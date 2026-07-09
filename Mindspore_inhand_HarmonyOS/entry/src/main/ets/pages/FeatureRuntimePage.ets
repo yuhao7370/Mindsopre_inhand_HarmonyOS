@@ -19,6 +19,11 @@ import { cachedRuntimeAiServiceForHarmonyResourceManager } from '../services/ai/
 import { PermissionRequestSummary, PermissionService } from '../services/permissions/PermissionService';
 import { ClipboardService, CopyTextResult } from '../services/clipboard/ClipboardService';
 import { PickerService, PickResult } from '../services/picker/PickerService';
+import {
+  ObjectDetection,
+  ObjectDetectionBoxPercent,
+  objectDetectionBoxPercent
+} from '../services/ai/ObjectDetectionService';
 import { styleTransferPixelMapFromRgbaOutput } from '../services/ai/StyleTransferService';
 import { AppStringKey, appString } from '../common/i18n/AppStrings';
 import { AppColor, AppRadius, AppSpacing } from '../common/theme/AppTheme';
@@ -48,6 +53,10 @@ struct FeatureRuntimePage {
   @State modelInputUri: string = '';
   @State userText: string = '';
   @State styledImagePixelMap: image.PixelMap | undefined = undefined;
+  @State objectDetectionImageUri: string = '';
+  @State objectDetections: Array<ObjectDetection> = [];
+  @State objectDetectionImageWidth: number = 0;
+  @State objectDetectionImageHeight: number = 0;
   @State helpUrl: string = '';
   @State inputKinds: Array<FeatureInputKind> = [];
   @State permissionKinds: Array<FeaturePermissionKind> = [];
@@ -76,7 +85,7 @@ struct FeatureRuntimePage {
     this.statusKey = 'feature_runtime_status_preparing';
     this.resultRows = [];
     this.resultText = '';
-    this.styledImagePixelMap = undefined;
+    this.clearVisualResults();
     if (inputKind === 'text') {
       this.statusKey = this.userText.length > 0 ? 'feature_runtime_text_ready' : 'feature_runtime_status_idle';
       this.selectedInputSummary = this.userText;
@@ -153,7 +162,7 @@ struct FeatureRuntimePage {
         this.statusKey = 'feature_runtime_permission_denied';
         this.resultText = permission.requested.join(', ');
         this.resultRows = [];
-        this.styledImagePixelMap = undefined;
+        this.clearVisualResults();
         return;
       }
       cachedRuntimeAiServiceForHarmonyResourceManager(workflow, context.resourceManager).then((aiService: DefaultAiService) => {
@@ -168,8 +177,45 @@ struct FeatureRuntimePage {
     this.statusKey = result.messageKey;
     this.resultText = result.detailText.length > 0 ? result.detailText : `${result.aiMethod}: ${result.code}`;
     this.resultRows = aiRunResultRows(result);
-    this.styledImagePixelMap = undefined;
+    this.clearVisualResults();
+    this.updateObjectDetectionPreview(result);
     this.updateStyledImagePreview(result);
+  }
+
+  private clearVisualResults(): void {
+    this.styledImagePixelMap = undefined;
+    this.objectDetectionImageUri = '';
+    this.objectDetections = [];
+    this.objectDetectionImageWidth = 0;
+    this.objectDetectionImageHeight = 0;
+  }
+
+  private updateObjectDetectionPreview(result: AiRunResult): void {
+    const data = result.data;
+    if (data === undefined || data.kind !== 'objectDetections' || data.detections.length === 0) {
+      return;
+    }
+
+    this.objectDetectionImageUri = data.imageUri;
+    this.objectDetections = data.detections;
+    this.objectDetectionImageWidth = this.objectDetectionSourceWidth(data.detections);
+    this.objectDetectionImageHeight = this.objectDetectionSourceHeight(data.detections);
+  }
+
+  private objectDetectionSourceWidth(detections: Array<ObjectDetection>): number {
+    let width = 0;
+    detections.forEach((detection: ObjectDetection) => {
+      width = Math.max(width, detection.imageWidth ?? 0, detection.right);
+    });
+    return width;
+  }
+
+  private objectDetectionSourceHeight(detections: Array<ObjectDetection>): number {
+    let height = 0;
+    detections.forEach((detection: ObjectDetection) => {
+      height = Math.max(height, detection.imageHeight ?? 0, detection.bottom);
+    });
+    return height;
   }
 
   private updateStyledImagePreview(result: AiRunResult): void {
@@ -271,6 +317,76 @@ struct FeatureRuntimePage {
     }
     .width('100%')
     .margin({ top: AppSpacing.sm })
+  }
+
+  private objectDetectionAspectRatio(): number {
+    if (this.objectDetectionImageWidth <= 0 || this.objectDetectionImageHeight <= 0) {
+      return 1;
+    }
+    return this.objectDetectionImageWidth / this.objectDetectionImageHeight;
+  }
+
+  private objectDetectionLabel(detection: ObjectDetection): string {
+    const label = detection.label.length > 0 ? detection.label : `${detection.labelId}`;
+    return `${label} ${(detection.score * 100).toFixed(1)}%`;
+  }
+
+  private objectDetectionBoxStyle(detection: ObjectDetection): ObjectDetectionBoxPercent {
+    return objectDetectionBoxPercent(
+      detection,
+      this.objectDetectionImageWidth,
+      this.objectDetectionImageHeight
+    );
+  }
+
+  private percentLength(value: number): string {
+    return `${value}%`;
+  }
+
+  @Builder
+  objectDetectionPreview(labelKey: AppStringKey, uri: string) {
+    Column() {
+      Text(appString(labelKey))
+        .fontSize(12)
+        .fontColor(AppColor.textSecondary)
+        .width('100%')
+      Stack({ alignContent: Alignment.TopStart }) {
+        Image(uri)
+          .width('100%')
+          .height('100%')
+          .objectFit(ImageFit.Fill)
+        ForEach(this.objectDetections, (detection: ObjectDetection) => {
+          this.objectDetectionBox(detection)
+        }, (detection: ObjectDetection) => `${detection.imageId}-${detection.labelId}-${detection.score}`)
+      }
+      .width('100%')
+      .aspectRatio(this.objectDetectionAspectRatio())
+      .backgroundColor('#F7F8FA')
+      .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
+      .clip(true)
+      .margin({ top: AppSpacing.xs })
+    }
+    .width('100%')
+    .margin({ top: AppSpacing.sm })
+  }
+
+  @Builder
+  objectDetectionBox(detection: ObjectDetection) {
+    Column() {
+      Text(this.objectDetectionLabel(detection))
+        .fontSize(10)
+        .fontColor('#FFFFFF')
+        .backgroundColor(AppColor.accent)
+        .padding({ left: 4, right: 4, top: 2, bottom: 2 })
+        .maxLines(1)
+    }
+    .width(this.percentLength(this.objectDetectionBoxStyle(detection).width))
+    .height(this.percentLength(this.objectDetectionBoxStyle(detection).height))
+    .border({ width: 2, color: AppColor.accent, radius: 2 })
+    .position({
+      x: this.percentLength(this.objectDetectionBoxStyle(detection).left),
+      y: this.percentLength(this.objectDetectionBoxStyle(detection).top)
+    })
   }
 
   @Builder
@@ -470,6 +586,9 @@ struct FeatureRuntimePage {
           }
           if (this.styledImagePixelMap !== undefined) {
             this.pixelMapPreview('feature_runtime_result_styled_image', this.styledImagePixelMap)
+          }
+          if (this.objectDetectionImageUri.length > 0 && this.objectDetections.length > 0) {
+            this.objectDetectionPreview('feature_runtime_result_detection_overlay', this.objectDetectionImageUri)
           }
           if (this.recognizedTextForCopy().length > 0) {
             Button(appString('feature_runtime_copy_text'))

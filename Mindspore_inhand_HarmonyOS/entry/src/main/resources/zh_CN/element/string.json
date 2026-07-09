@@ -116,6 +116,7 @@
     { "name": "feature_runtime_result_content_image", "value": "内容图" },
     { "name": "feature_runtime_result_style_image", "value": "风格图" },
     { "name": "feature_runtime_result_styled_image", "value": "风格化结果" },
+    { "name": "feature_runtime_result_detection_overlay", "value": "检测框预览" },
     { "name": "feature_runtime_result_output", "value": "输出" },
     { "name": "feature_runtime_result_target_language", "value": "目标语言" },
     { "name": "feature_runtime_result_translated_text", "value": "译文" },

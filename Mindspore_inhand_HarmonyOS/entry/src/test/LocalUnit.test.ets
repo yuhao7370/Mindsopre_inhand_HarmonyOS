@@ -105,6 +105,7 @@ import {
   ObjectDetectionMindSporeRunner,
   ObjectDetectionModelOutput,
   ObjectDetectionTensorRunner,
+  objectDetectionBoxPercent,
   decodeSsdObjectDetections,
   generateObjectDetectionDefaultBoxes,
   objectDetectionAnchorCount,
@@ -1532,6 +1533,26 @@ export default function localUnitTest() {
       expect(result.detections[0].label).assertEqual('person');
       expect(runner.seenImageUris[0]).assertEqual('file://selected/street.jpg');
       expect(runner.seenModelUris[0]).assertEqual('file://selected/ssd.ms');
+    });
+
+    it('mapsObjectDetectionBoxToPercentOverlay', 0, () => {
+      const detection: ObjectDetection = {
+        imageId: 1,
+        labelId: 1,
+        label: 'person',
+        score: 0.72,
+        left: 20,
+        top: -10,
+        right: 180,
+        bottom: 210
+      };
+
+      const box = objectDetectionBoxPercent(detection, 200, 200);
+
+      expect(box.left.toFixed(1)).assertEqual('10.0');
+      expect(box.top.toFixed(1)).assertEqual('0.0');
+      expect(box.width.toFixed(1)).assertEqual('80.0');
+      expect(box.height.toFixed(1)).assertEqual('100.0');
     });
 
     it('objectDetectionServiceHandlesRunnerFailureAsInvalidOutput', 0, async () => {

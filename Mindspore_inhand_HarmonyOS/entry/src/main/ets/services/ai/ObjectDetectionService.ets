@@ -43,10 +43,19 @@ export interface ObjectDetection {
   readonly labelId: number;
   readonly label: string;
   readonly score: number;
+  readonly imageWidth?: number;
+  readonly imageHeight?: number;
   readonly left: number;
   readonly top: number;
   readonly right: number;
   readonly bottom: number;
+}
+
+export interface ObjectDetectionBoxPercent {
+  readonly left: number;
+  readonly top: number;
+  readonly width: number;
+  readonly height: number;
 }
 
 export interface ObjectDetectionNormalBox {
@@ -337,6 +346,8 @@ export function decodeSsdObjectDetections(
         labelId: classId,
         label: classId < labels.length ? labels[classId] : `${classId}`,
         score: objectDetectionScore(scores, anchorIndex, classId),
+        imageWidth: imageWidth,
+        imageHeight: imageHeight,
         left: box.xmin * imageWidth / objectDetectionInputSize,
         top: box.ymin * imageHeight / objectDetectionInputSize,
         right: box.xmax * imageWidth / objectDetectionInputSize,
@@ -377,12 +388,44 @@ function mapObjectDetectionLabels(
       labelId: detection.labelId,
       label: label,
       score: detection.score,
+      imageWidth: detection.imageWidth,
+      imageHeight: detection.imageHeight,
       left: detection.left,
       top: detection.top,
       right: detection.right,
       bottom: detection.bottom
     };
   });
+}
+
+export function objectDetectionBoxPercent(
+  detection: ObjectDetection,
+  imageWidth: number,
+  imageHeight: number
+): ObjectDetectionBoxPercent {
+  if (imageWidth <= 0 || imageHeight <= 0) {
+    return {
+      left: 0,
+      top: 0,
+      width: 0,
+      height: 0
+    };
+  }
+
+  const left = objectDetectionPercent(detection.left, imageWidth);
+  const top = objectDetectionPercent(detection.top, imageHeight);
+  const right = objectDetectionPercent(detection.right, imageWidth);
+  const bottom = objectDetectionPercent(detection.bottom, imageHeight);
+  return {
+    left: left,
+    top: top,
+    width: Math.max(0, right - left),
+    height: Math.max(0, bottom - top)
+  };
+}
+
+function objectDetectionPercent(value: number, sourceLength: number): number {
+  return Math.min(100, Math.max(0, value * 100 / sourceLength));
 }
 
 interface ObjectDetectionWhBox {
