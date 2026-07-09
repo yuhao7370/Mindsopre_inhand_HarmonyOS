@@ -53,9 +53,14 @@ import {
   ObjectDetectionRunResult,
   ObjectDetectionRunner,
   ObjectDetectionService,
+  decodeSsdObjectDetections,
+  generateObjectDetectionDefaultBoxes,
+  objectDetectionAnchorCount,
+  objectDetectionClassCount,
   objectDetectionDecodeOptions,
   objectDetectionInputFloatCount,
   objectDetectionInputSize,
+  ObjectDetectionNormalBox,
   normalizedObjectDetectionRgbInputFromRgba,
   parseObjectCategoryLabels
 } from '../main/ets/services/ai/ObjectDetectionService';
@@ -658,6 +663,52 @@ export default function localUnitTest() {
       expect(result.ok).assertTrue();
       expect(result.code).assertEqual('OBJECT_DETECTION_DONE');
       expect(result.detailText.indexOf('person') >= 0).assertTrue();
+    });
+
+    it('generatesAndroidSsdDefaultBoxes', 0, () => {
+      const boxes: Array<ObjectDetectionNormalBox> = generateObjectDetectionDefaultBoxes();
+
+      expect(objectDetectionAnchorCount).assertEqual(1917);
+      expect(objectDetectionClassCount).assertEqual(81);
+      expect(boxes.length).assertEqual(objectDetectionAnchorCount);
+      expect(boxes[0].x.toFixed(6)).assertEqual('0.026667');
+      expect(boxes[0].y.toFixed(6)).assertEqual('0.026667');
+      expect(boxes[0].w.toFixed(6)).assertEqual('0.100000');
+      expect(boxes[0].h.toFixed(6)).assertEqual('0.100000');
+      expect(boxes[1916].x.toFixed(6)).assertEqual('0.500000');
+      expect(boxes[1916].h.toFixed(6)).assertEqual('0.974679');
+    });
+
+    it('decodesAndroidSsdBoxesToOriginalImageCoordinates', 0, () => {
+      const scores: Float32Array = new Float32Array(objectDetectionAnchorCount * objectDetectionClassCount);
+      const boxes: Float32Array = new Float32Array(objectDetectionAnchorCount * 4);
+      scores[1] = 0.7;
+
+      const detections: Array<ObjectDetection> =
+        decodeSsdObjectDetections(scores, boxes, ['background', 'person'], 600, 300);
+
+      expect(detections.length).assertEqual(1);
+      expect(detections[0].imageId).assertEqual(0);
+      expect(detections[0].labelId).assertEqual(1);
+      expect(detections[0].label).assertEqual('person');
+      expect(detections[0].left.toFixed(0)).assertEqual('0');
+      expect(detections[0].top.toFixed(0)).assertEqual('0');
+      expect(detections[0].right.toFixed(0)).assertEqual('46');
+      expect(detections[0].bottom.toFixed(0)).assertEqual('23');
+    });
+
+    it('appliesAndroidSsdThresholdsAndNmsPerClass', 0, () => {
+      const scores: Float32Array = new Float32Array(objectDetectionAnchorCount * objectDetectionClassCount);
+      const boxes: Float32Array = new Float32Array(objectDetectionAnchorCount * 4);
+      scores[1] = 0.9;
+      scores[objectDetectionClassCount + 1] = 0.8;
+
+      const detections: Array<ObjectDetection> =
+        decodeSsdObjectDetections(scores, boxes, ['background', 'person'], 300, 300);
+
+      expect(detections.length).assertEqual(1);
+      expect(detections[0].imageId).assertEqual(0);
+      expect(detections[0].score.toFixed(1)).assertEqual('0.9');
     });
 
     it('copiesRawfileViewToExactModelBuffer', 0, () => {
