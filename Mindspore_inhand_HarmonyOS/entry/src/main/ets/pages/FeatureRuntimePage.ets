@@ -8,6 +8,7 @@ import {
   workflowForRoute
 } from '../features/runtime/FeatureWorkflowCatalog';
 import { AiRunInputs, AiRunResult, DefaultAiService } from '../services/ai/AiService';
+import { cachedRuntimeAiServiceForHarmonyResourceManager } from '../services/ai/ImageClassificationRuntimeFactory';
 import { PermissionRequestSummary, PermissionService } from '../services/permissions/PermissionService';
 import { PickerService, PickResult } from '../services/picker/PickerService';
 import { AppStringKey, appString } from '../common/i18n/AppStrings';
@@ -119,9 +120,11 @@ struct FeatureRuntimePage {
         this.resultText = permission.requested.join(', ');
         return;
       }
-      new DefaultAiService().run(workflow, this.aiRunInputs()).then((result: AiRunResult) => {
-        this.statusKey = result.messageKey;
-        this.resultText = result.detailText.length > 0 ? result.detailText : `${result.aiMethod}: ${result.code}`;
+      cachedRuntimeAiServiceForHarmonyResourceManager(workflow, context.resourceManager).then((aiService: DefaultAiService) => {
+        aiService.run(workflow, this.aiRunInputs()).then((result: AiRunResult) => {
+          this.statusKey = result.messageKey;
+          this.resultText = result.detailText.length > 0 ? result.detailText : `${result.aiMethod}: ${result.code}`;
+        });
       });
     });
   }

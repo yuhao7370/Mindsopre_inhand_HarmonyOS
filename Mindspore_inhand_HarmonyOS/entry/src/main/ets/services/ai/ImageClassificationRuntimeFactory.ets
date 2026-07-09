@@ -1,3 +1,5 @@
+import { resourceManager } from '@kit.LocalizationKit';
+import { FeatureWorkflow } from '../../features/runtime/FeatureWorkflowCatalog';
 import { DefaultAiService } from './AiService';
 import { HarmonyImageClassificationInputPreprocessor } from './HarmonyImageInputPreprocessor';
 import {
@@ -21,6 +23,18 @@ export interface HarmonyImageClassificationRuntimeOptions {
 
 let cachedHarmonyDefaultAiService: Promise<DefaultAiService> | undefined = undefined;
 
+export class HarmonyRawfileContentReader implements RawfileContentReader {
+  private readonly resourceManager: resourceManager.ResourceManager;
+
+  constructor(resourceManager: resourceManager.ResourceManager) {
+    this.resourceManager = resourceManager;
+  }
+
+  async getRawFileContent(path: string): Promise<Uint8Array> {
+    return this.resourceManager.getRawFileContent(path);
+  }
+}
+
 export function cachedHarmonyDefaultAiServiceForResourceManager(
   resourceManager: RawfileContentReader
 ): Promise<DefaultAiService> {
@@ -30,6 +44,33 @@ export function cachedHarmonyDefaultAiServiceForResourceManager(
     });
   }
   return cachedHarmonyDefaultAiService;
+}
+
+export function cachedRuntimeAiServiceForHarmonyResourceManager(
+  workflow: FeatureWorkflow,
+  manager: resourceManager.ResourceManager
+): Promise<DefaultAiService> {
+  return cachedRuntimeAiServiceForWorkflow(workflow, new HarmonyRawfileContentReader(manager));
+}
+
+export async function cachedRuntimeAiServiceForWorkflow(
+  workflow: FeatureWorkflow,
+  resourceManager: RawfileContentReader
+): Promise<DefaultAiService> {
+  if (workflow.aiMethod === 'classifyImage') {
+    return cachedHarmonyDefaultAiServiceForResourceManager(resourceManager);
+  }
+  return new DefaultAiService();
+}
+
+export async function createRuntimeAiServiceForWorkflow(
+  workflow: FeatureWorkflow,
+  options: HarmonyImageClassificationRuntimeOptions
+): Promise<DefaultAiService> {
+  if (workflow.aiMethod === 'classifyImage') {
+    return createHarmonyDefaultAiService(options);
+  }
+  return new DefaultAiService();
 }
 
 export async function createHarmonyDefaultAiService(

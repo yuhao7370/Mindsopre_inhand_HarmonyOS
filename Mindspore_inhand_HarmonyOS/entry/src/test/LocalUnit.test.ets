@@ -21,6 +21,7 @@ import {
 import { imageClassificationDecodeOptions } from '../main/ets/services/ai/HarmonyImageInputPreprocessor';
 import {
   createHarmonyDefaultAiService,
+  createRuntimeAiServiceForWorkflow,
   rawfileAsciiContentToText
 } from '../main/ets/services/ai/ImageClassificationRuntimeFactory';
 import {
@@ -116,6 +117,12 @@ class FixedRawfileContentReader implements RawfileContentReader {
   async getRawFileContent(path: string): Promise<Uint8Array> {
     this.seenPaths.push(path);
     return this.content;
+  }
+}
+
+class ThrowingRawfileContentReader implements RawfileContentReader {
+  async getRawFileContent(_path: string): Promise<Uint8Array> {
+    throw new Error('unexpected rawfile access');
   }
 }
 
@@ -488,6 +495,19 @@ export default function localUnitTest() {
       expect(result.ok).assertTrue();
       expect(result.code).assertEqual('CLASSIFICATION_DONE');
       expect(result.detailText.indexOf('label=goldfish') >= 0).assertTrue();
+    });
+
+    it('keepsNonClassificationWorkflowsOnDefaultPendingRuntime', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.OBJECT_PHOTO.name);
+      expect(workflow !== undefined).assertTrue();
+      const service = await createRuntimeAiServiceForWorkflow(workflow!, {
+        resourceManager: new ThrowingRawfileContentReader()
+      });
+
+      const result = await service.run(workflow!);
+
+      expect(result.ok).assertFalse();
+      expect(result.code).assertEqual('NATIVE_ADAPTER_PENDING');
     });
 
     it('mapsWorkflowPermissionsToHarmonyPermissionNames', 0, () => {
