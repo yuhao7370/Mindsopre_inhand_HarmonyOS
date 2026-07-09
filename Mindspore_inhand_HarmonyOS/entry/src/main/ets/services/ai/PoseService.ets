@@ -24,6 +24,25 @@ export interface PosePointPercent {
   readonly y: number;
 }
 
+export interface PoseLine {
+  readonly start: PosePoint;
+  readonly end: PosePoint;
+}
+
+export interface PoseLinePercent {
+  readonly startX: number;
+  readonly startY: number;
+  readonly endX: number;
+  readonly endY: number;
+  readonly length: number;
+  readonly angle: number;
+}
+
+interface PoseLineTypePair {
+  readonly startType: number;
+  readonly endType: number;
+}
+
 export interface PoseRunner {
   detectPose(imageUri: string): Promise<PoseResult>;
 }
@@ -31,6 +50,59 @@ export interface PoseRunner {
 export interface PoseServiceOptions {
   readonly runner: PoseRunner;
 }
+
+export const poseMinPointScore = 0.2;
+
+const poseSkeletonLineTypePairs: Array<PoseLineTypePair> = [
+  {
+    startType: skeletonDetection.SkeletonPointType.NOSE,
+    endType: skeletonDetection.SkeletonPointType.LEFT_SHOULDER
+  },
+  {
+    startType: skeletonDetection.SkeletonPointType.NOSE,
+    endType: skeletonDetection.SkeletonPointType.RIGHT_SHOULDER
+  },
+  {
+    startType: skeletonDetection.SkeletonPointType.LEFT_SHOULDER,
+    endType: skeletonDetection.SkeletonPointType.LEFT_ELBOW
+  },
+  {
+    startType: skeletonDetection.SkeletonPointType.LEFT_ELBOW,
+    endType: skeletonDetection.SkeletonPointType.LEFT_WRIST
+  },
+  {
+    startType: skeletonDetection.SkeletonPointType.LEFT_SHOULDER,
+    endType: skeletonDetection.SkeletonPointType.LEFT_HIP
+  },
+  {
+    startType: skeletonDetection.SkeletonPointType.LEFT_HIP,
+    endType: skeletonDetection.SkeletonPointType.LEFT_KNEE
+  },
+  {
+    startType: skeletonDetection.SkeletonPointType.LEFT_KNEE,
+    endType: skeletonDetection.SkeletonPointType.LEFT_ANKLE
+  },
+  {
+    startType: skeletonDetection.SkeletonPointType.RIGHT_SHOULDER,
+    endType: skeletonDetection.SkeletonPointType.RIGHT_ELBOW
+  },
+  {
+    startType: skeletonDetection.SkeletonPointType.RIGHT_ELBOW,
+    endType: skeletonDetection.SkeletonPointType.RIGHT_WRIST
+  },
+  {
+    startType: skeletonDetection.SkeletonPointType.RIGHT_SHOULDER,
+    endType: skeletonDetection.SkeletonPointType.RIGHT_HIP
+  },
+  {
+    startType: skeletonDetection.SkeletonPointType.RIGHT_HIP,
+    endType: skeletonDetection.SkeletonPointType.RIGHT_KNEE
+  },
+  {
+    startType: skeletonDetection.SkeletonPointType.RIGHT_KNEE,
+    endType: skeletonDetection.SkeletonPointType.RIGHT_ANKLE
+  }
+];
 
 export class PoseService {
   private readonly runner: PoseRunner;
@@ -135,6 +207,58 @@ export function posePointPercent(point: PosePoint, imageWidth: number, imageHeig
   return {
     x: posePercent(point.x, imageWidth),
     y: posePercent(point.y, imageHeight)
+  };
+}
+
+export function isPosePointVisible(point: PosePoint): boolean {
+  return point.score >= poseMinPointScore && (point.x !== 0 || point.y !== 0);
+}
+
+export function poseSkeletonLines(points: Array<PosePoint>): Array<PoseLine> {
+  const pointByType: Map<number, PosePoint> = new Map<number, PosePoint>();
+  points.forEach((point: PosePoint) => {
+    if (isPosePointVisible(point)) {
+      pointByType.set(point.type, point);
+    }
+  });
+
+  const lines: Array<PoseLine> = [];
+  poseSkeletonLineTypePairs.forEach((pair: PoseLineTypePair) => {
+    const start = pointByType.get(pair.startType);
+    const end = pointByType.get(pair.endType);
+    if (start !== undefined && end !== undefined) {
+      lines.push({
+        start: start,
+        end: end
+      });
+    }
+  });
+  return lines;
+}
+
+export function poseLinePercent(line: PoseLine, imageWidth: number, imageHeight: number): PoseLinePercent {
+  const start = posePointPercent(line.start, imageWidth, imageHeight);
+  const end = posePointPercent(line.end, imageWidth, imageHeight);
+  if (imageWidth <= 0 || imageHeight <= 0) {
+    return {
+      startX: start.x,
+      startY: start.y,
+      endX: end.x,
+      endY: end.y,
+      length: 0,
+      angle: 0
+    };
+  }
+
+  const deltaX = line.end.x - line.start.x;
+  const deltaY = line.end.y - line.start.y;
+  return {
+    startX: start.x,
+    startY: start.y,
+    endX: end.x,
+    endY: end.y,
+    length: Math.sqrt(deltaX * deltaX + deltaY * deltaY) * 100 / imageWidth,
+    angle: Math.atan2(deltaY, deltaX) * 180 / Math.PI
   };
 }
 

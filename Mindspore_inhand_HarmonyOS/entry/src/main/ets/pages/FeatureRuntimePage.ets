@@ -30,9 +30,14 @@ import {
   segmentationRectanglePercent
 } from '../services/ai/SegmentationService';
 import {
+  PoseLine,
+  PoseLinePercent,
   PosePoint,
   PosePointPercent,
-  posePointPercent
+  isPosePointVisible,
+  poseLinePercent,
+  posePointPercent,
+  poseSkeletonLines
 } from '../services/ai/PoseService';
 import { styleTransferPixelMapFromRgbaOutput } from '../services/ai/StyleTransferService';
 import { AppStringKey, appString } from '../common/i18n/AppStrings';
@@ -463,6 +468,22 @@ struct FeatureRuntimePage {
     );
   }
 
+  private visiblePosePoints(): Array<PosePoint> {
+    return this.posePoints.filter((point: PosePoint) => isPosePointVisible(point));
+  }
+
+  private poseLines(): Array<PoseLine> {
+    return poseSkeletonLines(this.posePoints);
+  }
+
+  private poseLineStyle(line: PoseLine): PoseLinePercent {
+    return poseLinePercent(
+      line,
+      this.poseImageWidth,
+      this.poseImageHeight
+    );
+  }
+
   private segmentationBoxStyle(rectangle: SegmentationRectangle): SegmentationRectanglePercent {
     return segmentationRectanglePercent(
       rectangle,
@@ -487,7 +508,10 @@ struct FeatureRuntimePage {
           .width('100%')
           .height('100%')
           .objectFit(ImageFit.Fill)
-        ForEach(this.posePoints, (point: PosePoint) => {
+        ForEach(this.poseLines(), (line: PoseLine) => {
+          this.poseLine(line)
+        }, (line: PoseLine) => `${line.start.type}-${line.end.type}-${line.start.x}-${line.start.y}`)
+        ForEach(this.visiblePosePoints(), (point: PosePoint) => {
           this.posePoint(point)
         }, (point: PosePoint) => `${point.type}-${point.x}-${point.y}-${point.score}`)
       }
@@ -500,6 +524,28 @@ struct FeatureRuntimePage {
     }
     .width('100%')
     .margin({ top: AppSpacing.sm })
+  }
+
+  @Builder
+  poseLine(line: PoseLine) {
+    Column() {
+    }
+    .width(this.percentLength(this.poseLineStyle(line).length))
+    .height(3)
+    .borderRadius(2)
+    .backgroundColor('#1D9A6C')
+    .position({
+      x: this.percentLength(this.poseLineStyle(line).startX),
+      y: this.percentLength(this.poseLineStyle(line).startY)
+    })
+    .rotate({
+      x: 0,
+      y: 0,
+      z: 1,
+      angle: this.poseLineStyle(line).angle,
+      centerX: 0,
+      centerY: 1.5
+    })
   }
 
   @Builder

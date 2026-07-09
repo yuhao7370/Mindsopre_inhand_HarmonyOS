@@ -27,10 +27,15 @@ import {
 } from '../main/ets/services/ai/SegmentationService';
 import {
   PosePoint,
+  PoseLine,
+  PoseLinePercent,
   PoseResult,
   PoseRunner,
   PoseService,
-  posePointPercent
+  isPosePointVisible,
+  poseLinePercent,
+  posePointPercent,
+  poseSkeletonLines
 } from '../main/ets/services/ai/PoseService';
 import {
   StyleTransferInput,
@@ -1195,6 +1200,60 @@ export default function localUnitTest() {
 
       expect(marker.x.toFixed(1)).assertEqual('12.5');
       expect(marker.y.toFixed(1)).assertEqual('87.5');
+    });
+
+    it('filtersInvalidPoseOverlayPoints', 0, () => {
+      const visible: PosePoint = {
+        type: 0,
+        score: 0.2,
+        x: 1,
+        y: 1
+      };
+      const lowScore: PosePoint = {
+        type: 1,
+        score: 0.19,
+        x: 2,
+        y: 2
+      };
+      const zeroPoint: PosePoint = {
+        type: 2,
+        score: 0.9,
+        x: 0,
+        y: 0
+      };
+
+      expect(isPosePointVisible(visible)).assertTrue();
+      expect(isPosePointVisible(lowScore)).assertFalse();
+      expect(isPosePointVisible(zeroPoint)).assertFalse();
+    });
+
+    it('mapsPosePointsToSkeletonLineOverlay', 0, () => {
+      const points: Array<PosePoint> = [
+        { type: 0, score: 0.9, x: 100, y: 20 },
+        { type: 5, score: 0.9, x: 60, y: 80 },
+        { type: 6, score: 0.9, x: 140, y: 80 },
+        { type: 7, score: 0.9, x: 40, y: 130 },
+        { type: 9, score: 0.9, x: 20, y: 180 },
+        { type: 11, score: 0.9, x: 70, y: 180 },
+        { type: 13, score: 0.9, x: 70, y: 250 },
+        { type: 15, score: 0.9, x: 70, y: 310 },
+        { type: 8, score: 0.1, x: 160, y: 130 },
+        { type: 10, score: 0.9, x: 180, y: 180 }
+      ];
+
+      const lines: Array<PoseLine> = poseSkeletonLines(points);
+      const firstLine: PoseLinePercent = poseLinePercent(lines[0], 200, 400);
+
+      expect(lines.length).assertEqual(7);
+      expect(lines[0].start.type).assertEqual(0);
+      expect(lines[0].end.type).assertEqual(5);
+      expect(lines.find((line: PoseLine) => line.start.type === 8 || line.end.type === 8) === undefined).assertTrue();
+      expect(firstLine.startX.toFixed(1)).assertEqual('50.0');
+      expect(firstLine.startY.toFixed(1)).assertEqual('5.0');
+      expect(firstLine.endX.toFixed(1)).assertEqual('30.0');
+      expect(firstLine.endY.toFixed(1)).assertEqual('20.0');
+      expect(firstLine.length.toFixed(1)).assertEqual('36.1');
+      expect(firstLine.angle.toFixed(1)).assertEqual('123.7');
     });
 
     it('aiServiceReportsPoseFailureWithI18nKey', 0, async () => {
