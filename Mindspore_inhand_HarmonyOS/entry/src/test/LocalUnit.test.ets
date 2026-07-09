@@ -1741,6 +1741,24 @@ export default function localUnitTest() {
       expect(result.messageKey).assertEqual('feature_runtime_custom_model_failed');
     });
 
+    it('aiServiceReportsEmptyCustomModelOutputAsFailureWithI18nKey', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.CUSTOM_MODEL.name);
+      expect(workflow !== undefined).assertTrue();
+      const customModelService = new CustomModelService({
+        preprocessor: new FixedCustomModelPreprocessor(new ArrayBuffer(12)),
+        tensorRunner: new FixedCustomModelTensorRunner([])
+      });
+
+      const result = await new DefaultAiService({ customModelService: customModelService }).run(workflow!, {
+        imageUri: 'file://selected/input.png',
+        modelUri: 'file://selected/custom_model.ms'
+      });
+
+      expect(result.ok).assertFalse();
+      expect(result.code).assertEqual('CUSTOM_MODEL_FAILED');
+      expect(result.messageKey).assertEqual('feature_runtime_custom_model_failed');
+    });
+
     it('styleTransferRequiresContentAndStyleInputsWhenServiceIsProvided', 0, async () => {
       const workflow = workflowForRoute(AppRoute.STYLE_TRANSFER.name);
       expect(workflow !== undefined).assertTrue();

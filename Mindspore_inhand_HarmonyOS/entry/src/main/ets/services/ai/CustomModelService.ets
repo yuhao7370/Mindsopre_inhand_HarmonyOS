@@ -61,7 +61,7 @@ export class CustomModelMindSporeRunner {
     const inputBuffer = await this.preprocessor.createInputBuffer(imageUri);
     const output = await this.tensorRunner.predictOutput(modelUri, inputBuffer);
     return {
-      ok: true,
+      ok: output.length > 0,
       output: output,
       executionMs: Date.now() - startedAt
     };
