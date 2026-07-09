@@ -40,7 +40,12 @@ import {
   posePointPercent,
   poseSkeletonLines
 } from '../services/ai/PoseService';
-import { styleTransferPixelMapFromRgbaOutput } from '../services/ai/StyleTransferService';
+import {
+  BuiltInStyleTransferStyle,
+  builtInStyleTransferStyles,
+  builtInStyleTransferUri,
+  styleTransferPixelMapFromRgbaOutput
+} from '../services/ai/StyleTransferService';
 import { AppStringKey, appString } from '../common/i18n/AppStrings';
 import { AppColor, AppRadius, AppSpacing } from '../common/theme/AppTheme';
 import { common } from '@kit.AbilityKit';
@@ -384,6 +389,16 @@ struct FeatureRuntimePage {
       this.modelInputUri.length > 0;
   }
 
+  private isStyleTransferWorkflow(): boolean {
+    return this.aiMethod === 'runStyleTransfer';
+  }
+
+  private selectBuiltInStyle(style: BuiltInStyleTransferStyle): void {
+    this.styleImageUri = builtInStyleTransferUri(style);
+    this.selectedInputSummary = style.rawfilePath;
+    this.statusKey = 'feature_runtime_image_ready';
+  }
+
   private lastPathSegment(uri: string): string {
     const normalized = uri.split('\\').join('/');
     const parts = normalized.split('/');
@@ -424,6 +439,99 @@ struct FeatureRuntimePage {
       .backgroundColor('#F7F8FA')
       .borderRadius(AppRadius.button)
       .margin({ right: AppSpacing.sm, bottom: AppSpacing.sm })
+  }
+
+  @Builder
+  styleTransferStyleGrid() {
+    Column() {
+      Text(appString('feature_runtime_style_presets_title'))
+        .fontSize(14)
+        .fontWeight(FontWeight.Medium)
+        .fontColor(AppColor.textPrimary)
+        .width('100%')
+      Grid() {
+        ForEach(builtInStyleTransferStyles, (style: BuiltInStyleTransferStyle) => {
+          GridItem() {
+            this.styleTransferStyleItem(style)
+          }
+        }, (style: BuiltInStyleTransferStyle) => `${style.id}`)
+      }
+      .columnsTemplate('1fr 1fr 1fr 1fr')
+      .columnsGap(AppSpacing.sm)
+      .rowsGap(AppSpacing.sm)
+      .width('100%')
+      .margin({ top: AppSpacing.sm })
+    }
+    .width('100%')
+    .margin({ top: AppSpacing.md })
+  }
+
+  @Builder
+  styleTransferStyleItem(style: BuiltInStyleTransferStyle) {
+    Column() {
+      this.styleTransferStyleImage(style.id)
+    }
+    .width('100%')
+    .aspectRatio(1)
+    .padding(2)
+    .border({
+      width: this.styleImageUri === builtInStyleTransferUri(style) ? 2 : 1,
+      color: this.styleImageUri === builtInStyleTransferUri(style) ? AppColor.accent : AppColor.divider,
+      radius: AppRadius.card
+    })
+    .clip(true)
+    .onClick(() => this.selectBuiltInStyle(style))
+  }
+
+  @Builder
+  styleTransferStyleImage(styleId: number) {
+    if (styleId === 0) {
+      this.styleTransferStyleImageSource($r('app.media.style0'))
+    } else if (styleId === 1) {
+      this.styleTransferStyleImageSource($r('app.media.style1'))
+    } else if (styleId === 2) {
+      this.styleTransferStyleImageSource($r('app.media.style2'))
+    } else if (styleId === 3) {
+      this.styleTransferStyleImageSource($r('app.media.style3'))
+    } else if (styleId === 4) {
+      this.styleTransferStyleImageSource($r('app.media.style4'))
+    } else if (styleId === 5) {
+      this.styleTransferStyleImageSource($r('app.media.style5'))
+    } else if (styleId === 6) {
+      this.styleTransferStyleImageSource($r('app.media.style6'))
+    } else if (styleId === 7) {
+      this.styleTransferStyleImageSource($r('app.media.style7'))
+    } else if (styleId === 8) {
+      this.styleTransferStyleImageSource($r('app.media.style8'))
+    } else if (styleId === 9) {
+      this.styleTransferStyleImageSource($r('app.media.style9'))
+    } else if (styleId === 10) {
+      this.styleTransferStyleImageSource($r('app.media.style10'))
+    } else if (styleId === 11) {
+      this.styleTransferStyleImageSource($r('app.media.style11'))
+    } else if (styleId === 12) {
+      this.styleTransferStyleImageSource($r('app.media.style12'))
+    } else if (styleId === 13) {
+      this.styleTransferStyleImageSource($r('app.media.style13'))
+    } else if (styleId === 14) {
+      this.styleTransferStyleImageSource($r('app.media.style14'))
+    } else if (styleId === 15) {
+      this.styleTransferStyleImageSource($r('app.media.style15'))
+    } else if (styleId === 16) {
+      this.styleTransferStyleImageSource($r('app.media.style16'))
+    } else if (styleId === 17) {
+      this.styleTransferStyleImageSource($r('app.media.style17'))
+    } else {
+      this.styleTransferStyleImageSource($r('app.media.style18'))
+    }
+  }
+
+  @Builder
+  styleTransferStyleImageSource(source: Resource) {
+    Image(source)
+      .width('100%')
+      .height('100%')
+      .objectFit(ImageFit.Cover)
   }
 
   @Builder
@@ -780,6 +888,9 @@ struct FeatureRuntimePage {
           }
           .width('100%')
           .margin({ top: AppSpacing.md })
+          if (this.isStyleTransferWorkflow()) {
+            this.styleTransferStyleGrid()
+          }
           if (this.inputKinds.indexOf('text') >= 0) {
             TextInput({ text: this.userText, placeholder: appString('feature_runtime_text_placeholder') })
               .width('100%')

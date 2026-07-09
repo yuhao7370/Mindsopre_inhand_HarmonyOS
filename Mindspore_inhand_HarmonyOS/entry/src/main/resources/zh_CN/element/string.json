@@ -103,6 +103,7 @@
     { "name": "feature_runtime_preview_content", "value": "内容图" },
     { "name": "feature_runtime_preview_style", "value": "风格图" },
     { "name": "feature_runtime_preview_model", "value": "模型" },
+    { "name": "feature_runtime_style_presets_title", "value": "选择风格" },
     { "name": "feature_runtime_result_label", "value": "标签" },
     { "name": "feature_runtime_result_score", "value": "置信度" },
     { "name": "feature_runtime_result_count", "value": "数量" },

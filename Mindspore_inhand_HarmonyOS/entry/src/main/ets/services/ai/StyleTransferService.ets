@@ -16,6 +16,35 @@ export const styleTransferContentImageSize: number = 384;
 export const styleTransferChannels: number = 3;
 export const styleTransferOutputFloatCount: number =
   styleTransferContentImageSize * styleTransferContentImageSize * styleTransferChannels;
+export const builtInStyleTransferStyleCount: number = 19;
+export const builtInStyleTransferRawfileUriPrefix: string = 'rawfile://';
+
+export interface BuiltInStyleTransferStyle {
+  readonly id: number;
+  readonly rawfilePath: string;
+}
+
+export const builtInStyleTransferStyles: Array<BuiltInStyleTransferStyle> = [
+  { id: 0, rawfilePath: 'styletransfer/style0.jpg' },
+  { id: 1, rawfilePath: 'styletransfer/style1.jpg' },
+  { id: 2, rawfilePath: 'styletransfer/style2.jpg' },
+  { id: 3, rawfilePath: 'styletransfer/style3.jpg' },
+  { id: 4, rawfilePath: 'styletransfer/style4.jpg' },
+  { id: 5, rawfilePath: 'styletransfer/style5.jpg' },
+  { id: 6, rawfilePath: 'styletransfer/style6.jpg' },
+  { id: 7, rawfilePath: 'styletransfer/style7.jpg' },
+  { id: 8, rawfilePath: 'styletransfer/style8.jpg' },
+  { id: 9, rawfilePath: 'styletransfer/style9.jpg' },
+  { id: 10, rawfilePath: 'styletransfer/style10.jpg' },
+  { id: 11, rawfilePath: 'styletransfer/style11.jpg' },
+  { id: 12, rawfilePath: 'styletransfer/style12.jpg' },
+  { id: 13, rawfilePath: 'styletransfer/style13.jpg' },
+  { id: 14, rawfilePath: 'styletransfer/style14.jpg' },
+  { id: 15, rawfilePath: 'styletransfer/style15.jpg' },
+  { id: 16, rawfilePath: 'styletransfer/style16.jpg' },
+  { id: 17, rawfilePath: 'styletransfer/style17.jpg' },
+  { id: 18, rawfilePath: 'styletransfer/style18.jpg' }
+];
 
 export interface StyleTransferResult {
   readonly ok: boolean;
@@ -49,6 +78,17 @@ export interface StyleTransferTensorRunner {
 
 export interface StyleTransferRunner {
   run(contentImageUri: string, styleImageUri: string): Promise<StyleTransferResult>;
+}
+
+export function builtInStyleTransferUri(style: BuiltInStyleTransferStyle): string {
+  return `${builtInStyleTransferRawfileUriPrefix}${style.rawfilePath}`;
+}
+
+export function rawfilePathFromBuiltInStyleTransferUri(uri: string): string {
+  if (!uri.startsWith(builtInStyleTransferRawfileUriPrefix)) {
+    return '';
+  }
+  return uri.substring(builtInStyleTransferRawfileUriPrefix.length);
 }
 
 export interface StyleTransferMindSporeRunnerOptions {

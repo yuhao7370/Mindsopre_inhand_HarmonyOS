@@ -279,7 +279,9 @@ export function createHarmonyStyleTransferRunner(
   options: HarmonyImageClassificationRuntimeOptions
 ): StyleTransferRunner {
   return new StyleTransferMindSporeRunner({
-    preprocessor: options.styleTransferPreprocessor ?? new HarmonyStyleTransferInputPreprocessor(),
+    preprocessor: options.styleTransferPreprocessor ?? new HarmonyStyleTransferInputPreprocessor({
+      resourceManager: options.resourceManager
+    }),
     tensorRunner: options.styleTransferTensorRunner ?? new MindSporeLiteStyleTransferTensorRunner({
       resourceManager: options.resourceManager,
       predictModelRawfilePath: stylePredictModelRawfilePath,

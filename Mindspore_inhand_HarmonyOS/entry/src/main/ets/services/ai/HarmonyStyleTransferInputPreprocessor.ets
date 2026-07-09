@@ -1,6 +1,11 @@
 import { fileIo } from '@kit.CoreFileKit';
 import { image } from '@kit.ImageKit';
 import {
+  RawfileContentReader,
+  rawfileContentToArrayBuffer
+} from './MindSporeLiteModelRunner';
+import {
+  rawfilePathFromBuiltInStyleTransferUri,
   StyleTransferInput,
   StyleTransferInputPreprocessor,
   styleTransferContentImageSize,
@@ -9,15 +14,27 @@ import {
   styleTransferStyleImageSize
 } from './StyleTransferService';
 
+export interface HarmonyStyleTransferInputPreprocessorOptions {
+  readonly resourceManager?: RawfileContentReader;
+}
+
 export class HarmonyStyleTransferInputPreprocessor implements StyleTransferInputPreprocessor {
+  private readonly resourceManager?: RawfileContentReader;
+
+  constructor(options?: HarmonyStyleTransferInputPreprocessorOptions) {
+    this.resourceManager = options?.resourceManager;
+  }
+
   async createInput(contentImageUri: string, styleImageUri: string): Promise<StyleTransferInput> {
     const contentInputBuffer = await createStyleTransferImageInput(
       contentImageUri,
-      styleTransferContentImageSize
+      styleTransferContentImageSize,
+      this.resourceManager
     );
     const styleInputBuffer = await createStyleTransferImageInput(
       styleImageUri,
-      styleTransferStyleImageSize
+      styleTransferStyleImageSize,
+      this.resourceManager
     );
     return {
       contentInputBuffer: contentInputBuffer,
@@ -26,13 +43,26 @@ export class HarmonyStyleTransferInputPreprocessor implements StyleTransferInput
   }
 }
 
-async function createStyleTransferImageInput(imageUri: string, size: number): Promise<ArrayBuffer> {
+async function createStyleTransferImageInput(
+  imageUri: string,
+  size: number,
+  resourceManager?: RawfileContentReader
+): Promise<ArrayBuffer> {
   let imageFile: fileIo.File | undefined = undefined;
   let imageSource: image.ImageSource | undefined = undefined;
   let pixelMap: image.PixelMap | undefined = undefined;
   try {
-    imageFile = await openStyleTransferImageFile(imageUri);
-    imageSource = image.createImageSource(imageFile.fd);
+    const rawfilePath = rawfilePathFromBuiltInStyleTransferUri(imageUri);
+    if (rawfilePath.length > 0) {
+      if (resourceManager === undefined) {
+        throw new Error('Unable to read built-in style transfer image without rawfile reader.');
+      }
+      const rawfileContent = await resourceManager.getRawFileContent(rawfilePath);
+      imageSource = image.createImageSource(rawfileContentToArrayBuffer(rawfileContent));
+    } else {
+      imageFile = await openStyleTransferImageFile(imageUri);
+      imageSource = image.createImageSource(imageFile.fd);
+    }
     pixelMap = await imageSource.createPixelMap(styleTransferDecodeOptions(size));
     const rgbaBuffer = new ArrayBuffer(size * size * 4);
     await pixelMap.readPixelsToBuffer(rgbaBuffer);

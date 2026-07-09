@@ -39,6 +39,10 @@ import {
 } from '../main/ets/services/ai/PoseService';
 import {
   StyleTransferInput,
+  builtInStyleTransferStyleCount,
+  builtInStyleTransferStyles,
+  builtInStyleTransferUri,
+  rawfilePathFromBuiltInStyleTransferUri,
   StyleTransferInputPreprocessor,
   StyleTransferResult,
   StyleTransferRunner,
@@ -2109,6 +2113,18 @@ export default function localUnitTest() {
       expect(result.ok).assertTrue();
       expect(result.code).assertEqual('STYLE_TRANSFER_DONE');
       expect(result.detailText.indexOf('transferMs=6') >= 0).assertTrue();
+    });
+
+    it('definesAndroidBuiltInStyleTransferStyles', 0, () => {
+      expect(builtInStyleTransferStyles.length).assertEqual(builtInStyleTransferStyleCount);
+      expect(builtInStyleTransferStyleCount).assertEqual(19);
+      expect(builtInStyleTransferStyles[0].rawfilePath).assertEqual('styletransfer/style0.jpg');
+      expect(builtInStyleTransferStyles[18].rawfilePath).assertEqual('styletransfer/style18.jpg');
+      expect(builtInStyleTransferUri(builtInStyleTransferStyles[0]))
+        .assertEqual('rawfile://styletransfer/style0.jpg');
+      expect(rawfilePathFromBuiltInStyleTransferUri('rawfile://styletransfer/style18.jpg'))
+        .assertEqual('styletransfer/style18.jpg');
+      expect(rawfilePathFromBuiltInStyleTransferUri('file://selected/style.jpg')).assertEqual('');
     });
 
     it('runtimeFactoryInjectsTextRecognitionServiceForOcrWorkflow', 0, async () => {

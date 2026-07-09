@@ -102,6 +102,7 @@ export type AppStringKey =
   'feature_runtime_preview_content' |
   'feature_runtime_preview_style' |
   'feature_runtime_preview_model' |
+  'feature_runtime_style_presets_title' |
   'feature_runtime_result_label' |
   'feature_runtime_result_score' |
   'feature_runtime_result_count' |
@@ -250,6 +251,7 @@ const APP_STRING_KEYS: AppStringKey[] = [
   'feature_runtime_preview_content',
   'feature_runtime_preview_style',
   'feature_runtime_preview_model',
+  'feature_runtime_style_presets_title',
   'feature_runtime_result_label',
   'feature_runtime_result_score',
   'feature_runtime_result_count',
@@ -505,6 +507,8 @@ export function appString(key: AppStringKey): ResourceStr {
       return $r('app.string.feature_runtime_preview_style');
     case 'feature_runtime_preview_model':
       return $r('app.string.feature_runtime_preview_model');
+    case 'feature_runtime_style_presets_title':
+      return $r('app.string.feature_runtime_style_presets_title');
     case 'feature_runtime_result_label':
       return $r('app.string.feature_runtime_result_label');
     case 'feature_runtime_result_score':
