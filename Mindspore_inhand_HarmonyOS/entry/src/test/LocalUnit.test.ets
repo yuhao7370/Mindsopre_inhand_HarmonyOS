@@ -29,6 +29,11 @@ import {
   RawfileContentReader,
   rawfileContentToArrayBuffer
 } from '../main/ets/services/ai/MindSporeLiteModelRunner';
+import {
+  FileUriContentBackend,
+  FileUriContentReader,
+  FileUriDescriptor
+} from '../main/ets/services/ai/FileUriContentReader';
 import { image } from '@kit.ImageKit';
 import {
   imageClassificationCropOffset,
@@ -123,6 +128,43 @@ class FixedRawfileContentReader implements RawfileContentReader {
 class ThrowingRawfileContentReader implements RawfileContentReader {
   async getRawFileContent(_path: string): Promise<Uint8Array> {
     throw new Error('unexpected rawfile access');
+  }
+}
+
+class FixedFileUriContentBackend extends FileUriContentBackend {
+  readonly events: Array<string> = [];
+  private readonly content: Uint8Array;
+
+  constructor(content: Uint8Array) {
+    super();
+    this.content = content;
+  }
+
+  async open(uri: string): Promise<FileUriDescriptor> {
+    this.events.push(`open:${uri}`);
+    return new FileUriDescriptor(42);
+  }
+
+  async size(file: FileUriDescriptor): Promise<number> {
+    this.events.push(`size:${file.fd}`);
+    return this.content.length + 2;
+  }
+
+  async read(file: FileUriDescriptor, buffer: ArrayBuffer): Promise<number> {
+    this.events.push(`read:${file.fd}`);
+    new Uint8Array(buffer).set(this.content);
+    return this.content.length;
+  }
+
+  async close(file: FileUriDescriptor): Promise<void> {
+    this.events.push(`close:${file.fd}`);
+  }
+}
+
+class ThrowingFileUriContentBackend extends FixedFileUriContentBackend {
+  async read(file: FileUriDescriptor, _buffer: ArrayBuffer): Promise<number> {
+    this.events.push(`read:${file.fd}`);
+    throw new Error('read failed');
   }
 }
 
@@ -305,6 +347,29 @@ export default function localUnitTest() {
       expect(copied.length).assertEqual(3);
       expect(copied[0]).assertEqual(1);
       expect(copied[2]).assertEqual(3);
+    });
+
+    it('readsSelectedModelUriContentToExactBytes', 0, async () => {
+      const backend: FixedFileUriContentBackend = new FixedFileUriContentBackend(new Uint8Array([1, 2, 3]));
+      const content = await new FileUriContentReader(backend).readFileContent('file://selected/custom_model.ms');
+
+      expect(content.length).assertEqual(3);
+      expect(content[0]).assertEqual(1);
+      expect(content[2]).assertEqual(3);
+      expect(backend.events.join('|')).assertEqual('open:file://selected/custom_model.ms|size:42|read:42|close:42');
+    });
+
+    it('closesSelectedModelUriWhenReadFails', 0, async () => {
+      const backend: ThrowingFileUriContentBackend = new ThrowingFileUriContentBackend(new Uint8Array([1, 2, 3]));
+      let failed = false;
+      try {
+        await new FileUriContentReader(backend).readFileContent('file://selected/bad.ms');
+      } catch (_) {
+        failed = true;
+      }
+
+      expect(failed).assertTrue();
+      expect(backend.events.join('|')).assertEqual('open:file://selected/bad.ms|size:42|read:42|close:42');
     });
 
     it('readsMindSporeFloatOutputScores', 0, () => {
