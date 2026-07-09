@@ -83,6 +83,30 @@ export type AppStringKey =
   'feature_runtime_text_ready' |
   'feature_runtime_pick_cancelled' |
   'feature_runtime_text_placeholder' |
+  'feature_runtime_preview_title' |
+  'feature_runtime_preview_image' |
+  'feature_runtime_preview_content' |
+  'feature_runtime_preview_style' |
+  'feature_runtime_preview_model' |
+  'feature_runtime_result_label' |
+  'feature_runtime_result_score' |
+  'feature_runtime_result_count' |
+  'feature_runtime_result_top_detection' |
+  'feature_runtime_result_lines' |
+  'feature_runtime_result_text' |
+  'feature_runtime_result_subjects' |
+  'feature_runtime_result_details' |
+  'feature_runtime_result_skeletons' |
+  'feature_runtime_result_points' |
+  'feature_runtime_result_execution_time' |
+  'feature_runtime_result_image' |
+  'feature_runtime_result_model' |
+  'feature_runtime_result_content_image' |
+  'feature_runtime_result_style_image' |
+  'feature_runtime_result_output' |
+  'feature_runtime_result_target_language' |
+  'feature_runtime_result_translated_text' |
+  'feature_runtime_result_foreground' |
   'feature_input_camera' |
   'feature_input_photo' |
   'feature_input_content_image' |
@@ -189,6 +213,30 @@ const APP_STRING_KEYS: AppStringKey[] = [
   'feature_runtime_text_ready',
   'feature_runtime_pick_cancelled',
   'feature_runtime_text_placeholder',
+  'feature_runtime_preview_title',
+  'feature_runtime_preview_image',
+  'feature_runtime_preview_content',
+  'feature_runtime_preview_style',
+  'feature_runtime_preview_model',
+  'feature_runtime_result_label',
+  'feature_runtime_result_score',
+  'feature_runtime_result_count',
+  'feature_runtime_result_top_detection',
+  'feature_runtime_result_lines',
+  'feature_runtime_result_text',
+  'feature_runtime_result_subjects',
+  'feature_runtime_result_details',
+  'feature_runtime_result_skeletons',
+  'feature_runtime_result_points',
+  'feature_runtime_result_execution_time',
+  'feature_runtime_result_image',
+  'feature_runtime_result_model',
+  'feature_runtime_result_content_image',
+  'feature_runtime_result_style_image',
+  'feature_runtime_result_output',
+  'feature_runtime_result_target_language',
+  'feature_runtime_result_translated_text',
+  'feature_runtime_result_foreground',
   'feature_input_camera',
   'feature_input_photo',
   'feature_input_content_image',
@@ -383,6 +431,54 @@ export function appString(key: AppStringKey): ResourceStr {
       return $r('app.string.feature_runtime_pick_cancelled');
     case 'feature_runtime_text_placeholder':
       return $r('app.string.feature_runtime_text_placeholder');
+    case 'feature_runtime_preview_title':
+      return $r('app.string.feature_runtime_preview_title');
+    case 'feature_runtime_preview_image':
+      return $r('app.string.feature_runtime_preview_image');
+    case 'feature_runtime_preview_content':
+      return $r('app.string.feature_runtime_preview_content');
+    case 'feature_runtime_preview_style':
+      return $r('app.string.feature_runtime_preview_style');
+    case 'feature_runtime_preview_model':
+      return $r('app.string.feature_runtime_preview_model');
+    case 'feature_runtime_result_label':
+      return $r('app.string.feature_runtime_result_label');
+    case 'feature_runtime_result_score':
+      return $r('app.string.feature_runtime_result_score');
+    case 'feature_runtime_result_count':
+      return $r('app.string.feature_runtime_result_count');
+    case 'feature_runtime_result_top_detection':
+      return $r('app.string.feature_runtime_result_top_detection');
+    case 'feature_runtime_result_lines':
+      return $r('app.string.feature_runtime_result_lines');
+    case 'feature_runtime_result_text':
+      return $r('app.string.feature_runtime_result_text');
+    case 'feature_runtime_result_subjects':
+      return $r('app.string.feature_runtime_result_subjects');
+    case 'feature_runtime_result_details':
+      return $r('app.string.feature_runtime_result_details');
+    case 'feature_runtime_result_skeletons':
+      return $r('app.string.feature_runtime_result_skeletons');
+    case 'feature_runtime_result_points':
+      return $r('app.string.feature_runtime_result_points');
+    case 'feature_runtime_result_execution_time':
+      return $r('app.string.feature_runtime_result_execution_time');
+    case 'feature_runtime_result_image':
+      return $r('app.string.feature_runtime_result_image');
+    case 'feature_runtime_result_model':
+      return $r('app.string.feature_runtime_result_model');
+    case 'feature_runtime_result_content_image':
+      return $r('app.string.feature_runtime_result_content_image');
+    case 'feature_runtime_result_style_image':
+      return $r('app.string.feature_runtime_result_style_image');
+    case 'feature_runtime_result_output':
+      return $r('app.string.feature_runtime_result_output');
+    case 'feature_runtime_result_target_language':
+      return $r('app.string.feature_runtime_result_target_language');
+    case 'feature_runtime_result_translated_text':
+      return $r('app.string.feature_runtime_result_translated_text');
+    case 'feature_runtime_result_foreground':
+      return $r('app.string.feature_runtime_result_foreground');
     case 'feature_input_camera':
       return $r('app.string.feature_input_camera');
     case 'feature_input_photo':

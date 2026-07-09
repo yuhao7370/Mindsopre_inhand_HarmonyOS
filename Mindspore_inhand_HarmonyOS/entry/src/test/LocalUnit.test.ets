@@ -3,7 +3,7 @@ import { AppRoute, findRouteByName } from '../main/ets/app/AppRoutes';
 import { MainTab, mainTabs } from '../main/ets/app/AppState';
 import { hasAppStringKey } from '../main/ets/common/i18n/AppStrings';
 import { iconLabel } from '../main/ets/common/icons/IconSymbols';
-import { AiRunResult, DefaultAiService } from '../main/ets/services/ai/AiService';
+import { AiRunResult, DefaultAiService, aiRunResultRows } from '../main/ets/services/ai/AiService';
 import {
   androidDefaultTranslationTargetLanguage,
   containsAndroidChineseText,
@@ -536,6 +536,9 @@ export default function localUnitTest() {
       expect(hasAppStringKey('feature_runtime_text_translation_failed')).assertTrue();
       expect(hasAppStringKey('feature_runtime_segmentation_done')).assertTrue();
       expect(hasAppStringKey('feature_runtime_pose_done')).assertTrue();
+      expect(hasAppStringKey('feature_runtime_preview_title')).assertTrue();
+      expect(hasAppStringKey('feature_runtime_result_count')).assertTrue();
+      expect(hasAppStringKey('feature_runtime_result_text')).assertTrue();
     });
 
     it('doesNotNavigateQuickStartParentWithEmptyUrl', 0, () => {
@@ -693,6 +696,8 @@ export default function localUnitTest() {
       expect(result.messageKey).assertEqual('feature_runtime_text_recognition_done');
       expect(result.detailText.indexOf('MindSpore') >= 0).assertTrue();
       expect(result.detailText.indexOf('lineCount=2') >= 0).assertTrue();
+      expect(aiRunResultRows(result)[0].labelKey).assertEqual('feature_runtime_result_lines');
+      expect(aiRunResultRows(result)[2].value.indexOf('MindSpore') >= 0).assertTrue();
       expect(runner.seenImageUris[0]).assertEqual('file://selected/text.jpg');
     });
 
@@ -812,6 +817,8 @@ export default function localUnitTest() {
       expect(result.messageKey).assertEqual('feature_runtime_segmentation_done');
       expect(result.detailText.indexOf('subjectCount=1') >= 0).assertTrue();
       expect(result.detailText.indexOf('[1,2,100,200]') >= 0).assertTrue();
+      expect(aiRunResultRows(result)[0].labelKey).assertEqual('feature_runtime_result_subjects');
+      expect(aiRunResultRows(result)[0].value).assertEqual('1');
       expect(runner.seenImageUris[0]).assertEqual('file://selected/person.jpg');
     });
 
@@ -879,6 +886,8 @@ export default function localUnitTest() {
       expect(result.messageKey).assertEqual('feature_runtime_pose_done');
       expect(result.detailText.indexOf('skeletonCount=1') >= 0).assertTrue();
       expect(result.detailText.indexOf('0 95.00% [10,20]') >= 0).assertTrue();
+      expect(aiRunResultRows(result)[1].labelKey).assertEqual('feature_runtime_result_points');
+      expect(aiRunResultRows(result)[1].value).assertEqual('1');
       expect(runner.seenImageUris[0]).assertEqual('file://selected/pose.jpg');
     });
 
@@ -1278,6 +1287,8 @@ export default function localUnitTest() {
       expect(result.detailText.indexOf('person') >= 0).assertTrue();
       expect(result.detailText.indexOf('75.00%') >= 0).assertTrue();
       expect(result.detailText.indexOf('street.jpg') >= 0).assertTrue();
+      expect(aiRunResultRows(result)[0].labelKey).assertEqual('feature_runtime_result_count');
+      expect(aiRunResultRows(result)[1].value.indexOf('person') >= 0).assertTrue();
     });
 
     it('runtimeFactoryInjectsObjectDetectionServiceForObjectWorkflow', 0, async () => {
@@ -1552,6 +1563,8 @@ export default function localUnitTest() {
       expect(result.detailText.indexOf('label=goldfish') >= 0).assertTrue();
       expect(result.detailText.indexOf('score=0.900000') >= 0).assertTrue();
       expect(result.detailText.indexOf('fish.jpg') >= 0).assertTrue();
+      expect(aiRunResultRows(result)[0].labelKey).assertEqual('feature_runtime_result_label');
+      expect(aiRunResultRows(result)[0].value).assertEqual('goldfish');
     });
 
     it('classificationFailsWhenRunnerScoresDoNotMapToLabel', 0, async () => {

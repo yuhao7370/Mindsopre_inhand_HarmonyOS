@@ -62,12 +62,79 @@ export interface AiRunInputs {
   readonly text?: string;
 }
 
+export type AiRunData =
+  AiClassificationData |
+  AiObjectDetectionsData |
+  AiStyleTransferData |
+  AiTextRecognitionData |
+  AiTextTranslationData |
+  AiSegmentationData |
+  AiPoseData |
+  AiCustomModelData;
+
+export interface AiClassificationData {
+  readonly kind: 'classification';
+  readonly imageUri: string;
+  readonly classification: ImageClassificationResult;
+}
+
+export interface AiObjectDetectionsData {
+  readonly kind: 'objectDetections';
+  readonly imageUri: string;
+  readonly modelUri: string;
+  readonly detections: Array<ObjectDetection>;
+}
+
+export interface AiStyleTransferData {
+  readonly kind: 'styleTransfer';
+  readonly contentImageUri: string;
+  readonly styleImageUri: string;
+  readonly result: StyleTransferResult;
+}
+
+export interface AiTextRecognitionData {
+  readonly kind: 'textRecognition';
+  readonly imageUri: string;
+  readonly result: TextRecognitionResult;
+}
+
+export interface AiTextTranslationData {
+  readonly kind: 'textTranslation';
+  readonly result: TextTranslationResult;
+}
+
+export interface AiSegmentationData {
+  readonly kind: 'segmentation';
+  readonly imageUri: string;
+  readonly result: SegmentationResult;
+}
+
+export interface AiPoseData {
+  readonly kind: 'pose';
+  readonly imageUri: string;
+  readonly result: PoseResult;
+}
+
+export interface AiCustomModelData {
+  readonly kind: 'customModel';
+  readonly imageUri: string;
+  readonly modelUri: string;
+  readonly outputCount: number;
+  readonly executionMs: number;
+}
+
+export interface AiRunResultRow {
+  readonly labelKey: AppStringKey;
+  readonly value: string;
+}
+
 export interface AiRunResult {
   readonly ok: boolean;
   readonly code: AiRunCode;
   readonly aiMethod: string;
   readonly messageKey: AppStringKey;
   readonly detailText: string;
+  readonly data?: AiRunData;
 }
 
 export interface AiServiceOptions {
@@ -175,7 +242,12 @@ export class DefaultAiService {
       code: 'POSE_DETECTION_DONE',
       aiMethod: 'detectPose',
       messageKey: 'feature_runtime_pose_done',
-      detailText: this.poseSummary(result, imageUri)
+      detailText: this.poseSummary(result, imageUri),
+      data: {
+        kind: 'pose',
+        imageUri: imageUri,
+        result: result
+      }
     };
   }
 
@@ -216,7 +288,12 @@ export class DefaultAiService {
       code: 'SEGMENTATION_DONE',
       aiMethod: 'segmentPerson',
       messageKey: 'feature_runtime_segmentation_done',
-      detailText: this.segmentationSummary(result, imageUri)
+      detailText: this.segmentationSummary(result, imageUri),
+      data: {
+        kind: 'segmentation',
+        imageUri: imageUri,
+        result: result
+      }
     };
   }
 
@@ -257,7 +334,12 @@ export class DefaultAiService {
       code: 'TEXT_RECOGNITION_DONE',
       aiMethod: 'recognizeText',
       messageKey: 'feature_runtime_text_recognition_done',
-      detailText: this.textRecognitionSummary(result, imageUri)
+      detailText: this.textRecognitionSummary(result, imageUri),
+      data: {
+        kind: 'textRecognition',
+        imageUri: imageUri,
+        result: result
+      }
     };
   }
 
@@ -298,7 +380,11 @@ export class DefaultAiService {
       code: 'TEXT_TRANSLATION_DONE',
       aiMethod: 'translateText',
       messageKey: 'feature_runtime_text_translation_done',
-      detailText: this.textTranslationSummary(result)
+      detailText: this.textTranslationSummary(result),
+      data: {
+        kind: 'textTranslation',
+        result: result
+      }
     };
   }
 
@@ -340,7 +426,13 @@ export class DefaultAiService {
       code: 'STYLE_TRANSFER_DONE',
       aiMethod: 'runStyleTransfer',
       messageKey: 'feature_runtime_style_transfer_done',
-      detailText: this.styleTransferSummary(result, contentImageUri, styleImageUri)
+      detailText: this.styleTransferSummary(result, contentImageUri, styleImageUri),
+      data: {
+        kind: 'styleTransfer',
+        contentImageUri: contentImageUri,
+        styleImageUri: styleImageUri,
+        result: result
+      }
     };
   }
 
@@ -374,7 +466,13 @@ export class DefaultAiService {
         code: 'OBJECT_DETECTION_DONE',
         aiMethod: 'detectObjects',
         messageKey: 'feature_runtime_object_detection_done',
-        detailText: this.objectDetectionSummary(result.detections, imageUri, inputs.modelUri ?? '')
+        detailText: this.objectDetectionSummary(result.detections, imageUri, inputs.modelUri ?? ''),
+        data: {
+          kind: 'objectDetections',
+          imageUri: imageUri,
+          modelUri: inputs.modelUri ?? '',
+          detections: result.detections
+        }
       };
     }
     return {
@@ -414,7 +512,12 @@ export class DefaultAiService {
         code: 'CLASSIFICATION_DONE',
         aiMethod: 'classifyImage',
         messageKey: 'feature_runtime_classification_done',
-        detailText: this.imageClassificationSummary(result.classification, imageUri)
+        detailText: this.imageClassificationSummary(result.classification, imageUri),
+        data: {
+          kind: 'classification',
+          imageUri: imageUri,
+          classification: result.classification
+        }
       };
     }
     return {
@@ -446,7 +549,14 @@ export class DefaultAiService {
       code: 'CUSTOM_MODEL_SIMULATED',
       aiMethod: 'runCustomModel',
       messageKey: 'feature_runtime_custom_model_done',
-      detailText: this.customModelSummary(modelUri, imageUri)
+      detailText: this.customModelSummary(modelUri, imageUri),
+      data: {
+        kind: 'customModel',
+        imageUri: imageUri,
+        modelUri: modelUri,
+        outputCount: 10,
+        executionMs: 100
+      }
     };
   }
 
@@ -465,7 +575,14 @@ export class DefaultAiService {
         code: 'CUSTOM_MODEL_DONE',
         aiMethod: 'runCustomModel',
         messageKey: 'feature_runtime_custom_model_done',
-        detailText: this.customModelExecutionSummary(result)
+        detailText: this.customModelExecutionSummary(result),
+        data: {
+          kind: 'customModel',
+          imageUri: imageUri,
+          modelUri: modelUri,
+          outputCount: result.output.length,
+          executionMs: result.executionMs
+        }
       };
     } catch (_) {
       return this.customModelFailedResult(modelUri, imageUri);
@@ -645,11 +762,94 @@ export class DefaultAiService {
   }
 
   private lastPathSegment(uri: string): string {
-    const normalized = uri.split('\\').join('/');
-    const parts = normalized.split('/');
-    if (parts.length === 0) {
-      return uri;
-    }
-    return parts[parts.length - 1];
+    return runtimePathSegment(uri);
   }
+}
+
+export function aiRunResultRows(result: AiRunResult): Array<AiRunResultRow> {
+  const data = result.data;
+  if (data === undefined) {
+    return [];
+  }
+
+  switch (data.kind) {
+    case 'classification':
+      return [
+        resultRow('feature_runtime_result_label', data.classification.label),
+        resultRow('feature_runtime_result_score', `${(data.classification.score * 100).toFixed(2)}%`),
+        resultRow('feature_runtime_result_image', runtimePathSegment(data.imageUri))
+      ];
+    case 'objectDetections':
+      return objectDetectionResultRows(data);
+    case 'styleTransfer':
+      return [
+        resultRow('feature_runtime_result_content_image', runtimePathSegment(data.contentImageUri)),
+        resultRow('feature_runtime_result_style_image', runtimePathSegment(data.styleImageUri)),
+        resultRow('feature_runtime_result_output', `${data.result.outputFloatCount}`),
+        resultRow('feature_runtime_result_execution_time', `${data.result.executionMs}ms`)
+      ];
+    case 'textRecognition':
+      return [
+        resultRow('feature_runtime_result_lines', `${data.result.lineCount}`),
+        resultRow('feature_runtime_result_image', runtimePathSegment(data.imageUri)),
+        resultRow('feature_runtime_result_text', data.result.text)
+      ];
+    case 'textTranslation':
+      return [
+        resultRow('feature_runtime_result_target_language', data.result.targetLanguage),
+        resultRow('feature_runtime_result_text', data.result.sourceText),
+        resultRow('feature_runtime_result_translated_text', data.result.translatedText)
+      ];
+    case 'segmentation':
+      return [
+        resultRow('feature_runtime_result_subjects', `${data.result.subjectCount}`),
+        resultRow('feature_runtime_result_details', `${data.result.detailCount}`),
+        resultRow('feature_runtime_result_foreground', `${data.result.foregroundAvailable}`),
+        resultRow('feature_runtime_result_execution_time', `${data.result.executionMs}ms`)
+      ];
+    case 'pose':
+      return [
+        resultRow('feature_runtime_result_skeletons', `${data.result.skeletonCount}`),
+        resultRow('feature_runtime_result_points', `${data.result.pointCount}`),
+        resultRow('feature_runtime_result_execution_time', `${data.result.executionMs}ms`)
+      ];
+    case 'customModel':
+      return [
+        resultRow('feature_runtime_result_model', runtimePathSegment(data.modelUri)),
+        resultRow('feature_runtime_result_output', `${data.outputCount}`),
+        resultRow('feature_runtime_result_execution_time', `${data.executionMs}ms`)
+      ];
+  }
+}
+
+function objectDetectionResultRows(data: AiObjectDetectionsData): Array<AiRunResultRow> {
+  const rows: Array<AiRunResultRow> = [
+    resultRow('feature_runtime_result_count', `${data.detections.length}`)
+  ];
+  if (data.detections.length > 0) {
+    const top = data.detections[0];
+    const label = top.label.length > 0 ? top.label : `${top.labelId}`;
+    rows.push(resultRow('feature_runtime_result_top_detection', `${label} ${(top.score * 100).toFixed(2)}%`));
+  }
+  rows.push(resultRow('feature_runtime_result_image', runtimePathSegment(data.imageUri)));
+  if (data.modelUri.length > 0) {
+    rows.push(resultRow('feature_runtime_result_model', runtimePathSegment(data.modelUri)));
+  }
+  return rows;
+}
+
+function resultRow(labelKey: AppStringKey, value: string): AiRunResultRow {
+  return {
+    labelKey: labelKey,
+    value: value
+  };
+}
+
+function runtimePathSegment(uri: string): string {
+  const normalized = uri.split('\\').join('/');
+  const parts = normalized.split('/');
+  if (parts.length === 0) {
+    return uri;
+  }
+  return parts[parts.length - 1];
 }

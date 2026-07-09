@@ -7,7 +7,7 @@ import {
   permissionLabelKey,
   workflowForRoute
 } from '../features/runtime/FeatureWorkflowCatalog';
-import { AiRunInputs, AiRunResult, DefaultAiService } from '../services/ai/AiService';
+import { AiRunInputs, AiRunResult, AiRunResultRow, DefaultAiService, aiRunResultRows } from '../services/ai/AiService';
 import { cachedRuntimeAiServiceForHarmonyResourceManager } from '../services/ai/ImageClassificationRuntimeFactory';
 import { PermissionRequestSummary, PermissionService } from '../services/permissions/PermissionService';
 import { PickerService, PickResult } from '../services/picker/PickerService';
@@ -29,6 +29,7 @@ struct FeatureRuntimePage {
   @State routeName: string = '';
   @State aiMethod: string = '';
   @State resultText: string = '';
+  @State resultRows: Array<AiRunResultRow> = [];
   @State selectedInputSummary: string = '';
   @State imageInputUri: string = '';
   @State contentImageUri: string = '';
@@ -59,6 +60,7 @@ struct FeatureRuntimePage {
 
   private prepareInput(inputKind: FeatureInputKind): void {
     this.statusKey = 'feature_runtime_status_preparing';
+    this.resultRows = [];
     if (inputKind === 'text') {
       this.statusKey = this.userText.length > 0 ? 'feature_runtime_text_ready' : 'feature_runtime_status_idle';
       this.selectedInputSummary = this.userText;
@@ -134,15 +136,33 @@ struct FeatureRuntimePage {
       if (!permission.ok) {
         this.statusKey = 'feature_runtime_permission_denied';
         this.resultText = permission.requested.join(', ');
+        this.resultRows = [];
         return;
       }
       cachedRuntimeAiServiceForHarmonyResourceManager(workflow, context.resourceManager).then((aiService: DefaultAiService) => {
         aiService.run(workflow, this.aiRunInputs()).then((result: AiRunResult) => {
           this.statusKey = result.messageKey;
           this.resultText = result.detailText.length > 0 ? result.detailText : `${result.aiMethod}: ${result.code}`;
+          this.resultRows = aiRunResultRows(result);
         });
       });
     });
+  }
+
+  private hasInputPreview(): boolean {
+    return this.imageInputUri.length > 0 ||
+      this.contentImageUri.length > 0 ||
+      this.styleImageUri.length > 0 ||
+      this.modelInputUri.length > 0;
+  }
+
+  private lastPathSegment(uri: string): string {
+    const normalized = uri.split('\\').join('/');
+    const parts = normalized.split('/');
+    if (parts.length === 0) {
+      return uri;
+    }
+    return parts[parts.length - 1];
   }
 
   @Builder
@@ -166,6 +186,61 @@ struct FeatureRuntimePage {
       .backgroundColor('#F7F8FA')
       .borderRadius(AppRadius.button)
       .margin({ right: AppSpacing.sm, bottom: AppSpacing.sm })
+  }
+
+  @Builder
+  imagePreview(labelKey: AppStringKey, uri: string) {
+    Column() {
+      Text(appString(labelKey))
+        .fontSize(12)
+        .fontColor(AppColor.textSecondary)
+        .width('100%')
+      Image(uri)
+        .width('100%')
+        .height(156)
+        .objectFit(ImageFit.Contain)
+        .backgroundColor('#F7F8FA')
+        .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
+        .margin({ top: AppSpacing.xs })
+    }
+    .width('100%')
+    .margin({ top: AppSpacing.sm })
+  }
+
+  @Builder
+  filePreview(labelKey: AppStringKey, uri: string) {
+    Row() {
+      Text(appString(labelKey))
+        .fontSize(12)
+        .fontColor(AppColor.textSecondary)
+        .width(84)
+      Text(this.lastPathSegment(uri))
+        .fontSize(12)
+        .fontColor(AppColor.textMuted)
+        .layoutWeight(1)
+        .maxLines(1)
+    }
+    .width('100%')
+    .margin({ top: AppSpacing.xs })
+    .alignItems(VerticalAlign.Center)
+  }
+
+  @Builder
+  resultRow(row: AiRunResultRow) {
+    Row() {
+      Text(appString(row.labelKey))
+        .fontSize(12)
+        .fontColor(AppColor.textSecondary)
+        .width(108)
+      Text(row.value)
+        .fontSize(13)
+        .fontColor(AppColor.textPrimary)
+        .layoutWeight(1)
+        .maxLines(4)
+    }
+    .width('100%')
+    .margin({ top: AppSpacing.xs })
+    .alignItems(VerticalAlign.Top)
   }
 
   build() {
@@ -230,6 +305,29 @@ struct FeatureRuntimePage {
                 this.statusKey = value.length > 0 ? 'feature_runtime_text_ready' : 'feature_runtime_status_idle';
               })
           }
+          if (this.hasInputPreview()) {
+            Column() {
+              Text(appString('feature_runtime_preview_title'))
+                .fontSize(14)
+                .fontWeight(FontWeight.Medium)
+                .fontColor(AppColor.textPrimary)
+                .width('100%')
+              if (this.imageInputUri.length > 0) {
+                this.imagePreview('feature_runtime_preview_image', this.imageInputUri)
+              }
+              if (this.contentImageUri.length > 0) {
+                this.imagePreview('feature_runtime_preview_content', this.contentImageUri)
+              }
+              if (this.styleImageUri.length > 0) {
+                this.imagePreview('feature_runtime_preview_style', this.styleImageUri)
+              }
+              if (this.modelInputUri.length > 0) {
+                this.filePreview('feature_runtime_preview_model', this.modelInputUri)
+              }
+            }
+            .width('100%')
+            .margin({ top: AppSpacing.md })
+          }
         }
         .width('100%')
         .padding(AppSpacing.md)
@@ -274,6 +372,11 @@ struct FeatureRuntimePage {
             .fontColor(AppColor.textSecondary)
             .margin({ top: AppSpacing.sm })
             .width('100%')
+          if (this.resultRows.length > 0) {
+            ForEach(this.resultRows, (row: AiRunResultRow) => {
+              this.resultRow(row)
+            }, (row: AiRunResultRow) => row.labelKey)
+          }
           if (this.resultText.length > 0) {
             Text(this.resultText)
               .fontSize(12)
