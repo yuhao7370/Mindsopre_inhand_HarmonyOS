@@ -14,6 +14,10 @@
 **/.test/
 **/.cxx/
 
+# Downloaded MindSpore model assets
+/entry/src/main/resources/rawfile/model/*.ms
+/entry/src/main/resources/rawfile/model/*.ms.download
+
 # Local native tooling cache
 /.clangd
 

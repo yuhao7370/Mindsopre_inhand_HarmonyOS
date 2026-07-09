@@ -7,10 +7,16 @@ import { DefaultAiService } from '../main/ets/services/ai/AiService';
 import {
   ImageClassificationService,
   ImageClassificationScoreRunner,
+  imageClassificationModelDownloadUrl,
+  imageClassificationModelRawfilePath,
   imageCategoryLabelCount,
   parseImageCategoryLabels,
   topClassificationResult
 } from '../main/ets/services/ai/ImageClassificationService';
+import {
+  floatScoresFromOutputBuffer,
+  rawfileContentToArrayBuffer
+} from '../main/ets/services/ai/MindSporeLiteModelRunner';
 import { FeatureWorkflow, workflowForRoute } from '../main/ets/features/runtime/FeatureWorkflowCatalog';
 import {
   declaredPermissionNames,
@@ -214,6 +220,29 @@ export default function localUnitTest() {
       expect(labels[0]).assertEqual('tench');
       expect(labels[2]).assertEqual('toilet_tissue');
       expect(imageCategoryLabelCount).assertEqual(1000);
+    });
+
+    it('usesAndroidMobilenetV2ModelAssetContract', 0, () => {
+      expect(imageClassificationModelRawfilePath).assertEqual('model/mobilenetv2.ms');
+      expect(imageClassificationModelDownloadUrl).assertEqual('https://download.mindspore.cn/model_zoo/official/lite/mobilenetv2_imagenet/mobilenetv2.ms');
+    });
+
+    it('copiesRawfileViewToExactModelBuffer', 0, () => {
+      const backing: Uint8Array = new Uint8Array([9, 1, 2, 3, 8]);
+      const view: Uint8Array = backing.subarray(1, 4);
+      const buffer: ArrayBuffer = rawfileContentToArrayBuffer(view);
+      const copied: Uint8Array = new Uint8Array(buffer);
+      expect(copied.length).assertEqual(3);
+      expect(copied[0]).assertEqual(1);
+      expect(copied[2]).assertEqual(3);
+    });
+
+    it('readsMindSporeFloatOutputScores', 0, () => {
+      const output: Float32Array = new Float32Array([0.1, 0.9, 0.2]);
+      const outputBuffer: ArrayBuffer = output.buffer as ArrayBuffer;
+      const scores: Array<number> = floatScoresFromOutputBuffer(outputBuffer);
+      expect(scores.length).assertEqual(3);
+      expect(scores[1].toFixed(6)).assertEqual('0.900000');
     });
 
     it('mapsTopClassificationScoreToLabel', 0, () => {

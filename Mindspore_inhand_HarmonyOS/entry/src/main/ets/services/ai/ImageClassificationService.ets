@@ -1,5 +1,8 @@
 export const imageCategoryLabelRawfilePath: string = 'labels/image_category_old.txt';
 export const imageCategoryLabelCount: number = 1000;
+export const imageClassificationModelRawfilePath: string = 'model/mobilenetv2.ms';
+export const imageClassificationModelDownloadUrl: string =
+  'https://download.mindspore.cn/model_zoo/official/lite/mobilenetv2_imagenet/mobilenetv2.ms';
 
 export interface ImageClassificationResult {
   readonly ok: boolean;
