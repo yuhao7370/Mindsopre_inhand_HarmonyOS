@@ -1,6 +1,7 @@
 import { image } from '@kit.ImageKit';
 import { mindSporeLite } from '@kit.MindSporeLiteKit';
 import {
+  mindSporeLiteCpuContext,
   RawfileContentReader,
   rawfileContentToArrayBuffer
 } from './MindSporeLiteModelRunner';
@@ -232,7 +233,7 @@ export class MindSporeLiteStyleTransferTensorRunner implements StyleTransferTens
         return this.cachedSelectedPredictModel;
       }
       const content = await this.modelFileReader.readFileContent(modelUri);
-      const model = await mindSporeLite.loadModelFromBuffer(rawfileContentToArrayBuffer(content));
+      const model = await mindSporeLite.loadModelFromBuffer(rawfileContentToArrayBuffer(content), mindSporeLiteCpuContext());
       this.cachedPredictModelUri = modelUri;
       this.cachedSelectedPredictModel = model;
       return model;
@@ -242,7 +243,7 @@ export class MindSporeLiteStyleTransferTensorRunner implements StyleTransferTens
     }
 
     const content = await this.resourceManager.getRawFileContent(this.predictModelRawfilePath);
-    const model = await mindSporeLite.loadModelFromBuffer(rawfileContentToArrayBuffer(content));
+    const model = await mindSporeLite.loadModelFromBuffer(rawfileContentToArrayBuffer(content), mindSporeLiteCpuContext());
     this.cachedPredictModel = model;
     return model;
   }
@@ -253,7 +254,7 @@ export class MindSporeLiteStyleTransferTensorRunner implements StyleTransferTens
         return this.cachedSelectedTransferModel;
       }
       const content = await this.modelFileReader.readFileContent(modelUri);
-      const model = await mindSporeLite.loadModelFromBuffer(rawfileContentToArrayBuffer(content));
+      const model = await mindSporeLite.loadModelFromBuffer(rawfileContentToArrayBuffer(content), mindSporeLiteCpuContext());
       this.cachedTransferModelUri = modelUri;
       this.cachedSelectedTransferModel = model;
       return model;
@@ -263,7 +264,7 @@ export class MindSporeLiteStyleTransferTensorRunner implements StyleTransferTens
     }
 
     const content = await this.resourceManager.getRawFileContent(this.transferModelRawfilePath);
-    const model = await mindSporeLite.loadModelFromBuffer(rawfileContentToArrayBuffer(content));
+    const model = await mindSporeLite.loadModelFromBuffer(rawfileContentToArrayBuffer(content), mindSporeLiteCpuContext());
     this.cachedTransferModel = model;
     return model;
   }

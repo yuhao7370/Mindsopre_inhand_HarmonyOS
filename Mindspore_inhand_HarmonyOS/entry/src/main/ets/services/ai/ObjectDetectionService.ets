@@ -2,6 +2,7 @@ import { image } from '@kit.ImageKit';
 import { mindSporeLite } from '@kit.MindSporeLiteKit';
 import { FileUriContentReader } from './FileUriContentReader';
 import {
+  mindSporeLiteCpuContext,
   RawfileContentReader,
   rawfileContentToArrayBuffer
 } from './MindSporeLiteModelRunner';
@@ -172,7 +173,7 @@ export class MindSporeLiteObjectDetectionTensorRunner implements ObjectDetection
     }
 
     const content = await this.resourceManager.getRawFileContent(this.modelRawfilePath);
-    const model = await mindSporeLite.loadModelFromBuffer(rawfileContentToArrayBuffer(content));
+    const model = await mindSporeLite.loadModelFromBuffer(rawfileContentToArrayBuffer(content), mindSporeLiteCpuContext());
     this.cachedRawfileModel = model;
     return model;
   }
@@ -184,7 +185,8 @@ export class MindSporeLiteObjectDetectionTensorRunner implements ObjectDetection
     }
 
     const modelContent = await this.modelContentReader.readFileContent(modelUri);
-    const model = await mindSporeLite.loadModelFromBuffer(rawfileContentToArrayBuffer(modelContent));
+    const model =
+      await mindSporeLite.loadModelFromBuffer(rawfileContentToArrayBuffer(modelContent), mindSporeLiteCpuContext());
     this.cachedSelectedModels.set(modelUri, model);
     return model;
   }

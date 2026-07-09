@@ -95,6 +95,8 @@ import {
 } from '../main/ets/services/ai/ImageClassificationRuntimeFactory';
 import {
   floatScoresFromOutputBuffer,
+  mindSporeLiteCpuContext,
+  mindSporeLiteCpuThreadNum,
   RawfileContentReader,
   rawfileContentToArrayBuffer
 } from '../main/ets/services/ai/MindSporeLiteModelRunner';
@@ -1953,6 +1955,13 @@ export default function localUnitTest() {
     it('usesAndroidMobilenetV2ModelAssetContract', 0, () => {
       expect(imageClassificationModelRawfilePath).assertEqual('model/mobilenetv2.ms');
       expect(imageClassificationModelDownloadUrl).assertEqual('https://download.mindspore.cn/model_zoo/official/lite/mobilenetv2_imagenet/mobilenetv2.ms');
+    });
+
+    it('usesAndroidMindSporeCpuThreadContract', 0, () => {
+      const context = mindSporeLiteCpuContext();
+      expect(mindSporeLiteCpuThreadNum).assertEqual(2);
+      expect(context.target![0]).assertEqual('cpu');
+      expect(context.cpu!.threadNum).assertEqual(2);
     });
 
     it('parsesAndroidObjectDetectionLabels', 0, () => {

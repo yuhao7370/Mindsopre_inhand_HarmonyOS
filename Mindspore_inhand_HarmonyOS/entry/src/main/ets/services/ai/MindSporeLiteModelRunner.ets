@@ -9,6 +9,17 @@ export interface MindSporeLiteModelRunnerOptions {
   readonly modelRawfilePath: string;
 }
 
+export const mindSporeLiteCpuThreadNum: number = 2;
+
+export function mindSporeLiteCpuContext(): mindSporeLite.Context {
+  return {
+    target: ['cpu'],
+    cpu: {
+      threadNum: mindSporeLiteCpuThreadNum
+    }
+  };
+}
+
 export class MindSporeLiteModelRunner {
   private readonly resourceManager: RawfileContentReader;
   private readonly modelRawfilePath: string;
@@ -42,7 +53,7 @@ export class MindSporeLiteModelRunner {
 
     const content = await this.resourceManager.getRawFileContent(this.modelRawfilePath);
     const modelBuffer = rawfileContentToArrayBuffer(content);
-    const model = await mindSporeLite.loadModelFromBuffer(modelBuffer);
+    const model = await mindSporeLite.loadModelFromBuffer(modelBuffer, mindSporeLiteCpuContext());
     this.cachedModel = model;
     return model;
   }

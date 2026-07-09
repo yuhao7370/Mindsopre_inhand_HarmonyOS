@@ -1,7 +1,11 @@
 import { mindSporeLite } from '@kit.MindSporeLiteKit';
 import { image } from '@kit.ImageKit';
 import { FileUriContentReader } from './FileUriContentReader';
-import { floatScoresFromOutputBuffer, rawfileContentToArrayBuffer } from './MindSporeLiteModelRunner';
+import {
+  floatScoresFromOutputBuffer,
+  mindSporeLiteCpuContext,
+  rawfileContentToArrayBuffer
+} from './MindSporeLiteModelRunner';
 
 export const customModelInputSize: number = 224;
 export const customModelInputChannels: number = 3;
@@ -96,7 +100,7 @@ export class CustomModelSelectedFileRunner implements CustomModelTensorRunner {
 
     const modelContent = await this.modelContentReader.readFileContent(modelUri);
     const modelBuffer = rawfileContentToArrayBuffer(modelContent);
-    const model = await mindSporeLite.loadModelFromBuffer(modelBuffer);
+    const model = await mindSporeLite.loadModelFromBuffer(modelBuffer, mindSporeLiteCpuContext());
     this.cachedModels.set(modelUri, model);
     return model;
   }
