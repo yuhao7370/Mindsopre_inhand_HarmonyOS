@@ -18,10 +18,12 @@ import {
   ImageClassificationMindSporeScoreRunner,
   ImageClassificationTensorRunner
 } from '../main/ets/services/ai/ImageClassificationPipeline';
+import { imageClassificationDecodeOptions } from '../main/ets/services/ai/HarmonyImageInputPreprocessor';
 import {
   floatScoresFromOutputBuffer,
   rawfileContentToArrayBuffer
 } from '../main/ets/services/ai/MindSporeLiteModelRunner';
+import { image } from '@kit.ImageKit';
 import {
   imageClassificationCropOffset,
   imageClassificationCropSize,
@@ -310,6 +312,13 @@ export default function localUnitTest() {
       expect(input[0].toFixed(6)).assertEqual('2.248908');
       expect(input[1].toFixed(6)).assertEqual('-2.035714');
       expect(input[2].toFixed(6)).assertEqual('-1.804444');
+    });
+
+    it('requestsHarmonyDecodeAsResizedRgba', 0, () => {
+      const options: image.DecodingOptions = imageClassificationDecodeOptions();
+      expect(options.desiredSize!.width).assertEqual(imageClassificationResizedSize);
+      expect(options.desiredSize!.height).assertEqual(imageClassificationResizedSize);
+      expect(options.desiredPixelFormat).assertEqual(image.PixelMapFormat.RGBA_8888);
     });
 
     it('mapsTopClassificationScoreToLabel', 0, () => {
