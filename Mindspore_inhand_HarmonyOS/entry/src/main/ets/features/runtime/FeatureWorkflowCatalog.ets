@@ -204,16 +204,6 @@ export const featureWorkflows: Array<FeatureWorkflow> = [
     requiredPermissions: ['camera'],
     resultKind: 'poseOverlay',
     liveMode: true
-  },
-  {
-    routeName: AppRoute.POETRY.name,
-    titleKey: 'title_intelligent_poetry',
-    summaryKey: 'workflow_summary_text_translation',
-    aiMethod: 'translateText',
-    inputKinds: ['text'],
-    requiredPermissions: ['internet'],
-    resultKind: 'translationText',
-    liveMode: false
   }
 ];
 

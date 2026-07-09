@@ -763,6 +763,7 @@ export default function localUnitTest() {
     it('routesIntelligentPoetryToOriginalWebExperience', 0, () => {
       expect(AppRoute.POETRY.page).assertEqual(webPagePath);
       expect(webUrlForRouteName(AppRoute.POETRY.name)).assertEqual(intelligentPoetryUrl);
+      expect(workflowForRoute(AppRoute.POETRY.name) === undefined).assertTrue();
       const poetryDestination = webDestinationForUrl(intelligentPoetryUrl, 'me_official_title');
       expect(poetryDestination.titleKey).assertEqual('title_intelligent_poetry');
     });
