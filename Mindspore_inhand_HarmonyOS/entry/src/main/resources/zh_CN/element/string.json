@@ -74,6 +74,8 @@
     { "name": "feature_runtime_text_recognition_failed", "value": "文本提取失败。" },
     { "name": "feature_runtime_text_translation_done", "value": "文本翻译已完成。" },
     { "name": "feature_runtime_text_translation_failed", "value": "文本翻译失败。" },
+    { "name": "feature_runtime_segmentation_done", "value": "人像分割已完成。" },
+    { "name": "feature_runtime_segmentation_failed", "value": "人像分割失败。" },
     { "name": "feature_runtime_permission_denied", "value": "所需权限被拒绝。" },
     { "name": "feature_runtime_image_ready", "value": "图片输入已就绪。" },
     { "name": "feature_runtime_model_ready", "value": "MindSpore 模型文件已就绪。" },

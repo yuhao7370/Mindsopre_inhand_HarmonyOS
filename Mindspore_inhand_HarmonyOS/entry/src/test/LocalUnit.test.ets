@@ -18,6 +18,12 @@ import {
   translationLanguagePairsRawfilePath
 } from '../main/ets/services/ai/TextRecognitionService';
 import {
+  SegmentationRectangle,
+  SegmentationResult,
+  SegmentationRunner,
+  SegmentationService
+} from '../main/ets/services/ai/SegmentationService';
+import {
   StyleTransferInput,
   StyleTransferInputPreprocessor,
   StyleTransferResult,
@@ -400,6 +406,26 @@ class RejectingTextTranslationRunner implements TextTranslationRunner {
   }
 }
 
+class FixedSegmentationRunner implements SegmentationRunner {
+  readonly seenImageUris: Array<string> = [];
+  private readonly result: SegmentationResult;
+
+  constructor(result: SegmentationResult) {
+    this.result = result;
+  }
+
+  async segmentPerson(imageUri: string): Promise<SegmentationResult> {
+    this.seenImageUris.push(imageUri);
+    return this.result;
+  }
+}
+
+class RejectingSegmentationRunner implements SegmentationRunner {
+  async segmentPerson(_imageUri: string): Promise<SegmentationResult> {
+    throw new Error('segmentation failed');
+  }
+}
+
 class FixedObjectDetectionPreprocessor implements ObjectDetectionInputPreprocessor {
   readonly seenImageUris: Array<string> = [];
   private readonly input: ObjectDetectionInput;
@@ -482,6 +508,7 @@ export default function localUnitTest() {
       expect(hasAppStringKey('feature_runtime_custom_model_failed')).assertTrue();
       expect(hasAppStringKey('feature_runtime_text_recognition_done')).assertTrue();
       expect(hasAppStringKey('feature_runtime_text_translation_failed')).assertTrue();
+      expect(hasAppStringKey('feature_runtime_segmentation_done')).assertTrue();
     });
 
     it('doesNotNavigateQuickStartParentWithEmptyUrl', 0, () => {
@@ -706,6 +733,75 @@ export default function localUnitTest() {
       expect(result.ok).assertFalse();
       expect(result.code).assertEqual('TEXT_TRANSLATION_FAILED');
       expect(result.messageKey).assertEqual('feature_runtime_text_translation_failed');
+    });
+
+    it('segmentationRequiresImageInputWhenServiceIsProvided', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.PORTRAIT_SEGMENTATION.name);
+      expect(workflow !== undefined).assertTrue();
+      const service = new SegmentationService({
+        runner: new FixedSegmentationRunner({
+          ok: true,
+          subjectCount: 1,
+          detailCount: 0,
+          foregroundAvailable: true,
+          rectangles: [],
+          executionMs: 3
+        })
+      });
+
+      const result = await new DefaultAiService({ segmentationService: service }).run(workflow!);
+
+      expect(result.ok).assertFalse();
+      expect(result.code).assertEqual('MISSING_INPUT');
+    });
+
+    it('aiServiceUsesRealSegmentationServiceWhenProvided', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.PORTRAIT_SEGMENTATION.name);
+      expect(workflow !== undefined).assertTrue();
+      const rectangle: SegmentationRectangle = {
+        left: 1,
+        top: 2,
+        width: 100,
+        height: 200
+      };
+      const runner: FixedSegmentationRunner = new FixedSegmentationRunner({
+        ok: true,
+        subjectCount: 1,
+        detailCount: 1,
+        foregroundAvailable: true,
+        rectangles: [rectangle],
+        executionMs: 13
+      });
+      const service = new SegmentationService({
+        runner: runner
+      });
+
+      const result = await new DefaultAiService({ segmentationService: service }).run(workflow!, {
+        imageUri: 'file://selected/person.jpg'
+      });
+
+      expect(result.ok).assertTrue();
+      expect(result.code).assertEqual('SEGMENTATION_DONE');
+      expect(result.messageKey).assertEqual('feature_runtime_segmentation_done');
+      expect(result.detailText.indexOf('subjectCount=1') >= 0).assertTrue();
+      expect(result.detailText.indexOf('[1,2,100,200]') >= 0).assertTrue();
+      expect(runner.seenImageUris[0]).assertEqual('file://selected/person.jpg');
+    });
+
+    it('aiServiceReportsSegmentationFailureWithI18nKey', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.PORTRAIT_SEGMENTATION.name);
+      expect(workflow !== undefined).assertTrue();
+      const service = new SegmentationService({
+        runner: new RejectingSegmentationRunner()
+      });
+
+      const result = await new DefaultAiService({ segmentationService: service }).run(workflow!, {
+        imageUri: 'file://selected/person.jpg'
+      });
+
+      expect(result.ok).assertFalse();
+      expect(result.code).assertEqual('SEGMENTATION_FAILED');
+      expect(result.messageKey).assertEqual('feature_runtime_segmentation_failed');
     });
 
     it('customModelRequiresModelAndImageInputs', 0, async () => {
@@ -1525,6 +1621,31 @@ export default function localUnitTest() {
 
       expect(result.ok).assertFalse();
       expect(result.code).assertEqual('NATIVE_ADAPTER_PENDING');
+    });
+
+    it('runtimeFactoryInjectsSegmentationServiceForSegmentationWorkflow', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.PORTRAIT_SEGMENTATION.name);
+      expect(workflow !== undefined).assertTrue();
+      const runner: FixedSegmentationRunner = new FixedSegmentationRunner({
+        ok: true,
+        subjectCount: 1,
+        detailCount: 0,
+        foregroundAvailable: false,
+        rectangles: [],
+        executionMs: 8
+      });
+      const service = await createRuntimeAiServiceForWorkflow(workflow!, {
+        resourceManager: new ThrowingRawfileContentReader(),
+        segmentationRunner: runner
+      });
+
+      const result: AiRunResult = await service.run(workflow!, {
+        imageUri: 'file://selected/person.jpg'
+      });
+
+      expect(result.ok).assertTrue();
+      expect(result.code).assertEqual('SEGMENTATION_DONE');
+      expect(runner.seenImageUris[0]).assertEqual('file://selected/person.jpg');
     });
 
     it('mapsWorkflowPermissionsToHarmonyPermissionNames', 0, () => {

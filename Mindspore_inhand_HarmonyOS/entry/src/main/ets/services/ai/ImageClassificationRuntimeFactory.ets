@@ -45,6 +45,11 @@ import {
 } from './ObjectDetectionService';
 import { MindSporeLiteModelRunner, RawfileContentReader } from './MindSporeLiteModelRunner';
 import {
+  HarmonySubjectSegmentationRunner,
+  SegmentationRunner,
+  SegmentationService
+} from './SegmentationService';
+import {
   HarmonyTextRecognitionRunner,
   TextRecognitionRunner,
   TextRecognitionService,
@@ -66,6 +71,7 @@ export interface HarmonyImageClassificationRuntimeOptions {
   readonly styleTransferTensorRunner?: StyleTransferTensorRunner;
   readonly textRecognitionRunner?: TextRecognitionRunner;
   readonly textTranslationRunner?: TextTranslationRunner;
+  readonly segmentationRunner?: SegmentationRunner;
 }
 
 let cachedHarmonyDefaultAiService: Promise<DefaultAiService> | undefined = undefined;
@@ -134,6 +140,11 @@ export async function cachedRuntimeAiServiceForWorkflow(
       resourceManager: resourceManager
     });
   }
+  if (workflow.aiMethod === 'segmentPerson') {
+    return createRuntimeAiServiceForWorkflow(workflow, {
+      resourceManager: resourceManager
+    });
+  }
   return new DefaultAiService();
 }
 
@@ -168,6 +179,11 @@ export async function createRuntimeAiServiceForWorkflow(
   if (workflow.aiMethod === 'translateText' && options.textTranslationRunner !== undefined) {
     return new DefaultAiService({
       textTranslationService: createHarmonyTextTranslationService(options)
+    });
+  }
+  if (workflow.aiMethod === 'segmentPerson') {
+    return new DefaultAiService({
+      segmentationService: createHarmonySegmentationService(options)
     });
   }
   return new DefaultAiService();
@@ -268,6 +284,14 @@ export function createHarmonyTextTranslationService(
 ): TextTranslationService {
   return new TextTranslationService({
     runner: options.textTranslationRunner!
+  });
+}
+
+export function createHarmonySegmentationService(
+  options: HarmonyImageClassificationRuntimeOptions
+): SegmentationService {
+  return new SegmentationService({
+    runner: options.segmentationRunner ?? new HarmonySubjectSegmentationRunner()
   });
 }
 

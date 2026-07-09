@@ -16,6 +16,11 @@ import {
   StyleTransferService
 } from './StyleTransferService';
 import {
+  SegmentationRectangle,
+  SegmentationResult,
+  SegmentationService
+} from './SegmentationService';
+import {
   TextRecognitionResult,
   TextRecognitionService,
   TextTranslationResult,
@@ -38,7 +43,9 @@ export type AiRunCode =
   'TEXT_RECOGNITION_DONE' |
   'TEXT_RECOGNITION_FAILED' |
   'TEXT_TRANSLATION_DONE' |
-  'TEXT_TRANSLATION_FAILED';
+  'TEXT_TRANSLATION_FAILED' |
+  'SEGMENTATION_DONE' |
+  'SEGMENTATION_FAILED';
 
 export interface AiRunInputs {
   readonly imageUri?: string;
@@ -63,6 +70,7 @@ export interface AiServiceOptions {
   readonly styleTransferService?: StyleTransferService;
   readonly textRecognitionService?: TextRecognitionService;
   readonly textTranslationService?: TextTranslationService;
+  readonly segmentationService?: SegmentationService;
 }
 
 export class DefaultAiService {
@@ -72,6 +80,7 @@ export class DefaultAiService {
   private readonly styleTransferService?: StyleTransferService;
   private readonly textRecognitionService?: TextRecognitionService;
   private readonly textTranslationService?: TextTranslationService;
+  private readonly segmentationService?: SegmentationService;
 
   constructor(options?: AiServiceOptions) {
     this.imageClassificationService = options?.imageClassificationService ?? new ImageClassificationService({
@@ -82,6 +91,7 @@ export class DefaultAiService {
     this.styleTransferService = options?.styleTransferService;
     this.textRecognitionService = options?.textRecognitionService;
     this.textTranslationService = options?.textTranslationService;
+    this.segmentationService = options?.segmentationService;
   }
 
   async run(workflow: FeatureWorkflow, inputs: AiRunInputs = {}): Promise<AiRunResult> {
@@ -100,6 +110,9 @@ export class DefaultAiService {
     if (workflow.aiMethod === 'translateText') {
       return this.translateText(inputs);
     }
+    if (workflow.aiMethod === 'segmentPerson') {
+      return this.segmentPerson(inputs);
+    }
     if (workflow.aiMethod === 'runCustomModel') {
       return this.runCustomModel(inputs);
     }
@@ -109,6 +122,47 @@ export class DefaultAiService {
       aiMethod: workflow.aiMethod,
       messageKey: 'feature_runtime_pending_adapter',
       detailText: ''
+    };
+  }
+
+  private async segmentPerson(inputs: AiRunInputs): Promise<AiRunResult> {
+    if (this.segmentationService === undefined) {
+      return {
+        ok: false,
+        code: 'NATIVE_ADAPTER_PENDING',
+        aiMethod: 'segmentPerson',
+        messageKey: 'feature_runtime_pending_adapter',
+        detailText: ''
+      };
+    }
+
+    const imageUri = inputs.imageUri ?? '';
+    if (imageUri.length === 0) {
+      return {
+        ok: false,
+        code: 'MISSING_INPUT',
+        aiMethod: 'segmentPerson',
+        messageKey: 'feature_runtime_missing_input',
+        detailText: ''
+      };
+    }
+
+    const result: SegmentationResult = await this.segmentationService.segmentPerson(imageUri);
+    if (!result.ok) {
+      return {
+        ok: false,
+        code: 'SEGMENTATION_FAILED',
+        aiMethod: 'segmentPerson',
+        messageKey: 'feature_runtime_segmentation_failed',
+        detailText: this.segmentationSummary(result, imageUri)
+      };
+    }
+    return {
+      ok: true,
+      code: 'SEGMENTATION_DONE',
+      aiMethod: 'segmentPerson',
+      messageKey: 'feature_runtime_segmentation_done',
+      detailText: this.segmentationSummary(result, imageUri)
     };
   }
 
@@ -455,6 +509,22 @@ export class DefaultAiService {
     if (modelUri.length > 0) {
       lines.push(`model=${this.lastPathSegment(modelUri)}`);
     }
+    return lines.join('\n');
+  }
+
+  private segmentationSummary(result: SegmentationResult, imageUri: string): string {
+    const lines: Array<string> = [
+      `image=${this.lastPathSegment(imageUri)}`,
+      `subjectCount=${result.subjectCount}`,
+      `detailCount=${result.detailCount}`,
+      `foregroundAvailable=${result.foregroundAvailable}`,
+      `executionMs=${result.executionMs}`
+    ];
+    result.rectangles.forEach((rectangle: SegmentationRectangle, index: number) => {
+      lines.push(`${index + 1}. [` +
+        `${rectangle.left.toFixed(0)},${rectangle.top.toFixed(0)},` +
+        `${rectangle.width.toFixed(0)},${rectangle.height.toFixed(0)}]`);
+    });
     return lines.join('\n');
   }
 
