@@ -45,6 +45,7 @@
     { "name": "college_ask_title", "value": "Ask on forum" },
     { "name": "college_light_title", "value": "~Illuminate your learning trip~" },
     { "name": "college_dialog_content", "value": "MindSpore is a full-scenario AI computing framework. This HarmonyOS port keeps the learning entry local and opens external resources through the web page flow." },
+    { "name": "college_checked", "value": "Done" },
     { "name": "me_share_title", "value": "Share" },
     { "name": "me_my_qr_code", "value": "My QR Code" },
     { "name": "me_up_title", "value": "Star" },

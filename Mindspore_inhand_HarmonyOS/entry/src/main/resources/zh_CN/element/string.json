@@ -45,6 +45,7 @@
     { "name": "college_ask_title", "value": "论坛提问" },
     { "name": "college_light_title", "value": "~点亮您的学习之旅~" },
     { "name": "college_dialog_content", "value": "MindSpore 是全场景 AI 计算框架。当前 HarmonyOS 迁移版本保留本地学习入口，并通过网页流程打开外部资源。" },
+    { "name": "college_checked", "value": "已完成" },
     { "name": "me_share_title", "value": "分享" },
     { "name": "me_my_qr_code", "value": "我的二维码" },
     { "name": "me_up_title", "value": "点赞" },

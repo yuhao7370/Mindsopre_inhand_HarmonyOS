@@ -158,6 +158,12 @@ import {
 import { collegeItems, isCollegeItemUrlNavigable } from '../main/ets/common/data/CollegeCatalog';
 import { MeItem, isMeItemUrlNavigable, meItems, visibleMeItems } from '../main/ets/common/data/MeCatalog';
 import { AppVersionReader, AppVersionService, formattedAppVersionName } from '../main/ets/services/app/AppVersionService';
+import {
+  CollegeProgressService,
+  CollegeProgressStore,
+  collegeProgressKeyForItemId,
+  collegeProgressKeyForQuickActionId
+} from '../main/ets/services/storage/CollegeProgressService';
 
 class FixedScoreRunner implements ImageClassificationScoreRunner {
   private readonly scores: Array<number>;
@@ -392,6 +398,22 @@ class ThrowingAppVersionReader implements AppVersionReader {
   }
 }
 
+class MemoryCollegeProgressStore implements CollegeProgressStore {
+  readonly values: Map<string, boolean> = new Map<string, boolean>();
+
+  getBoolean(key: string, defaultValue: boolean): boolean {
+    const value = this.values.get(key);
+    return value === undefined ? defaultValue : value;
+  }
+
+  putBoolean(key: string, value: boolean): void {
+    this.values.set(key, value);
+  }
+
+  flush(): void {
+  }
+}
+
 class FixedTextRecognitionRunner implements TextRecognitionRunner {
   readonly seenImageUris: Array<string> = [];
   private readonly result: TextRecognitionResult;
@@ -555,6 +577,37 @@ export default function localUnitTest() {
       expect(collegeItems.length).assertEqual(6);
       expect(visibleMeItems.length).assertEqual(7);
       expect(visibleMeItems[5].title).assertEqual('Version');
+    });
+
+    it('usesAndroidPreferenceKeysForCollegeProgress', 0, () => {
+      expect(collegeProgressKeyForItemId('summary')).assertEqual('preferences_college_summary');
+      expect(collegeProgressKeyForItemId('cloud')).assertEqual('preferences_college_cloud');
+      expect(collegeProgressKeyForItemId('quick')).assertEqual('preferences_college_quick');
+      expect(collegeProgressKeyForItemId('faq')).assertEqual('preferences_college_faq');
+      expect(collegeProgressKeyForItemId('forum')).assertEqual('preferences_college_ask');
+      expect(collegeProgressKeyForQuickActionId('train')).assertEqual('preferences_college_train');
+      expect(collegeProgressKeyForQuickActionId('inference')).assertEqual('preferences_college_execute');
+      expect(collegeProgressKeyForQuickActionId('applications')).assertEqual('preferences_college_app');
+      expect(collegeProgressKeyForQuickActionId('video')).assertEqual('preferences_college_video');
+    });
+
+    it('collegeProgressMarksRowsAndQuickParentLikeAndroid', 0, () => {
+      const store = new MemoryCollegeProgressStore();
+      const service = new CollegeProgressService(store);
+
+      service.markItemChecked('cloud');
+      expect(service.isItemChecked('cloud')).assertTrue();
+      expect(store.values.get('preferences_college_cloud')).assertTrue();
+
+      service.markQuickActionChecked('train');
+      service.markQuickActionChecked('inference');
+      service.markQuickActionChecked('applications');
+      expect(service.isItemChecked('quick')).assertFalse();
+
+      service.markQuickActionChecked('video');
+      expect(service.isQuickActionChecked('video')).assertTrue();
+      expect(service.isItemChecked('quick')).assertTrue();
+      expect(store.values.get('preferences_college_quick')).assertTrue();
     });
 
     it('formatsAppVersionNameLikeAndroidPackageInfo', 0, () => {

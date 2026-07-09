@@ -44,6 +44,7 @@ export type AppStringKey =
   'college_ask_title' |
   'college_light_title' |
   'college_dialog_content' |
+  'college_checked' |
   'me_share_title' |
   'me_my_qr_code' |
   'me_up_title' |
@@ -178,6 +179,7 @@ const APP_STRING_KEYS: AppStringKey[] = [
   'college_ask_title',
   'college_light_title',
   'college_dialog_content',
+  'college_checked',
   'me_share_title',
   'me_my_qr_code',
   'me_up_title',
@@ -361,6 +363,8 @@ export function appString(key: AppStringKey): ResourceStr {
       return $r('app.string.college_light_title');
     case 'college_dialog_content':
       return $r('app.string.college_dialog_content');
+    case 'college_checked':
+      return $r('app.string.college_checked');
     case 'me_share_title':
       return $r('app.string.me_share_title');
     case 'me_my_qr_code':
