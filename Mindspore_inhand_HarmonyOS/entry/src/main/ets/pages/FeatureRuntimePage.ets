@@ -24,6 +24,11 @@ import {
   ObjectDetectionBoxPercent,
   objectDetectionBoxPercent
 } from '../services/ai/ObjectDetectionService';
+import {
+  SegmentationRectangle,
+  SegmentationRectanglePercent,
+  segmentationRectanglePercent
+} from '../services/ai/SegmentationService';
 import { styleTransferPixelMapFromRgbaOutput } from '../services/ai/StyleTransferService';
 import { AppStringKey, appString } from '../common/i18n/AppStrings';
 import { AppColor, AppRadius, AppSpacing } from '../common/theme/AppTheme';
@@ -57,6 +62,10 @@ struct FeatureRuntimePage {
   @State objectDetections: Array<ObjectDetection> = [];
   @State objectDetectionImageWidth: number = 0;
   @State objectDetectionImageHeight: number = 0;
+  @State segmentationImageUri: string = '';
+  @State segmentationRectangles: Array<SegmentationRectangle> = [];
+  @State segmentationImageWidth: number = 0;
+  @State segmentationImageHeight: number = 0;
   @State helpUrl: string = '';
   @State inputKinds: Array<FeatureInputKind> = [];
   @State permissionKinds: Array<FeaturePermissionKind> = [];
@@ -179,6 +188,7 @@ struct FeatureRuntimePage {
     this.resultRows = aiRunResultRows(result);
     this.clearVisualResults();
     this.updateObjectDetectionPreview(result);
+    this.updateSegmentationPreview(result);
     this.updateStyledImagePreview(result);
   }
 
@@ -188,6 +198,10 @@ struct FeatureRuntimePage {
     this.objectDetections = [];
     this.objectDetectionImageWidth = 0;
     this.objectDetectionImageHeight = 0;
+    this.segmentationImageUri = '';
+    this.segmentationRectangles = [];
+    this.segmentationImageWidth = 0;
+    this.segmentationImageHeight = 0;
   }
 
   private updateObjectDetectionPreview(result: AiRunResult): void {
@@ -200,6 +214,34 @@ struct FeatureRuntimePage {
     this.objectDetections = data.detections;
     this.objectDetectionImageWidth = this.objectDetectionSourceWidth(data.detections);
     this.objectDetectionImageHeight = this.objectDetectionSourceHeight(data.detections);
+  }
+
+  private updateSegmentationPreview(result: AiRunResult): void {
+    const data = result.data;
+    if (data === undefined || data.kind !== 'segmentation' || data.result.rectangles.length === 0) {
+      return;
+    }
+
+    this.segmentationImageUri = data.imageUri;
+    this.segmentationRectangles = data.result.rectangles;
+    this.segmentationImageWidth = data.result.imageWidth ?? this.segmentationSourceWidth(data.result.rectangles);
+    this.segmentationImageHeight = data.result.imageHeight ?? this.segmentationSourceHeight(data.result.rectangles);
+  }
+
+  private segmentationSourceWidth(rectangles: Array<SegmentationRectangle>): number {
+    let width = 0;
+    rectangles.forEach((rectangle: SegmentationRectangle) => {
+      width = Math.max(width, rectangle.left + rectangle.width);
+    });
+    return width;
+  }
+
+  private segmentationSourceHeight(rectangles: Array<SegmentationRectangle>): number {
+    let height = 0;
+    rectangles.forEach((rectangle: SegmentationRectangle) => {
+      height = Math.max(height, rectangle.top + rectangle.height);
+    });
+    return height;
   }
 
   private objectDetectionSourceWidth(detections: Array<ObjectDetection>): number {
@@ -319,6 +361,13 @@ struct FeatureRuntimePage {
     .margin({ top: AppSpacing.sm })
   }
 
+  private segmentationAspectRatio(): number {
+    if (this.segmentationImageWidth <= 0 || this.segmentationImageHeight <= 0) {
+      return 1;
+    }
+    return this.segmentationImageWidth / this.segmentationImageHeight;
+  }
+
   private objectDetectionAspectRatio(): number {
     if (this.objectDetectionImageWidth <= 0 || this.objectDetectionImageHeight <= 0) {
       return 1;
@@ -339,8 +388,57 @@ struct FeatureRuntimePage {
     );
   }
 
+  private segmentationBoxStyle(rectangle: SegmentationRectangle): SegmentationRectanglePercent {
+    return segmentationRectanglePercent(
+      rectangle,
+      this.segmentationImageWidth,
+      this.segmentationImageHeight
+    );
+  }
+
   private percentLength(value: number): string {
     return `${value}%`;
+  }
+
+  @Builder
+  segmentationPreview(labelKey: AppStringKey, uri: string) {
+    Column() {
+      Text(appString(labelKey))
+        .fontSize(12)
+        .fontColor(AppColor.textSecondary)
+        .width('100%')
+      Stack({ alignContent: Alignment.TopStart }) {
+        Image(uri)
+          .width('100%')
+          .height('100%')
+          .objectFit(ImageFit.Fill)
+        ForEach(this.segmentationRectangles, (rectangle: SegmentationRectangle) => {
+          this.segmentationBox(rectangle)
+        }, (rectangle: SegmentationRectangle) =>
+          `${rectangle.left}-${rectangle.top}-${rectangle.width}-${rectangle.height}`)
+      }
+      .width('100%')
+      .aspectRatio(this.segmentationAspectRatio())
+      .backgroundColor('#F7F8FA')
+      .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
+      .clip(true)
+      .margin({ top: AppSpacing.xs })
+    }
+    .width('100%')
+    .margin({ top: AppSpacing.sm })
+  }
+
+  @Builder
+  segmentationBox(rectangle: SegmentationRectangle) {
+    Column() {
+    }
+    .width(this.percentLength(this.segmentationBoxStyle(rectangle).width))
+    .height(this.percentLength(this.segmentationBoxStyle(rectangle).height))
+    .border({ width: 2, color: '#1D9A6C', radius: 2 })
+    .position({
+      x: this.percentLength(this.segmentationBoxStyle(rectangle).left),
+      y: this.percentLength(this.segmentationBoxStyle(rectangle).top)
+    })
   }
 
   @Builder
@@ -589,6 +687,9 @@ struct FeatureRuntimePage {
           }
           if (this.objectDetectionImageUri.length > 0 && this.objectDetections.length > 0) {
             this.objectDetectionPreview('feature_runtime_result_detection_overlay', this.objectDetectionImageUri)
+          }
+          if (this.segmentationImageUri.length > 0 && this.segmentationRectangles.length > 0) {
+            this.segmentationPreview('feature_runtime_result_segmentation_overlay', this.segmentationImageUri)
           }
           if (this.recognizedTextForCopy().length > 0) {
             Button(appString('feature_runtime_copy_text'))

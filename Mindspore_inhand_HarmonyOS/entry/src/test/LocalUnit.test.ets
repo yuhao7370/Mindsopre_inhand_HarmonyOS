@@ -22,7 +22,8 @@ import {
   SegmentationRectangle,
   SegmentationResult,
   SegmentationRunner,
-  SegmentationService
+  SegmentationService,
+  segmentationRectanglePercent
 } from '../main/ets/services/ai/SegmentationService';
 import {
   PosePoint,
@@ -1084,6 +1085,22 @@ export default function localUnitTest() {
       expect(aiRunResultRows(result)[0].labelKey).assertEqual('feature_runtime_result_subjects');
       expect(aiRunResultRows(result)[0].value).assertEqual('1');
       expect(runner.seenImageUris[0]).assertEqual('file://selected/person.jpg');
+    });
+
+    it('mapsSegmentationRectangleToPercentOverlay', 0, () => {
+      const rectangle: SegmentationRectangle = {
+        left: 20,
+        top: -10,
+        width: 160,
+        height: 220
+      };
+
+      const box = segmentationRectanglePercent(rectangle, 200, 200);
+
+      expect(box.left.toFixed(1)).assertEqual('10.0');
+      expect(box.top.toFixed(1)).assertEqual('0.0');
+      expect(box.width.toFixed(1)).assertEqual('80.0');
+      expect(box.height.toFixed(1)).assertEqual('100.0');
     });
 
     it('aiServiceReportsSegmentationFailureWithI18nKey', 0, async () => {

@@ -116,6 +116,7 @@ export type AppStringKey =
   'feature_runtime_result_style_image' |
   'feature_runtime_result_styled_image' |
   'feature_runtime_result_detection_overlay' |
+  'feature_runtime_result_segmentation_overlay' |
   'feature_runtime_result_output' |
   'feature_runtime_result_target_language' |
   'feature_runtime_result_translated_text' |
@@ -259,6 +260,7 @@ const APP_STRING_KEYS: AppStringKey[] = [
   'feature_runtime_result_style_image',
   'feature_runtime_result_styled_image',
   'feature_runtime_result_detection_overlay',
+  'feature_runtime_result_segmentation_overlay',
   'feature_runtime_result_output',
   'feature_runtime_result_target_language',
   'feature_runtime_result_translated_text',
@@ -523,6 +525,8 @@ export function appString(key: AppStringKey): ResourceStr {
       return $r('app.string.feature_runtime_result_styled_image');
     case 'feature_runtime_result_detection_overlay':
       return $r('app.string.feature_runtime_result_detection_overlay');
+    case 'feature_runtime_result_segmentation_overlay':
+      return $r('app.string.feature_runtime_result_segmentation_overlay');
     case 'feature_runtime_result_output':
       return $r('app.string.feature_runtime_result_output');
     case 'feature_runtime_result_target_language':

@@ -14,8 +14,17 @@ export interface SegmentationResult {
   readonly subjectCount: number;
   readonly detailCount: number;
   readonly foregroundAvailable: boolean;
+  readonly imageWidth?: number;
+  readonly imageHeight?: number;
   readonly rectangles: Array<SegmentationRectangle>;
   readonly executionMs: number;
+}
+
+export interface SegmentationRectanglePercent {
+  readonly left: number;
+  readonly top: number;
+  readonly width: number;
+  readonly height: number;
 }
 
 export interface SegmentationRunner {
@@ -59,6 +68,7 @@ export class HarmonySubjectSegmentationRunner implements SegmentationRunner {
     try {
       imageFile = await openSegmentationImageFile(imageUri);
       imageSource = image.createImageSource(imageFile.fd);
+      const imageInfo: image.ImageInfo = await imageSource.getImageInfo();
       pixelMap = await imageSource.createPixelMap();
       const result = await subjectSegmentation.doSegmentation({
         pixelMap: pixelMap
@@ -67,7 +77,12 @@ export class HarmonySubjectSegmentationRunner implements SegmentationRunner {
         enableSubjectDetails: true,
         enableSubjectForegroundImage: true
       });
-      const segmentationResult = segmentationResultFromCoreVision(result, Date.now() - startMs);
+      const segmentationResult = segmentationResultFromCoreVision(
+        result,
+        Date.now() - startMs,
+        imageInfo.size.width,
+        imageInfo.size.height
+      );
       await releaseSegmentationResultImages(result);
       return segmentationResult;
     } finally {
@@ -86,7 +101,9 @@ export class HarmonySubjectSegmentationRunner implements SegmentationRunner {
 
 export function segmentationResultFromCoreVision(
   result: subjectSegmentation.SegmentationResult,
-  executionMs: number
+  executionMs: number,
+  imageWidth: number = 0,
+  imageHeight: number = 0
 ): SegmentationResult {
   const rectangles: Array<SegmentationRectangle> = [];
   rectangles.push(rectangleFromCoreVision(result.fullSubject.subjectRectangle));
@@ -100,9 +117,41 @@ export function segmentationResultFromCoreVision(
     subjectCount: result.subjectCount,
     detailCount: result.subjectDetails?.length ?? 0,
     foregroundAvailable: true,
+    imageWidth: imageWidth,
+    imageHeight: imageHeight,
     rectangles: rectangles,
     executionMs: executionMs
   };
+}
+
+export function segmentationRectanglePercent(
+  rectangle: SegmentationRectangle,
+  imageWidth: number,
+  imageHeight: number
+): SegmentationRectanglePercent {
+  if (imageWidth <= 0 || imageHeight <= 0) {
+    return {
+      left: 0,
+      top: 0,
+      width: 0,
+      height: 0
+    };
+  }
+
+  const left = segmentationPercent(rectangle.left, imageWidth);
+  const top = segmentationPercent(rectangle.top, imageHeight);
+  const right = segmentationPercent(rectangle.left + rectangle.width, imageWidth);
+  const bottom = segmentationPercent(rectangle.top + rectangle.height, imageHeight);
+  return {
+    left: left,
+    top: top,
+    width: Math.max(0, right - left),
+    height: Math.max(0, bottom - top)
+  };
+}
+
+function segmentationPercent(value: number, sourceLength: number): number {
+  return Math.min(100, Math.max(0, value * 100 / sourceLength));
 }
 
 function rectangleFromCoreVision(rectangle: subjectSegmentation.Rectangle): SegmentationRectangle {
