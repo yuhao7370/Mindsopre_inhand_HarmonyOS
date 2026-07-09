@@ -18,8 +18,12 @@ export interface LiveCameraPreviewResult {
   readonly messageKey: AppStringKey;
 }
 
+export type LiveCameraPosition = 'back' | 'front';
+
+export const defaultLiveCameraPosition: LiveCameraPosition = 'back';
+
 export interface LiveCameraPreviewDriver {
-  start(surfaceId: string): Promise<void>;
+  start(surfaceId: string, position: LiveCameraPosition): Promise<void>;
   stop(): Promise<void>;
 }
 
@@ -91,6 +95,10 @@ export function shouldAutoRunLiveRuntimeAfterPreview(
   return shouldRunLiveRuntimeLoop(aiMethod, workflowLiveMode, true, previewReady);
 }
 
+export function nextLiveCameraPosition(position: LiveCameraPosition): LiveCameraPosition {
+  return position === 'back' ? 'front' : 'back';
+}
+
 export class HarmonyLiveRuntimeLoopScheduler implements LiveRuntimeLoopScheduler {
   schedule(intervalMs: number, tick: () => void): number {
     return setInterval(tick, intervalMs);
@@ -154,13 +162,16 @@ export class LiveCameraPreviewService {
     this.driver = driver;
   }
 
-  async start(surfaceId: string): Promise<LiveCameraPreviewResult> {
+  async start(
+    surfaceId: string,
+    position: LiveCameraPosition = defaultLiveCameraPosition
+  ): Promise<LiveCameraPreviewResult> {
     if (surfaceId.length === 0) {
       return { ok: false, surfaceId: '', messageKey: 'feature_runtime_live_camera_surface_missing' };
     }
 
     try {
-      await this.driver.start(surfaceId);
+      await this.driver.start(surfaceId, position);
       return { ok: true, surfaceId: surfaceId, messageKey: 'feature_runtime_live_camera_ready' };
     } catch (_) {
       return { ok: false, surfaceId: surfaceId, messageKey: 'feature_runtime_live_camera_failed' };
@@ -209,12 +220,15 @@ export class HarmonyLiveCameraPreviewDriver implements LiveCameraPreviewDriver {
     this.context = context;
   }
 
-  async start(surfaceId: string): Promise<void> {
+  async start(
+    surfaceId: string,
+    position: LiveCameraPosition = defaultLiveCameraPosition
+  ): Promise<void> {
     await this.stop();
     try {
       const manager = camera.getCameraManager(this.context);
       this.cameraInput = manager.createCameraInput(
-        camera.CameraPosition.CAMERA_POSITION_BACK,
+        position === 'front' ? camera.CameraPosition.CAMERA_POSITION_FRONT : camera.CameraPosition.CAMERA_POSITION_BACK,
         camera.CameraType.CAMERA_TYPE_DEFAULT
       );
       await this.cameraInput.open();

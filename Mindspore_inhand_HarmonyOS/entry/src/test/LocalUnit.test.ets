@@ -170,6 +170,7 @@ import {
 } from '../main/ets/services/picker/ModelFileCacheService';
 import {
   LiveCameraPreviewDriver,
+  LiveCameraPosition,
   LiveCameraPreviewService,
   LiveFrameImageEncoder,
   LiveFrameImageService,
@@ -181,6 +182,7 @@ import {
   liveRuntimeIntervalMs,
   liveCameraXComponentId,
   liveFrameImagePackingOption,
+  nextLiveCameraPosition,
   shouldRunLiveRuntimeLoop,
   shouldAutoRunLiveRuntimeAfterPreview,
   shouldRunLiveImageClassificationLoop,
@@ -769,17 +771,19 @@ class RejectingResultImageAssetWriter implements ResultImageAssetWriter {
 
 class RecordingLiveCameraPreviewDriver implements LiveCameraPreviewDriver {
   startedSurfaceIds: Array<string> = [];
+  startedPositions: Array<LiveCameraPosition> = [];
   private readonly failStart: boolean;
 
   constructor(failStart: boolean) {
     this.failStart = failStart;
   }
 
-  async start(surfaceId: string): Promise<void> {
+  async start(surfaceId: string, position: LiveCameraPosition): Promise<void> {
     if (this.failStart) {
       throw new Error('camera failed');
     }
     this.startedSurfaceIds.push(surfaceId);
+    this.startedPositions.push(position);
   }
 
   async stop(): Promise<void> {
@@ -1028,6 +1032,7 @@ export default function localUnitTest() {
       expect(hasAppStringKey('feature_runtime_segmentation_done')).assertTrue();
       expect(hasAppStringKey('feature_runtime_pose_done')).assertTrue();
       expect(hasAppStringKey('feature_runtime_preview_title')).assertTrue();
+      expect(hasAppStringKey('feature_runtime_switch_camera')).assertTrue();
       expect(hasAppStringKey('feature_runtime_result_count')).assertTrue();
       expect(hasAppStringKey('feature_runtime_result_text')).assertTrue();
       expect(hasAppStringKey('feature_runtime_copy_text')).assertTrue();
@@ -3033,8 +3038,20 @@ export default function localUnitTest() {
       expect(readyResult.surfaceId).assertEqual('surface-1');
       expect(readyResult.messageKey).assertEqual('feature_runtime_live_camera_ready');
       expect(readyDriver.startedSurfaceIds[0]).assertEqual('surface-1');
+      expect(readyDriver.startedPositions[0]).assertEqual('back');
       expect(failedResult.ok).assertFalse();
       expect(failedResult.messageKey).assertEqual('feature_runtime_live_camera_failed');
+    });
+
+    it('liveCameraPreviewServiceUsesRequestedCameraPositionLikeAndroidSwitch', 0, async () => {
+      const driver = new RecordingLiveCameraPreviewDriver(false);
+      const result = await new LiveCameraPreviewService(driver).start('surface-3', 'front');
+
+      expect(result.ok).assertTrue();
+      expect(driver.startedSurfaceIds[0]).assertEqual('surface-3');
+      expect(driver.startedPositions[0]).assertEqual('front');
+      expect(nextLiveCameraPosition('back')).assertEqual('front');
+      expect(nextLiveCameraPosition('front')).assertEqual('back');
     });
 
     it('liveFrameImageServiceCapturesSurfaceToCacheImageUri', 0, async () => {

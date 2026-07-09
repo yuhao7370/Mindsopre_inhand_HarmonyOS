@@ -28,6 +28,7 @@ import {
   HarmonyLiveCameraPreviewDriver,
   HarmonyLiveFrameImageEncoder,
   HarmonyLiveFrameImageStore,
+  LiveCameraPosition,
   LiveCameraPreviewResult,
   LiveCameraPreviewService,
   LiveFrameImageResult,
@@ -38,6 +39,7 @@ import {
   liveCameraXComponentId,
   shouldRunLiveRuntimeLoop,
   shouldAutoRunLiveRuntimeAfterPreview,
+  nextLiveCameraPosition,
   shouldCaptureLiveFrameImage
 } from '../services/camera/LiveCameraService';
 import {
@@ -133,6 +135,7 @@ struct FeatureRuntimePage {
   @State permissionKinds: Array<FeaturePermissionKind> = [];
   @State liveCameraSurfaceId: string = '';
   @State liveCameraActive: boolean = false;
+  @State liveCameraPosition: LiveCameraPosition = 'back';
   private liveCameraController: XComponentController = new XComponentController();
   private liveCameraService: LiveCameraPreviewService | undefined = undefined;
   private liveCameraInputSelected: boolean = false;
@@ -285,8 +288,12 @@ struct FeatureRuntimePage {
       const surfaceId = this.liveCameraSurfaceId.length > 0 ?
         this.liveCameraSurfaceId :
         this.liveCameraController.getXComponentSurfaceId();
+      const previousService = this.liveCameraService;
+      if (previousService !== undefined) {
+        await previousService.stop();
+      }
       this.liveCameraService = new LiveCameraPreviewService(new HarmonyLiveCameraPreviewDriver(context));
-      const result = await this.liveCameraService.start(surfaceId);
+      const result = await this.liveCameraService.start(surfaceId, this.liveCameraPosition);
       this.applyLiveCameraPreviewResult(result);
     } catch (_) {
       this.applyLiveCameraPreviewResult({
@@ -321,6 +328,15 @@ struct FeatureRuntimePage {
     this.liveCameraService = undefined;
     if (service !== undefined) {
       service.stop();
+    }
+  }
+
+  private switchLiveCamera(): void {
+    this.liveCameraPosition = nextLiveCameraPosition(this.liveCameraPosition);
+    if (this.liveCameraInputSelected || this.liveCameraActive) {
+      this.stopLiveRuntimeLoop();
+      this.liveCameraActive = false;
+      this.startLiveCameraPreview();
     }
   }
 
@@ -827,6 +843,10 @@ struct FeatureRuntimePage {
           this.liveCameraSurfaceId = this.liveCameraController.getXComponentSurfaceId();
         })
         .onDestroy(() => this.stopLiveCameraPreview())
+      Button(appString('feature_runtime_switch_camera'))
+        .height(32)
+        .margin({ top: AppSpacing.sm })
+        .onClick(() => this.switchLiveCamera())
     }
     .width('100%')
     .margin({ top: AppSpacing.md })

@@ -117,6 +117,7 @@
     { "name": "feature_runtime_save_image_missing", "value": "No result image to save." },
     { "name": "feature_runtime_preview_title", "value": "Preview" },
     { "name": "feature_runtime_preview_image", "value": "Image" },
+    { "name": "feature_runtime_switch_camera", "value": "Switch camera" },
     { "name": "feature_runtime_preview_content", "value": "Content" },
     { "name": "feature_runtime_preview_style", "value": "Style" },
     { "name": "feature_runtime_preview_model", "value": "Model" },

@@ -116,6 +116,7 @@ export type AppStringKey =
   'feature_runtime_save_image_missing' |
   'feature_runtime_preview_title' |
   'feature_runtime_preview_image' |
+  'feature_runtime_switch_camera' |
   'feature_runtime_preview_content' |
   'feature_runtime_preview_style' |
   'feature_runtime_preview_model' |
@@ -284,6 +285,7 @@ const APP_STRING_KEYS: AppStringKey[] = [
   'feature_runtime_save_image_missing',
   'feature_runtime_preview_title',
   'feature_runtime_preview_image',
+  'feature_runtime_switch_camera',
   'feature_runtime_preview_content',
   'feature_runtime_preview_style',
   'feature_runtime_preview_model',
@@ -573,6 +575,8 @@ export function appString(key: AppStringKey): ResourceStr {
       return $r('app.string.feature_runtime_preview_title');
     case 'feature_runtime_preview_image':
       return $r('app.string.feature_runtime_preview_image');
+    case 'feature_runtime_switch_camera':
+      return $r('app.string.feature_runtime_switch_camera');
     case 'feature_runtime_preview_content':
       return $r('app.string.feature_runtime_preview_content');
     case 'feature_runtime_preview_style':
