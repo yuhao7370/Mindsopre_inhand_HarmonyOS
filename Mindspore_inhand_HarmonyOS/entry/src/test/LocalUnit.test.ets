@@ -602,8 +602,11 @@ export default function localUnitTest() {
 
     it('definesCollegeAndMeRows', 0, () => {
       expect(collegeItems.length).assertEqual(6);
-      expect(visibleMeItems.length).assertEqual(7);
-      expect(visibleMeItems[5].title).assertEqual('Version');
+      expect(meItems.length).assertEqual(8);
+      expect(visibleMeItems.length).assertEqual(1);
+      expect(visibleMeItems[0].title).assertEqual('Version');
+      expect(meItems.find((item: MeItem) => item.id === 'privacy')?.visibleByDefault).assertFalse();
+      expect(meItems.find((item: MeItem) => item.id === 'qr')?.visibleByDefault).assertFalse();
     });
 
     it('usesAndroidPreferenceKeysForCollegeProgress', 0, () => {
@@ -736,10 +739,11 @@ export default function localUnitTest() {
       expect(collegeDestination.url).assertEqual(collegeMainCloudUrl);
     });
 
-    it('restoresNavigableMeWebEntries', 0, () => {
-      const privacyItem = visibleMeItems.find((item: MeItem) => item.id === 'privacy');
+    it('retainsHiddenNavigableMeWebEntries', 0, () => {
+      const privacyItem = meItems.find((item: MeItem) => item.id === 'privacy');
       expect(privacyItem !== undefined).assertTrue();
       if (privacyItem) {
+        expect(privacyItem.visibleByDefault).assertFalse();
         expect(isMeItemUrlNavigable(privacyItem)).assertTrue();
         expect(privacyItem.url).assertEqual(userPrivacyRulesUrl);
       }
@@ -752,10 +756,11 @@ export default function localUnitTest() {
     });
 
     it('routesMyQrCodeToNativeHarmonyPage', 0, () => {
-      const qrItem = visibleMeItems.find((item: MeItem) => item.id === 'qr');
+      const qrItem = meItems.find((item: MeItem) => item.id === 'qr');
       expect(qrItem !== undefined).assertTrue();
       expect(AppRoute.MY_QR_CODE.page).assertEqual('pages/QrCodePage');
       if (qrItem) {
+        expect(qrItem.visibleByDefault).assertFalse();
         expect(qrItem.page).assertEqual(AppRoute.MY_QR_CODE.page);
       }
     });

@@ -19,13 +19,13 @@ export interface MeItem {
 
 export const meItems: MeItem[] = [
   { id: 'share', title: 'Share', titleKey: 'me_share_title', icon: 'share', visibleByDefault: false },
-  { id: 'qr', title: 'My QR Code', titleKey: 'me_my_qr_code', icon: 'qr', visibleByDefault: true, page: 'pages/QrCodePage' },
-  { id: 'star', title: 'Star', titleKey: 'me_up_title', icon: 'star', visibleByDefault: true, url: meStarUrl },
-  { id: 'official', title: 'Official Website', titleKey: 'me_official_title', icon: 'official', visibleByDefault: true, url: mindSporeBaseUrl },
-  { id: 'code', title: 'Code', titleKey: 'me_official_code_title', icon: 'code', visibleByDefault: true, url: meCodeUrl },
-  { id: 'feedback', title: 'FeedBack', titleKey: 'me_qa_title', icon: 'feedback', visibleByDefault: true, url: meHelpUrl },
+  { id: 'qr', title: 'My QR Code', titleKey: 'me_my_qr_code', icon: 'qr', visibleByDefault: false, page: 'pages/QrCodePage' },
+  { id: 'star', title: 'Star', titleKey: 'me_up_title', icon: 'star', visibleByDefault: false, url: meStarUrl },
+  { id: 'official', title: 'Official Website', titleKey: 'me_official_title', icon: 'official', visibleByDefault: false, url: mindSporeBaseUrl },
+  { id: 'code', title: 'Code', titleKey: 'me_official_code_title', icon: 'code', visibleByDefault: false, url: meCodeUrl },
+  { id: 'feedback', title: 'FeedBack', titleKey: 'me_qa_title', icon: 'feedback', visibleByDefault: false, url: meHelpUrl },
   { id: 'version', title: 'Version', titleKey: 'me_version_title', icon: 'version', visibleByDefault: true },
-  { id: 'privacy', title: 'User Agreement and Privacy Policy', titleKey: 'me_user_agreements', icon: 'privacy', visibleByDefault: true, url: userPrivacyRulesUrl }
+  { id: 'privacy', title: 'User Agreement and Privacy Policy', titleKey: 'me_user_agreements', icon: 'privacy', visibleByDefault: false, url: userPrivacyRulesUrl }
 ];
 
 export const visibleMeItems: MeItem[] = meItems.filter((item: MeItem) => item.visibleByDefault);
