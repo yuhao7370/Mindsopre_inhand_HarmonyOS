@@ -165,6 +165,10 @@ struct FeatureRuntimePage {
   }
 
   private runWorkflow(): void {
+    this.runWorkflowAsync();
+  }
+
+  private async runWorkflowAsync(): Promise<void> {
     const workflow = workflowForRoute(this.routeName);
     if (!workflow) {
       this.statusKey = 'feature_runtime_unknown_route';
@@ -175,7 +179,12 @@ struct FeatureRuntimePage {
       this.statusKey = 'feature_runtime_permission_denied';
       return;
     }
-    new PermissionService().requestForWorkflow(context, workflow).then((permission: PermissionRequestSummary) => {
+    this.statusKey = 'feature_runtime_status_preparing';
+    this.resultText = '';
+    this.resultRows = [];
+    this.clearVisualResults();
+    try {
+      const permission: PermissionRequestSummary = await new PermissionService().requestForWorkflow(context, workflow);
       if (!permission.ok) {
         this.statusKey = 'feature_runtime_permission_denied';
         this.resultText = permission.requested.join(', ');
@@ -183,12 +192,20 @@ struct FeatureRuntimePage {
         this.clearVisualResults();
         return;
       }
-      cachedRuntimeAiServiceForHarmonyResourceManager(workflow, context.resourceManager).then((aiService: DefaultAiService) => {
-        aiService.run(workflow, this.aiRunInputs()).then((result: AiRunResult) => {
-          this.applyAiResult(result);
-        });
-      });
-    });
+      const aiService: DefaultAiService =
+        await cachedRuntimeAiServiceForHarmonyResourceManager(workflow, context.resourceManager);
+      const result: AiRunResult = await aiService.run(workflow, this.aiRunInputs());
+      this.applyAiResult(result);
+    } catch (_) {
+      this.applyRuntimeFailure();
+    }
+  }
+
+  private applyRuntimeFailure(): void {
+    this.statusKey = 'feature_runtime_run_failed';
+    this.resultText = this.aiMethod;
+    this.resultRows = [];
+    this.clearVisualResults();
   }
 
   private applyAiResult(result: AiRunResult): void {

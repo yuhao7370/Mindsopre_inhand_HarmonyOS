@@ -68,6 +68,7 @@ export type AppStringKey =
   'feature_runtime_pending_adapter' |
   'feature_runtime_unknown_route' |
   'feature_runtime_missing_input' |
+  'feature_runtime_run_failed' |
   'feature_runtime_custom_model_done' |
   'feature_runtime_custom_model_failed' |
   'feature_runtime_classification_pending' |
@@ -213,6 +214,7 @@ const APP_STRING_KEYS: AppStringKey[] = [
   'feature_runtime_pending_adapter',
   'feature_runtime_unknown_route',
   'feature_runtime_missing_input',
+  'feature_runtime_run_failed',
   'feature_runtime_custom_model_done',
   'feature_runtime_custom_model_failed',
   'feature_runtime_classification_pending',
@@ -431,6 +433,8 @@ export function appString(key: AppStringKey): ResourceStr {
       return $r('app.string.feature_runtime_unknown_route');
     case 'feature_runtime_missing_input':
       return $r('app.string.feature_runtime_missing_input');
+    case 'feature_runtime_run_failed':
+      return $r('app.string.feature_runtime_run_failed');
     case 'feature_runtime_custom_model_done':
       return $r('app.string.feature_runtime_custom_model_done');
     case 'feature_runtime_custom_model_failed':

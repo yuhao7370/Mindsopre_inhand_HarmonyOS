@@ -69,6 +69,7 @@
     { "name": "feature_runtime_pending_adapter", "value": "HarmonyOS 服务边界已就绪，下一步接入原生 AI 适配器。" },
     { "name": "feature_runtime_unknown_route", "value": "该路由暂未映射到功能工作流。" },
     { "name": "feature_runtime_missing_input", "value": "请先选择所需输入后再运行。" },
+    { "name": "feature_runtime_run_failed", "value": "功能运行失败，请检查输入和模型资源。" },
     { "name": "feature_runtime_custom_model_done", "value": "自定义模型执行完成。" },
     { "name": "feature_runtime_custom_model_failed", "value": "自定义模型执行失败。" },
     { "name": "feature_runtime_classification_pending", "value": "图像分类流程已接入，下一步添加 MobileNetV2 MindSpore 运行器即可执行。" },
