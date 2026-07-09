@@ -5,6 +5,7 @@ import { photoAccessHelper } from '@kit.MediaLibraryKit';
 import { FeatureInputKind, FeatureWorkflow } from '../../features/runtime/FeatureWorkflowCatalog';
 
 export type RuntimeInputAction =
+  'startLiveCamera' |
   'captureImage' |
   'pickImage' |
   'pickModelFile' |
@@ -34,10 +35,20 @@ export function inputActionForKind(kind: FeatureInputKind): RuntimeInputAction {
   }
 }
 
+export function runtimeInputActionForWorkflowInput(
+  workflow: FeatureWorkflow,
+  kind: FeatureInputKind
+): RuntimeInputAction {
+  if (kind === 'camera' && workflow.liveMode) {
+    return 'startLiveCamera';
+  }
+  return inputActionForKind(kind);
+}
+
 export function runtimeInputActionsForWorkflow(workflow: FeatureWorkflow): Array<RuntimeInputAction> {
   const actions: Array<RuntimeInputAction> = [];
   workflow.inputKinds.forEach((kind: FeatureInputKind) => {
-    const action = inputActionForKind(kind);
+    const action = runtimeInputActionForWorkflowInput(workflow, kind);
     if (actions.indexOf(action) < 0) {
       actions.push(action);
     }

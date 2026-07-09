@@ -18,7 +18,13 @@ import {
 import { cachedRuntimeAiServiceForHarmonyResourceManager } from '../services/ai/ImageClassificationRuntimeFactory';
 import { PermissionRequestSummary, PermissionService } from '../services/permissions/PermissionService';
 import { ClipboardService, CopyTextResult } from '../services/clipboard/ClipboardService';
-import { PickerService, PickResult } from '../services/picker/PickerService';
+import { PickerService, PickResult, runtimeInputActionForWorkflowInput } from '../services/picker/PickerService';
+import {
+  HarmonyLiveCameraPreviewDriver,
+  LiveCameraPreviewResult,
+  LiveCameraPreviewService,
+  liveCameraXComponentId
+} from '../services/camera/LiveCameraService';
 import {
   ObjectDetection,
   ObjectDetectionBoxPercent,
@@ -92,6 +98,10 @@ struct FeatureRuntimePage {
   @State helpUrl: string = '';
   @State inputKinds: Array<FeatureInputKind> = [];
   @State permissionKinds: Array<FeaturePermissionKind> = [];
+  @State liveCameraSurfaceId: string = '';
+  @State liveCameraActive: boolean = false;
+  private liveCameraController: XComponentController = new XComponentController();
+  private liveCameraService: LiveCameraPreviewService | undefined = undefined;
 
   aboutToAppear() {
     const params = router.getParams() as FeatureRuntimeParams;
@@ -103,6 +113,10 @@ struct FeatureRuntimePage {
     this.helpUrl = workflow?.helpUrl ?? '';
     this.inputKinds = workflow?.inputKinds ?? [];
     this.permissionKinds = workflow?.requiredPermissions ?? [];
+  }
+
+  aboutToDisappear() {
+    this.stopLiveCameraPreview();
   }
 
   private uiAbilityContext(): common.UIAbilityContext | undefined {
@@ -123,6 +137,10 @@ struct FeatureRuntimePage {
       this.selectedInputSummary = this.userText;
       return;
     }
+    if (this.isLiveCameraInput(inputKind)) {
+      this.startLiveCameraPreview();
+      return;
+    }
     const context = this.uiAbilityContext();
     if (!context) {
       this.statusKey = 'feature_runtime_pick_cancelled';
@@ -140,6 +158,78 @@ struct FeatureRuntimePage {
       return;
     }
     pickerService.pickImage().then((result: PickResult) => this.applyPickResult(result, 'feature_runtime_image_ready', inputKind));
+  }
+
+  private isLiveCameraInput(inputKind: FeatureInputKind): boolean {
+    const workflow = workflowForRoute(this.routeName);
+    if (!workflow) {
+      return false;
+    }
+    return runtimeInputActionForWorkflowInput(workflow, inputKind) === 'startLiveCamera';
+  }
+
+  private hasLiveCameraInput(): boolean {
+    const workflow = workflowForRoute(this.routeName);
+    if (!workflow) {
+      return false;
+    }
+    return workflow.inputKinds.some((inputKind: FeatureInputKind) =>
+      runtimeInputActionForWorkflowInput(workflow, inputKind) === 'startLiveCamera');
+  }
+
+  private startLiveCameraPreview(): void {
+    this.startLiveCameraPreviewAsync();
+  }
+
+  private async startLiveCameraPreviewAsync(): Promise<void> {
+    const workflow = workflowForRoute(this.routeName);
+    const context = this.uiAbilityContext();
+    if (!workflow || !context) {
+      this.statusKey = 'feature_runtime_permission_denied';
+      return;
+    }
+
+    this.statusKey = 'feature_runtime_status_preparing';
+    this.resultRows = [];
+    this.resultText = '';
+    this.clearVisualResults();
+    try {
+      const permission = await new PermissionService().requestForWorkflow(context, workflow);
+      if (!permission.ok) {
+        this.statusKey = 'feature_runtime_permission_denied';
+        this.resultText = permission.requested.join(', ');
+        return;
+      }
+
+      const surfaceId = this.liveCameraSurfaceId.length > 0 ?
+        this.liveCameraSurfaceId :
+        this.liveCameraController.getXComponentSurfaceId();
+      this.liveCameraService = new LiveCameraPreviewService(new HarmonyLiveCameraPreviewDriver(context));
+      const result = await this.liveCameraService.start(surfaceId);
+      this.applyLiveCameraPreviewResult(result);
+    } catch (_) {
+      this.applyLiveCameraPreviewResult({
+        ok: false,
+        surfaceId: '',
+        messageKey: 'feature_runtime_live_camera_failed'
+      });
+    }
+  }
+
+  private applyLiveCameraPreviewResult(result: LiveCameraPreviewResult): void {
+    this.statusKey = result.messageKey;
+    this.liveCameraActive = result.ok;
+    this.liveCameraSurfaceId = result.surfaceId;
+    this.selectedInputSummary = result.surfaceId;
+  }
+
+  private stopLiveCameraPreview(): void {
+    this.liveCameraActive = false;
+    const service = this.liveCameraService;
+    this.liveCameraService = undefined;
+    if (service !== undefined) {
+      service.stop();
+    }
   }
 
   private applyPickResult(result: PickResult, readyKey: AppStringKey, inputKind: FeatureInputKind): void {
@@ -551,6 +641,33 @@ struct FeatureRuntimePage {
   }
 
   @Builder
+  liveCameraPreview() {
+    Column() {
+      Text(appString('feature_runtime_preview_image'))
+        .fontSize(12)
+        .fontColor(AppColor.textSecondary)
+        .width('100%')
+      XComponent({
+        id: liveCameraXComponentId,
+        type: XComponentType.SURFACE,
+        controller: this.liveCameraController
+      })
+        .width('100%')
+        .height(260)
+        .backgroundColor('#111827')
+        .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
+        .clip(true)
+        .margin({ top: AppSpacing.xs })
+        .onLoad(() => {
+          this.liveCameraSurfaceId = this.liveCameraController.getXComponentSurfaceId();
+        })
+        .onDestroy(() => this.stopLiveCameraPreview())
+    }
+    .width('100%')
+    .margin({ top: AppSpacing.md })
+  }
+
+  @Builder
   imagePreview(labelKey: AppStringKey, uri: string) {
     Column() {
       Text(appString(labelKey))
@@ -906,6 +1023,9 @@ struct FeatureRuntimePage {
           .margin({ top: AppSpacing.md })
           if (this.isStyleTransferWorkflow()) {
             this.styleTransferStyleGrid()
+          }
+          if (this.hasLiveCameraInput()) {
+            this.liveCameraPreview()
           }
           if (this.inputKinds.indexOf('text') >= 0) {
             TextInput({ text: this.userText, placeholder: appString('feature_runtime_text_placeholder') })

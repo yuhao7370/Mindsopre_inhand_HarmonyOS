@@ -149,8 +149,14 @@ import {
 import {
   inputActionForKind,
   modelFileSuffixFilters,
+  runtimeInputActionForWorkflowInput,
   runtimeInputActionsForWorkflow
 } from '../main/ets/services/picker/PickerService';
+import {
+  LiveCameraPreviewDriver,
+  LiveCameraPreviewService,
+  liveCameraXComponentId
+} from '../main/ets/services/camera/LiveCameraService';
 import {
   allExperienceFeatures,
   FeatureItem,
@@ -573,6 +579,25 @@ class RecordingClipboardWriter implements TextClipboardWriter {
 class RejectingClipboardWriter implements TextClipboardWriter {
   async copyText(_text: string): Promise<void> {
     throw new Error('clipboard rejected');
+  }
+}
+
+class RecordingLiveCameraPreviewDriver implements LiveCameraPreviewDriver {
+  startedSurfaceIds: Array<string> = [];
+  private readonly failStart: boolean;
+
+  constructor(failStart: boolean) {
+    this.failStart = failStart;
+  }
+
+  async start(surfaceId: string): Promise<void> {
+    if (this.failStart) {
+      throw new Error('camera failed');
+    }
+    this.startedSurfaceIds.push(surfaceId);
+  }
+
+  async stop(): Promise<void> {
   }
 }
 
@@ -2344,6 +2369,39 @@ export default function localUnitTest() {
       expect(inputActionForKind('text')).assertEqual('enterText');
       expect(inputActionForKind('stylePredictModelFile')).assertEqual('pickModelFile');
       expect(inputActionForKind('styleTransferModelFile')).assertEqual('pickModelFile');
+    });
+
+    it('mapsLiveCameraWorkflowsToLivePreviewAction', 0, () => {
+      const imageCamera: FeatureWorkflow = workflowForRoute(AppRoute.IMAGE_CAMERA.name)!;
+      const objectCamera: FeatureWorkflow = workflowForRoute(AppRoute.OBJECT_CAMERA.name)!;
+      const textRecognition: FeatureWorkflow = workflowForRoute(AppRoute.TEXT_RECOGNITION.name)!;
+
+      expect(runtimeInputActionForWorkflowInput(imageCamera, 'camera')).assertEqual('startLiveCamera');
+      expect(runtimeInputActionsForWorkflow(objectCamera).indexOf('startLiveCamera') >= 0).assertTrue();
+      expect(runtimeInputActionForWorkflowInput(textRecognition, 'camera')).assertEqual('captureImage');
+    });
+
+    it('liveCameraPreviewServiceRequiresSurfaceIdBeforeStarting', 0, async () => {
+      const driver = new RecordingLiveCameraPreviewDriver(false);
+      const result = await new LiveCameraPreviewService(driver).start('');
+
+      expect(result.ok).assertFalse();
+      expect(result.messageKey).assertEqual('feature_runtime_live_camera_surface_missing');
+      expect(driver.startedSurfaceIds.length).assertEqual(0);
+    });
+
+    it('liveCameraPreviewServiceReportsReadyAndFailure', 0, async () => {
+      const readyDriver = new RecordingLiveCameraPreviewDriver(false);
+      const readyResult = await new LiveCameraPreviewService(readyDriver).start('surface-1');
+      const failedResult = await new LiveCameraPreviewService(new RecordingLiveCameraPreviewDriver(true)).start('surface-2');
+
+      expect(liveCameraXComponentId.length > 0).assertTrue();
+      expect(readyResult.ok).assertTrue();
+      expect(readyResult.surfaceId).assertEqual('surface-1');
+      expect(readyResult.messageKey).assertEqual('feature_runtime_live_camera_ready');
+      expect(readyDriver.startedSurfaceIds[0]).assertEqual('surface-1');
+      expect(failedResult.ok).assertFalse();
+      expect(failedResult.messageKey).assertEqual('feature_runtime_live_camera_failed');
     });
 
     it('usesMindSporeModelFileSuffixForModelPicker', 0, () => {
