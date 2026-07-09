@@ -154,6 +154,7 @@ import {
 } from '../main/ets/common/data/WebDestination';
 import { collegeItems, isCollegeItemUrlNavigable } from '../main/ets/common/data/CollegeCatalog';
 import { MeItem, isMeItemUrlNavigable, meItems, visibleMeItems } from '../main/ets/common/data/MeCatalog';
+import { AppVersionReader, AppVersionService, formattedAppVersionName } from '../main/ets/services/app/AppVersionService';
 
 class FixedScoreRunner implements ImageClassificationScoreRunner {
   private readonly scores: Array<number>;
@@ -370,6 +371,24 @@ class FixedStyleTransferTensorRunner implements StyleTransferTensorRunner {
   }
 }
 
+class FixedAppVersionReader implements AppVersionReader {
+  private readonly versionName: string;
+
+  constructor(versionName: string) {
+    this.versionName = versionName;
+  }
+
+  getVersionName(): string {
+    return this.versionName;
+  }
+}
+
+class ThrowingAppVersionReader implements AppVersionReader {
+  getVersionName(): string {
+    throw new Error('bundle info unavailable');
+  }
+}
+
 class FixedTextRecognitionRunner implements TextRecognitionRunner {
   readonly seenImageUris: Array<string> = [];
   private readonly result: TextRecognitionResult;
@@ -533,6 +552,17 @@ export default function localUnitTest() {
       expect(collegeItems.length).assertEqual(6);
       expect(visibleMeItems.length).assertEqual(7);
       expect(visibleMeItems[5].title).assertEqual('Version');
+    });
+
+    it('formatsAppVersionNameLikeAndroidPackageInfo', 0, () => {
+      expect(formattedAppVersionName('2.10.0')).assertEqual('V2.10.0');
+      expect(formattedAppVersionName(' V3.0.1 ')).assertEqual('V3.0.1');
+      expect(formattedAppVersionName('')).assertEqual('V1.0.0');
+    });
+
+    it('appVersionServiceReadsBundleVersionNameWithFallback', 0, () => {
+      expect(new AppVersionService(new FixedAppVersionReader('2.10.0')).currentVersionLabel()).assertEqual('V2.10.0');
+      expect(new AppVersionService(new ThrowingAppVersionReader()).currentVersionLabel()).assertEqual('V1.0.0');
     });
 
     it('definesThreeMainTabsInAndroidOrder', 0, () => {

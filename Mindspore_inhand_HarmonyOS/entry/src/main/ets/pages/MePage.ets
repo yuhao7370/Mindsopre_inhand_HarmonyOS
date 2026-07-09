@@ -6,9 +6,16 @@ import { webPagePath } from '../common/data/WebDestination';
 import { iconLabel } from '../common/icons/IconSymbols';
 import { appString } from '../common/i18n/AppStrings';
 import { AppColor, AppRadius, AppSpacing } from '../common/theme/AppTheme';
+import { AppVersionService } from '../services/app/AppVersionService';
 
 @Component
 export struct MePage {
+  @State versionLabel: string = 'V1.0.0';
+
+  aboutToAppear() {
+    this.versionLabel = new AppVersionService().currentVersionLabel();
+  }
+
   private openItem(item: MeItem): void {
     if (isMeItemPageNavigable(item)) {
       router.pushUrl({
@@ -33,7 +40,7 @@ export struct MePage {
 
   private valueForItem(item: MeItem): string {
     if (item.id === 'version') {
-      return 'V1.0.0';
+      return this.versionLabel;
     }
     return '';
   }
