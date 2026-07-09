@@ -151,7 +151,12 @@ import {
   imageClassificationStd,
   normalizedRgbInputFromResizedRgba
 } from '../main/ets/services/ai/ImageClassificationPreprocess';
-import { FeatureWorkflow, workflowForRoute } from '../main/ets/features/runtime/FeatureWorkflowCatalog';
+import {
+  FeatureWorkflow,
+  inputKindReplacesPrimaryInput,
+  runtimeInputKindsForWorkflow,
+  workflowForRoute
+} from '../main/ets/features/runtime/FeatureWorkflowCatalog';
 import {
   declaredPermissionNames,
   runtimePermissionNamesForWorkflow,
@@ -1310,11 +1315,13 @@ export default function localUnitTest() {
       const objectPhoto: FeatureWorkflow = workflowForRoute(AppRoute.OBJECT_PHOTO.name)!;
       expect(objectPhoto.inputKinds.indexOf('photo') >= 0).assertTrue();
       expect(objectPhoto.inputKinds.indexOf('modelFile')).assertEqual(-1);
+      expect((objectPhoto.optionalInputKinds ?? []).indexOf('modelFile') >= 0).assertTrue();
       expect(objectPhoto.requiredPermissions.indexOf('media') >= 0).assertTrue();
 
       const objectCamera: FeatureWorkflow = workflowForRoute(AppRoute.OBJECT_CAMERA.name)!;
       expect(objectCamera.inputKinds.indexOf('camera') >= 0).assertTrue();
       expect(objectCamera.inputKinds.indexOf('modelFile')).assertEqual(-1);
+      expect((objectCamera.optionalInputKinds ?? []).indexOf('modelFile') >= 0).assertTrue();
       expect(objectCamera.requiredPermissions.indexOf('camera') >= 0).assertTrue();
       expect(objectCamera.requiredPermissions.indexOf('media')).assertEqual(-1);
 
@@ -3073,11 +3080,15 @@ export default function localUnitTest() {
       expect(actions.indexOf('pickModelFile')).assertEqual(-1);
       const objectPhoto: FeatureWorkflow = workflowForRoute(AppRoute.OBJECT_PHOTO.name)!;
       expect(runtimeInputActionsForWorkflow(objectPhoto).indexOf('pickModelFile')).assertEqual(-1);
+      expect(runtimeInputKindsForWorkflow(objectPhoto).indexOf('modelFile') >= 0).assertTrue();
       expect(inputActionForKind('camera')).assertEqual('captureImage');
       expect(inputActionForKind('photo')).assertEqual('pickImage');
       expect(inputActionForKind('text')).assertEqual('enterText');
       expect(inputActionForKind('stylePredictModelFile')).assertEqual('pickModelFile');
       expect(inputActionForKind('styleTransferModelFile')).assertEqual('pickModelFile');
+      expect(inputKindReplacesPrimaryInput('modelFile')).assertFalse();
+      expect(inputKindReplacesPrimaryInput('stylePredictModelFile')).assertFalse();
+      expect(inputKindReplacesPrimaryInput('photo')).assertTrue();
     });
 
     it('mapsLiveCameraWorkflowsToLivePreviewAction', 0, () => {

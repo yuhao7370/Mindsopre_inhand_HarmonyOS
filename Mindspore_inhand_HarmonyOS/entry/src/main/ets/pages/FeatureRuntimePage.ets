@@ -4,8 +4,10 @@ import {
   FeatureInputKind,
   FeaturePermissionKind,
   FeatureWorkflow,
+  inputKindReplacesPrimaryInput,
   inputLabelKey,
   permissionLabelKey,
+  runtimeInputKindsForWorkflow,
   workflowForRoute
 } from '../features/runtime/FeatureWorkflowCatalog';
 import {
@@ -150,7 +152,7 @@ struct FeatureRuntimePage {
     this.summaryKey = workflow?.summaryKey ?? this.summaryKey;
     this.aiMethod = workflow?.aiMethod ?? '';
     this.helpUrl = workflow?.helpUrl ?? '';
-    this.inputKinds = workflow?.inputKinds ?? [];
+    this.inputKinds = workflow ? runtimeInputKindsForWorkflow(workflow) : [];
     this.permissionKinds = workflow?.requiredPermissions ?? [];
   }
 
@@ -172,8 +174,10 @@ struct FeatureRuntimePage {
     this.resultText = '';
     this.clearVisualResults();
     const liveCameraInput = this.isLiveCameraInput(inputKind);
-    this.liveCameraInputSelected = liveCameraInput;
-    if (!liveCameraInput) {
+    if (liveCameraInput) {
+      this.liveCameraInputSelected = true;
+    } else if (inputKindReplacesPrimaryInput(inputKind)) {
+      this.liveCameraInputSelected = false;
       this.stopLiveRuntimeLoop();
     }
     if (inputKind === 'text') {
@@ -250,7 +254,7 @@ struct FeatureRuntimePage {
     if (!workflow) {
       return false;
     }
-    return workflow.inputKinds.some((inputKind: FeatureInputKind) =>
+    return runtimeInputKindsForWorkflow(workflow).some((inputKind: FeatureInputKind) =>
       runtimeInputActionForWorkflowInput(workflow, inputKind) === 'startLiveCamera');
   }
 

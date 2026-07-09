@@ -46,6 +46,7 @@ export interface FeatureWorkflow {
   readonly summaryKey: AppStringKey;
   readonly aiMethod: AiMethodName;
   readonly inputKinds: Array<FeatureInputKind>;
+  readonly optionalInputKinds?: Array<FeatureInputKind>;
   readonly requiredPermissions: Array<FeaturePermissionKind>;
   readonly resultKind: FeatureResultKind;
   readonly liveMode: boolean;
@@ -160,6 +161,7 @@ export const featureWorkflows: Array<FeatureWorkflow> = [
     summaryKey: 'workflow_summary_object_photo',
     aiMethod: 'detectObjects',
     inputKinds: ['photo'],
+    optionalInputKinds: ['modelFile'],
     requiredPermissions: ['media'],
     resultKind: 'detections',
     liveMode: false,
@@ -171,6 +173,7 @@ export const featureWorkflows: Array<FeatureWorkflow> = [
     summaryKey: 'workflow_summary_object_camera',
     aiMethod: 'detectObjects',
     inputKinds: ['camera'],
+    optionalInputKinds: ['modelFile'],
     requiredPermissions: ['camera'],
     resultKind: 'detections',
     liveMode: true,
@@ -201,6 +204,25 @@ export const featureWorkflows: Array<FeatureWorkflow> = [
 
 export function workflowForRoute(routeName: string): FeatureWorkflow | undefined {
   return featureWorkflows.find((workflow: FeatureWorkflow) => workflow.routeName === routeName);
+}
+
+export function runtimeInputKindsForWorkflow(workflow: FeatureWorkflow): Array<FeatureInputKind> {
+  const kinds: Array<FeatureInputKind> = [];
+  workflow.inputKinds.forEach((kind: FeatureInputKind) => appendUniqueInputKind(kinds, kind));
+  workflow.optionalInputKinds?.forEach((kind: FeatureInputKind) => appendUniqueInputKind(kinds, kind));
+  return kinds;
+}
+
+export function inputKindReplacesPrimaryInput(inputKind: FeatureInputKind): boolean {
+  return inputKind !== 'modelFile' &&
+    inputKind !== 'stylePredictModelFile' &&
+    inputKind !== 'styleTransferModelFile';
+}
+
+function appendUniqueInputKind(kinds: Array<FeatureInputKind>, kind: FeatureInputKind): void {
+  if (kinds.indexOf(kind) < 0) {
+    kinds.push(kind);
+  }
 }
 
 export function inputLabelKey(inputKind: FeatureInputKind): AppStringKey {
