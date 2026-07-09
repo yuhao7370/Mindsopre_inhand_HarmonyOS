@@ -2,6 +2,7 @@
   "src": [
     "pages/Index",
     "pages/FeatureStubPage",
-    "pages/FeatureRuntimePage"
+    "pages/FeatureRuntimePage",
+    "pages/WebPage"
   ]
 }

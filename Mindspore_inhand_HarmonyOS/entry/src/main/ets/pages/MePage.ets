@@ -1,12 +1,27 @@
+import router from '@ohos.router';
 import { GradientTitleBar } from '../common/components/GradientTitleBar';
 import { SectionTitle } from '../common/components/SectionTitle';
-import { MeItem, visibleMeItems } from '../common/data/MeCatalog';
+import { MeItem, isMeItemUrlNavigable, visibleMeItems } from '../common/data/MeCatalog';
+import { webPagePath } from '../common/data/WebDestination';
 import { iconLabel } from '../common/icons/IconSymbols';
 import { appString } from '../common/i18n/AppStrings';
 import { AppColor, AppRadius, AppSpacing } from '../common/theme/AppTheme';
 
 @Component
 export struct MePage {
+  private openWeb(item: MeItem): void {
+    if (!isMeItemUrlNavigable(item)) {
+      return;
+    }
+    router.pushUrl({
+      url: webPagePath,
+      params: {
+        titleKey: item.titleKey,
+        url: item.url ?? ''
+      }
+    });
+  }
+
   private valueForItem(item: MeItem): string {
     if (item.id === 'version') {
       return 'V1.0.0';
@@ -36,11 +51,18 @@ export struct MePage {
       Text(this.valueForItem(item))
         .fontSize(13)
         .fontColor(AppColor.textSecondary)
+      if (isMeItemUrlNavigable(item)) {
+        Text('>')
+          .fontSize(14)
+          .fontColor(AppColor.textMuted)
+          .margin({ left: AppSpacing.sm })
+      }
     }
     .width('100%')
     .padding({ left: AppSpacing.md, right: AppSpacing.md, top: AppSpacing.md, bottom: AppSpacing.md })
     .backgroundColor(AppColor.cardBackground)
     .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
+    .onClick(() => this.openWeb(item))
   }
 
   build() {

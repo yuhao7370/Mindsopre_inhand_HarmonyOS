@@ -62,6 +62,8 @@ export function iconLabel(token: string): string {
       return 'F';
     case 'version':
       return 'V';
+    case 'privacy':
+      return 'P';
     default:
       return token.length <= 2 ? token : token.substring(0, 2).toUpperCase();
   }

@@ -51,6 +51,7 @@
     { "name": "me_official_title", "value": "官方网站" },
     { "name": "me_official_code_title", "value": "代码" },
     { "name": "me_qa_title", "value": "问题反馈" },
+    { "name": "me_user_agreements", "value": "用户协议和隐私政策" },
     { "name": "me_version_title", "value": "版本" },
     { "name": "feature_runtime_inputs_title", "value": "输入" },
     { "name": "feature_runtime_permissions_title", "value": "平台权限" },

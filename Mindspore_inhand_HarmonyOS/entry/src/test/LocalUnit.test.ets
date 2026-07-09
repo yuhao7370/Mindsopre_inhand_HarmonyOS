@@ -143,8 +143,15 @@ import {
   experienceSections,
   visibleExperienceSections
 } from '../main/ets/common/data/FeatureCatalog';
+import {
+  collegeMainCloudUrl,
+  harmonyPrivacyRawfile,
+  userPrivacyRulesUrl,
+  webDestinationForUrl,
+  webPagePath
+} from '../main/ets/common/data/WebDestination';
 import { collegeItems, isCollegeItemUrlNavigable } from '../main/ets/common/data/CollegeCatalog';
-import { meItems, visibleMeItems } from '../main/ets/common/data/MeCatalog';
+import { MeItem, isMeItemUrlNavigable, meItems, visibleMeItems } from '../main/ets/common/data/MeCatalog';
 
 class FixedScoreRunner implements ImageClassificationScoreRunner {
   private readonly scores: Array<number>;
@@ -522,8 +529,8 @@ export default function localUnitTest() {
 
     it('definesCollegeAndMeRows', 0, () => {
       expect(collegeItems.length).assertEqual(6);
-      expect(visibleMeItems.length).assertEqual(1);
-      expect(visibleMeItems[0].title).assertEqual('Version');
+      expect(visibleMeItems.length).assertEqual(6);
+      expect(visibleMeItems[4].title).assertEqual('Version');
     });
 
     it('definesThreeMainTabsInAndroidOrder', 0, () => {
@@ -578,6 +585,34 @@ export default function localUnitTest() {
     it('doesNotNavigateQuickStartParentWithEmptyUrl', 0, () => {
       expect(isCollegeItemUrlNavigable(collegeItems[1])).assertTrue();
       expect(isCollegeItemUrlNavigable(collegeItems[2])).assertFalse();
+    });
+
+    it('mapsCollegeAndPrivacyLinksToHarmonyWebPage', 0, () => {
+      expect(AppRoute.PRIVACY.page).assertEqual(webPagePath);
+      expect(collegeItems[1].url).assertEqual(collegeMainCloudUrl);
+
+      const privacyDestination = webDestinationForUrl(userPrivacyRulesUrl, 'me_official_title');
+      expect(privacyDestination.titleKey).assertEqual('me_user_agreements');
+      expect(privacyDestination.localRawfile).assertEqual(harmonyPrivacyRawfile);
+
+      const collegeDestination = webDestinationForUrl(collegeMainCloudUrl, 'me_official_title');
+      expect(collegeDestination.titleKey).assertEqual('college_cloud_title');
+      expect(collegeDestination.url).assertEqual(collegeMainCloudUrl);
+    });
+
+    it('restoresNavigableMeWebEntries', 0, () => {
+      const privacyItem = visibleMeItems.find((item: MeItem) => item.id === 'privacy');
+      expect(privacyItem !== undefined).assertTrue();
+      if (privacyItem) {
+        expect(isMeItemUrlNavigable(privacyItem)).assertTrue();
+        expect(privacyItem.url).assertEqual(userPrivacyRulesUrl);
+      }
+
+      const versionItem = visibleMeItems.find((item: MeItem) => item.id === 'version');
+      expect(versionItem !== undefined).assertTrue();
+      if (versionItem) {
+        expect(isMeItemUrlNavigable(versionItem)).assertFalse();
+      }
     });
 
     it('definesRuntimeWorkflowForEveryVisibleExperienceFeature', 0, () => {

@@ -1,3 +1,5 @@
+import { webPagePath } from '../common/data/WebDestination';
+
 export interface AppRouteInfo {
   readonly name: string;
   readonly page: string;
@@ -22,6 +24,7 @@ export interface AppRouteCatalog {
   readonly DANCE: AppRouteInfo;
   readonly POETRY: AppRouteInfo;
   readonly MY_QR_CODE: AppRouteInfo;
+  readonly WEB: AppRouteInfo;
   readonly PRIVACY: AppRouteInfo;
 }
 
@@ -44,7 +47,8 @@ export const AppRoute: AppRouteCatalog = {
   DANCE: { name: '/dance/DanceMainActivity', page: 'pages/FeatureRuntimePage' } as AppRouteInfo,
   POETRY: { name: '/app/IntelligentPoetryWritingActivity', page: 'pages/FeatureRuntimePage' } as AppRouteInfo,
   MY_QR_CODE: { name: '/app/MyQRCodeActivity', page: 'pages/FeatureStubPage' } as AppRouteInfo,
-  PRIVACY: { name: '/app/PrivacyPolicyActivity', page: 'pages/FeatureStubPage' } as AppRouteInfo
+  WEB: { name: '/app/WebViewUtilsActivity', page: webPagePath } as AppRouteInfo,
+  PRIVACY: { name: '/app/PrivacyPolicyActivity', page: webPagePath } as AppRouteInfo
 };
 
 export const appRoutes: AppRouteInfo[] = [
@@ -66,6 +70,7 @@ export const appRoutes: AppRouteInfo[] = [
   AppRoute.DANCE,
   AppRoute.POETRY,
   AppRoute.MY_QR_CODE,
+  AppRoute.WEB,
   AppRoute.PRIVACY
 ];
 

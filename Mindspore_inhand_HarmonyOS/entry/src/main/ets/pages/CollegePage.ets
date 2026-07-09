@@ -10,12 +10,13 @@ import {
 import { iconLabel } from '../common/icons/IconSymbols';
 import { AppStringKey, appString } from '../common/i18n/AppStrings';
 import { AppColor, AppRadius, AppSpacing } from '../common/theme/AppTheme';
+import { webPagePath } from '../common/data/WebDestination';
 
 @Component
 export struct CollegePage {
-  private openStub(titleKey: AppStringKey, url: string): void {
+  private openWeb(titleKey: AppStringKey, url: string): void {
     router.pushUrl({
-      url: 'pages/FeatureStubPage',
+      url: webPagePath,
       params: {
         titleKey: titleKey,
         url: url
@@ -58,7 +59,7 @@ export struct CollegePage {
     .padding({ top: AppSpacing.md, bottom: AppSpacing.md, left: AppSpacing.xs, right: AppSpacing.xs })
     .backgroundColor(AppColor.cardBackground)
     .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
-    .onClick(() => this.openStub(action.titleKey, action.url))
+    .onClick(() => this.openWeb(action.titleKey, action.url))
   }
 
   @Builder
@@ -96,7 +97,7 @@ export struct CollegePage {
         return;
       }
       if (isCollegeItemUrlNavigable(item)) {
-        this.openStub(item.titleKey, item.url ?? '');
+        this.openWeb(item.titleKey, item.url ?? '');
       }
     })
   }

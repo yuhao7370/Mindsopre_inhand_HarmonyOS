@@ -51,6 +51,7 @@
     { "name": "me_official_title", "value": "Official Website" },
     { "name": "me_official_code_title", "value": "Code" },
     { "name": "me_qa_title", "value": "Feedback" },
+    { "name": "me_user_agreements", "value": "User Agreement and Privacy Policy" },
     { "name": "me_version_title", "value": "Version" },
     { "name": "feature_runtime_inputs_title", "value": "Inputs" },
     { "name": "feature_runtime_permissions_title", "value": "Platform permissions" },
