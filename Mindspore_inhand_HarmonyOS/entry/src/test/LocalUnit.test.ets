@@ -1038,6 +1038,7 @@ export default function localUnitTest() {
       expect(hasAppStringKey('feature_runtime_result_count')).assertTrue();
       expect(hasAppStringKey('feature_runtime_result_text')).assertTrue();
       expect(hasAppStringKey('feature_runtime_result_similarity')).assertTrue();
+      expect(hasAppStringKey('feature_runtime_result_pose_template')).assertTrue();
       expect(hasAppStringKey('feature_runtime_copy_text')).assertTrue();
       expect(hasAppStringKey('feature_runtime_copy_done')).assertTrue();
       expect(hasAppStringKey('feature_runtime_model_cache_failed')).assertTrue();

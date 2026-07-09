@@ -142,6 +142,7 @@
     { "name": "feature_runtime_result_detection_overlay", "value": "Detection overlay" },
     { "name": "feature_runtime_result_segmentation_overlay", "value": "Segmentation overlay" },
     { "name": "feature_runtime_result_pose_overlay", "value": "Pose overlay" },
+    { "name": "feature_runtime_result_pose_template", "value": "Pose template" },
     { "name": "feature_runtime_result_output", "value": "Output" },
     { "name": "feature_runtime_result_target_language", "value": "Target language" },
     { "name": "feature_runtime_result_translated_text", "value": "Translation" },

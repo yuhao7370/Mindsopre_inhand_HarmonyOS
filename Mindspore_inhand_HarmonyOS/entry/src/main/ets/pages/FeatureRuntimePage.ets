@@ -1,4 +1,5 @@
 import router from '@ohos.router';
+import { AppRoute } from '../app/AppRoutes';
 import {
   FeatureInputKind,
   FeaturePermissionKind,
@@ -921,6 +922,10 @@ struct FeatureRuntimePage {
     return poseSkeletonLines(this.posePoints);
   }
 
+  private shouldShowPoseTemplate(): boolean {
+    return this.routeName === AppRoute.LIVE_SKELETON.name;
+  }
+
   private poseLineStyle(line: PoseLine): PoseLinePercent {
     return poseLinePercent(
       line,
@@ -968,6 +973,24 @@ struct FeatureRuntimePage {
       .margin({ top: AppSpacing.xs })
     }
     .width('100%')
+    .margin({ top: AppSpacing.sm })
+  }
+
+  @Builder
+  poseTemplatePreview() {
+    Column() {
+      Text(appString('feature_runtime_result_pose_template'))
+        .fontSize(12)
+        .fontColor(AppColor.textSecondary)
+      Image($r('app.media.skeleton_template'))
+        .width(120)
+        .aspectRatio(135 / 169)
+        .objectFit(ImageFit.Contain)
+        .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
+        .margin({ top: AppSpacing.xs })
+    }
+    .width('100%')
+    .alignItems(HorizontalAlign.End)
     .margin({ top: AppSpacing.sm })
   }
 
@@ -1340,6 +1363,9 @@ struct FeatureRuntimePage {
           }
           if (this.poseImageUri.length > 0 && this.posePoints.length > 0) {
             this.posePreview('feature_runtime_result_pose_overlay', this.poseImageUri)
+            if (this.shouldShowPoseTemplate()) {
+              this.poseTemplatePreview()
+            }
           }
           if (this.recognizedTextForCopy().length > 0) {
             Button(appString('feature_runtime_copy_text'))
