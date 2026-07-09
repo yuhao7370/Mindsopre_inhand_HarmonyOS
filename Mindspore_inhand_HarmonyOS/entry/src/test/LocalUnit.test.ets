@@ -1783,17 +1783,16 @@ export default function localUnitTest() {
       expect(modelOnlyResult.code).assertEqual('MISSING_INPUT');
     });
 
-    it('customModelReturnsSimulatedTensorSummary', 0, async () => {
+    it('customModelRequiresNativeRunnerInsteadOfSimulatedOutput', 0, async () => {
       const workflow = workflowForRoute(AppRoute.CUSTOM_MODEL.name);
       expect(workflow !== undefined).assertTrue();
       const result = await new DefaultAiService().run(workflow!, {
         imageUri: 'file://selected/input.png',
         modelUri: 'file://selected/custom_model.ms'
       });
-      expect(result.ok).assertTrue();
-      expect(result.code).assertEqual('CUSTOM_MODEL_SIMULATED');
-      expect(result.detailText.indexOf('output[0]') >= 0).assertTrue();
-      expect(result.detailText.indexOf('custom_model.ms') >= 0).assertTrue();
+      expect(result.ok).assertFalse();
+      expect(result.code).assertEqual('NATIVE_ADAPTER_PENDING');
+      expect(result.messageKey).assertEqual('feature_runtime_pending_adapter');
     });
 
     it('normalizesCustomModelRgbaToRgbUnitInput', 0, () => {
