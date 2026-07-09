@@ -688,6 +688,8 @@ export default function localUnitTest() {
       expect(hasAppStringKey(collegeItems[0].titleKey)).assertTrue();
       expect(hasAppStringKey(meItems[0].titleKey)).assertTrue();
       expect(hasAppStringKey('feature_runtime_custom_model_failed')).assertTrue();
+      expect(hasAppStringKey('feature_runtime_gesture_unsupported')).assertTrue();
+      expect(hasAppStringKey('feature_runtime_translation_unsupported')).assertTrue();
       expect(hasAppStringKey('feature_runtime_text_recognition_done')).assertTrue();
       expect(hasAppStringKey('feature_runtime_text_translation_failed')).assertTrue();
       expect(hasAppStringKey('feature_runtime_segmentation_done')).assertTrue();
@@ -1976,7 +1978,7 @@ export default function localUnitTest() {
       expect(result.detailText.indexOf('label=goldfish') >= 0).assertTrue();
     });
 
-    it('keepsNonClassificationWorkflowsOnDefaultPendingRuntime', 0, async () => {
+    it('reportsGestureAsPlatformUnsupported', 0, async () => {
       const workflow = workflowForRoute(AppRoute.GESTURE_STILL.name);
       expect(workflow !== undefined).assertTrue();
       const service = await createRuntimeAiServiceForWorkflow(workflow!, {
@@ -1986,7 +1988,8 @@ export default function localUnitTest() {
       const result = await service.run(workflow!);
 
       expect(result.ok).assertFalse();
-      expect(result.code).assertEqual('NATIVE_ADAPTER_PENDING');
+      expect(result.code).assertEqual('PLATFORM_UNSUPPORTED');
+      expect(result.messageKey).assertEqual('feature_runtime_gesture_unsupported');
     });
 
     it('runtimeFactoryInjectsCustomModelServiceForCustomModelWorkflow', 0, async () => {
@@ -2083,7 +2086,7 @@ export default function localUnitTest() {
       expect(translationRunner.seenTexts[0]).assertEqual('你好\n');
     });
 
-    it('runtimeFactoryKeepsTranslationPendingWithoutTranslator', 0, async () => {
+    it('runtimeFactoryReportsTranslationUnsupportedWithoutTranslator', 0, async () => {
       const workflow = workflowForRoute(AppRoute.TEXT_TRANSLATION.name);
       expect(workflow !== undefined).assertTrue();
       const service = await createRuntimeAiServiceForWorkflow(workflow!, {
@@ -2095,7 +2098,8 @@ export default function localUnitTest() {
       });
 
       expect(result.ok).assertFalse();
-      expect(result.code).assertEqual('NATIVE_ADAPTER_PENDING');
+      expect(result.code).assertEqual('PLATFORM_UNSUPPORTED');
+      expect(result.messageKey).assertEqual('feature_runtime_translation_unsupported');
     });
 
     it('runtimeFactoryInjectsSegmentationServiceForSegmentationWorkflow', 0, async () => {

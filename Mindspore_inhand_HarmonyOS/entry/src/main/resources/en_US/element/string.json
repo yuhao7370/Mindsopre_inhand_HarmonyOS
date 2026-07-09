@@ -67,6 +67,8 @@
     { "name": "feature_runtime_status_idle", "value": "Select the required inputs, then run the feature adapter." },
     { "name": "feature_runtime_status_preparing", "value": "Preparing feature input..." },
     { "name": "feature_runtime_pending_adapter", "value": "The HarmonyOS service boundary is ready. Native AI adapter integration is the next migration step." },
+    { "name": "feature_runtime_gesture_unsupported", "value": "Gesture recognition is unavailable in the current HarmonyOS SDK. The Android version depends on HMS hand gesture ML APIs with no ArkTS equivalent." },
+    { "name": "feature_runtime_translation_unsupported", "value": "Text translation is unavailable in the current HarmonyOS SDK/resources. Add a translation runner or service API to enable it." },
     { "name": "feature_runtime_unknown_route", "value": "This route is not mapped to a feature workflow yet." },
     { "name": "feature_runtime_missing_input", "value": "Select the required inputs before running." },
     { "name": "feature_runtime_run_failed", "value": "Feature run failed. Check the selected inputs and model resources." },

@@ -66,6 +66,8 @@ export type AppStringKey =
   'feature_runtime_status_idle' |
   'feature_runtime_status_preparing' |
   'feature_runtime_pending_adapter' |
+  'feature_runtime_gesture_unsupported' |
+  'feature_runtime_translation_unsupported' |
   'feature_runtime_unknown_route' |
   'feature_runtime_missing_input' |
   'feature_runtime_run_failed' |
@@ -212,6 +214,8 @@ const APP_STRING_KEYS: AppStringKey[] = [
   'feature_runtime_status_idle',
   'feature_runtime_status_preparing',
   'feature_runtime_pending_adapter',
+  'feature_runtime_gesture_unsupported',
+  'feature_runtime_translation_unsupported',
   'feature_runtime_unknown_route',
   'feature_runtime_missing_input',
   'feature_runtime_run_failed',
@@ -429,6 +433,10 @@ export function appString(key: AppStringKey): ResourceStr {
       return $r('app.string.feature_runtime_status_preparing');
     case 'feature_runtime_pending_adapter':
       return $r('app.string.feature_runtime_pending_adapter');
+    case 'feature_runtime_gesture_unsupported':
+      return $r('app.string.feature_runtime_gesture_unsupported');
+    case 'feature_runtime_translation_unsupported':
+      return $r('app.string.feature_runtime_translation_unsupported');
     case 'feature_runtime_unknown_route':
       return $r('app.string.feature_runtime_unknown_route');
     case 'feature_runtime_missing_input':

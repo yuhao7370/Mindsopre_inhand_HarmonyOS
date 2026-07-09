@@ -34,6 +34,7 @@ import {
 
 export type AiRunCode =
   'NATIVE_ADAPTER_PENDING' |
+  'PLATFORM_UNSUPPORTED' |
   'MISSING_INPUT' |
   'CUSTOM_MODEL_SIMULATED' |
   'CUSTOM_MODEL_DONE' |
@@ -193,6 +194,9 @@ export class DefaultAiService {
     if (workflow.aiMethod === 'detectPose') {
       return this.detectPose(inputs);
     }
+    if (workflow.aiMethod === 'detectGesture') {
+      return this.platformUnsupportedResult('detectGesture', 'feature_runtime_gesture_unsupported');
+    }
     if (workflow.aiMethod === 'runCustomModel') {
       return this.runCustomModel(inputs);
     }
@@ -345,13 +349,7 @@ export class DefaultAiService {
 
   private async translateText(inputs: AiRunInputs): Promise<AiRunResult> {
     if (this.textTranslationService === undefined) {
-      return {
-        ok: false,
-        code: 'NATIVE_ADAPTER_PENDING',
-        aiMethod: 'translateText',
-        messageKey: 'feature_runtime_pending_adapter',
-        detailText: ''
-      };
+      return this.platformUnsupportedResult('translateText', 'feature_runtime_translation_unsupported');
     }
 
     let text = inputs.text ?? '';
@@ -786,6 +784,16 @@ export class DefaultAiService {
 
   private lastPathSegment(uri: string): string {
     return runtimePathSegment(uri);
+  }
+
+  private platformUnsupportedResult(aiMethod: string, messageKey: AppStringKey): AiRunResult {
+    return {
+      ok: false,
+      code: 'PLATFORM_UNSUPPORTED',
+      aiMethod: aiMethod,
+      messageKey: messageKey,
+      detailText: ''
+    };
   }
 }
 
