@@ -3,7 +3,7 @@ import { AppRoute, findRouteByName } from '../main/ets/app/AppRoutes';
 import { MainTab, mainTabs } from '../main/ets/app/AppState';
 import { hasAppStringKey } from '../main/ets/common/i18n/AppStrings';
 import { iconLabel } from '../main/ets/common/icons/IconSymbols';
-import { DefaultAiService } from '../main/ets/services/ai/AiService';
+import { AiRunResult, DefaultAiService } from '../main/ets/services/ai/AiService';
 import {
   ImageClassificationService,
   ImageClassificationScoreRunner,
@@ -49,6 +49,10 @@ import {
   objectDetectionModelRawfilePath,
   objectCategoryLabelCount,
   objectCategoryLabelRawfilePath,
+  ObjectDetection,
+  ObjectDetectionRunResult,
+  ObjectDetectionRunner,
+  ObjectDetectionService,
   objectDetectionDecodeOptions,
   objectDetectionInputFloatCount,
   objectDetectionInputSize,
@@ -222,6 +226,28 @@ class FixedCustomModelTensorRunner implements CustomModelTensorRunner {
 class RejectingCustomModelTensorRunner implements CustomModelTensorRunner {
   async predictOutput(_modelUri: string, _inputBuffer: ArrayBuffer): Promise<Array<number>> {
     throw new Error('custom model failed');
+  }
+}
+
+class FixedObjectDetectionRunner implements ObjectDetectionRunner {
+  readonly seenImageUris: Array<string> = [];
+  readonly seenModelUris: Array<string> = [];
+  private readonly detections: Array<ObjectDetection>;
+
+  constructor(detections: Array<ObjectDetection>) {
+    this.detections = detections;
+  }
+
+  async detectObjects(imageUri: string, modelUri?: string): Promise<Array<ObjectDetection>> {
+    this.seenImageUris.push(imageUri);
+    this.seenModelUris.push(modelUri ?? '');
+    return this.detections;
+  }
+}
+
+class RejectingObjectDetectionRunner implements ObjectDetectionRunner {
+  async detectObjects(_imageUri: string, _modelUri?: string): Promise<Array<ObjectDetection>> {
+    throw new Error('object detection failed');
   }
 }
 
@@ -534,6 +560,106 @@ export default function localUnitTest() {
       expect(options.desiredPixelFormat).assertEqual(image.PixelMapFormat.RGBA_8888);
     });
 
+    it('objectDetectionServiceMapsRunnerDetectionsToAndroidLabels', 0, async () => {
+      const detection: ObjectDetection = {
+        imageId: 7,
+        labelId: 1,
+        label: '',
+        score: 0.875,
+        left: 10,
+        top: 20,
+        right: 110,
+        bottom: 120
+      };
+      const runner: FixedObjectDetectionRunner = new FixedObjectDetectionRunner([detection]);
+      const service = new ObjectDetectionService({
+        labels: ['background', 'person'],
+        runner: runner
+      });
+
+      const result: ObjectDetectionRunResult = await service.detectObjects('file://selected/street.jpg', 'file://selected/ssd.ms');
+
+      expect(result.ok).assertTrue();
+      expect(result.code).assertEqual('DETECTION_DONE');
+      expect(result.detections.length).assertEqual(1);
+      expect(result.detections[0].label).assertEqual('person');
+      expect(runner.seenImageUris[0]).assertEqual('file://selected/street.jpg');
+      expect(runner.seenModelUris[0]).assertEqual('file://selected/ssd.ms');
+    });
+
+    it('objectDetectionServiceHandlesRunnerFailureAsInvalidOutput', 0, async () => {
+      const service = new ObjectDetectionService({
+        labels: ['background'],
+        runner: new RejectingObjectDetectionRunner()
+      });
+
+      const result: ObjectDetectionRunResult = await service.detectObjects('file://selected/street.jpg');
+
+      expect(result.ok).assertFalse();
+      expect(result.code).assertEqual('DETECTION_INVALID_OUTPUT');
+    });
+
+    it('aiServiceUsesRealObjectDetectionServiceWhenProvided', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.OBJECT_PHOTO.name);
+      expect(workflow !== undefined).assertTrue();
+      const detection: ObjectDetection = {
+        imageId: 4,
+        labelId: 1,
+        label: '',
+        score: 0.75,
+        left: 1,
+        top: 2,
+        right: 101,
+        bottom: 202
+      };
+      const service = new ObjectDetectionService({
+        labels: ['background', 'person'],
+        runner: new FixedObjectDetectionRunner([detection])
+      });
+
+      const result: AiRunResult = await new DefaultAiService({ objectDetectionService: service }).run(workflow!, {
+        imageUri: 'file://selected/street.jpg',
+        modelUri: 'file://selected/ssd.ms'
+      });
+
+      expect(result.ok).assertTrue();
+      expect(result.code).assertEqual('OBJECT_DETECTION_DONE');
+      expect(result.messageKey).assertEqual('feature_runtime_object_detection_done');
+      expect(result.detailText.indexOf('person') >= 0).assertTrue();
+      expect(result.detailText.indexOf('75.00%') >= 0).assertTrue();
+      expect(result.detailText.indexOf('street.jpg') >= 0).assertTrue();
+    });
+
+    it('runtimeFactoryInjectsObjectDetectionServiceForObjectWorkflow', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.OBJECT_PHOTO.name);
+      expect(workflow !== undefined).assertTrue();
+      const labelContent: Uint8Array = new Uint8Array([98, 97, 99, 107, 103, 114, 111, 117, 110, 100, 10, 112, 101, 114, 115, 111, 110]);
+      const resourceManager: FixedRawfileContentReader = new FixedRawfileContentReader(labelContent);
+      const detection: ObjectDetection = {
+        imageId: 1,
+        labelId: 1,
+        label: '',
+        score: 0.8,
+        left: 3,
+        top: 4,
+        right: 103,
+        bottom: 204
+      };
+      const service = await createRuntimeAiServiceForWorkflow(workflow!, {
+        resourceManager: resourceManager,
+        objectDetectionRunner: new FixedObjectDetectionRunner([detection])
+      });
+
+      const result: AiRunResult = await service.run(workflow!, {
+        imageUri: 'file://selected/street.jpg'
+      });
+
+      expect(resourceManager.seenPaths[0]).assertEqual('labels/object_category.txt');
+      expect(result.ok).assertTrue();
+      expect(result.code).assertEqual('OBJECT_DETECTION_DONE');
+      expect(result.detailText.indexOf('person') >= 0).assertTrue();
+    });
+
     it('copiesRawfileViewToExactModelBuffer', 0, () => {
       const backing: Uint8Array = new Uint8Array([9, 1, 2, 3, 8]);
       const view: Uint8Array = backing.subarray(1, 4);
@@ -758,7 +884,7 @@ export default function localUnitTest() {
     });
 
     it('keepsNonClassificationWorkflowsOnDefaultPendingRuntime', 0, async () => {
-      const workflow = workflowForRoute(AppRoute.OBJECT_PHOTO.name);
+      const workflow = workflowForRoute(AppRoute.STYLE_TRANSFER.name);
       expect(workflow !== undefined).assertTrue();
       const service = await createRuntimeAiServiceForWorkflow(workflow!, {
         resourceManager: new ThrowingRawfileContentReader()

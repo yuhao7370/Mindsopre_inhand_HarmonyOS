@@ -6,6 +6,11 @@ import {
   ImageClassificationService
 } from './ImageClassificationService';
 import { CustomModelRunResult, CustomModelService } from './CustomModelService';
+import {
+  ObjectDetection,
+  ObjectDetectionRunResult,
+  ObjectDetectionService
+} from './ObjectDetectionService';
 
 export type AiRunCode =
   'NATIVE_ADAPTER_PENDING' |
@@ -15,7 +20,9 @@ export type AiRunCode =
   'CUSTOM_MODEL_FAILED' |
   'CLASSIFICATION_MODEL_PENDING' |
   'CLASSIFICATION_DONE' |
-  'CLASSIFICATION_FAILED';
+  'CLASSIFICATION_FAILED' |
+  'OBJECT_DETECTION_DONE' |
+  'OBJECT_DETECTION_FAILED';
 
 export interface AiRunInputs {
   readonly imageUri?: string;
@@ -34,22 +41,28 @@ export interface AiRunResult {
 export interface AiServiceOptions {
   readonly imageClassificationService?: ImageClassificationService;
   readonly customModelService?: CustomModelService;
+  readonly objectDetectionService?: ObjectDetectionService;
 }
 
 export class DefaultAiService {
   private readonly imageClassificationService: ImageClassificationService;
   private readonly customModelService?: CustomModelService;
+  private readonly objectDetectionService?: ObjectDetectionService;
 
   constructor(options?: AiServiceOptions) {
     this.imageClassificationService = options?.imageClassificationService ?? new ImageClassificationService({
       labels: []
     });
     this.customModelService = options?.customModelService;
+    this.objectDetectionService = options?.objectDetectionService;
   }
 
   async run(workflow: FeatureWorkflow, inputs: AiRunInputs = {}): Promise<AiRunResult> {
     if (workflow.aiMethod === 'classifyImage') {
       return this.classifyImage(inputs);
+    }
+    if (workflow.aiMethod === 'detectObjects') {
+      return this.detectObjects(inputs);
     }
     if (workflow.aiMethod === 'runCustomModel') {
       return this.runCustomModel(inputs);
@@ -60,6 +73,48 @@ export class DefaultAiService {
       aiMethod: workflow.aiMethod,
       messageKey: 'feature_runtime_pending_adapter',
       detailText: ''
+    };
+  }
+
+  private async detectObjects(inputs: AiRunInputs): Promise<AiRunResult> {
+    if (this.objectDetectionService === undefined) {
+      return {
+        ok: false,
+        code: 'NATIVE_ADAPTER_PENDING',
+        aiMethod: 'detectObjects',
+        messageKey: 'feature_runtime_pending_adapter',
+        detailText: ''
+      };
+    }
+
+    const imageUri = inputs.imageUri ?? '';
+    if (imageUri.length === 0) {
+      return {
+        ok: false,
+        code: 'MISSING_INPUT',
+        aiMethod: 'detectObjects',
+        messageKey: 'feature_runtime_missing_input',
+        detailText: ''
+      };
+    }
+
+    const result: ObjectDetectionRunResult =
+      await this.objectDetectionService.detectObjects(imageUri, inputs.modelUri);
+    if (result.ok) {
+      return {
+        ok: true,
+        code: 'OBJECT_DETECTION_DONE',
+        aiMethod: 'detectObjects',
+        messageKey: 'feature_runtime_object_detection_done',
+        detailText: this.objectDetectionSummary(result.detections, imageUri, inputs.modelUri ?? '')
+      };
+    }
+    return {
+      ok: false,
+      code: 'OBJECT_DETECTION_FAILED',
+      aiMethod: 'detectObjects',
+      messageKey: 'feature_runtime_object_detection_failed',
+      detailText: this.objectDetectionFailureSummary(result, imageUri, inputs.modelUri ?? '')
     };
   }
 
@@ -208,6 +263,38 @@ export class DefaultAiService {
       `index=${result.classification.index}`,
       `score=${result.classification.score.toFixed(6)}`
     ];
+    return lines.join('\n');
+  }
+
+  private objectDetectionSummary(detections: Array<ObjectDetection>, imageUri: string, modelUri: string): string {
+    const lines: Array<string> = [
+      `image=${this.lastPathSegment(imageUri)}`
+    ];
+    if (modelUri.length > 0) {
+      lines.push(`model=${this.lastPathSegment(modelUri)}`);
+    }
+    lines.push(`detections=${detections.length}`);
+    detections.forEach((detection: ObjectDetection, index: number) => {
+      const label = detection.label.length > 0 ? detection.label : `${detection.labelId}`;
+      lines.push(`${index + 1}. ${label} ${(detection.score * 100).toFixed(2)}% ` +
+        `[${detection.left.toFixed(0)},${detection.top.toFixed(0)},` +
+        `${detection.right.toFixed(0)},${detection.bottom.toFixed(0)}]`);
+    });
+    return lines.join('\n');
+  }
+
+  private objectDetectionFailureSummary(
+    result: ObjectDetectionRunResult,
+    imageUri: string,
+    modelUri: string
+  ): string {
+    const lines: Array<string> = [
+      `image=${this.lastPathSegment(imageUri)}`,
+      `reason=${result.code}`
+    ];
+    if (modelUri.length > 0) {
+      lines.push(`model=${this.lastPathSegment(modelUri)}`);
+    }
     return lines.join('\n');
   }
 

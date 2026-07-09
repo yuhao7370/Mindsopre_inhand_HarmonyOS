@@ -66,6 +66,8 @@
     { "name": "feature_runtime_classification_pending", "value": "Image classification is wired. Add the MobileNetV2 MindSpore runner to execute it." },
     { "name": "feature_runtime_classification_done", "value": "Image classification completed." },
     { "name": "feature_runtime_classification_failed", "value": "Image classification did not produce a valid label." },
+    { "name": "feature_runtime_object_detection_done", "value": "Object detection completed." },
+    { "name": "feature_runtime_object_detection_failed", "value": "Object detection did not produce valid boxes." },
     { "name": "feature_runtime_permission_denied", "value": "Required permission was denied." },
     { "name": "feature_runtime_image_ready", "value": "Image input is ready." },
     { "name": "feature_runtime_model_ready", "value": "MindSpore model file is ready." },

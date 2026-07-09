@@ -66,6 +66,8 @@
     { "name": "feature_runtime_classification_pending", "value": "图像分类流程已接入，下一步添加 MobileNetV2 MindSpore 运行器即可执行。" },
     { "name": "feature_runtime_classification_done", "value": "图像分类执行完成。" },
     { "name": "feature_runtime_classification_failed", "value": "图像分类未产生有效标签。" },
+    { "name": "feature_runtime_object_detection_done", "value": "目标检测执行完成。" },
+    { "name": "feature_runtime_object_detection_failed", "value": "目标检测未产生有效检测框。" },
     { "name": "feature_runtime_permission_denied", "value": "所需权限被拒绝。" },
     { "name": "feature_runtime_image_ready", "value": "图片输入已就绪。" },
     { "name": "feature_runtime_model_ready", "value": "MindSpore 模型文件已就绪。" },

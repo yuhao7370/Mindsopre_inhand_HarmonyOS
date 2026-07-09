@@ -12,6 +12,78 @@ export const objectDetectionInputFloatCount: number =
 export const objectDetectionMean: Array<number> = [0.485, 0.456, 0.406];
 export const objectDetectionStd: Array<number> = [0.229, 0.224, 0.225];
 
+export interface ObjectDetection {
+  readonly imageId: number;
+  readonly labelId: number;
+  readonly label: string;
+  readonly score: number;
+  readonly left: number;
+  readonly top: number;
+  readonly right: number;
+  readonly bottom: number;
+}
+
+export type ObjectDetectionRunCode =
+  'MISSING_INPUT' |
+  'MODEL_PENDING' |
+  'DETECTION_DONE' |
+  'DETECTION_INVALID_OUTPUT';
+
+export interface ObjectDetectionRunResult {
+  readonly ok: boolean;
+  readonly code: ObjectDetectionRunCode;
+  readonly detections: Array<ObjectDetection>;
+}
+
+export interface ObjectDetectionRunner {
+  detectObjects(imageUri: string, modelUri?: string): Promise<Array<ObjectDetection>>;
+}
+
+export interface ObjectDetectionServiceOptions {
+  readonly labels: Array<string>;
+  readonly runner?: ObjectDetectionRunner;
+}
+
+export class ObjectDetectionService {
+  private readonly labels: Array<string>;
+  private readonly runner?: ObjectDetectionRunner;
+
+  constructor(options: ObjectDetectionServiceOptions) {
+    this.labels = options.labels;
+    this.runner = options.runner;
+  }
+
+  async detectObjects(imageUri: string, modelUri?: string): Promise<ObjectDetectionRunResult> {
+    if (imageUri.length === 0) {
+      return this.runResult(false, 'MISSING_INPUT', []);
+    }
+    if (!this.runner) {
+      return this.runResult(false, 'MODEL_PENDING', []);
+    }
+
+    let detections: Array<ObjectDetection>;
+    try {
+      detections = await this.runner.detectObjects(imageUri, modelUri);
+    } catch (_) {
+      return this.runResult(false, 'DETECTION_INVALID_OUTPUT', []);
+    }
+
+    return this.runResult(true, 'DETECTION_DONE', mapObjectDetectionLabels(detections, this.labels));
+  }
+
+  private runResult(
+    ok: boolean,
+    code: ObjectDetectionRunCode,
+    detections: Array<ObjectDetection>
+  ): ObjectDetectionRunResult {
+    return {
+      ok: ok,
+      code: code,
+      detections: detections
+    };
+  }
+}
+
 export function parseObjectCategoryLabels(rawText: string): Array<string> {
   const labels: Array<string> = [];
   rawText.split('\n').forEach((line: string) => {
@@ -52,4 +124,23 @@ export function normalizedObjectDetectionRgbInputFromRgba(rgba: Uint8Array): Arr
 
 function normalizeObjectDetectionChannel(value: number, channel: number): number {
   return ((value / 255) - objectDetectionMean[channel]) / objectDetectionStd[channel];
+}
+
+function mapObjectDetectionLabels(
+  detections: Array<ObjectDetection>,
+  labels: Array<string>
+): Array<ObjectDetection> {
+  return detections.map((detection: ObjectDetection): ObjectDetection => {
+    const label = detection.labelId >= 0 && detection.labelId < labels.length ? labels[detection.labelId] : detection.label;
+    return {
+      imageId: detection.imageId,
+      labelId: detection.labelId,
+      label: label,
+      score: detection.score,
+      left: detection.left,
+      top: detection.top,
+      right: detection.right,
+      bottom: detection.bottom
+    };
+  });
 }

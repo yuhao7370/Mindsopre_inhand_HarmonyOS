@@ -20,6 +20,12 @@ import {
   ImageClassificationService,
   parseImageCategoryLabels
 } from './ImageClassificationService';
+import {
+  objectCategoryLabelRawfilePath,
+  ObjectDetectionRunner,
+  ObjectDetectionService,
+  parseObjectCategoryLabels
+} from './ObjectDetectionService';
 import { MindSporeLiteModelRunner, RawfileContentReader } from './MindSporeLiteModelRunner';
 
 export interface HarmonyImageClassificationRuntimeOptions {
@@ -28,6 +34,7 @@ export interface HarmonyImageClassificationRuntimeOptions {
   readonly tensorRunner?: ImageClassificationTensorRunner;
   readonly customModelPreprocessor?: CustomModelInputPreprocessor;
   readonly customModelTensorRunner?: CustomModelTensorRunner;
+  readonly objectDetectionRunner?: ObjectDetectionRunner;
 }
 
 let cachedHarmonyDefaultAiService: Promise<DefaultAiService> | undefined = undefined;
@@ -76,6 +83,11 @@ export async function cachedRuntimeAiServiceForWorkflow(
       })
     });
   }
+  if (workflow.aiMethod === 'detectObjects') {
+    return createRuntimeAiServiceForWorkflow(workflow, {
+      resourceManager: resourceManager
+    });
+  }
   return new DefaultAiService();
 }
 
@@ -89,6 +101,12 @@ export async function createRuntimeAiServiceForWorkflow(
   if (workflow.aiMethod === 'runCustomModel') {
     return new DefaultAiService({
       customModelService: createHarmonyCustomModelService(options)
+    });
+  }
+  if (workflow.aiMethod === 'detectObjects') {
+    const objectDetectionService = await createHarmonyObjectDetectionService(options);
+    return new DefaultAiService({
+      objectDetectionService: objectDetectionService
     });
   }
   return new DefaultAiService();
@@ -131,9 +149,24 @@ export function createHarmonyCustomModelService(
   });
 }
 
+export async function createHarmonyObjectDetectionService(
+  options: HarmonyImageClassificationRuntimeOptions
+): Promise<ObjectDetectionService> {
+  const labels = await loadObjectDetectionLabels(options.resourceManager);
+  return new ObjectDetectionService({
+    labels: labels,
+    runner: options.objectDetectionRunner
+  });
+}
+
 export async function loadImageClassificationLabels(resourceManager: RawfileContentReader): Promise<Array<string>> {
   const content = await resourceManager.getRawFileContent(imageCategoryLabelRawfilePath);
   return parseImageCategoryLabels(rawfileAsciiContentToText(content));
+}
+
+export async function loadObjectDetectionLabels(resourceManager: RawfileContentReader): Promise<Array<string>> {
+  const content = await resourceManager.getRawFileContent(objectCategoryLabelRawfilePath);
+  return parseObjectCategoryLabels(rawfileAsciiContentToText(content));
 }
 
 export function rawfileAsciiContentToText(content: Uint8Array): string {
