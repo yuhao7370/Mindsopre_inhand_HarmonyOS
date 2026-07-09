@@ -9,6 +9,7 @@ import {
 } from './CustomModelService';
 import { HarmonyCustomModelInputPreprocessor } from './HarmonyCustomModelInputPreprocessor';
 import { HarmonyImageClassificationInputPreprocessor } from './HarmonyImageInputPreprocessor';
+import { HarmonyObjectDetectionInputPreprocessor } from './HarmonyObjectDetectionInputPreprocessor';
 import {
   ImageClassificationInputPreprocessor,
   ImageClassificationMindSporeScoreRunner,
@@ -21,9 +22,14 @@ import {
   parseImageCategoryLabels
 } from './ImageClassificationService';
 import {
+  MindSporeLiteObjectDetectionTensorRunner,
   objectCategoryLabelRawfilePath,
+  objectDetectionModelRawfilePath,
+  ObjectDetectionInputPreprocessor,
+  ObjectDetectionMindSporeRunner,
   ObjectDetectionRunner,
   ObjectDetectionService,
+  ObjectDetectionTensorRunner,
   parseObjectCategoryLabels
 } from './ObjectDetectionService';
 import { MindSporeLiteModelRunner, RawfileContentReader } from './MindSporeLiteModelRunner';
@@ -34,7 +40,9 @@ export interface HarmonyImageClassificationRuntimeOptions {
   readonly tensorRunner?: ImageClassificationTensorRunner;
   readonly customModelPreprocessor?: CustomModelInputPreprocessor;
   readonly customModelTensorRunner?: CustomModelTensorRunner;
+  readonly objectDetectionPreprocessor?: ObjectDetectionInputPreprocessor;
   readonly objectDetectionRunner?: ObjectDetectionRunner;
+  readonly objectDetectionTensorRunner?: ObjectDetectionTensorRunner;
 }
 
 let cachedHarmonyDefaultAiService: Promise<DefaultAiService> | undefined = undefined;
@@ -153,9 +161,22 @@ export async function createHarmonyObjectDetectionService(
   options: HarmonyImageClassificationRuntimeOptions
 ): Promise<ObjectDetectionService> {
   const labels = await loadObjectDetectionLabels(options.resourceManager);
+  const runner = options.objectDetectionRunner ?? createHarmonyObjectDetectionRunner(options);
   return new ObjectDetectionService({
     labels: labels,
-    runner: options.objectDetectionRunner
+    runner: runner
+  });
+}
+
+export function createHarmonyObjectDetectionRunner(
+  options: HarmonyImageClassificationRuntimeOptions
+): ObjectDetectionRunner {
+  return new ObjectDetectionMindSporeRunner({
+    preprocessor: options.objectDetectionPreprocessor ?? new HarmonyObjectDetectionInputPreprocessor(),
+    tensorRunner: options.objectDetectionTensorRunner ?? new MindSporeLiteObjectDetectionTensorRunner({
+      resourceManager: options.resourceManager,
+      modelRawfilePath: objectDetectionModelRawfilePath
+    })
   });
 }
 

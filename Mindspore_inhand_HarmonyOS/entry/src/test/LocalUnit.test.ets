@@ -53,6 +53,11 @@ import {
   ObjectDetectionRunResult,
   ObjectDetectionRunner,
   ObjectDetectionService,
+  ObjectDetectionInput,
+  ObjectDetectionInputPreprocessor,
+  ObjectDetectionMindSporeRunner,
+  ObjectDetectionModelOutput,
+  ObjectDetectionTensorRunner,
   decodeSsdObjectDetections,
   generateObjectDetectionDefaultBoxes,
   objectDetectionAnchorCount,
@@ -61,6 +66,7 @@ import {
   objectDetectionInputFloatCount,
   objectDetectionInputSize,
   ObjectDetectionNormalBox,
+  objectDetectionModelOutputFromFloatArrays,
   normalizedObjectDetectionRgbInputFromRgba,
   parseObjectCategoryLabels
 } from '../main/ets/services/ai/ObjectDetectionService';
@@ -253,6 +259,36 @@ class FixedObjectDetectionRunner implements ObjectDetectionRunner {
 class RejectingObjectDetectionRunner implements ObjectDetectionRunner {
   async detectObjects(_imageUri: string, _modelUri?: string): Promise<Array<ObjectDetection>> {
     throw new Error('object detection failed');
+  }
+}
+
+class FixedObjectDetectionPreprocessor implements ObjectDetectionInputPreprocessor {
+  readonly seenImageUris: Array<string> = [];
+  private readonly input: ObjectDetectionInput;
+
+  constructor(input: ObjectDetectionInput) {
+    this.input = input;
+  }
+
+  async createInput(imageUri: string): Promise<ObjectDetectionInput> {
+    this.seenImageUris.push(imageUri);
+    return this.input;
+  }
+}
+
+class FixedObjectDetectionTensorRunner implements ObjectDetectionTensorRunner {
+  readonly seenByteLengths: Array<number> = [];
+  readonly seenModelUris: Array<string> = [];
+  private readonly output: ObjectDetectionModelOutput;
+
+  constructor(output: ObjectDetectionModelOutput) {
+    this.output = output;
+  }
+
+  async predictOutput(inputBuffer: ArrayBuffer, modelUri?: string): Promise<ObjectDetectionModelOutput> {
+    this.seenByteLengths.push(inputBuffer.byteLength);
+    this.seenModelUris.push(modelUri ?? '');
+    return this.output;
   }
 }
 
@@ -709,6 +745,49 @@ export default function localUnitTest() {
       expect(detections.length).assertEqual(1);
       expect(detections[0].imageId).assertEqual(0);
       expect(detections[0].score.toFixed(1)).assertEqual('0.9');
+    });
+
+    it('identifiesObjectDetectionModelOutputsByAndroidElementCount', 0, () => {
+      const boxes: Float32Array = new Float32Array(objectDetectionAnchorCount * 4);
+      const scores: Float32Array = new Float32Array(objectDetectionAnchorCount * objectDetectionClassCount);
+      boxes[3] = 0.25;
+      scores[1] = 0.7;
+
+      const output: ObjectDetectionModelOutput = objectDetectionModelOutputFromFloatArrays([boxes, scores]);
+
+      expect(output.boxes.length).assertEqual(objectDetectionAnchorCount * 4);
+      expect(output.scores.length).assertEqual(objectDetectionAnchorCount * objectDetectionClassCount);
+      expect(output.boxes[3]).assertEqual(0.25);
+      expect(output.scores[1].toFixed(1)).assertEqual('0.7');
+    });
+
+    it('objectDetectionMindSporeRunnerBridgesPreprocessorTensorRunnerAndSsdDecode', 0, async () => {
+      const scores: Float32Array = new Float32Array(objectDetectionAnchorCount * objectDetectionClassCount);
+      const boxes: Float32Array = new Float32Array(objectDetectionAnchorCount * 4);
+      scores[1] = 0.7;
+      const input: ObjectDetectionInput = {
+        inputBuffer: new ArrayBuffer(12),
+        imageWidth: 600,
+        imageHeight: 300
+      };
+      const preprocessor: FixedObjectDetectionPreprocessor = new FixedObjectDetectionPreprocessor(input);
+      const tensorRunner: FixedObjectDetectionTensorRunner = new FixedObjectDetectionTensorRunner({
+        scores: scores,
+        boxes: boxes
+      });
+      const runner = new ObjectDetectionMindSporeRunner({
+        preprocessor: preprocessor,
+        tensorRunner: tensorRunner
+      });
+
+      const detections: Array<ObjectDetection> =
+        await runner.detectObjects('file://selected/street.jpg', 'file://selected/ssd.ms');
+
+      expect(detections.length).assertEqual(1);
+      expect(detections[0].right.toFixed(0)).assertEqual('46');
+      expect(preprocessor.seenImageUris[0]).assertEqual('file://selected/street.jpg');
+      expect(tensorRunner.seenByteLengths[0]).assertEqual(12);
+      expect(tensorRunner.seenModelUris[0]).assertEqual('file://selected/ssd.ms');
     });
 
     it('copiesRawfileViewToExactModelBuffer', 0, () => {

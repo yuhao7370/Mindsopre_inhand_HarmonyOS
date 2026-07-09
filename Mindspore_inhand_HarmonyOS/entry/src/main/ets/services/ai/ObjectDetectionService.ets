@@ -1,4 +1,10 @@
 import { image } from '@kit.ImageKit';
+import { mindSporeLite } from '@kit.MindSporeLiteKit';
+import { FileUriContentReader } from './FileUriContentReader';
+import {
+  RawfileContentReader,
+  rawfileContentToArrayBuffer
+} from './MindSporeLiteModelRunner';
 
 export const objectCategoryLabelRawfilePath: string = 'labels/object_category.txt';
 export const objectCategoryLabelCount: number = 81;
@@ -71,6 +77,108 @@ export interface ObjectDetectionRunResult {
 
 export interface ObjectDetectionRunner {
   detectObjects(imageUri: string, modelUri?: string): Promise<Array<ObjectDetection>>;
+}
+
+export interface ObjectDetectionInput {
+  readonly inputBuffer: ArrayBuffer;
+  readonly imageWidth: number;
+  readonly imageHeight: number;
+}
+
+export interface ObjectDetectionInputPreprocessor {
+  createInput(imageUri: string): Promise<ObjectDetectionInput>;
+}
+
+export interface ObjectDetectionModelOutput {
+  readonly scores: Float32Array;
+  readonly boxes: Float32Array;
+}
+
+export interface ObjectDetectionTensorRunner {
+  predictOutput(inputBuffer: ArrayBuffer, modelUri?: string): Promise<ObjectDetectionModelOutput>;
+}
+
+export interface ObjectDetectionMindSporeRunnerOptions {
+  readonly preprocessor: ObjectDetectionInputPreprocessor;
+  readonly tensorRunner: ObjectDetectionTensorRunner;
+}
+
+export class ObjectDetectionMindSporeRunner implements ObjectDetectionRunner {
+  private readonly preprocessor: ObjectDetectionInputPreprocessor;
+  private readonly tensorRunner: ObjectDetectionTensorRunner;
+
+  constructor(options: ObjectDetectionMindSporeRunnerOptions) {
+    this.preprocessor = options.preprocessor;
+    this.tensorRunner = options.tensorRunner;
+  }
+
+  async detectObjects(imageUri: string, modelUri?: string): Promise<Array<ObjectDetection>> {
+    const input = await this.preprocessor.createInput(imageUri);
+    const output = await this.tensorRunner.predictOutput(input.inputBuffer, modelUri);
+    return decodeSsdObjectDetections(output.scores, output.boxes, [], input.imageWidth, input.imageHeight);
+  }
+}
+
+export interface MindSporeLiteObjectDetectionTensorRunnerOptions {
+  readonly resourceManager: RawfileContentReader;
+  readonly modelRawfilePath: string;
+  readonly modelContentReader?: FileUriContentReader;
+}
+
+export class MindSporeLiteObjectDetectionTensorRunner implements ObjectDetectionTensorRunner {
+  private readonly resourceManager: RawfileContentReader;
+  private readonly modelRawfilePath: string;
+  private readonly modelContentReader: FileUriContentReader;
+  private cachedRawfileModel?: mindSporeLite.Model;
+  private readonly cachedSelectedModels: Map<string, mindSporeLite.Model> = new Map<string, mindSporeLite.Model>();
+
+  constructor(options: MindSporeLiteObjectDetectionTensorRunnerOptions) {
+    this.resourceManager = options.resourceManager;
+    this.modelRawfilePath = options.modelRawfilePath;
+    this.modelContentReader = options.modelContentReader ?? new FileUriContentReader();
+  }
+
+  async predictOutput(inputBuffer: ArrayBuffer, modelUri?: string): Promise<ObjectDetectionModelOutput> {
+    const model = await this.loadModel(modelUri);
+    const inputs = model.getInputs();
+    if (inputs.length === 0) {
+      return emptyObjectDetectionModelOutput();
+    }
+
+    inputs[0].setData(inputBuffer);
+    const outputs = await model.predict(inputs);
+    const floatOutputs: Array<Float32Array> = [];
+    for (let index = 0; index < outputs.length; index++) {
+      floatOutputs.push(new Float32Array(outputs[index].getData()));
+    }
+    return objectDetectionModelOutputFromFloatArrays(floatOutputs);
+  }
+
+  private async loadModel(modelUri?: string): Promise<mindSporeLite.Model> {
+    if (modelUri !== undefined && modelUri.length > 0) {
+      return this.loadSelectedModel(modelUri);
+    }
+    if (this.cachedRawfileModel !== undefined) {
+      return this.cachedRawfileModel;
+    }
+
+    const content = await this.resourceManager.getRawFileContent(this.modelRawfilePath);
+    const model = await mindSporeLite.loadModelFromBuffer(rawfileContentToArrayBuffer(content));
+    this.cachedRawfileModel = model;
+    return model;
+  }
+
+  private async loadSelectedModel(modelUri: string): Promise<mindSporeLite.Model> {
+    const cachedModel = this.cachedSelectedModels.get(modelUri);
+    if (cachedModel !== undefined) {
+      return cachedModel;
+    }
+
+    const modelContent = await this.modelContentReader.readFileContent(modelUri);
+    const model = await mindSporeLite.loadModelFromBuffer(rawfileContentToArrayBuffer(modelContent));
+    this.cachedSelectedModels.set(modelUri, model);
+    return model;
+  }
 }
 
 export interface ObjectDetectionServiceOptions {
@@ -239,6 +347,25 @@ export function decodeSsdObjectDetections(
   return detections;
 }
 
+export function objectDetectionModelOutputFromFloatArrays(
+  outputs: Array<Float32Array>
+): ObjectDetectionModelOutput {
+  let scores: Float32Array = new Float32Array(0);
+  let boxes: Float32Array = new Float32Array(0);
+  outputs.forEach((output: Float32Array) => {
+    if (output.length === objectDetectionAnchorCount * objectDetectionClassCount) {
+      scores = output;
+    }
+    if (output.length === objectDetectionAnchorCount * 4) {
+      boxes = output;
+    }
+  });
+  return {
+    scores: scores,
+    boxes: boxes
+  };
+}
+
 function mapObjectDetectionLabels(
   detections: Array<ObjectDetection>,
   labels: Array<string>
@@ -369,4 +496,11 @@ function objectDetectionScore(scores: Float32Array, anchorIndex: number, classId
 
 function clamp01(value: number): number {
   return Math.min(1, Math.max(0, value));
+}
+
+function emptyObjectDetectionModelOutput(): ObjectDetectionModelOutput {
+  return {
+    scores: new Float32Array(0),
+    boxes: new Float32Array(0)
+  };
 }
