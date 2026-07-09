@@ -3,6 +3,7 @@
     "pages/Index",
     "pages/FeatureStubPage",
     "pages/FeatureRuntimePage",
-    "pages/WebPage"
+    "pages/WebPage",
+    "pages/QrCodePage"
   ]
 }

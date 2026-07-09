@@ -529,8 +529,8 @@ export default function localUnitTest() {
 
     it('definesCollegeAndMeRows', 0, () => {
       expect(collegeItems.length).assertEqual(6);
-      expect(visibleMeItems.length).assertEqual(6);
-      expect(visibleMeItems[4].title).assertEqual('Version');
+      expect(visibleMeItems.length).assertEqual(7);
+      expect(visibleMeItems[5].title).assertEqual('Version');
     });
 
     it('definesThreeMainTabsInAndroidOrder', 0, () => {
@@ -612,6 +612,15 @@ export default function localUnitTest() {
       expect(versionItem !== undefined).assertTrue();
       if (versionItem) {
         expect(isMeItemUrlNavigable(versionItem)).assertFalse();
+      }
+    });
+
+    it('routesMyQrCodeToNativeHarmonyPage', 0, () => {
+      const qrItem = visibleMeItems.find((item: MeItem) => item.id === 'qr');
+      expect(qrItem !== undefined).assertTrue();
+      expect(AppRoute.MY_QR_CODE.page).assertEqual('pages/QrCodePage');
+      if (qrItem) {
+        expect(qrItem.page).assertEqual(AppRoute.MY_QR_CODE.page);
       }
     });
 
