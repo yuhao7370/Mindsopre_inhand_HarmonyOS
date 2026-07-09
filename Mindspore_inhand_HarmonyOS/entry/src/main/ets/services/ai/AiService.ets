@@ -15,6 +15,12 @@ import {
   StyleTransferResult,
   StyleTransferService
 } from './StyleTransferService';
+import {
+  TextRecognitionResult,
+  TextRecognitionService,
+  TextTranslationResult,
+  TextTranslationService
+} from './TextRecognitionService';
 
 export type AiRunCode =
   'NATIVE_ADAPTER_PENDING' |
@@ -28,7 +34,11 @@ export type AiRunCode =
   'OBJECT_DETECTION_DONE' |
   'OBJECT_DETECTION_FAILED' |
   'STYLE_TRANSFER_DONE' |
-  'STYLE_TRANSFER_FAILED';
+  'STYLE_TRANSFER_FAILED' |
+  'TEXT_RECOGNITION_DONE' |
+  'TEXT_RECOGNITION_FAILED' |
+  'TEXT_TRANSLATION_DONE' |
+  'TEXT_TRANSLATION_FAILED';
 
 export interface AiRunInputs {
   readonly imageUri?: string;
@@ -51,6 +61,8 @@ export interface AiServiceOptions {
   readonly customModelService?: CustomModelService;
   readonly objectDetectionService?: ObjectDetectionService;
   readonly styleTransferService?: StyleTransferService;
+  readonly textRecognitionService?: TextRecognitionService;
+  readonly textTranslationService?: TextTranslationService;
 }
 
 export class DefaultAiService {
@@ -58,6 +70,8 @@ export class DefaultAiService {
   private readonly customModelService?: CustomModelService;
   private readonly objectDetectionService?: ObjectDetectionService;
   private readonly styleTransferService?: StyleTransferService;
+  private readonly textRecognitionService?: TextRecognitionService;
+  private readonly textTranslationService?: TextTranslationService;
 
   constructor(options?: AiServiceOptions) {
     this.imageClassificationService = options?.imageClassificationService ?? new ImageClassificationService({
@@ -66,6 +80,8 @@ export class DefaultAiService {
     this.customModelService = options?.customModelService;
     this.objectDetectionService = options?.objectDetectionService;
     this.styleTransferService = options?.styleTransferService;
+    this.textRecognitionService = options?.textRecognitionService;
+    this.textTranslationService = options?.textTranslationService;
   }
 
   async run(workflow: FeatureWorkflow, inputs: AiRunInputs = {}): Promise<AiRunResult> {
@@ -78,6 +94,12 @@ export class DefaultAiService {
     if (workflow.aiMethod === 'runStyleTransfer') {
       return this.runStyleTransfer(inputs);
     }
+    if (workflow.aiMethod === 'recognizeText') {
+      return this.recognizeText(inputs);
+    }
+    if (workflow.aiMethod === 'translateText') {
+      return this.translateText(inputs);
+    }
     if (workflow.aiMethod === 'runCustomModel') {
       return this.runCustomModel(inputs);
     }
@@ -87,6 +109,88 @@ export class DefaultAiService {
       aiMethod: workflow.aiMethod,
       messageKey: 'feature_runtime_pending_adapter',
       detailText: ''
+    };
+  }
+
+  private async recognizeText(inputs: AiRunInputs): Promise<AiRunResult> {
+    if (this.textRecognitionService === undefined) {
+      return {
+        ok: false,
+        code: 'NATIVE_ADAPTER_PENDING',
+        aiMethod: 'recognizeText',
+        messageKey: 'feature_runtime_pending_adapter',
+        detailText: ''
+      };
+    }
+
+    const imageUri = inputs.imageUri ?? '';
+    if (imageUri.length === 0) {
+      return {
+        ok: false,
+        code: 'MISSING_INPUT',
+        aiMethod: 'recognizeText',
+        messageKey: 'feature_runtime_missing_input',
+        detailText: ''
+      };
+    }
+
+    const result: TextRecognitionResult = await this.textRecognitionService.recognizeText(imageUri);
+    if (!result.ok) {
+      return {
+        ok: false,
+        code: 'TEXT_RECOGNITION_FAILED',
+        aiMethod: 'recognizeText',
+        messageKey: 'feature_runtime_text_recognition_failed',
+        detailText: this.textRecognitionSummary(result, imageUri)
+      };
+    }
+    return {
+      ok: true,
+      code: 'TEXT_RECOGNITION_DONE',
+      aiMethod: 'recognizeText',
+      messageKey: 'feature_runtime_text_recognition_done',
+      detailText: this.textRecognitionSummary(result, imageUri)
+    };
+  }
+
+  private async translateText(inputs: AiRunInputs): Promise<AiRunResult> {
+    if (this.textTranslationService === undefined) {
+      return {
+        ok: false,
+        code: 'NATIVE_ADAPTER_PENDING',
+        aiMethod: 'translateText',
+        messageKey: 'feature_runtime_pending_adapter',
+        detailText: ''
+      };
+    }
+
+    const text = inputs.text ?? '';
+    if (text.length === 0) {
+      return {
+        ok: false,
+        code: 'MISSING_INPUT',
+        aiMethod: 'translateText',
+        messageKey: 'feature_runtime_missing_input',
+        detailText: ''
+      };
+    }
+
+    const result: TextTranslationResult = await this.textTranslationService.translateText(text);
+    if (!result.ok) {
+      return {
+        ok: false,
+        code: 'TEXT_TRANSLATION_FAILED',
+        aiMethod: 'translateText',
+        messageKey: 'feature_runtime_text_translation_failed',
+        detailText: this.textTranslationSummary(result)
+      };
+    }
+    return {
+      ok: true,
+      code: 'TEXT_TRANSLATION_DONE',
+      aiMethod: 'translateText',
+      messageKey: 'feature_runtime_text_translation_done',
+      detailText: this.textTranslationSummary(result)
     };
   }
 
@@ -351,6 +455,29 @@ export class DefaultAiService {
     if (modelUri.length > 0) {
       lines.push(`model=${this.lastPathSegment(modelUri)}`);
     }
+    return lines.join('\n');
+  }
+
+  private textRecognitionSummary(result: TextRecognitionResult, imageUri: string): string {
+    const lines: Array<string> = [
+      `image=${this.lastPathSegment(imageUri)}`,
+      `lineCount=${result.lineCount}`,
+      `blockCount=${result.blockCount}`,
+      `executionMs=${result.executionMs}`
+    ];
+    if (result.text.length > 0) {
+      lines.push('text=');
+      lines.push(result.text);
+    }
+    return lines.join('\n');
+  }
+
+  private textTranslationSummary(result: TextTranslationResult): string {
+    const lines: Array<string> = [
+      `targetLanguage=${result.targetLanguage}`,
+      `source=${result.sourceText}`,
+      `translated=${result.translatedText}`
+    ];
     return lines.join('\n');
   }
 

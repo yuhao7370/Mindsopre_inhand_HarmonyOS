@@ -5,6 +5,19 @@ import { hasAppStringKey } from '../main/ets/common/i18n/AppStrings';
 import { iconLabel } from '../main/ets/common/icons/IconSymbols';
 import { AiRunResult, DefaultAiService } from '../main/ets/services/ai/AiService';
 import {
+  androidDefaultTranslationTargetLanguage,
+  containsAndroidChineseText,
+  parseTranslationLanguagePairs,
+  TextRecognitionResult,
+  TextRecognitionRunner,
+  TextRecognitionService,
+  TextTranslationResult,
+  TextTranslationRunner,
+  TextTranslationService,
+  textRecognitionOutputFromBlocks,
+  translationLanguagePairsRawfilePath
+} from '../main/ets/services/ai/TextRecognitionService';
+import {
   StyleTransferInput,
   StyleTransferInputPreprocessor,
   StyleTransferResult,
@@ -335,6 +348,58 @@ class FixedStyleTransferTensorRunner implements StyleTransferTensorRunner {
   }
 }
 
+class FixedTextRecognitionRunner implements TextRecognitionRunner {
+  readonly seenImageUris: Array<string> = [];
+  private readonly result: TextRecognitionResult;
+
+  constructor(result: TextRecognitionResult) {
+    this.result = result;
+  }
+
+  async recognizeText(imageUri: string): Promise<TextRecognitionResult> {
+    this.seenImageUris.push(imageUri);
+    return this.result;
+  }
+}
+
+class RejectingTextRecognitionRunner implements TextRecognitionRunner {
+  async recognizeText(_imageUri: string): Promise<TextRecognitionResult> {
+    throw new Error('text recognition failed');
+  }
+}
+
+class FixedTextTranslationRunner implements TextTranslationRunner {
+  readonly seenTexts: Array<string> = [];
+  readonly seenTargetLanguages: Array<string> = [];
+  private readonly translatedText: string;
+
+  constructor(translatedText: string) {
+    this.translatedText = translatedText;
+  }
+
+  async translate(text: string, targetLanguage: string): Promise<TextTranslationResult> {
+    this.seenTexts.push(text);
+    this.seenTargetLanguages.push(targetLanguage);
+    return {
+      ok: true,
+      sourceText: text,
+      translatedText: this.translatedText,
+      targetLanguage: targetLanguage
+    };
+  }
+}
+
+class RejectingTextTranslationRunner implements TextTranslationRunner {
+  async translate(text: string, targetLanguage: string): Promise<TextTranslationResult> {
+    return {
+      ok: false,
+      sourceText: text,
+      translatedText: '',
+      targetLanguage: targetLanguage
+    };
+  }
+}
+
 class FixedObjectDetectionPreprocessor implements ObjectDetectionInputPreprocessor {
   readonly seenImageUris: Array<string> = [];
   private readonly input: ObjectDetectionInput;
@@ -415,6 +480,8 @@ export default function localUnitTest() {
       expect(hasAppStringKey(collegeItems[0].titleKey)).assertTrue();
       expect(hasAppStringKey(meItems[0].titleKey)).assertTrue();
       expect(hasAppStringKey('feature_runtime_custom_model_failed')).assertTrue();
+      expect(hasAppStringKey('feature_runtime_text_recognition_done')).assertTrue();
+      expect(hasAppStringKey('feature_runtime_text_translation_failed')).assertTrue();
     });
 
     it('doesNotNavigateQuickStartParentWithEmptyUrl', 0, () => {
@@ -489,6 +556,156 @@ export default function localUnitTest() {
       expect(result.ok).assertFalse();
       expect(result.code).assertEqual('NATIVE_ADAPTER_PENDING');
       expect(result.aiMethod).assertEqual('detectObjects');
+    });
+
+    it('formatsCoreVisionTextBlocksLikeAndroidLineOutput', 0, () => {
+      const text = textRecognitionOutputFromBlocks([
+        {
+          value: 'ignored block value',
+          lines: [
+            { value: 'MindSpore' },
+            { value: 'HarmonyOS' }
+          ]
+        },
+        {
+          value: 'second block',
+          lines: [
+            { value: 'AI' }
+          ]
+        }
+      ]);
+
+      expect(text).assertEqual('MindSpore\nHarmonyOS\nAI\n');
+    });
+
+    it('detectsAndroidChineseRangesForTranslationTarget', 0, () => {
+      expect(containsAndroidChineseText('hello')).assertFalse();
+      expect(containsAndroidChineseText('你好')).assertTrue();
+      expect(containsAndroidChineseText('hello，')).assertTrue();
+      expect(containsAndroidChineseText('⺀')).assertTrue();
+      expect(androidDefaultTranslationTargetLanguage('你好')).assertEqual('en');
+      expect(androidDefaultTranslationTargetLanguage('hello')).assertEqual('zh');
+    });
+
+    it('parsesAndroidTranslationLanguagePairs', 0, () => {
+      const pairs = parseTranslationLanguagePairs('English en\nChinese zh\nChinese(Traditional) zh-HK\n');
+
+      expect(translationLanguagePairsRawfilePath).assertEqual('hms/Country_pair_new.txt');
+      expect(pairs.length).assertEqual(3);
+      expect(pairs[0].name).assertEqual('English');
+      expect(pairs[0].code).assertEqual('en');
+      expect(pairs[2].code).assertEqual('zh-HK');
+    });
+
+    it('textRecognitionRequiresImageInputWhenServiceIsProvided', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.TEXT_RECOGNITION.name);
+      expect(workflow !== undefined).assertTrue();
+      const service = new TextRecognitionService({
+        runner: new FixedTextRecognitionRunner({
+          ok: true,
+          text: 'MindSpore\n',
+          lineCount: 1,
+          blockCount: 1,
+          executionMs: 4
+        })
+      });
+
+      const result = await new DefaultAiService({ textRecognitionService: service }).run(workflow!);
+
+      expect(result.ok).assertFalse();
+      expect(result.code).assertEqual('MISSING_INPUT');
+    });
+
+    it('aiServiceUsesRealTextRecognitionServiceWhenProvided', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.TEXT_RECOGNITION.name);
+      expect(workflow !== undefined).assertTrue();
+      const runner: FixedTextRecognitionRunner = new FixedTextRecognitionRunner({
+        ok: true,
+        text: 'MindSpore\nHarmonyOS\n',
+        lineCount: 2,
+        blockCount: 1,
+        executionMs: 9
+      });
+      const service = new TextRecognitionService({
+        runner: runner
+      });
+
+      const result = await new DefaultAiService({ textRecognitionService: service }).run(workflow!, {
+        imageUri: 'file://selected/text.jpg'
+      });
+
+      expect(result.ok).assertTrue();
+      expect(result.code).assertEqual('TEXT_RECOGNITION_DONE');
+      expect(result.messageKey).assertEqual('feature_runtime_text_recognition_done');
+      expect(result.detailText.indexOf('MindSpore') >= 0).assertTrue();
+      expect(result.detailText.indexOf('lineCount=2') >= 0).assertTrue();
+      expect(runner.seenImageUris[0]).assertEqual('file://selected/text.jpg');
+    });
+
+    it('aiServiceReportsTextRecognitionFailureWithI18nKey', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.TEXT_RECOGNITION.name);
+      expect(workflow !== undefined).assertTrue();
+      const service = new TextRecognitionService({
+        runner: new RejectingTextRecognitionRunner()
+      });
+
+      const result = await new DefaultAiService({ textRecognitionService: service }).run(workflow!, {
+        imageUri: 'file://selected/text.jpg'
+      });
+
+      expect(result.ok).assertFalse();
+      expect(result.code).assertEqual('TEXT_RECOGNITION_FAILED');
+      expect(result.messageKey).assertEqual('feature_runtime_text_recognition_failed');
+    });
+
+    it('textTranslationRequiresTextInputWhenServiceIsProvided', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.TEXT_TRANSLATION.name);
+      expect(workflow !== undefined).assertTrue();
+      const service = new TextTranslationService({
+        runner: new FixedTextTranslationRunner('translated')
+      });
+
+      const result = await new DefaultAiService({ textTranslationService: service }).run(workflow!);
+
+      expect(result.ok).assertFalse();
+      expect(result.code).assertEqual('MISSING_INPUT');
+    });
+
+    it('aiServiceUsesAndroidTargetLanguageRuleForTextTranslation', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.TEXT_TRANSLATION.name);
+      expect(workflow !== undefined).assertTrue();
+      const runner: FixedTextTranslationRunner = new FixedTextTranslationRunner('hello');
+      const service = new TextTranslationService({
+        runner: runner
+      });
+
+      const result = await new DefaultAiService({ textTranslationService: service }).run(workflow!, {
+        text: '你好'
+      });
+
+      expect(result.ok).assertTrue();
+      expect(result.code).assertEqual('TEXT_TRANSLATION_DONE');
+      expect(result.messageKey).assertEqual('feature_runtime_text_translation_done');
+      expect(result.detailText.indexOf('targetLanguage=en') >= 0).assertTrue();
+      expect(result.detailText.indexOf('translated=hello') >= 0).assertTrue();
+      expect(runner.seenTexts[0]).assertEqual('你好');
+      expect(runner.seenTargetLanguages[0]).assertEqual('en');
+    });
+
+    it('aiServiceReportsTextTranslationFailureWithI18nKey', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.TEXT_TRANSLATION.name);
+      expect(workflow !== undefined).assertTrue();
+      const service = new TextTranslationService({
+        runner: new RejectingTextTranslationRunner()
+      });
+
+      const result = await new DefaultAiService({ textTranslationService: service }).run(workflow!, {
+        text: 'hello'
+      });
+
+      expect(result.ok).assertFalse();
+      expect(result.code).assertEqual('TEXT_TRANSLATION_FAILED');
+      expect(result.messageKey).assertEqual('feature_runtime_text_translation_failed');
     });
 
     it('customModelRequiresModelAndImageInputs', 0, async () => {
@@ -1269,6 +1486,45 @@ export default function localUnitTest() {
       expect(result.ok).assertTrue();
       expect(result.code).assertEqual('STYLE_TRANSFER_DONE');
       expect(result.detailText.indexOf('transferMs=6') >= 0).assertTrue();
+    });
+
+    it('runtimeFactoryInjectsTextRecognitionServiceForOcrWorkflow', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.TEXT_RECOGNITION.name);
+      expect(workflow !== undefined).assertTrue();
+      const runner: FixedTextRecognitionRunner = new FixedTextRecognitionRunner({
+        ok: true,
+        text: 'MindSpore\n',
+        lineCount: 1,
+        blockCount: 1,
+        executionMs: 7
+      });
+      const service = await createRuntimeAiServiceForWorkflow(workflow!, {
+        resourceManager: new ThrowingRawfileContentReader(),
+        textRecognitionRunner: runner
+      });
+
+      const result: AiRunResult = await service.run(workflow!, {
+        imageUri: 'file://selected/ocr.jpg'
+      });
+
+      expect(result.ok).assertTrue();
+      expect(result.code).assertEqual('TEXT_RECOGNITION_DONE');
+      expect(runner.seenImageUris[0]).assertEqual('file://selected/ocr.jpg');
+    });
+
+    it('runtimeFactoryKeepsTranslationPendingWithoutTranslator', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.TEXT_TRANSLATION.name);
+      expect(workflow !== undefined).assertTrue();
+      const service = await createRuntimeAiServiceForWorkflow(workflow!, {
+        resourceManager: new ThrowingRawfileContentReader()
+      });
+
+      const result: AiRunResult = await service.run(workflow!, {
+        text: 'hello'
+      });
+
+      expect(result.ok).assertFalse();
+      expect(result.code).assertEqual('NATIVE_ADAPTER_PENDING');
     });
 
     it('mapsWorkflowPermissionsToHarmonyPermissionNames', 0, () => {

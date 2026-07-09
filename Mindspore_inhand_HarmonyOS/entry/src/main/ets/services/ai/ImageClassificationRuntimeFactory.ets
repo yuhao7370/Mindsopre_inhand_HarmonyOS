@@ -44,6 +44,13 @@ import {
   parseObjectCategoryLabels
 } from './ObjectDetectionService';
 import { MindSporeLiteModelRunner, RawfileContentReader } from './MindSporeLiteModelRunner';
+import {
+  HarmonyTextRecognitionRunner,
+  TextRecognitionRunner,
+  TextRecognitionService,
+  TextTranslationRunner,
+  TextTranslationService
+} from './TextRecognitionService';
 
 export interface HarmonyImageClassificationRuntimeOptions {
   readonly resourceManager: RawfileContentReader;
@@ -57,6 +64,8 @@ export interface HarmonyImageClassificationRuntimeOptions {
   readonly styleTransferPreprocessor?: StyleTransferInputPreprocessor;
   readonly styleTransferRunner?: StyleTransferRunner;
   readonly styleTransferTensorRunner?: StyleTransferTensorRunner;
+  readonly textRecognitionRunner?: TextRecognitionRunner;
+  readonly textTranslationRunner?: TextTranslationRunner;
 }
 
 let cachedHarmonyDefaultAiService: Promise<DefaultAiService> | undefined = undefined;
@@ -115,6 +124,16 @@ export async function cachedRuntimeAiServiceForWorkflow(
       resourceManager: resourceManager
     });
   }
+  if (workflow.aiMethod === 'recognizeText') {
+    return createRuntimeAiServiceForWorkflow(workflow, {
+      resourceManager: resourceManager
+    });
+  }
+  if (workflow.aiMethod === 'translateText') {
+    return createRuntimeAiServiceForWorkflow(workflow, {
+      resourceManager: resourceManager
+    });
+  }
   return new DefaultAiService();
 }
 
@@ -139,6 +158,16 @@ export async function createRuntimeAiServiceForWorkflow(
   if (workflow.aiMethod === 'runStyleTransfer') {
     return new DefaultAiService({
       styleTransferService: createHarmonyStyleTransferService(options)
+    });
+  }
+  if (workflow.aiMethod === 'recognizeText') {
+    return new DefaultAiService({
+      textRecognitionService: createHarmonyTextRecognitionService(options)
+    });
+  }
+  if (workflow.aiMethod === 'translateText' && options.textTranslationRunner !== undefined) {
+    return new DefaultAiService({
+      textTranslationService: createHarmonyTextTranslationService(options)
     });
   }
   return new DefaultAiService();
@@ -223,6 +252,22 @@ export function createHarmonyStyleTransferRunner(
       predictModelRawfilePath: stylePredictModelRawfilePath,
       transferModelRawfilePath: styleTransferModelRawfilePath
     })
+  });
+}
+
+export function createHarmonyTextRecognitionService(
+  options: HarmonyImageClassificationRuntimeOptions
+): TextRecognitionService {
+  return new TextRecognitionService({
+    runner: options.textRecognitionRunner ?? new HarmonyTextRecognitionRunner()
+  });
+}
+
+export function createHarmonyTextTranslationService(
+  options: HarmonyImageClassificationRuntimeOptions
+): TextTranslationService {
+  return new TextTranslationService({
+    runner: options.textTranslationRunner!
   });
 }
 
