@@ -2998,10 +2998,13 @@ export default function localUnitTest() {
       const imageCamera: FeatureWorkflow = workflowForRoute(AppRoute.IMAGE_CAMERA.name)!;
       const objectCamera: FeatureWorkflow = workflowForRoute(AppRoute.OBJECT_CAMERA.name)!;
       const textRecognition: FeatureWorkflow = workflowForRoute(AppRoute.TEXT_RECOGNITION.name)!;
+      const gestureLive: FeatureWorkflow = workflowForRoute(AppRoute.GESTURE_LIVE.name)!;
 
       expect(runtimeInputActionForWorkflowInput(imageCamera, 'camera')).assertEqual('startLiveCamera');
       expect(runtimeInputActionsForWorkflow(objectCamera).indexOf('startLiveCamera') >= 0).assertTrue();
       expect(runtimeInputActionForWorkflowInput(textRecognition, 'camera')).assertEqual('captureImage');
+      expect(gestureLive.liveMode).assertFalse();
+      expect(runtimeInputActionForWorkflowInput(gestureLive, 'camera')).assertEqual('captureImage');
     });
 
     it('liveCameraPreviewServiceRequiresSurfaceIdBeforeStarting', 0, async () => {

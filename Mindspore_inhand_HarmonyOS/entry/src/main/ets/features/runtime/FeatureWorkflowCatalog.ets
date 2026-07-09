@@ -132,7 +132,7 @@ export const featureWorkflows: Array<FeatureWorkflow> = [
     inputKinds: ['camera'],
     requiredPermissions: ['camera'],
     resultKind: 'gestureLabel',
-    liveMode: true
+    liveMode: false
   },
   {
     routeName: AppRoute.TEXT_RECOGNITION.name,
