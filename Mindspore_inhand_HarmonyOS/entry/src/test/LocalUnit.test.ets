@@ -14,6 +14,11 @@ import {
   topClassificationResult
 } from '../main/ets/services/ai/ImageClassificationService';
 import {
+  ImageClassificationInputPreprocessor,
+  ImageClassificationMindSporeScoreRunner,
+  ImageClassificationTensorRunner
+} from '../main/ets/services/ai/ImageClassificationPipeline';
+import {
   floatScoresFromOutputBuffer,
   rawfileContentToArrayBuffer
 } from '../main/ets/services/ai/MindSporeLiteModelRunner';
@@ -62,6 +67,34 @@ class FixedScoreRunner implements ImageClassificationScoreRunner {
 class RejectingScoreRunner implements ImageClassificationScoreRunner {
   async predictScores(_imageUri: string): Promise<Array<number>> {
     throw new Error('native runner failed');
+  }
+}
+
+class FixedInputPreprocessor implements ImageClassificationInputPreprocessor {
+  readonly seenUris: Array<string> = [];
+  private readonly inputBuffer: ArrayBuffer;
+
+  constructor(inputBuffer: ArrayBuffer) {
+    this.inputBuffer = inputBuffer;
+  }
+
+  async createInputBuffer(imageUri: string): Promise<ArrayBuffer> {
+    this.seenUris.push(imageUri);
+    return this.inputBuffer;
+  }
+}
+
+class FixedTensorRunner implements ImageClassificationTensorRunner {
+  readonly seenByteLengths: Array<number> = [];
+  private readonly scores: Array<number>;
+
+  constructor(scores: Array<number>) {
+    this.scores = scores;
+  }
+
+  async predictScoresFromInput(inputBuffer: ArrayBuffer): Promise<Array<number>> {
+    this.seenByteLengths.push(inputBuffer.byteLength);
+    return this.scores;
   }
 }
 
@@ -385,6 +418,22 @@ export default function localUnitTest() {
       expect(result.ok).assertFalse();
       expect(result.code).assertEqual('CLASSIFICATION_FAILED');
       expect(result.messageKey).assertEqual('feature_runtime_classification_failed');
+    });
+
+    it('classificationMindSporeRunnerBridgesImagePreprocessorToTensorRunner', 0, async () => {
+      const inputBuffer: ArrayBuffer = new ArrayBuffer(12);
+      const preprocessor: FixedInputPreprocessor = new FixedInputPreprocessor(inputBuffer);
+      const tensorRunner: FixedTensorRunner = new FixedTensorRunner([0.3, 0.7]);
+      const runner: ImageClassificationScoreRunner = new ImageClassificationMindSporeScoreRunner({
+        preprocessor: preprocessor,
+        tensorRunner: tensorRunner
+      });
+
+      const scores: Array<number> = await runner.predictScores('file://selected/fish.jpg');
+      expect(scores.length).assertEqual(2);
+      expect(scores[1]).assertEqual(0.7);
+      expect(preprocessor.seenUris[0]).assertEqual('file://selected/fish.jpg');
+      expect(tensorRunner.seenByteLengths[0]).assertEqual(12);
     });
 
     it('mapsWorkflowPermissionsToHarmonyPermissionNames', 0, () => {
