@@ -56,8 +56,15 @@ export type AppStringKey =
   'feature_runtime_result_title' |
   'feature_runtime_run' |
   'feature_runtime_status_idle' |
+  'feature_runtime_status_preparing' |
   'feature_runtime_pending_adapter' |
   'feature_runtime_unknown_route' |
+  'feature_runtime_permission_denied' |
+  'feature_runtime_image_ready' |
+  'feature_runtime_model_ready' |
+  'feature_runtime_text_ready' |
+  'feature_runtime_pick_cancelled' |
+  'feature_runtime_text_placeholder' |
   'feature_input_camera' |
   'feature_input_photo' |
   'feature_input_content_image' |
@@ -137,8 +144,15 @@ const APP_STRING_KEYS: AppStringKey[] = [
   'feature_runtime_result_title',
   'feature_runtime_run',
   'feature_runtime_status_idle',
+  'feature_runtime_status_preparing',
   'feature_runtime_pending_adapter',
   'feature_runtime_unknown_route',
+  'feature_runtime_permission_denied',
+  'feature_runtime_image_ready',
+  'feature_runtime_model_ready',
+  'feature_runtime_text_ready',
+  'feature_runtime_pick_cancelled',
+  'feature_runtime_text_placeholder',
   'feature_input_camera',
   'feature_input_photo',
   'feature_input_content_image',
@@ -279,10 +293,24 @@ export function appString(key: AppStringKey): ResourceStr {
       return $r('app.string.feature_runtime_run');
     case 'feature_runtime_status_idle':
       return $r('app.string.feature_runtime_status_idle');
+    case 'feature_runtime_status_preparing':
+      return $r('app.string.feature_runtime_status_preparing');
     case 'feature_runtime_pending_adapter':
       return $r('app.string.feature_runtime_pending_adapter');
     case 'feature_runtime_unknown_route':
       return $r('app.string.feature_runtime_unknown_route');
+    case 'feature_runtime_permission_denied':
+      return $r('app.string.feature_runtime_permission_denied');
+    case 'feature_runtime_image_ready':
+      return $r('app.string.feature_runtime_image_ready');
+    case 'feature_runtime_model_ready':
+      return $r('app.string.feature_runtime_model_ready');
+    case 'feature_runtime_text_ready':
+      return $r('app.string.feature_runtime_text_ready');
+    case 'feature_runtime_pick_cancelled':
+      return $r('app.string.feature_runtime_pick_cancelled');
+    case 'feature_runtime_text_placeholder':
+      return $r('app.string.feature_runtime_text_placeholder');
     case 'feature_input_camera':
       return $r('app.string.feature_input_camera');
     case 'feature_input_photo':

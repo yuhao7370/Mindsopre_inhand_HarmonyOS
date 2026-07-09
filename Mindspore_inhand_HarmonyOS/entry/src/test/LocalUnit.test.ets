@@ -6,6 +6,15 @@ import { iconLabel } from '../main/ets/common/icons/IconSymbols';
 import { DefaultAiService } from '../main/ets/services/ai/AiService';
 import { FeatureWorkflow, workflowForRoute } from '../main/ets/features/runtime/FeatureWorkflowCatalog';
 import {
+  declaredPermissionNames,
+  runtimePermissionNamesForWorkflow
+} from '../main/ets/services/permissions/PermissionService';
+import {
+  inputActionForKind,
+  modelFileSuffixFilters,
+  runtimeInputActionsForWorkflow
+} from '../main/ets/services/picker/PickerService';
+import {
   allExperienceFeatures,
   FeatureItem,
   FeatureSection,
@@ -139,6 +148,28 @@ export default function localUnitTest() {
       expect(result.ok).assertFalse();
       expect(result.code).assertEqual('NATIVE_ADAPTER_PENDING');
       expect(result.aiMethod).assertEqual('detectObjects');
+    });
+
+    it('mapsWorkflowPermissionsToHarmonyPermissionNames', 0, () => {
+      const translation: FeatureWorkflow = workflowForRoute(AppRoute.TEXT_TRANSLATION.name)!;
+      const permissionNames = runtimePermissionNamesForWorkflow(translation);
+      expect(permissionNames.indexOf('ohos.permission.CAMERA') >= 0).assertTrue();
+      expect(permissionNames.indexOf('ohos.permission.READ_IMAGEVIDEO') >= 0).assertTrue();
+      expect(permissionNames.indexOf('ohos.permission.INTERNET')).assertEqual(-1);
+      expect(declaredPermissionNames.indexOf('ohos.permission.INTERNET') >= 0).assertTrue();
+    });
+
+    it('mapsWorkflowInputsToPickerActions', 0, () => {
+      const styleTransfer: FeatureWorkflow = workflowForRoute(AppRoute.STYLE_TRANSFER.name)!;
+      const actions = runtimeInputActionsForWorkflow(styleTransfer);
+      expect(actions.indexOf('captureOrPickImage') >= 0).assertTrue();
+      expect(actions.indexOf('pickModelFile') >= 0).assertTrue();
+      expect(inputActionForKind('text')).assertEqual('enterText');
+    });
+
+    it('usesMindSporeModelFileSuffixForModelPicker', 0, () => {
+      expect(modelFileSuffixFilters.length).assertEqual(1);
+      expect(modelFileSuffixFilters[0]).assertEqual('.ms');
     });
   });
 }
