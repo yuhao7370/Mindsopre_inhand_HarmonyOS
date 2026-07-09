@@ -68,6 +68,7 @@ export interface AiRunInputs {
   readonly imageUri?: string;
   readonly contentImageUri?: string;
   readonly styleImageUri?: string;
+  readonly backgroundImageUri?: string;
   readonly stylePredictModelUri?: string;
   readonly styleTransferModelUri?: string;
   readonly modelUri?: string;
@@ -119,6 +120,7 @@ export interface AiTextTranslationData {
 export interface AiSegmentationData {
   readonly kind: 'segmentation';
   readonly imageUri: string;
+  readonly backgroundImageUri: string;
   readonly result: SegmentationResult;
 }
 
@@ -339,13 +341,14 @@ export class DefaultAiService {
     }
 
     const result: SegmentationResult = await this.segmentationService.segmentPerson(imageUri);
+    const backgroundImageUri = inputs.backgroundImageUri ?? '';
     if (!result.ok) {
       return {
         ok: false,
         code: 'SEGMENTATION_FAILED',
         aiMethod: 'segmentPerson',
         messageKey: 'feature_runtime_segmentation_failed',
-        detailText: this.segmentationSummary(result, imageUri)
+        detailText: this.segmentationSummary(result, imageUri, backgroundImageUri)
       };
     }
     return {
@@ -353,10 +356,11 @@ export class DefaultAiService {
       code: 'SEGMENTATION_DONE',
       aiMethod: 'segmentPerson',
       messageKey: 'feature_runtime_segmentation_done',
-      detailText: this.segmentationSummary(result, imageUri),
+      detailText: this.segmentationSummary(result, imageUri, backgroundImageUri),
       data: {
         kind: 'segmentation',
         imageUri: imageUri,
+        backgroundImageUri: backgroundImageUri,
         result: result
       }
     };
@@ -782,7 +786,7 @@ export class DefaultAiService {
     return lines.join('\n');
   }
 
-  private segmentationSummary(result: SegmentationResult, imageUri: string): string {
+  private segmentationSummary(result: SegmentationResult, imageUri: string, backgroundImageUri: string): string {
     const lines: Array<string> = [
       `image=${this.lastPathSegment(imageUri)}`,
       `subjectCount=${result.subjectCount}`,
@@ -790,6 +794,9 @@ export class DefaultAiService {
       `foregroundAvailable=${result.foregroundAvailable}`,
       `executionMs=${result.executionMs}`
     ];
+    if (backgroundImageUri.length > 0) {
+      lines.push(`background=${this.lastPathSegment(backgroundImageUri)}`);
+    }
     result.rectangles.forEach((rectangle: SegmentationRectangle, index: number) => {
       lines.push(`${index + 1}. [` +
         `${rectangle.left.toFixed(0)},${rectangle.top.toFixed(0)},` +
@@ -912,12 +919,19 @@ export function aiRunResultRows(result: AiRunResult): Array<AiRunResultRow> {
         resultRow('feature_runtime_result_translated_text', data.result.translatedText)
       ];
     case 'segmentation':
-      return [
+      const segmentationRows: Array<AiRunResultRow> = [
         resultRow('feature_runtime_result_subjects', `${data.result.subjectCount}`),
         resultRow('feature_runtime_result_details', `${data.result.detailCount}`),
         resultRow('feature_runtime_result_foreground', `${data.result.foregroundAvailable}`),
         resultRow('feature_runtime_result_execution_time', `${data.result.executionMs}ms`)
       ];
+      if (data.backgroundImageUri.length > 0) {
+        segmentationRows.push(resultRow(
+          'feature_runtime_result_background',
+          runtimePathSegment(data.backgroundImageUri)
+        ));
+      }
+      return segmentationRows;
     case 'pose':
       const poseRows: Array<AiRunResultRow> = [
         resultRow('feature_runtime_result_skeletons', `${data.result.skeletonCount}`),

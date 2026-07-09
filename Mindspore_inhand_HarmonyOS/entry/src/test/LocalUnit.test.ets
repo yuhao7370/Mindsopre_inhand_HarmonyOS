@@ -1046,6 +1046,10 @@ export default function localUnitTest() {
       expect(hasAppStringKey('feature_runtime_text_recognition_done')).assertTrue();
       expect(hasAppStringKey('feature_runtime_text_translation_failed')).assertTrue();
       expect(hasAppStringKey('feature_runtime_segmentation_done')).assertTrue();
+      expect(hasAppStringKey('feature_runtime_preview_background')).assertTrue();
+      expect(hasAppStringKey('feature_runtime_result_background')).assertTrue();
+      expect(hasAppStringKey('feature_runtime_result_background_replacement')).assertTrue();
+      expect(hasAppStringKey('feature_input_background_image')).assertTrue();
       expect(hasAppStringKey('feature_runtime_pose_done')).assertTrue();
       expect(hasAppStringKey('feature_runtime_preview_title')).assertTrue();
       expect(hasAppStringKey('feature_runtime_switch_camera')).assertTrue();
@@ -1307,6 +1311,11 @@ export default function localUnitTest() {
       expect(translation.inputKinds.indexOf('camera') >= 0).assertTrue();
       expect(translation.inputKinds.indexOf('photo') >= 0).assertTrue();
       expect(translation.requiredPermissions.indexOf('internet') >= 0).assertTrue();
+
+      const portraitSegmentation: FeatureWorkflow = workflowForRoute(AppRoute.PORTRAIT_SEGMENTATION.name)!;
+      expect(portraitSegmentation.aiMethod).assertEqual('segmentPerson');
+      expect(portraitSegmentation.inputKinds.indexOf('photo') >= 0).assertTrue();
+      expect((portraitSegmentation.optionalInputKinds ?? []).indexOf('backgroundImage') >= 0).assertTrue();
     });
 
     it('recordsPlatformNeedsFromOriginalAndroidFlows', 0, () => {
@@ -1629,18 +1638,23 @@ export default function localUnitTest() {
       });
 
       const result = await new DefaultAiService({ segmentationService: service }).run(workflow!, {
-        imageUri: 'file://selected/person.jpg'
+        imageUri: 'file://selected/person.jpg',
+        backgroundImageUri: 'file://selected/background.jpg'
       });
 
       expect(result.ok).assertTrue();
       expect(result.code).assertEqual('SEGMENTATION_DONE');
       expect(result.messageKey).assertEqual('feature_runtime_segmentation_done');
       expect(result.detailText.indexOf('subjectCount=1') >= 0).assertTrue();
+      expect(result.detailText.indexOf('background=background.jpg') >= 0).assertTrue();
       expect(result.detailText.indexOf('[1,2,100,200]') >= 0).assertTrue();
       expect(aiRunResultRows(result)[0].labelKey).assertEqual('feature_runtime_result_subjects');
       expect(aiRunResultRows(result)[0].value).assertEqual('1');
+      expect(aiRunResultRows(result).filter((row: AiRunResultRow) =>
+        row.labelKey === 'feature_runtime_result_background')[0].value).assertEqual('background.jpg');
       expect(result.data?.kind).assertEqual('segmentation');
       if (result.data?.kind === 'segmentation') {
+        expect(result.data.backgroundImageUri).assertEqual('file://selected/background.jpg');
         expect(result.data.result.foregroundImageWidth).assertEqual(1);
         expect(result.data.result.foregroundImageHeight).assertEqual(1);
         expect(result.data.result.foregroundImageRgba?.byteLength).assertEqual(4);
@@ -3085,13 +3099,17 @@ export default function localUnitTest() {
       const objectPhoto: FeatureWorkflow = workflowForRoute(AppRoute.OBJECT_PHOTO.name)!;
       expect(runtimeInputActionsForWorkflow(objectPhoto).indexOf('pickModelFile')).assertEqual(-1);
       expect(runtimeInputKindsForWorkflow(objectPhoto).indexOf('modelFile') >= 0).assertTrue();
+      const portraitSegmentation: FeatureWorkflow = workflowForRoute(AppRoute.PORTRAIT_SEGMENTATION.name)!;
+      expect(runtimeInputKindsForWorkflow(portraitSegmentation).indexOf('backgroundImage') >= 0).assertTrue();
       expect(inputActionForKind('camera')).assertEqual('captureImage');
       expect(inputActionForKind('photo')).assertEqual('pickImage');
+      expect(inputActionForKind('backgroundImage')).assertEqual('pickImage');
       expect(inputActionForKind('text')).assertEqual('enterText');
       expect(inputActionForKind('stylePredictModelFile')).assertEqual('pickModelFile');
       expect(inputActionForKind('styleTransferModelFile')).assertEqual('pickModelFile');
       expect(inputKindReplacesPrimaryInput('modelFile')).assertFalse();
       expect(inputKindReplacesPrimaryInput('stylePredictModelFile')).assertFalse();
+      expect(inputKindReplacesPrimaryInput('backgroundImage')).assertFalse();
       expect(inputKindReplacesPrimaryInput('photo')).assertTrue();
     });
 

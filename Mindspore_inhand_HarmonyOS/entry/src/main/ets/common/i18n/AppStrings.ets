@@ -116,6 +116,7 @@ export type AppStringKey =
   'feature_runtime_save_image_missing' |
   'feature_runtime_preview_title' |
   'feature_runtime_preview_image' |
+  'feature_runtime_preview_background' |
   'feature_runtime_switch_camera' |
   'feature_runtime_preview_content' |
   'feature_runtime_preview_style' |
@@ -146,6 +147,8 @@ export type AppStringKey =
   'feature_runtime_result_target_language' |
   'feature_runtime_result_translated_text' |
   'feature_runtime_result_foreground' |
+  'feature_runtime_result_background' |
+  'feature_runtime_result_background_replacement' |
   'feature_input_camera' |
   'feature_input_photo' |
   'feature_input_content_image' |
@@ -153,6 +156,7 @@ export type AppStringKey =
   'feature_input_style_predict_model_file' |
   'feature_input_style_transfer_model_file' |
   'feature_input_model_file' |
+  'feature_input_background_image' |
   'feature_input_text' |
   'feature_permission_camera' |
   'feature_permission_media' |
@@ -287,6 +291,7 @@ const APP_STRING_KEYS: AppStringKey[] = [
   'feature_runtime_save_image_missing',
   'feature_runtime_preview_title',
   'feature_runtime_preview_image',
+  'feature_runtime_preview_background',
   'feature_runtime_switch_camera',
   'feature_runtime_preview_content',
   'feature_runtime_preview_style',
@@ -317,6 +322,8 @@ const APP_STRING_KEYS: AppStringKey[] = [
   'feature_runtime_result_target_language',
   'feature_runtime_result_translated_text',
   'feature_runtime_result_foreground',
+  'feature_runtime_result_background',
+  'feature_runtime_result_background_replacement',
   'feature_input_camera',
   'feature_input_photo',
   'feature_input_content_image',
@@ -324,6 +331,7 @@ const APP_STRING_KEYS: AppStringKey[] = [
   'feature_input_style_predict_model_file',
   'feature_input_style_transfer_model_file',
   'feature_input_model_file',
+  'feature_input_background_image',
   'feature_input_text',
   'feature_permission_camera',
   'feature_permission_media',
@@ -579,6 +587,8 @@ export function appString(key: AppStringKey): ResourceStr {
       return $r('app.string.feature_runtime_preview_title');
     case 'feature_runtime_preview_image':
       return $r('app.string.feature_runtime_preview_image');
+    case 'feature_runtime_preview_background':
+      return $r('app.string.feature_runtime_preview_background');
     case 'feature_runtime_switch_camera':
       return $r('app.string.feature_runtime_switch_camera');
     case 'feature_runtime_preview_content':
@@ -639,6 +649,10 @@ export function appString(key: AppStringKey): ResourceStr {
       return $r('app.string.feature_runtime_result_translated_text');
     case 'feature_runtime_result_foreground':
       return $r('app.string.feature_runtime_result_foreground');
+    case 'feature_runtime_result_background':
+      return $r('app.string.feature_runtime_result_background');
+    case 'feature_runtime_result_background_replacement':
+      return $r('app.string.feature_runtime_result_background_replacement');
     case 'feature_input_camera':
       return $r('app.string.feature_input_camera');
     case 'feature_input_photo':
@@ -653,6 +667,8 @@ export function appString(key: AppStringKey): ResourceStr {
       return $r('app.string.feature_input_style_transfer_model_file');
     case 'feature_input_model_file':
       return $r('app.string.feature_input_model_file');
+    case 'feature_input_background_image':
+      return $r('app.string.feature_input_background_image');
     case 'feature_input_text':
       return $r('app.string.feature_input_text');
     case 'feature_permission_camera':

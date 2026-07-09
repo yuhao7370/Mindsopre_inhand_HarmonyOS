@@ -11,6 +11,7 @@ export type FeatureInputKind =
   'photo' |
   'contentImage' |
   'styleImage' |
+  'backgroundImage' |
   'stylePredictModelFile' |
   'styleTransferModelFile' |
   'modelFile' |
@@ -100,6 +101,7 @@ export const featureWorkflows: Array<FeatureWorkflow> = [
     summaryKey: 'workflow_summary_segmentation',
     aiMethod: 'segmentPerson',
     inputKinds: ['photo'],
+    optionalInputKinds: ['backgroundImage'],
     requiredPermissions: ['media'],
     resultKind: 'segmentationMask',
     liveMode: false
@@ -216,6 +218,7 @@ export function runtimeInputKindsForWorkflow(workflow: FeatureWorkflow): Array<F
 
 export function inputKindReplacesPrimaryInput(inputKind: FeatureInputKind): boolean {
   return inputKind !== 'modelFile' &&
+    inputKind !== 'backgroundImage' &&
     inputKind !== 'stylePredictModelFile' &&
     inputKind !== 'styleTransferModelFile';
 }
@@ -236,6 +239,8 @@ export function inputLabelKey(inputKind: FeatureInputKind): AppStringKey {
       return 'feature_input_content_image';
     case 'styleImage':
       return 'feature_input_style_image';
+    case 'backgroundImage':
+      return 'feature_input_background_image';
     case 'stylePredictModelFile':
       return 'feature_input_style_predict_model_file';
     case 'styleTransferModelFile':

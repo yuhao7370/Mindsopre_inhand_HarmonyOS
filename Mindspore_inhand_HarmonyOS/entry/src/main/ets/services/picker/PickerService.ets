@@ -25,6 +25,7 @@ export function inputActionForKind(kind: FeatureInputKind): RuntimeInputAction {
     case 'photo':
     case 'contentImage':
     case 'styleImage':
+    case 'backgroundImage':
       return 'pickImage';
     case 'stylePredictModelFile':
     case 'styleTransferModelFile':

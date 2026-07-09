@@ -115,6 +115,7 @@ struct FeatureRuntimePage {
   @State imageInputUri: string = '';
   @State contentImageUri: string = '';
   @State styleImageUri: string = '';
+  @State backgroundImageUri: string = '';
   @State stylePredictModelInputUri: string = '';
   @State styleTransferModelInputUri: string = '';
   @State modelInputUri: string = '';
@@ -125,6 +126,7 @@ struct FeatureRuntimePage {
   @State objectDetectionImageWidth: number = 0;
   @State objectDetectionImageHeight: number = 0;
   @State segmentationImageUri: string = '';
+  @State segmentationBackgroundImageUri: string = '';
   @State segmentationForegroundPixelMap: image.PixelMap | undefined = undefined;
   @State segmentationRectangles: Array<SegmentationRectangle> = [];
   @State segmentationImageWidth: number = 0;
@@ -359,6 +361,8 @@ struct FeatureRuntimePage {
         this.contentImageUri = '';
       } else if (inputKind === 'styleImage') {
         this.styleImageUri = '';
+      } else if (inputKind === 'backgroundImage') {
+        this.backgroundImageUri = '';
       } else {
         this.imageInputUri = '';
       }
@@ -376,6 +380,8 @@ struct FeatureRuntimePage {
       this.contentImageUri = result.uri;
     } else if (inputKind === 'styleImage') {
       this.styleImageUri = result.uri;
+    } else if (inputKind === 'backgroundImage') {
+      this.backgroundImageUri = result.uri;
     } else {
       this.imageInputUri = result.uri;
     }
@@ -387,6 +393,7 @@ struct FeatureRuntimePage {
       imageUri: this.imageInputUri,
       contentImageUri: contentImageUri,
       styleImageUri: this.styleImageUri,
+      backgroundImageUri: this.backgroundImageUri,
       stylePredictModelUri: this.stylePredictModelInputUri,
       styleTransferModelUri: this.styleTransferModelInputUri,
       modelUri: this.modelInputUri,
@@ -510,6 +517,7 @@ struct FeatureRuntimePage {
     this.objectDetectionImageWidth = 0;
     this.objectDetectionImageHeight = 0;
     this.segmentationImageUri = '';
+    this.segmentationBackgroundImageUri = '';
     this.segmentationForegroundPixelMap = undefined;
     this.segmentationRectangles = [];
     this.segmentationImageWidth = 0;
@@ -539,6 +547,7 @@ struct FeatureRuntimePage {
     }
 
     this.segmentationImageUri = data.imageUri;
+    this.segmentationBackgroundImageUri = data.backgroundImageUri;
     this.segmentationRectangles = data.result.rectangles;
     this.segmentationImageWidth = data.result.imageWidth ?? this.segmentationSourceWidth(data.result.rectangles);
     this.segmentationImageHeight = data.result.imageHeight ?? this.segmentationSourceHeight(data.result.rectangles);
@@ -657,6 +666,7 @@ struct FeatureRuntimePage {
     return this.imageInputUri.length > 0 ||
       this.contentImageUri.length > 0 ||
       this.styleImageUri.length > 0 ||
+      this.backgroundImageUri.length > 0 ||
       this.stylePredictModelInputUri.length > 0 ||
       this.styleTransferModelInputUri.length > 0 ||
       this.modelInputUri.length > 0;
@@ -664,6 +674,16 @@ struct FeatureRuntimePage {
 
   private isStyleTransferWorkflow(): boolean {
     return this.aiMethod === 'runStyleTransfer';
+  }
+
+  private isPortraitSegmentationWorkflow(): boolean {
+    return this.routeName === AppRoute.PORTRAIT_SEGMENTATION.name;
+  }
+
+  private shouldShowSegmentationBackgroundPreview(): boolean {
+    return this.isPortraitSegmentationWorkflow() &&
+      this.segmentationBackgroundImageUri.length > 0 &&
+      this.segmentationForegroundPixelMap !== undefined;
   }
 
   private selectBuiltInStyle(style: BuiltInStyleTransferStyle): void {
@@ -1064,6 +1084,34 @@ struct FeatureRuntimePage {
   }
 
   @Builder
+  segmentationBackgroundReplacementPreview(pixelMap: image.PixelMap) {
+    Column() {
+      Text(appString('feature_runtime_result_background_replacement'))
+        .fontSize(12)
+        .fontColor(AppColor.textSecondary)
+        .width('100%')
+      Stack({ alignContent: Alignment.TopStart }) {
+        Image(this.segmentationBackgroundImageUri)
+          .width('100%')
+          .height('100%')
+          .objectFit(ImageFit.Fill)
+        Image(pixelMap)
+          .width('100%')
+          .height('100%')
+          .objectFit(ImageFit.Fill)
+      }
+      .width('100%')
+      .aspectRatio(this.segmentationAspectRatio())
+      .backgroundColor('#F7F8FA')
+      .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
+      .clip(true)
+      .margin({ top: AppSpacing.xs })
+    }
+    .width('100%')
+    .margin({ top: AppSpacing.sm })
+  }
+
+  @Builder
   segmentationBox(rectangle: SegmentationRectangle) {
     Column() {
     }
@@ -1289,6 +1337,9 @@ struct FeatureRuntimePage {
               if (this.styleImageUri.length > 0) {
                 this.imagePreview('feature_runtime_preview_style', this.styleImageUri)
               }
+              if (this.backgroundImageUri.length > 0) {
+                this.imagePreview('feature_runtime_preview_background', this.backgroundImageUri)
+              }
               if (this.stylePredictModelInputUri.length > 0) {
                 this.filePreview('feature_input_style_predict_model_file', this.stylePredictModelInputUri)
               }
@@ -1361,6 +1412,9 @@ struct FeatureRuntimePage {
           if (this.segmentationForegroundPixelMap !== undefined) {
             this.pixelMapPreview('feature_runtime_result_foreground', this.segmentationForegroundPixelMap)
             this.resultImageSaveControl(this.segmentationForegroundPixelMap)
+          }
+          if (this.shouldShowSegmentationBackgroundPreview() && this.segmentationForegroundPixelMap !== undefined) {
+            this.segmentationBackgroundReplacementPreview(this.segmentationForegroundPixelMap)
           }
           if (this.segmentationImageUri.length > 0 && this.segmentationRectangles.length > 0) {
             this.segmentationPreview('feature_runtime_result_segmentation_overlay', this.segmentationImageUri)
