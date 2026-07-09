@@ -785,8 +785,10 @@ export default function localUnitTest() {
 
       const styleTransfer: FeatureWorkflow = workflowForRoute(AppRoute.STYLE_TRANSFER.name)!;
       expect(styleTransfer.aiMethod).assertEqual('runStyleTransfer');
+      expect(styleTransfer.inputKinds.indexOf('camera') >= 0).assertTrue();
       expect(styleTransfer.inputKinds.indexOf('contentImage') >= 0).assertTrue();
       expect(styleTransfer.inputKinds.indexOf('styleImage') >= 0).assertTrue();
+      expect(styleTransfer.inputKinds.indexOf('modelFile')).assertEqual(-1);
 
       const translation: FeatureWorkflow = workflowForRoute(AppRoute.TEXT_TRANSLATION.name)!;
       expect(translation.aiMethod).assertEqual('translateText');
@@ -2174,7 +2176,9 @@ export default function localUnitTest() {
       const actions = runtimeInputActionsForWorkflow(styleTransfer);
       expect(actions.indexOf('captureImage') >= 0).assertTrue();
       expect(actions.indexOf('pickImage') >= 0).assertTrue();
-      expect(actions.indexOf('pickModelFile') >= 0).assertTrue();
+      expect(actions.indexOf('pickModelFile')).assertEqual(-1);
+      const objectPhoto: FeatureWorkflow = workflowForRoute(AppRoute.OBJECT_PHOTO.name)!;
+      expect(runtimeInputActionsForWorkflow(objectPhoto).indexOf('pickModelFile') >= 0).assertTrue();
       expect(inputActionForKind('camera')).assertEqual('captureImage');
       expect(inputActionForKind('photo')).assertEqual('pickImage');
       expect(inputActionForKind('text')).assertEqual('enterText');

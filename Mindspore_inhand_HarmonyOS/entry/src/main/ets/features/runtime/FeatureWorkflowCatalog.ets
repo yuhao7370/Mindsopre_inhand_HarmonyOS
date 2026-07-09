@@ -179,7 +179,7 @@ export const featureWorkflows: Array<FeatureWorkflow> = [
     titleKey: 'title_style_transfer',
     summaryKey: 'workflow_summary_style_transfer',
     aiMethod: 'runStyleTransfer',
-    inputKinds: ['camera', 'contentImage', 'styleImage', 'modelFile'],
+    inputKinds: ['camera', 'contentImage', 'styleImage'],
     requiredPermissions: ['camera', 'media'],
     resultKind: 'styledImage',
     liveMode: false,

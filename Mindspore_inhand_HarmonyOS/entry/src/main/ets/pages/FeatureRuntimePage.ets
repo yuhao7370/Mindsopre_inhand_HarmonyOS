@@ -155,9 +155,10 @@ struct FeatureRuntimePage {
   }
 
   private aiRunInputs(): AiRunInputs {
+    const contentImageUri = this.contentImageUri.length > 0 ? this.contentImageUri : this.imageInputUri;
     return {
       imageUri: this.imageInputUri,
-      contentImageUri: this.contentImageUri,
+      contentImageUri: contentImageUri,
       styleImageUri: this.styleImageUri,
       modelUri: this.modelInputUri,
       text: this.userText
