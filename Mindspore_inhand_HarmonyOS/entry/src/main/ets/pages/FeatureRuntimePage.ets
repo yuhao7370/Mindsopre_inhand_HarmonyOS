@@ -7,7 +7,7 @@ import {
   permissionLabelKey,
   workflowForRoute
 } from '../features/runtime/FeatureWorkflowCatalog';
-import { AiRunResult, DefaultAiService } from '../services/ai/AiService';
+import { AiRunInputs, AiRunResult, DefaultAiService } from '../services/ai/AiService';
 import { PermissionRequestSummary, PermissionService } from '../services/permissions/PermissionService';
 import { PickerService, PickResult } from '../services/picker/PickerService';
 import { AppStringKey, appString } from '../common/i18n/AppStrings';
@@ -29,6 +29,8 @@ struct FeatureRuntimePage {
   @State aiMethod: string = '';
   @State resultText: string = '';
   @State selectedInputSummary: string = '';
+  @State imageInputUri: string = '';
+  @State modelInputUri: string = '';
   @State userText: string = '';
   @State inputKinds: Array<FeatureInputKind> = [];
   @State permissionKinds: Array<FeaturePermissionKind> = [];
@@ -66,20 +68,38 @@ struct FeatureRuntimePage {
     }
     const pickerService = new PickerService(context);
     if (inputKind === 'modelFile') {
-      pickerService.pickModelFile().then((result: PickResult) => this.applyPickResult(result, 'feature_runtime_model_ready'));
+      pickerService.pickModelFile().then((result: PickResult) => this.applyPickResult(result, 'feature_runtime_model_ready', inputKind));
       return;
     }
-    pickerService.pickImage().then((result: PickResult) => this.applyPickResult(result, 'feature_runtime_image_ready'));
+    pickerService.pickImage().then((result: PickResult) => this.applyPickResult(result, 'feature_runtime_image_ready', inputKind));
   }
 
-  private applyPickResult(result: PickResult, readyKey: AppStringKey): void {
+  private applyPickResult(result: PickResult, readyKey: AppStringKey, inputKind: FeatureInputKind): void {
     if (!result.ok) {
       this.statusKey = 'feature_runtime_pick_cancelled';
       this.selectedInputSummary = '';
+      if (inputKind === 'modelFile') {
+        this.modelInputUri = '';
+      } else {
+        this.imageInputUri = '';
+      }
       return;
     }
     this.statusKey = readyKey;
     this.selectedInputSummary = result.uri;
+    if (inputKind === 'modelFile') {
+      this.modelInputUri = result.uri;
+    } else {
+      this.imageInputUri = result.uri;
+    }
+  }
+
+  private aiRunInputs(): AiRunInputs {
+    return {
+      imageUri: this.imageInputUri,
+      modelUri: this.modelInputUri,
+      text: this.userText
+    };
   }
 
   private runWorkflow(): void {
@@ -99,9 +119,9 @@ struct FeatureRuntimePage {
         this.resultText = permission.requested.join(', ');
         return;
       }
-      new DefaultAiService().run(workflow).then((result: AiRunResult) => {
+      new DefaultAiService().run(workflow, this.aiRunInputs()).then((result: AiRunResult) => {
         this.statusKey = result.messageKey;
-        this.resultText = `${result.aiMethod}: ${result.code}`;
+        this.resultText = result.detailText.length > 0 ? result.detailText : `${result.aiMethod}: ${result.code}`;
       });
     });
   }

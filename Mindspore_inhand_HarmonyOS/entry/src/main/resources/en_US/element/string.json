@@ -60,6 +60,8 @@
     { "name": "feature_runtime_status_preparing", "value": "Preparing feature input..." },
     { "name": "feature_runtime_pending_adapter", "value": "The HarmonyOS service boundary is ready. Native AI adapter integration is the next migration step." },
     { "name": "feature_runtime_unknown_route", "value": "This route is not mapped to a feature workflow yet." },
+    { "name": "feature_runtime_missing_input", "value": "Select the required inputs before running." },
+    { "name": "feature_runtime_custom_model_done", "value": "Custom model execution completed." },
     { "name": "feature_runtime_permission_denied", "value": "Required permission was denied." },
     { "name": "feature_runtime_image_ready", "value": "Image input is ready." },
     { "name": "feature_runtime_model_ready", "value": "MindSpore model file is ready." },

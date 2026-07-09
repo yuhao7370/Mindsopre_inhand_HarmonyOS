@@ -60,6 +60,8 @@
     { "name": "feature_runtime_status_preparing", "value": "正在准备功能输入..." },
     { "name": "feature_runtime_pending_adapter", "value": "HarmonyOS 服务边界已就绪，下一步接入原生 AI 适配器。" },
     { "name": "feature_runtime_unknown_route", "value": "该路由暂未映射到功能工作流。" },
+    { "name": "feature_runtime_missing_input", "value": "请先选择所需输入后再运行。" },
+    { "name": "feature_runtime_custom_model_done", "value": "自定义模型执行完成。" },
     { "name": "feature_runtime_permission_denied", "value": "所需权限被拒绝。" },
     { "name": "feature_runtime_image_ready", "value": "图片输入已就绪。" },
     { "name": "feature_runtime_model_ready", "value": "MindSpore 模型文件已就绪。" },

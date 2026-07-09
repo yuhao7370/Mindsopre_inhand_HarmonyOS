@@ -150,6 +150,39 @@ export default function localUnitTest() {
       expect(result.aiMethod).assertEqual('detectObjects');
     });
 
+    it('customModelRequiresModelAndImageInputs', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.CUSTOM_MODEL.name);
+      expect(workflow !== undefined).assertTrue();
+      const result = await new DefaultAiService().run(workflow!);
+      expect(result.ok).assertFalse();
+      expect(result.code).assertEqual('MISSING_INPUT');
+
+      const imageOnlyResult = await new DefaultAiService().run(workflow!, {
+        imageUri: 'file://selected/input.png'
+      });
+      expect(imageOnlyResult.ok).assertFalse();
+      expect(imageOnlyResult.code).assertEqual('MISSING_INPUT');
+
+      const modelOnlyResult = await new DefaultAiService().run(workflow!, {
+        modelUri: 'file://selected/custom_model.ms'
+      });
+      expect(modelOnlyResult.ok).assertFalse();
+      expect(modelOnlyResult.code).assertEqual('MISSING_INPUT');
+    });
+
+    it('customModelReturnsSimulatedTensorSummary', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.CUSTOM_MODEL.name);
+      expect(workflow !== undefined).assertTrue();
+      const result = await new DefaultAiService().run(workflow!, {
+        imageUri: 'file://selected/input.png',
+        modelUri: 'file://selected/custom_model.ms'
+      });
+      expect(result.ok).assertTrue();
+      expect(result.code).assertEqual('CUSTOM_MODEL_SIMULATED');
+      expect(result.detailText.indexOf('output[0]') >= 0).assertTrue();
+      expect(result.detailText.indexOf('custom_model.ms') >= 0).assertTrue();
+    });
+
     it('mapsWorkflowPermissionsToHarmonyPermissionNames', 0, () => {
       const translation: FeatureWorkflow = workflowForRoute(AppRoute.TEXT_TRANSLATION.name)!;
       const permissionNames = runtimePermissionNamesForWorkflow(translation);
