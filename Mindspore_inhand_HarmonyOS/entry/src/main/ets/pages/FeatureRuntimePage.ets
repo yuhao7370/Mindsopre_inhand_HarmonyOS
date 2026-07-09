@@ -21,9 +21,14 @@ import { ClipboardService, CopyTextResult } from '../services/clipboard/Clipboar
 import { PickerService, PickResult, runtimeInputActionForWorkflowInput } from '../services/picker/PickerService';
 import {
   HarmonyLiveCameraPreviewDriver,
+  HarmonyLiveFrameImageEncoder,
+  HarmonyLiveFrameImageStore,
   LiveCameraPreviewResult,
   LiveCameraPreviewService,
-  liveCameraXComponentId
+  LiveFrameImageResult,
+  LiveFrameImageService,
+  liveCameraXComponentId,
+  shouldCaptureLiveFrameImage
 } from '../services/camera/LiveCameraService';
 import {
   ObjectDetection,
@@ -309,6 +314,10 @@ struct FeatureRuntimePage {
         this.clearVisualResults();
         return;
       }
+      const frameInputReady = await this.prepareLiveFrameImageInput(context);
+      if (!frameInputReady) {
+        return;
+      }
       const aiService: DefaultAiService =
         await cachedRuntimeAiServiceForHarmonyResourceManager(workflow, context.resourceManager);
       const result: AiRunResult = await aiService.run(workflow, this.aiRunInputs());
@@ -323,6 +332,38 @@ struct FeatureRuntimePage {
     this.resultText = this.aiMethod;
     this.resultRows = [];
     this.clearVisualResults();
+  }
+
+  private async prepareLiveFrameImageInput(context: common.UIAbilityContext): Promise<boolean> {
+    if (!shouldCaptureLiveFrameImage(this.hasLiveCameraInput(), this.imageInputUri, this.liveCameraActive)) {
+      return true;
+    }
+
+    if (!this.liveCameraActive) {
+      await this.startLiveCameraPreviewAsync();
+      if (!this.liveCameraActive) {
+        return false;
+      }
+    }
+
+    const surfaceId = this.liveCameraSurfaceId.length > 0 ?
+      this.liveCameraSurfaceId :
+      this.liveCameraController.getXComponentSurfaceId();
+    const result: LiveFrameImageResult = await new LiveFrameImageService(
+      new HarmonyLiveFrameImageEncoder(),
+      new HarmonyLiveFrameImageStore()
+    ).captureToCacheImage(surfaceId, context.cacheDir);
+    if (!result.ok) {
+      this.statusKey = result.messageKey;
+      this.resultText = '';
+      this.resultRows = [];
+      this.clearVisualResults();
+      return false;
+    }
+
+    this.imageInputUri = result.uri;
+    this.selectedInputSummary = result.uri;
+    return true;
   }
 
   private applyAiResult(result: AiRunResult): void {

@@ -155,7 +155,11 @@ import {
 import {
   LiveCameraPreviewDriver,
   LiveCameraPreviewService,
-  liveCameraXComponentId
+  LiveFrameImageEncoder,
+  LiveFrameImageService,
+  LiveFrameImageStore,
+  liveCameraXComponentId,
+  shouldCaptureLiveFrameImage
 } from '../main/ets/services/camera/LiveCameraService';
 import {
   allExperienceFeatures,
@@ -598,6 +602,42 @@ class RecordingLiveCameraPreviewDriver implements LiveCameraPreviewDriver {
   }
 
   async stop(): Promise<void> {
+  }
+}
+
+class FixedLiveFrameImageEncoder implements LiveFrameImageEncoder {
+  seenSurfaceIds: Array<string> = [];
+  private readonly imageBytes: ArrayBuffer;
+
+  constructor(imageBytes: ArrayBuffer) {
+    this.imageBytes = imageBytes;
+  }
+
+  async encodeSurfaceFrame(surfaceId: string): Promise<ArrayBuffer> {
+    this.seenSurfaceIds.push(surfaceId);
+    return this.imageBytes;
+  }
+}
+
+class RejectingLiveFrameImageEncoder implements LiveFrameImageEncoder {
+  async encodeSurfaceFrame(_surfaceId: string): Promise<ArrayBuffer> {
+    throw new Error('frame unavailable');
+  }
+}
+
+class RecordingLiveFrameImageStore implements LiveFrameImageStore {
+  readonly seenCacheDirs: Array<string> = [];
+  readonly seenBytes: Array<Uint8Array> = [];
+  private readonly nextPath: string;
+
+  constructor(nextPath: string) {
+    this.nextPath = nextPath;
+  }
+
+  async writeJpeg(cacheDir: string, bytes: ArrayBuffer): Promise<string> {
+    this.seenCacheDirs.push(cacheDir);
+    this.seenBytes.push(new Uint8Array(bytes));
+    return this.nextPath;
   }
 }
 
@@ -2402,6 +2442,44 @@ export default function localUnitTest() {
       expect(readyDriver.startedSurfaceIds[0]).assertEqual('surface-1');
       expect(failedResult.ok).assertFalse();
       expect(failedResult.messageKey).assertEqual('feature_runtime_live_camera_failed');
+    });
+
+    it('liveFrameImageServiceCapturesSurfaceToCacheImageUri', 0, async () => {
+      const encoder = new FixedLiveFrameImageEncoder(new Uint8Array([1, 2, 3]).buffer as ArrayBuffer);
+      const store = new RecordingLiveFrameImageStore('/cache/live-frame.jpg');
+      const result = await new LiveFrameImageService(encoder, store).captureToCacheImage('surface-1', '/cache');
+
+      expect(result.ok).assertTrue();
+      expect(result.uri).assertEqual('/cache/live-frame.jpg');
+      expect(result.messageKey).assertEqual('feature_runtime_image_ready');
+      expect(encoder.seenSurfaceIds[0]).assertEqual('surface-1');
+      expect(store.seenCacheDirs[0]).assertEqual('/cache');
+      expect(store.seenBytes[0][2]).assertEqual(3);
+    });
+
+    it('liveFrameImageServiceReportsCaptureFailureWithoutWritingCache', 0, async () => {
+      const missingSurfaceStore = new RecordingLiveFrameImageStore('/cache/live-frame.jpg');
+      const missingSurface = await new LiveFrameImageService(
+        new FixedLiveFrameImageEncoder(new ArrayBuffer(1)),
+        missingSurfaceStore
+      ).captureToCacheImage('', '/cache');
+      const rejected = await new LiveFrameImageService(
+        new RejectingLiveFrameImageEncoder(),
+        new RecordingLiveFrameImageStore('/cache/live-frame.jpg')
+      ).captureToCacheImage('surface-1', '/cache');
+
+      expect(missingSurface.ok).assertFalse();
+      expect(missingSurface.messageKey).assertEqual('feature_runtime_live_camera_surface_missing');
+      expect(missingSurfaceStore.seenCacheDirs.length).assertEqual(0);
+      expect(rejected.ok).assertFalse();
+      expect(rejected.messageKey).assertEqual('feature_runtime_live_frame_failed');
+    });
+
+    it('capturesLiveFrameOnlyWhenLiveCameraIsTheActiveImageSource', 0, () => {
+      expect(shouldCaptureLiveFrameImage(false, '', false)).assertFalse();
+      expect(shouldCaptureLiveFrameImage(true, '', false)).assertTrue();
+      expect(shouldCaptureLiveFrameImage(true, '/cache/selected.jpg', false)).assertFalse();
+      expect(shouldCaptureLiveFrameImage(true, '/cache/previous.jpg', true)).assertTrue();
     });
 
     it('usesMindSporeModelFileSuffixForModelPicker', 0, () => {

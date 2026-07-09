@@ -69,6 +69,7 @@
     { "name": "feature_runtime_live_camera_ready", "value": "Live camera preview is running." },
     { "name": "feature_runtime_live_camera_failed", "value": "Live camera preview failed to start." },
     { "name": "feature_runtime_live_camera_surface_missing", "value": "Camera preview surface is not ready yet." },
+    { "name": "feature_runtime_live_frame_failed", "value": "Live camera frame capture failed." },
     { "name": "feature_runtime_pending_adapter", "value": "The HarmonyOS service boundary is ready. Native AI adapter integration is the next migration step." },
     { "name": "feature_runtime_gesture_unsupported", "value": "Gesture recognition is unavailable in the current HarmonyOS SDK. The Android version depends on HMS hand gesture ML APIs with no ArkTS equivalent." },
     { "name": "feature_runtime_translation_unsupported", "value": "Text translation is unavailable in the current HarmonyOS SDK/resources. Add a translation runner or service API to enable it." },

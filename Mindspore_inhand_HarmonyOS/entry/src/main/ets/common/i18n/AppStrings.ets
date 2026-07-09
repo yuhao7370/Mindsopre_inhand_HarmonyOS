@@ -68,6 +68,7 @@ export type AppStringKey =
   'feature_runtime_live_camera_ready' |
   'feature_runtime_live_camera_failed' |
   'feature_runtime_live_camera_surface_missing' |
+  'feature_runtime_live_frame_failed' |
   'feature_runtime_pending_adapter' |
   'feature_runtime_gesture_unsupported' |
   'feature_runtime_translation_unsupported' |
@@ -222,6 +223,7 @@ const APP_STRING_KEYS: AppStringKey[] = [
   'feature_runtime_live_camera_ready',
   'feature_runtime_live_camera_failed',
   'feature_runtime_live_camera_surface_missing',
+  'feature_runtime_live_frame_failed',
   'feature_runtime_pending_adapter',
   'feature_runtime_gesture_unsupported',
   'feature_runtime_translation_unsupported',
@@ -449,6 +451,8 @@ export function appString(key: AppStringKey): ResourceStr {
       return $r('app.string.feature_runtime_live_camera_failed');
     case 'feature_runtime_live_camera_surface_missing':
       return $r('app.string.feature_runtime_live_camera_surface_missing');
+    case 'feature_runtime_live_frame_failed':
+      return $r('app.string.feature_runtime_live_frame_failed');
     case 'feature_runtime_pending_adapter':
       return $r('app.string.feature_runtime_pending_adapter');
     case 'feature_runtime_gesture_unsupported':
