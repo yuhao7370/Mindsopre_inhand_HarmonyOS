@@ -74,6 +74,10 @@ struct FeatureRuntimePage {
       pickerService.pickModelFile().then((result: PickResult) => this.applyPickResult(result, 'feature_runtime_model_ready', inputKind));
       return;
     }
+    if (inputKind === 'camera') {
+      pickerService.captureImage().then((result: PickResult) => this.applyPickResult(result, 'feature_runtime_image_ready', inputKind));
+      return;
+    }
     pickerService.pickImage().then((result: PickResult) => this.applyPickResult(result, 'feature_runtime_image_ready', inputKind));
   }
 

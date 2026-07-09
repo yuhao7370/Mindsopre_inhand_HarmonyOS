@@ -1778,8 +1778,11 @@ export default function localUnitTest() {
     it('mapsWorkflowInputsToPickerActions', 0, () => {
       const styleTransfer: FeatureWorkflow = workflowForRoute(AppRoute.STYLE_TRANSFER.name)!;
       const actions = runtimeInputActionsForWorkflow(styleTransfer);
-      expect(actions.indexOf('captureOrPickImage') >= 0).assertTrue();
+      expect(actions.indexOf('captureImage') >= 0).assertTrue();
+      expect(actions.indexOf('pickImage') >= 0).assertTrue();
       expect(actions.indexOf('pickModelFile') >= 0).assertTrue();
+      expect(inputActionForKind('camera')).assertEqual('captureImage');
+      expect(inputActionForKind('photo')).assertEqual('pickImage');
       expect(inputActionForKind('text')).assertEqual('enterText');
     });
 

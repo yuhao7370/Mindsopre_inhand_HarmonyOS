@@ -1,10 +1,12 @@
 import { common } from '@kit.AbilityKit';
 import { picker } from '@kit.CoreFileKit';
+import { camera, cameraPicker } from '@kit.CameraKit';
 import { photoAccessHelper } from '@kit.MediaLibraryKit';
 import { FeatureInputKind, FeatureWorkflow } from '../../features/runtime/FeatureWorkflowCatalog';
 
 export type RuntimeInputAction =
-  'captureOrPickImage' |
+  'captureImage' |
+  'pickImage' |
   'pickModelFile' |
   'enterText';
 
@@ -18,10 +20,11 @@ export const modelFileSuffixFilters: Array<string> = ['.ms'];
 export function inputActionForKind(kind: FeatureInputKind): RuntimeInputAction {
   switch (kind) {
     case 'camera':
+      return 'captureImage';
     case 'photo':
     case 'contentImage':
     case 'styleImage':
-      return 'captureOrPickImage';
+      return 'pickImage';
     case 'modelFile':
       return 'pickModelFile';
     case 'text':
@@ -45,6 +48,18 @@ export class PickerService {
 
   constructor(context: common.UIAbilityContext) {
     this.context = context;
+  }
+
+  async captureImage(): Promise<PickResult> {
+    const profile = new cameraPicker.PickerProfile();
+    profile.cameraPosition = camera.CameraPosition.CAMERA_POSITION_BACK;
+    try {
+      const result = await cameraPicker.pick(this.context, [cameraPicker.PickerMediaType.PHOTO], profile);
+      const uri = result.resultUri;
+      return { ok: uri.length > 0, uri: uri };
+    } catch (_) {
+      return { ok: false, uri: '' };
+    }
   }
 
   async pickImage(): Promise<PickResult> {
