@@ -20,7 +20,12 @@ import {
 } from '../main/ets/services/ai/ImageClassificationPipeline';
 import { imageClassificationDecodeOptions } from '../main/ets/services/ai/HarmonyImageInputPreprocessor';
 import {
+  createHarmonyDefaultAiService,
+  rawfileAsciiContentToText
+} from '../main/ets/services/ai/ImageClassificationRuntimeFactory';
+import {
   floatScoresFromOutputBuffer,
+  RawfileContentReader,
   rawfileContentToArrayBuffer
 } from '../main/ets/services/ai/MindSporeLiteModelRunner';
 import { image } from '@kit.ImageKit';
@@ -97,6 +102,20 @@ class FixedTensorRunner implements ImageClassificationTensorRunner {
   async predictScoresFromInput(inputBuffer: ArrayBuffer): Promise<Array<number>> {
     this.seenByteLengths.push(inputBuffer.byteLength);
     return this.scores;
+  }
+}
+
+class FixedRawfileContentReader implements RawfileContentReader {
+  readonly seenPaths: Array<string> = [];
+  private readonly content: Uint8Array;
+
+  constructor(content: Uint8Array) {
+    this.content = content;
+  }
+
+  async getRawFileContent(path: string): Promise<Uint8Array> {
+    this.seenPaths.push(path);
+    return this.content;
   }
 }
 
@@ -321,6 +340,11 @@ export default function localUnitTest() {
       expect(options.desiredPixelFormat).assertEqual(image.PixelMapFormat.RGBA_8888);
     });
 
+    it('decodesRawfileAsciiContentForAndroidLabels', 0, () => {
+      const content: Uint8Array = new Uint8Array([116, 101, 110, 99, 104, 13, 10, 103, 111, 108, 100, 102, 105, 115, 104]);
+      expect(rawfileAsciiContentToText(content)).assertEqual('tench\r\ngoldfish');
+    });
+
     it('mapsTopClassificationScoreToLabel', 0, () => {
       const result = topClassificationResult([0.1, 0.9, 0.2], ['tench', 'goldfish', 'great_white_shark']);
       expect(result.ok).assertTrue();
@@ -443,6 +467,27 @@ export default function localUnitTest() {
       expect(scores[1]).assertEqual(0.7);
       expect(preprocessor.seenUris[0]).assertEqual('file://selected/fish.jpg');
       expect(tensorRunner.seenByteLengths[0]).assertEqual(12);
+    });
+
+    it('createsHarmonyDefaultAiServiceWithRawfileLabelsAndRunner', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.IMAGE_CAMERA.name);
+      expect(workflow !== undefined).assertTrue();
+      const labelContent: Uint8Array = new Uint8Array([116, 101, 110, 99, 104, 10, 103, 111, 108, 100, 102, 105, 115, 104]);
+      const resourceManager: FixedRawfileContentReader = new FixedRawfileContentReader(labelContent);
+      const service = await createHarmonyDefaultAiService({
+        resourceManager: resourceManager,
+        inputPreprocessor: new FixedInputPreprocessor(new ArrayBuffer(12)),
+        tensorRunner: new FixedTensorRunner([0.1, 0.9])
+      });
+
+      const result = await service.run(workflow!, {
+        imageUri: 'file://selected/fish.jpg'
+      });
+
+      expect(resourceManager.seenPaths[0]).assertEqual('labels/image_category_old.txt');
+      expect(result.ok).assertTrue();
+      expect(result.code).assertEqual('CLASSIFICATION_DONE');
+      expect(result.detailText.indexOf('label=goldfish') >= 0).assertTrue();
     });
 
     it('mapsWorkflowPermissionsToHarmonyPermissionNames', 0, () => {
