@@ -11,6 +11,8 @@ export type FeatureInputKind =
   'photo' |
   'contentImage' |
   'styleImage' |
+  'stylePredictModelFile' |
+  'styleTransferModelFile' |
   'modelFile' |
   'text';
 
@@ -179,7 +181,7 @@ export const featureWorkflows: Array<FeatureWorkflow> = [
     titleKey: 'title_style_transfer',
     summaryKey: 'workflow_summary_style_transfer',
     aiMethod: 'runStyleTransfer',
-    inputKinds: ['camera', 'contentImage', 'styleImage'],
+    inputKinds: ['camera', 'contentImage', 'styleImage', 'stylePredictModelFile', 'styleTransferModelFile'],
     requiredPermissions: ['camera', 'media'],
     resultKind: 'styledImage',
     liveMode: false,
@@ -221,6 +223,10 @@ export function inputLabelKey(inputKind: FeatureInputKind): AppStringKey {
       return 'feature_input_content_image';
     case 'styleImage':
       return 'feature_input_style_image';
+    case 'stylePredictModelFile':
+      return 'feature_input_style_predict_model_file';
+    case 'styleTransferModelFile':
+      return 'feature_input_style_transfer_model_file';
     case 'modelFile':
       return 'feature_input_model_file';
     case 'text':

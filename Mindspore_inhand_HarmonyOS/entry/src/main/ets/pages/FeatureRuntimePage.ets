@@ -71,6 +71,8 @@ struct FeatureRuntimePage {
   @State imageInputUri: string = '';
   @State contentImageUri: string = '';
   @State styleImageUri: string = '';
+  @State stylePredictModelInputUri: string = '';
+  @State styleTransferModelInputUri: string = '';
   @State modelInputUri: string = '';
   @State userText: string = '';
   @State styledImagePixelMap: image.PixelMap | undefined = undefined;
@@ -127,7 +129,9 @@ struct FeatureRuntimePage {
       return;
     }
     const pickerService = new PickerService(context);
-    if (inputKind === 'modelFile') {
+    if (inputKind === 'modelFile' ||
+      inputKind === 'stylePredictModelFile' ||
+      inputKind === 'styleTransferModelFile') {
       pickerService.pickModelFile().then((result: PickResult) => this.applyPickResult(result, 'feature_runtime_model_ready', inputKind));
       return;
     }
@@ -144,6 +148,10 @@ struct FeatureRuntimePage {
       this.selectedInputSummary = '';
       if (inputKind === 'modelFile') {
         this.modelInputUri = '';
+      } else if (inputKind === 'stylePredictModelFile') {
+        this.stylePredictModelInputUri = '';
+      } else if (inputKind === 'styleTransferModelFile') {
+        this.styleTransferModelInputUri = '';
       } else if (inputKind === 'contentImage') {
         this.contentImageUri = '';
       } else if (inputKind === 'styleImage') {
@@ -157,6 +165,10 @@ struct FeatureRuntimePage {
     this.selectedInputSummary = result.uri;
     if (inputKind === 'modelFile') {
       this.modelInputUri = result.uri;
+    } else if (inputKind === 'stylePredictModelFile') {
+      this.stylePredictModelInputUri = result.uri;
+    } else if (inputKind === 'styleTransferModelFile') {
+      this.styleTransferModelInputUri = result.uri;
     } else if (inputKind === 'contentImage') {
       this.contentImageUri = result.uri;
     } else if (inputKind === 'styleImage') {
@@ -172,6 +184,8 @@ struct FeatureRuntimePage {
       imageUri: this.imageInputUri,
       contentImageUri: contentImageUri,
       styleImageUri: this.styleImageUri,
+      stylePredictModelUri: this.stylePredictModelInputUri,
+      styleTransferModelUri: this.styleTransferModelInputUri,
       modelUri: this.modelInputUri,
       text: this.userText
     };
@@ -386,6 +400,8 @@ struct FeatureRuntimePage {
     return this.imageInputUri.length > 0 ||
       this.contentImageUri.length > 0 ||
       this.styleImageUri.length > 0 ||
+      this.stylePredictModelInputUri.length > 0 ||
+      this.styleTransferModelInputUri.length > 0 ||
       this.modelInputUri.length > 0;
   }
 
@@ -918,6 +934,12 @@ struct FeatureRuntimePage {
               }
               if (this.styleImageUri.length > 0) {
                 this.imagePreview('feature_runtime_preview_style', this.styleImageUri)
+              }
+              if (this.stylePredictModelInputUri.length > 0) {
+                this.filePreview('feature_input_style_predict_model_file', this.stylePredictModelInputUri)
+              }
+              if (this.styleTransferModelInputUri.length > 0) {
+                this.filePreview('feature_input_style_transfer_model_file', this.styleTransferModelInputUri)
               }
               if (this.modelInputUri.length > 0) {
                 this.filePreview('feature_runtime_preview_model', this.modelInputUri)

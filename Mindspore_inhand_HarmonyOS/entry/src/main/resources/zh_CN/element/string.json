@@ -131,6 +131,8 @@
     { "name": "feature_input_photo", "value": "图片" },
     { "name": "feature_input_content_image", "value": "内容图" },
     { "name": "feature_input_style_image", "value": "风格图" },
+    { "name": "feature_input_style_predict_model_file", "value": "预测模型" },
+    { "name": "feature_input_style_transfer_model_file", "value": "迁移模型" },
     { "name": "feature_input_model_file", "value": "模型文件" },
     { "name": "feature_input_text", "value": "文本" },
     { "name": "feature_permission_camera", "value": "相机权限" },

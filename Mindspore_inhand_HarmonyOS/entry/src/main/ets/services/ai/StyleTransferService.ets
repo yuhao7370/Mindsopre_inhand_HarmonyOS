@@ -4,6 +4,7 @@ import {
   RawfileContentReader,
   rawfileContentToArrayBuffer
 } from './MindSporeLiteModelRunner';
+import { FileUriContentReader } from './FileUriContentReader';
 
 export const stylePredictModelRawfilePath: string = 'model/style_predict_quant.ms';
 export const styleTransferModelRawfilePath: string = 'model/style_transfer_quant.ms';
@@ -62,6 +63,11 @@ export interface StyleTransferInput {
   readonly styleInputBuffer: ArrayBuffer;
 }
 
+export interface StyleTransferModelUris {
+  readonly predictModelUri?: string;
+  readonly transferModelUri?: string;
+}
+
 export interface StyleTransferInputPreprocessor {
   createInput(contentImageUri: string, styleImageUri: string): Promise<StyleTransferInput>;
 }
@@ -73,11 +79,15 @@ export interface StyleTransferTensorOutput {
 }
 
 export interface StyleTransferTensorRunner {
-  runStyleTransfer(input: StyleTransferInput): Promise<StyleTransferTensorOutput>;
+  runStyleTransfer(input: StyleTransferInput, modelUris?: StyleTransferModelUris): Promise<StyleTransferTensorOutput>;
 }
 
 export interface StyleTransferRunner {
-  run(contentImageUri: string, styleImageUri: string): Promise<StyleTransferResult>;
+  run(
+    contentImageUri: string,
+    styleImageUri: string,
+    modelUris?: StyleTransferModelUris
+  ): Promise<StyleTransferResult>;
 }
 
 export function builtInStyleTransferUri(style: BuiltInStyleTransferStyle): string {
@@ -105,10 +115,14 @@ export class StyleTransferMindSporeRunner implements StyleTransferRunner {
     this.tensorRunner = options.tensorRunner;
   }
 
-  async run(contentImageUri: string, styleImageUri: string): Promise<StyleTransferResult> {
+  async run(
+    contentImageUri: string,
+    styleImageUri: string,
+    modelUris?: StyleTransferModelUris
+  ): Promise<StyleTransferResult> {
     const startedAt = Date.now();
     const input = await this.preprocessor.createInput(contentImageUri, styleImageUri);
-    const output = await this.tensorRunner.runStyleTransfer(input);
+    const output = await this.tensorRunner.runStyleTransfer(input, modelUris);
     const outputImageRgba = output.output.length >= styleTransferOutputFloatCount ?
       styleTransferRgbaOutputFromFloatOutput(
         output.output,
@@ -132,28 +146,42 @@ export interface MindSporeLiteStyleTransferTensorRunnerOptions {
   readonly resourceManager: RawfileContentReader;
   readonly predictModelRawfilePath: string;
   readonly transferModelRawfilePath: string;
+  readonly modelFileReader?: FileUriContentReader;
 }
 
 export class MindSporeLiteStyleTransferTensorRunner implements StyleTransferTensorRunner {
   private readonly resourceManager: RawfileContentReader;
   private readonly predictModelRawfilePath: string;
   private readonly transferModelRawfilePath: string;
+  private readonly modelFileReader: FileUriContentReader;
   private cachedPredictModel?: mindSporeLite.Model;
   private cachedTransferModel?: mindSporeLite.Model;
+  private cachedPredictModelUri: string = '';
+  private cachedSelectedPredictModel?: mindSporeLite.Model;
+  private cachedTransferModelUri: string = '';
+  private cachedSelectedTransferModel?: mindSporeLite.Model;
 
   constructor(options: MindSporeLiteStyleTransferTensorRunnerOptions) {
     this.resourceManager = options.resourceManager;
     this.predictModelRawfilePath = options.predictModelRawfilePath;
     this.transferModelRawfilePath = options.transferModelRawfilePath;
+    this.modelFileReader = options.modelFileReader ?? new FileUriContentReader();
   }
 
-  async runStyleTransfer(input: StyleTransferInput): Promise<StyleTransferTensorOutput> {
+  async runStyleTransfer(
+    input: StyleTransferInput,
+    modelUris?: StyleTransferModelUris
+  ): Promise<StyleTransferTensorOutput> {
     const predictStartedAt = Date.now();
-    const styleVector = await this.predictStyleVector(input.styleInputBuffer);
+    const styleVector = await this.predictStyleVector(input.styleInputBuffer, modelUris?.predictModelUri ?? '');
     const predictMs = Date.now() - predictStartedAt;
 
     const transferStartedAt = Date.now();
-    const output = await this.transferStyle(styleVector.buffer as ArrayBuffer, input.contentInputBuffer);
+    const output = await this.transferStyle(
+      styleVector.buffer as ArrayBuffer,
+      input.contentInputBuffer,
+      modelUris?.transferModelUri ?? ''
+    );
     const transferMs = Date.now() - transferStartedAt;
 
     return {
@@ -163,8 +191,8 @@ export class MindSporeLiteStyleTransferTensorRunner implements StyleTransferTens
     };
   }
 
-  private async predictStyleVector(styleInputBuffer: ArrayBuffer): Promise<Float32Array> {
-    const model = await this.loadPredictModel();
+  private async predictStyleVector(styleInputBuffer: ArrayBuffer, modelUri: string): Promise<Float32Array> {
+    const model = await this.loadPredictModel(modelUri);
     const inputs = model.getInputs();
     if (inputs.length === 0) {
       return new Float32Array(0);
@@ -178,8 +206,12 @@ export class MindSporeLiteStyleTransferTensorRunner implements StyleTransferTens
     return new Float32Array(outputs[0].getData());
   }
 
-  private async transferStyle(styleVectorBuffer: ArrayBuffer, contentInputBuffer: ArrayBuffer): Promise<Float32Array> {
-    const model = await this.loadTransferModel();
+  private async transferStyle(
+    styleVectorBuffer: ArrayBuffer,
+    contentInputBuffer: ArrayBuffer,
+    modelUri: string
+  ): Promise<Float32Array> {
+    const model = await this.loadTransferModel(modelUri);
     const inputs = model.getInputs();
     if (inputs.length < 2 || styleVectorBuffer.byteLength === 0) {
       return new Float32Array(0);
@@ -194,7 +226,17 @@ export class MindSporeLiteStyleTransferTensorRunner implements StyleTransferTens
     return new Float32Array(outputs[0].getData());
   }
 
-  private async loadPredictModel(): Promise<mindSporeLite.Model> {
+  private async loadPredictModel(modelUri: string): Promise<mindSporeLite.Model> {
+    if (modelUri.length > 0) {
+      if (this.cachedSelectedPredictModel !== undefined && this.cachedPredictModelUri === modelUri) {
+        return this.cachedSelectedPredictModel;
+      }
+      const content = await this.modelFileReader.readFileContent(modelUri);
+      const model = await mindSporeLite.loadModelFromBuffer(rawfileContentToArrayBuffer(content));
+      this.cachedPredictModelUri = modelUri;
+      this.cachedSelectedPredictModel = model;
+      return model;
+    }
     if (this.cachedPredictModel !== undefined) {
       return this.cachedPredictModel;
     }
@@ -205,7 +247,17 @@ export class MindSporeLiteStyleTransferTensorRunner implements StyleTransferTens
     return model;
   }
 
-  private async loadTransferModel(): Promise<mindSporeLite.Model> {
+  private async loadTransferModel(modelUri: string): Promise<mindSporeLite.Model> {
+    if (modelUri.length > 0) {
+      if (this.cachedSelectedTransferModel !== undefined && this.cachedTransferModelUri === modelUri) {
+        return this.cachedSelectedTransferModel;
+      }
+      const content = await this.modelFileReader.readFileContent(modelUri);
+      const model = await mindSporeLite.loadModelFromBuffer(rawfileContentToArrayBuffer(content));
+      this.cachedTransferModelUri = modelUri;
+      this.cachedSelectedTransferModel = model;
+      return model;
+    }
     if (this.cachedTransferModel !== undefined) {
       return this.cachedTransferModel;
     }
@@ -228,12 +280,16 @@ export class StyleTransferService {
     this.runner = options.runner;
   }
 
-  async run(contentImageUri: string, styleImageUri: string): Promise<StyleTransferResult> {
+  async run(
+    contentImageUri: string,
+    styleImageUri: string,
+    modelUris?: StyleTransferModelUris
+  ): Promise<StyleTransferResult> {
     if (this.runner === undefined) {
       return emptyStyleTransferResult();
     }
     try {
-      return await this.runner.run(contentImageUri, styleImageUri);
+      return await this.runner.run(contentImageUri, styleImageUri, modelUris);
     } catch (_) {
       return emptyStyleTransferResult();
     }

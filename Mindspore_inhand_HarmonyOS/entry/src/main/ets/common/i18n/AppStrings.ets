@@ -130,6 +130,8 @@ export type AppStringKey =
   'feature_input_photo' |
   'feature_input_content_image' |
   'feature_input_style_image' |
+  'feature_input_style_predict_model_file' |
+  'feature_input_style_transfer_model_file' |
   'feature_input_model_file' |
   'feature_input_text' |
   'feature_permission_camera' |
@@ -279,6 +281,8 @@ const APP_STRING_KEYS: AppStringKey[] = [
   'feature_input_photo',
   'feature_input_content_image',
   'feature_input_style_image',
+  'feature_input_style_predict_model_file',
+  'feature_input_style_transfer_model_file',
   'feature_input_model_file',
   'feature_input_text',
   'feature_permission_camera',
@@ -563,6 +567,10 @@ export function appString(key: AppStringKey): ResourceStr {
       return $r('app.string.feature_input_content_image');
     case 'feature_input_style_image':
       return $r('app.string.feature_input_style_image');
+    case 'feature_input_style_predict_model_file':
+      return $r('app.string.feature_input_style_predict_model_file');
+    case 'feature_input_style_transfer_model_file':
+      return $r('app.string.feature_input_style_transfer_model_file');
     case 'feature_input_model_file':
       return $r('app.string.feature_input_model_file');
     case 'feature_input_text':

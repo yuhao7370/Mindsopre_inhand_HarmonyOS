@@ -44,6 +44,7 @@ import {
   builtInStyleTransferUri,
   rawfilePathFromBuiltInStyleTransferUri,
   StyleTransferInputPreprocessor,
+  StyleTransferModelUris,
   StyleTransferResult,
   StyleTransferRunner,
   StyleTransferService,
@@ -349,21 +350,33 @@ class RejectingObjectDetectionRunner implements ObjectDetectionRunner {
 class FixedStyleTransferRunner implements StyleTransferRunner {
   readonly seenContentUris: Array<string> = [];
   readonly seenStyleUris: Array<string> = [];
+  readonly seenPredictModelUris: Array<string> = [];
+  readonly seenTransferModelUris: Array<string> = [];
   private readonly result: StyleTransferResult;
 
   constructor(result: StyleTransferResult) {
     this.result = result;
   }
 
-  async run(contentImageUri: string, styleImageUri: string): Promise<StyleTransferResult> {
+  async run(
+    contentImageUri: string,
+    styleImageUri: string,
+    modelUris?: StyleTransferModelUris
+  ): Promise<StyleTransferResult> {
     this.seenContentUris.push(contentImageUri);
     this.seenStyleUris.push(styleImageUri);
+    this.seenPredictModelUris.push(modelUris?.predictModelUri ?? '');
+    this.seenTransferModelUris.push(modelUris?.transferModelUri ?? '');
     return this.result;
   }
 }
 
 class RejectingStyleTransferRunner implements StyleTransferRunner {
-  async run(_contentImageUri: string, _styleImageUri: string): Promise<StyleTransferResult> {
+  async run(
+    _contentImageUri: string,
+    _styleImageUri: string,
+    _modelUris?: StyleTransferModelUris
+  ): Promise<StyleTransferResult> {
     throw new Error('style transfer failed');
   }
 }
@@ -387,15 +400,22 @@ class FixedStyleTransferPreprocessor implements StyleTransferInputPreprocessor {
 class FixedStyleTransferTensorRunner implements StyleTransferTensorRunner {
   readonly seenContentBytes: Array<number> = [];
   readonly seenStyleBytes: Array<number> = [];
+  readonly seenPredictModelUris: Array<string> = [];
+  readonly seenTransferModelUris: Array<string> = [];
   private readonly output: StyleTransferTensorOutput;
 
   constructor(output: StyleTransferTensorOutput) {
     this.output = output;
   }
 
-  async runStyleTransfer(input: StyleTransferInput): Promise<StyleTransferTensorOutput> {
+  async runStyleTransfer(
+    input: StyleTransferInput,
+    modelUris?: StyleTransferModelUris
+  ): Promise<StyleTransferTensorOutput> {
     this.seenContentBytes.push(input.contentInputBuffer.byteLength);
     this.seenStyleBytes.push(input.styleInputBuffer.byteLength);
+    this.seenPredictModelUris.push(modelUris?.predictModelUri ?? '');
+    this.seenTransferModelUris.push(modelUris?.transferModelUri ?? '');
     return this.output;
   }
 }
@@ -802,7 +822,8 @@ export default function localUnitTest() {
       expect(styleTransfer.inputKinds.indexOf('camera') >= 0).assertTrue();
       expect(styleTransfer.inputKinds.indexOf('contentImage') >= 0).assertTrue();
       expect(styleTransfer.inputKinds.indexOf('styleImage') >= 0).assertTrue();
-      expect(styleTransfer.inputKinds.indexOf('modelFile')).assertEqual(-1);
+      expect(styleTransfer.inputKinds.indexOf('stylePredictModelFile') >= 0).assertTrue();
+      expect(styleTransfer.inputKinds.indexOf('styleTransferModelFile') >= 0).assertTrue();
 
       const translation: FeatureWorkflow = workflowForRoute(AppRoute.TEXT_TRANSLATION.name)!;
       expect(translation.aiMethod).assertEqual('translateText');
@@ -1462,6 +1483,31 @@ export default function localUnitTest() {
       expect(runner.seenStyleUris[0]).assertEqual('file://selected/style.jpg');
     });
 
+    it('aiServicePassesSelectedStyleTransferModels', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.STYLE_TRANSFER.name);
+      expect(workflow !== undefined).assertTrue();
+      const runner: FixedStyleTransferRunner = new FixedStyleTransferRunner({
+        ok: true,
+        outputFloatCount: 384 * 384 * 3,
+        predictMs: 4,
+        transferMs: 5,
+        executionMs: 9
+      });
+      const styleTransferService = new StyleTransferService({
+        runner: runner
+      });
+
+      await new DefaultAiService({ styleTransferService: styleTransferService }).run(workflow!, {
+        contentImageUri: 'file://selected/content.jpg',
+        styleImageUri: 'file://selected/style.jpg',
+        stylePredictModelUri: 'file://selected/custom_predict.ms',
+        styleTransferModelUri: 'file://selected/custom_transfer.ms'
+      });
+
+      expect(runner.seenPredictModelUris[0]).assertEqual('file://selected/custom_predict.ms');
+      expect(runner.seenTransferModelUris[0]).assertEqual('file://selected/custom_transfer.ms');
+    });
+
     it('aiServiceReportsStyleTransferRunnerFailureWithI18nKey', 0, async () => {
       const workflow = workflowForRoute(AppRoute.STYLE_TRANSFER.name);
       expect(workflow !== undefined).assertTrue();
@@ -1565,6 +1611,31 @@ export default function localUnitTest() {
       expect(result.transferMs).assertEqual(9);
       expect(preprocessor.seenContentUris[0]).assertEqual('file://selected/content.jpg');
       expect(tensorRunner.seenStyleBytes[0]).assertEqual(256 * 256 * 3 * 4);
+    });
+
+    it('styleTransferMindSporeRunnerForwardsSelectedModelUris', 0, async () => {
+      const input: StyleTransferInput = {
+        contentInputBuffer: new ArrayBuffer(12),
+        styleInputBuffer: new ArrayBuffer(8)
+      };
+      const preprocessor: FixedStyleTransferPreprocessor = new FixedStyleTransferPreprocessor(input);
+      const tensorRunner: FixedStyleTransferTensorRunner = new FixedStyleTransferTensorRunner({
+        output: new Float32Array(styleTransferOutputFloatCount),
+        predictMs: 1,
+        transferMs: 2
+      });
+      const runner = new StyleTransferMindSporeRunner({
+        preprocessor: preprocessor,
+        tensorRunner: tensorRunner
+      });
+
+      await runner.run('file://selected/content.jpg', 'file://selected/style.jpg', {
+        predictModelUri: 'file://selected/custom_predict.ms',
+        transferModelUri: 'file://selected/custom_transfer.ms'
+      });
+
+      expect(tensorRunner.seenPredictModelUris[0]).assertEqual('file://selected/custom_predict.ms');
+      expect(tensorRunner.seenTransferModelUris[0]).assertEqual('file://selected/custom_transfer.ms');
     });
 
     it('parsesAndroidImageClassificationLabels', 0, () => {
@@ -2265,12 +2336,14 @@ export default function localUnitTest() {
       const actions = runtimeInputActionsForWorkflow(styleTransfer);
       expect(actions.indexOf('captureImage') >= 0).assertTrue();
       expect(actions.indexOf('pickImage') >= 0).assertTrue();
-      expect(actions.indexOf('pickModelFile')).assertEqual(-1);
+      expect(actions.indexOf('pickModelFile') >= 0).assertTrue();
       const objectPhoto: FeatureWorkflow = workflowForRoute(AppRoute.OBJECT_PHOTO.name)!;
       expect(runtimeInputActionsForWorkflow(objectPhoto).indexOf('pickModelFile') >= 0).assertTrue();
       expect(inputActionForKind('camera')).assertEqual('captureImage');
       expect(inputActionForKind('photo')).assertEqual('pickImage');
       expect(inputActionForKind('text')).assertEqual('enterText');
+      expect(inputActionForKind('stylePredictModelFile')).assertEqual('pickModelFile');
+      expect(inputActionForKind('styleTransferModelFile')).assertEqual('pickModelFile');
     });
 
     it('usesMindSporeModelFileSuffixForModelPicker', 0, () => {

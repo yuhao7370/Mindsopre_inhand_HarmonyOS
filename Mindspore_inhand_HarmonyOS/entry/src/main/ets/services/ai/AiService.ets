@@ -12,6 +12,7 @@ import {
   ObjectDetectionService
 } from './ObjectDetectionService';
 import {
+  StyleTransferModelUris,
   StyleTransferResult,
   StyleTransferService
 } from './StyleTransferService';
@@ -59,6 +60,8 @@ export interface AiRunInputs {
   readonly imageUri?: string;
   readonly contentImageUri?: string;
   readonly styleImageUri?: string;
+  readonly stylePredictModelUri?: string;
+  readonly styleTransferModelUri?: string;
   readonly modelUri?: string;
   readonly text?: string;
 }
@@ -432,7 +435,11 @@ export class DefaultAiService {
       };
     }
 
-    const result = await this.styleTransferService.run(contentImageUri, styleImageUri);
+    const modelUris: StyleTransferModelUris = {
+      predictModelUri: inputs.stylePredictModelUri ?? '',
+      transferModelUri: inputs.styleTransferModelUri ?? ''
+    };
+    const result = await this.styleTransferService.run(contentImageUri, styleImageUri, modelUris);
     if (!result.ok) {
       return {
         ok: false,

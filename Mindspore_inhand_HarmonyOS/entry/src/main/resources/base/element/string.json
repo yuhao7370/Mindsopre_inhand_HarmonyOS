@@ -131,6 +131,8 @@
     { "name": "feature_input_photo", "value": "Image" },
     { "name": "feature_input_content_image", "value": "Content image" },
     { "name": "feature_input_style_image", "value": "Style image" },
+    { "name": "feature_input_style_predict_model_file", "value": "Predict model" },
+    { "name": "feature_input_style_transfer_model_file", "value": "Transfer model" },
     { "name": "feature_input_model_file", "value": "Model file" },
     { "name": "feature_input_text", "value": "Text" },
     { "name": "feature_permission_camera", "value": "Camera permission" },
