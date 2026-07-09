@@ -162,6 +162,13 @@ import {
   runtimeInputActionsForWorkflow
 } from '../main/ets/services/picker/PickerService';
 import {
+  cachedModelFileNameForInputKind,
+  modelFileCacheWriteSucceeded,
+  ModelFileCacheWriter,
+  RuntimeModelFileCacheService,
+  shouldCachePickedModelFileForRoute
+} from '../main/ets/services/picker/ModelFileCacheService';
+import {
   LiveCameraPreviewDriver,
   LiveCameraPreviewService,
   LiveFrameImageEncoder,
@@ -325,6 +332,30 @@ class ThrowingFileUriContentBackend extends FixedFileUriContentBackend {
   async read(file: FileUriDescriptor, _buffer: ArrayBuffer): Promise<number> {
     this.events.push(`read:${file.fd}`);
     throw new Error('read failed');
+  }
+}
+
+class RecordingModelFileCacheWriter implements ModelFileCacheWriter {
+  readonly seenCacheDirs: Array<string> = [];
+  readonly seenFileNames: Array<string> = [];
+  readonly writtenBytes: Array<number> = [];
+  private readonly nextUri: string;
+
+  constructor(nextUri: string) {
+    this.nextUri = nextUri;
+  }
+
+  async writeModelFile(cacheDir: string, fileName: string, content: Uint8Array): Promise<string> {
+    this.seenCacheDirs.push(cacheDir);
+    this.seenFileNames.push(fileName);
+    this.writtenBytes.push(content.length);
+    return this.nextUri;
+  }
+}
+
+class RejectingModelFileCacheWriter implements ModelFileCacheWriter {
+  async writeModelFile(_cacheDir: string, _fileName: string, _content: Uint8Array): Promise<string> {
+    throw new Error('model cache write failed');
   }
 }
 
@@ -952,6 +983,7 @@ export default function localUnitTest() {
       expect(hasAppStringKey('feature_runtime_result_text')).assertTrue();
       expect(hasAppStringKey('feature_runtime_copy_text')).assertTrue();
       expect(hasAppStringKey('feature_runtime_copy_done')).assertTrue();
+      expect(hasAppStringKey('feature_runtime_model_cache_failed')).assertTrue();
       expect(hasAppStringKey('qr_code_save_done')).assertTrue();
       expect(hasAppStringKey('qr_code_save_failed')).assertTrue();
       expect(hasAppStringKey('title_share')).assertTrue();
@@ -2994,6 +3026,51 @@ export default function localUnitTest() {
     it('usesMindSporeModelFileSuffixForModelPicker', 0, () => {
       expect(modelFileSuffixFilters.length).assertEqual(1);
       expect(modelFileSuffixFilters[0]).assertEqual('.ms');
+    });
+
+    it('usesAndroidModelCacheFileNamesForPickedModelInputs', 0, () => {
+      expect(cachedModelFileNameForInputKind(AppRoute.CUSTOM_MODEL.name, 'modelFile')).assertEqual('custom_model.ms');
+      expect(cachedModelFileNameForInputKind(AppRoute.STYLE_TRANSFER.name, 'stylePredictModelFile')).assertEqual('custom_predict.ms');
+      expect(cachedModelFileNameForInputKind(AppRoute.STYLE_TRANSFER.name, 'styleTransferModelFile')).assertEqual('custom_transfer.ms');
+    });
+
+    it('keepsObjectDetectionPickedModelUriInsteadOfCustomModelCacheSlot', 0, () => {
+      expect(shouldCachePickedModelFileForRoute(AppRoute.OBJECT_PHOTO.name, 'modelFile')).assertFalse();
+      expect(shouldCachePickedModelFileForRoute(AppRoute.OBJECT_CAMERA.name, 'modelFile')).assertFalse();
+      expect(cachedModelFileNameForInputKind(AppRoute.OBJECT_PHOTO.name, 'modelFile')).assertEqual('');
+      expect(cachedModelFileNameForInputKind(AppRoute.CUSTOM_MODEL.name, 'modelFile')).assertEqual('custom_model.ms');
+    });
+
+    it('cachesPickedModelFileContentBeforeRuntimeUse', 0, async () => {
+      const reader = new FileUriContentReader(new FixedFileUriContentBackend(new Uint8Array([1, 2, 3, 4])));
+      const writer = new RecordingModelFileCacheWriter('/cache/custom_model.ms');
+      const service = new RuntimeModelFileCacheService(reader, writer);
+
+      const result = await service.cachePickedModelFile('file://selected/custom.ms', '/cache', AppRoute.CUSTOM_MODEL.name, 'modelFile');
+
+      expect(result.ok).assertTrue();
+      expect(result.uri).assertEqual('/cache/custom_model.ms');
+      expect(result.messageKey).assertEqual('feature_runtime_model_ready');
+      expect(writer.seenCacheDirs[0]).assertEqual('/cache');
+      expect(writer.seenFileNames[0]).assertEqual('custom_model.ms');
+      expect(writer.writtenBytes[0]).assertEqual(4);
+    });
+
+    it('reportsPickedModelFileCacheFailureWithI18nKey', 0, async () => {
+      const reader = new FileUriContentReader(new FixedFileUriContentBackend(new Uint8Array([1, 2, 3, 4])));
+      const writer = new RejectingModelFileCacheWriter();
+      const service = new RuntimeModelFileCacheService(reader, writer);
+
+      const result = await service.cachePickedModelFile('file://selected/custom.ms', '/cache', AppRoute.CUSTOM_MODEL.name, 'modelFile');
+
+      expect(result.ok).assertFalse();
+      expect(result.uri).assertEqual('');
+      expect(result.messageKey).assertEqual('feature_runtime_model_cache_failed');
+    });
+
+    it('rejectsShortModelFileCacheWrites', 0, () => {
+      expect(modelFileCacheWriteSucceeded(4, new Uint8Array([1, 2, 3, 4]))).assertTrue();
+      expect(modelFileCacheWriteSucceeded(3, new Uint8Array([1, 2, 3, 4]))).assertFalse();
     });
   });
 }

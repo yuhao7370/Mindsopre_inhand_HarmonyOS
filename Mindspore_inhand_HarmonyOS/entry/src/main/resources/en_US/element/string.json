@@ -104,6 +104,7 @@
     { "name": "feature_runtime_permission_denied", "value": "Required permission was denied." },
     { "name": "feature_runtime_image_ready", "value": "Image input is ready." },
     { "name": "feature_runtime_model_ready", "value": "MindSpore model file is ready." },
+    { "name": "feature_runtime_model_cache_failed", "value": "Failed to copy the selected model file into the app cache." },
     { "name": "feature_runtime_text_ready", "value": "Text input is ready." },
     { "name": "feature_runtime_pick_cancelled", "value": "No file was selected." },
     { "name": "feature_runtime_text_placeholder", "value": "Enter text for translation or text-based demos" },

@@ -103,6 +103,7 @@ export type AppStringKey =
   'feature_runtime_permission_denied' |
   'feature_runtime_image_ready' |
   'feature_runtime_model_ready' |
+  'feature_runtime_model_cache_failed' |
   'feature_runtime_text_ready' |
   'feature_runtime_pick_cancelled' |
   'feature_runtime_text_placeholder' |
@@ -266,6 +267,7 @@ const APP_STRING_KEYS: AppStringKey[] = [
   'feature_runtime_permission_denied',
   'feature_runtime_image_ready',
   'feature_runtime_model_ready',
+  'feature_runtime_model_cache_failed',
   'feature_runtime_text_ready',
   'feature_runtime_pick_cancelled',
   'feature_runtime_text_placeholder',
@@ -537,6 +539,8 @@ export function appString(key: AppStringKey): ResourceStr {
       return $r('app.string.feature_runtime_image_ready');
     case 'feature_runtime_model_ready':
       return $r('app.string.feature_runtime_model_ready');
+    case 'feature_runtime_model_cache_failed':
+      return $r('app.string.feature_runtime_model_cache_failed');
     case 'feature_runtime_text_ready':
       return $r('app.string.feature_runtime_text_ready');
     case 'feature_runtime_pick_cancelled':

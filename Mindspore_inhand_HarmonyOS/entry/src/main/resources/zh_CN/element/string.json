@@ -104,6 +104,7 @@
     { "name": "feature_runtime_permission_denied", "value": "所需权限被拒绝。" },
     { "name": "feature_runtime_image_ready", "value": "图片输入已就绪。" },
     { "name": "feature_runtime_model_ready", "value": "MindSpore 模型文件已就绪。" },
+    { "name": "feature_runtime_model_cache_failed", "value": "复制所选模型文件到应用缓存失败。" },
     { "name": "feature_runtime_text_ready", "value": "文本输入已就绪。" },
     { "name": "feature_runtime_pick_cancelled", "value": "未选择文件。" },
     { "name": "feature_runtime_text_placeholder", "value": "输入用于翻译或文本类示例的文本" },

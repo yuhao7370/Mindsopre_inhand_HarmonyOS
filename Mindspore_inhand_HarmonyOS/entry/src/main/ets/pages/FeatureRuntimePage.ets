@@ -20,6 +20,11 @@ import { PermissionRequestSummary, PermissionService } from '../services/permiss
 import { ClipboardService, CopyTextResult } from '../services/clipboard/ClipboardService';
 import { PickerService, PickResult, runtimeInputActionForWorkflowInput } from '../services/picker/PickerService';
 import {
+  ModelFileCacheResult,
+  RuntimeModelFileCacheService,
+  shouldCachePickedModelFileForRoute
+} from '../services/picker/ModelFileCacheService';
+import {
   HarmonyLiveCameraPreviewDriver,
   HarmonyLiveFrameImageEncoder,
   HarmonyLiveFrameImageStore,
@@ -178,7 +183,8 @@ struct FeatureRuntimePage {
     if (inputKind === 'modelFile' ||
       inputKind === 'stylePredictModelFile' ||
       inputKind === 'styleTransferModelFile') {
-      pickerService.pickModelFile().then((result: PickResult) => this.applyPickResult(result, 'feature_runtime_model_ready', inputKind));
+      pickerService.pickModelFile().then((result: PickResult) =>
+        this.cacheAndApplyPickedModelFile(result, context.cacheDir, inputKind));
       return;
     }
     if (inputKind === 'camera') {
@@ -186,6 +192,38 @@ struct FeatureRuntimePage {
       return;
     }
     pickerService.pickImage().then((result: PickResult) => this.applyPickResult(result, 'feature_runtime_image_ready', inputKind));
+  }
+
+  private cacheAndApplyPickedModelFile(result: PickResult, cacheDir: string, inputKind: FeatureInputKind): void {
+    if (!result.ok) {
+      this.applyPickResult(result, 'feature_runtime_model_ready', inputKind);
+      return;
+    }
+    if (!shouldCachePickedModelFileForRoute(this.routeName, inputKind)) {
+      this.applyPickResult(result, 'feature_runtime_model_ready', inputKind);
+      return;
+    }
+    new RuntimeModelFileCacheService().cachePickedModelFile(result.uri, cacheDir, this.routeName, inputKind)
+      .then((cacheResult: ModelFileCacheResult) => this.applyModelFileCacheResult(cacheResult, inputKind));
+  }
+
+  private applyModelFileCacheResult(result: ModelFileCacheResult, inputKind: FeatureInputKind): void {
+    if (!result.ok) {
+      this.statusKey = result.messageKey;
+      this.selectedInputSummary = '';
+      if (inputKind === 'modelFile') {
+        this.modelInputUri = '';
+      } else if (inputKind === 'stylePredictModelFile') {
+        this.stylePredictModelInputUri = '';
+      } else if (inputKind === 'styleTransferModelFile') {
+        this.styleTransferModelInputUri = '';
+      }
+      return;
+    }
+    this.applyPickResult({
+      ok: true,
+      uri: result.uri
+    }, result.messageKey, inputKind);
   }
 
   private isLiveCameraInput(inputKind: FeatureInputKind): boolean {
