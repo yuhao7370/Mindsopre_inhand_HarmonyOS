@@ -49,6 +49,10 @@ import {
   objectDetectionModelRawfilePath,
   objectCategoryLabelCount,
   objectCategoryLabelRawfilePath,
+  objectDetectionDecodeOptions,
+  objectDetectionInputFloatCount,
+  objectDetectionInputSize,
+  normalizedObjectDetectionRgbInputFromRgba,
   parseObjectCategoryLabels
 } from '../main/ets/services/ai/ObjectDetectionService';
 import { image } from '@kit.ImageKit';
@@ -501,6 +505,33 @@ export default function localUnitTest() {
       expect(objectCategoryLabelRawfilePath).assertEqual('labels/object_category.txt');
       expect(objectDetectionModelRawfilePath).assertEqual('model/ssd.ms');
       expect(objectDetectionModelDownloadUrl).assertEqual('https://download.mindspore.cn/model_zoo/official/lite/ssd_mobilenetv2_lite/ssd.ms');
+    });
+
+    it('definesAndroidObjectDetectionPreprocessContract', 0, () => {
+      expect(objectDetectionInputSize).assertEqual(300);
+      expect(objectDetectionInputFloatCount).assertEqual(300 * 300 * 3);
+    });
+
+    it('normalizesObjectDetectionRgbaToRgbHwcInput', 0, () => {
+      const rgba: Uint8Array = new Uint8Array(objectDetectionInputSize * objectDetectionInputSize * 4);
+      rgba[0] = 255;
+      rgba[1] = 0;
+      rgba[2] = 0;
+      rgba[3] = 77;
+
+      const input = new Float32Array(normalizedObjectDetectionRgbInputFromRgba(rgba));
+
+      expect(input.length).assertEqual(objectDetectionInputFloatCount);
+      expect(input[0].toFixed(6)).assertEqual('2.248908');
+      expect(input[1].toFixed(6)).assertEqual('-2.035714');
+      expect(input[2].toFixed(6)).assertEqual('-1.804444');
+    });
+
+    it('requestsObjectDetectionDecodeAsAndroid300Rgba', 0, () => {
+      const options: image.DecodingOptions = objectDetectionDecodeOptions();
+      expect(options.desiredSize!.width).assertEqual(300);
+      expect(options.desiredSize!.height).assertEqual(300);
+      expect(options.desiredPixelFormat).assertEqual(image.PixelMapFormat.RGBA_8888);
     });
 
     it('copiesRawfileViewToExactModelBuffer', 0, () => {
