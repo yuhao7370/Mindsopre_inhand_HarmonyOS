@@ -24,6 +24,12 @@ import {
   SegmentationService
 } from '../main/ets/services/ai/SegmentationService';
 import {
+  PosePoint,
+  PoseResult,
+  PoseRunner,
+  PoseService
+} from '../main/ets/services/ai/PoseService';
+import {
   StyleTransferInput,
   StyleTransferInputPreprocessor,
   StyleTransferResult,
@@ -426,6 +432,26 @@ class RejectingSegmentationRunner implements SegmentationRunner {
   }
 }
 
+class FixedPoseRunner implements PoseRunner {
+  readonly seenImageUris: Array<string> = [];
+  private readonly result: PoseResult;
+
+  constructor(result: PoseResult) {
+    this.result = result;
+  }
+
+  async detectPose(imageUri: string): Promise<PoseResult> {
+    this.seenImageUris.push(imageUri);
+    return this.result;
+  }
+}
+
+class RejectingPoseRunner implements PoseRunner {
+  async detectPose(_imageUri: string): Promise<PoseResult> {
+    throw new Error('pose detection failed');
+  }
+}
+
 class FixedObjectDetectionPreprocessor implements ObjectDetectionInputPreprocessor {
   readonly seenImageUris: Array<string> = [];
   private readonly input: ObjectDetectionInput;
@@ -509,6 +535,7 @@ export default function localUnitTest() {
       expect(hasAppStringKey('feature_runtime_text_recognition_done')).assertTrue();
       expect(hasAppStringKey('feature_runtime_text_translation_failed')).assertTrue();
       expect(hasAppStringKey('feature_runtime_segmentation_done')).assertTrue();
+      expect(hasAppStringKey('feature_runtime_pose_done')).assertTrue();
     });
 
     it('doesNotNavigateQuickStartParentWithEmptyUrl', 0, () => {
@@ -802,6 +829,73 @@ export default function localUnitTest() {
       expect(result.ok).assertFalse();
       expect(result.code).assertEqual('SEGMENTATION_FAILED');
       expect(result.messageKey).assertEqual('feature_runtime_segmentation_failed');
+    });
+
+    it('poseDetectionRequiresImageInputWhenServiceIsProvided', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.POSENET.name);
+      expect(workflow !== undefined).assertTrue();
+      const service = new PoseService({
+        runner: new FixedPoseRunner({
+          ok: true,
+          skeletonCount: 1,
+          pointCount: 17,
+          points: [],
+          executionMs: 3
+        })
+      });
+
+      const result = await new DefaultAiService({ poseService: service }).run(workflow!);
+
+      expect(result.ok).assertFalse();
+      expect(result.code).assertEqual('MISSING_INPUT');
+    });
+
+    it('aiServiceUsesRealPoseServiceWhenProvided', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.POSENET.name);
+      expect(workflow !== undefined).assertTrue();
+      const nose: PosePoint = {
+        type: 0,
+        score: 0.95,
+        x: 10,
+        y: 20
+      };
+      const runner: FixedPoseRunner = new FixedPoseRunner({
+        ok: true,
+        skeletonCount: 1,
+        pointCount: 1,
+        points: [nose],
+        executionMs: 14
+      });
+      const service = new PoseService({
+        runner: runner
+      });
+
+      const result = await new DefaultAiService({ poseService: service }).run(workflow!, {
+        imageUri: 'file://selected/pose.jpg'
+      });
+
+      expect(result.ok).assertTrue();
+      expect(result.code).assertEqual('POSE_DETECTION_DONE');
+      expect(result.messageKey).assertEqual('feature_runtime_pose_done');
+      expect(result.detailText.indexOf('skeletonCount=1') >= 0).assertTrue();
+      expect(result.detailText.indexOf('0 95.00% [10,20]') >= 0).assertTrue();
+      expect(runner.seenImageUris[0]).assertEqual('file://selected/pose.jpg');
+    });
+
+    it('aiServiceReportsPoseFailureWithI18nKey', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.POSENET.name);
+      expect(workflow !== undefined).assertTrue();
+      const service = new PoseService({
+        runner: new RejectingPoseRunner()
+      });
+
+      const result = await new DefaultAiService({ poseService: service }).run(workflow!, {
+        imageUri: 'file://selected/pose.jpg'
+      });
+
+      expect(result.ok).assertFalse();
+      expect(result.code).assertEqual('POSE_DETECTION_FAILED');
+      expect(result.messageKey).assertEqual('feature_runtime_pose_failed');
     });
 
     it('customModelRequiresModelAndImageInputs', 0, async () => {
@@ -1529,7 +1623,7 @@ export default function localUnitTest() {
     });
 
     it('keepsNonClassificationWorkflowsOnDefaultPendingRuntime', 0, async () => {
-      const workflow = workflowForRoute(AppRoute.POSENET.name);
+      const workflow = workflowForRoute(AppRoute.GESTURE_STILL.name);
       expect(workflow !== undefined).assertTrue();
       const service = await createRuntimeAiServiceForWorkflow(workflow!, {
         resourceManager: new ThrowingRawfileContentReader()
@@ -1646,6 +1740,30 @@ export default function localUnitTest() {
       expect(result.ok).assertTrue();
       expect(result.code).assertEqual('SEGMENTATION_DONE');
       expect(runner.seenImageUris[0]).assertEqual('file://selected/person.jpg');
+    });
+
+    it('runtimeFactoryInjectsPoseServiceForPoseWorkflow', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.POSENET.name);
+      expect(workflow !== undefined).assertTrue();
+      const runner: FixedPoseRunner = new FixedPoseRunner({
+        ok: true,
+        skeletonCount: 1,
+        pointCount: 0,
+        points: [],
+        executionMs: 6
+      });
+      const service = await createRuntimeAiServiceForWorkflow(workflow!, {
+        resourceManager: new ThrowingRawfileContentReader(),
+        poseRunner: runner
+      });
+
+      const result: AiRunResult = await service.run(workflow!, {
+        imageUri: 'file://selected/pose.jpg'
+      });
+
+      expect(result.ok).assertTrue();
+      expect(result.code).assertEqual('POSE_DETECTION_DONE');
+      expect(runner.seenImageUris[0]).assertEqual('file://selected/pose.jpg');
     });
 
     it('mapsWorkflowPermissionsToHarmonyPermissionNames', 0, () => {

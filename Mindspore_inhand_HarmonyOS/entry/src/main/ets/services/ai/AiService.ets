@@ -21,6 +21,11 @@ import {
   SegmentationService
 } from './SegmentationService';
 import {
+  PosePoint,
+  PoseResult,
+  PoseService
+} from './PoseService';
+import {
   TextRecognitionResult,
   TextRecognitionService,
   TextTranslationResult,
@@ -45,7 +50,9 @@ export type AiRunCode =
   'TEXT_TRANSLATION_DONE' |
   'TEXT_TRANSLATION_FAILED' |
   'SEGMENTATION_DONE' |
-  'SEGMENTATION_FAILED';
+  'SEGMENTATION_FAILED' |
+  'POSE_DETECTION_DONE' |
+  'POSE_DETECTION_FAILED';
 
 export interface AiRunInputs {
   readonly imageUri?: string;
@@ -71,6 +78,7 @@ export interface AiServiceOptions {
   readonly textRecognitionService?: TextRecognitionService;
   readonly textTranslationService?: TextTranslationService;
   readonly segmentationService?: SegmentationService;
+  readonly poseService?: PoseService;
 }
 
 export class DefaultAiService {
@@ -81,6 +89,7 @@ export class DefaultAiService {
   private readonly textRecognitionService?: TextRecognitionService;
   private readonly textTranslationService?: TextTranslationService;
   private readonly segmentationService?: SegmentationService;
+  private readonly poseService?: PoseService;
 
   constructor(options?: AiServiceOptions) {
     this.imageClassificationService = options?.imageClassificationService ?? new ImageClassificationService({
@@ -92,6 +101,7 @@ export class DefaultAiService {
     this.textRecognitionService = options?.textRecognitionService;
     this.textTranslationService = options?.textTranslationService;
     this.segmentationService = options?.segmentationService;
+    this.poseService = options?.poseService;
   }
 
   async run(workflow: FeatureWorkflow, inputs: AiRunInputs = {}): Promise<AiRunResult> {
@@ -113,6 +123,9 @@ export class DefaultAiService {
     if (workflow.aiMethod === 'segmentPerson') {
       return this.segmentPerson(inputs);
     }
+    if (workflow.aiMethod === 'detectPose') {
+      return this.detectPose(inputs);
+    }
     if (workflow.aiMethod === 'runCustomModel') {
       return this.runCustomModel(inputs);
     }
@@ -122,6 +135,47 @@ export class DefaultAiService {
       aiMethod: workflow.aiMethod,
       messageKey: 'feature_runtime_pending_adapter',
       detailText: ''
+    };
+  }
+
+  private async detectPose(inputs: AiRunInputs): Promise<AiRunResult> {
+    if (this.poseService === undefined) {
+      return {
+        ok: false,
+        code: 'NATIVE_ADAPTER_PENDING',
+        aiMethod: 'detectPose',
+        messageKey: 'feature_runtime_pending_adapter',
+        detailText: ''
+      };
+    }
+
+    const imageUri = inputs.imageUri ?? '';
+    if (imageUri.length === 0) {
+      return {
+        ok: false,
+        code: 'MISSING_INPUT',
+        aiMethod: 'detectPose',
+        messageKey: 'feature_runtime_missing_input',
+        detailText: ''
+      };
+    }
+
+    const result: PoseResult = await this.poseService.detectPose(imageUri);
+    if (!result.ok) {
+      return {
+        ok: false,
+        code: 'POSE_DETECTION_FAILED',
+        aiMethod: 'detectPose',
+        messageKey: 'feature_runtime_pose_failed',
+        detailText: this.poseSummary(result, imageUri)
+      };
+    }
+    return {
+      ok: true,
+      code: 'POSE_DETECTION_DONE',
+      aiMethod: 'detectPose',
+      messageKey: 'feature_runtime_pose_done',
+      detailText: this.poseSummary(result, imageUri)
     };
   }
 
@@ -509,6 +563,20 @@ export class DefaultAiService {
     if (modelUri.length > 0) {
       lines.push(`model=${this.lastPathSegment(modelUri)}`);
     }
+    return lines.join('\n');
+  }
+
+  private poseSummary(result: PoseResult, imageUri: string): string {
+    const lines: Array<string> = [
+      `image=${this.lastPathSegment(imageUri)}`,
+      `skeletonCount=${result.skeletonCount}`,
+      `pointCount=${result.pointCount}`,
+      `executionMs=${result.executionMs}`
+    ];
+    result.points.forEach((point: PosePoint, index: number) => {
+      lines.push(`${index + 1}. ${point.type} ${(point.score * 100).toFixed(2)}% ` +
+        `[${point.x.toFixed(0)},${point.y.toFixed(0)}]`);
+    });
     return lines.join('\n');
   }
 

@@ -50,6 +50,11 @@ import {
   SegmentationService
 } from './SegmentationService';
 import {
+  HarmonySkeletonDetectionRunner,
+  PoseRunner,
+  PoseService
+} from './PoseService';
+import {
   HarmonyTextRecognitionRunner,
   TextRecognitionRunner,
   TextRecognitionService,
@@ -72,6 +77,7 @@ export interface HarmonyImageClassificationRuntimeOptions {
   readonly textRecognitionRunner?: TextRecognitionRunner;
   readonly textTranslationRunner?: TextTranslationRunner;
   readonly segmentationRunner?: SegmentationRunner;
+  readonly poseRunner?: PoseRunner;
 }
 
 let cachedHarmonyDefaultAiService: Promise<DefaultAiService> | undefined = undefined;
@@ -145,6 +151,11 @@ export async function cachedRuntimeAiServiceForWorkflow(
       resourceManager: resourceManager
     });
   }
+  if (workflow.aiMethod === 'detectPose') {
+    return createRuntimeAiServiceForWorkflow(workflow, {
+      resourceManager: resourceManager
+    });
+  }
   return new DefaultAiService();
 }
 
@@ -184,6 +195,11 @@ export async function createRuntimeAiServiceForWorkflow(
   if (workflow.aiMethod === 'segmentPerson') {
     return new DefaultAiService({
       segmentationService: createHarmonySegmentationService(options)
+    });
+  }
+  if (workflow.aiMethod === 'detectPose') {
+    return new DefaultAiService({
+      poseService: createHarmonyPoseService(options)
     });
   }
   return new DefaultAiService();
@@ -292,6 +308,14 @@ export function createHarmonySegmentationService(
 ): SegmentationService {
   return new SegmentationService({
     runner: options.segmentationRunner ?? new HarmonySubjectSegmentationRunner()
+  });
+}
+
+export function createHarmonyPoseService(
+  options: HarmonyImageClassificationRuntimeOptions
+): PoseService {
+  return new PoseService({
+    runner: options.poseRunner ?? new HarmonySkeletonDetectionRunner()
   });
 }
 
