@@ -1,9 +1,11 @@
 import router from '@ohos.router';
 import { allExperienceFeatures, FeatureItem } from '../common/data/FeatureCatalog';
+import { AppStringKey, appString } from '../common/i18n/AppStrings';
 import { AppColor, AppSpacing } from '../common/theme/AppTheme';
 
 interface FeatureStubParams {
   title?: string;
+  titleKey?: AppStringKey;
   routeName?: string;
   url?: string;
 }
@@ -11,7 +13,8 @@ interface FeatureStubParams {
 @Entry
 @Component
 struct FeatureStubPage {
-  @State title: string = 'MindSpore Feature';
+  @State title: string = '';
+  @State titleKey: AppStringKey = 'feature_stub_title';
   @State routeName: string = '';
   @State sourceUrl: string = '';
 
@@ -20,17 +23,18 @@ struct FeatureStubPage {
     this.routeName = params?.routeName ?? '';
     this.sourceUrl = params?.url ?? '';
     const feature = allExperienceFeatures.find((item: FeatureItem) => item.routeName === this.routeName);
-    this.title = params?.title ?? feature?.title ?? this.title;
+    this.title = params?.title ?? feature?.title ?? '';
+    this.titleKey = params?.titleKey ?? feature?.titleKey ?? this.titleKey;
   }
 
   build() {
     Column() {
-      Text(this.title)
+      Text(this.titleKey === 'feature_stub_title' && this.title.length > 0 ? this.title : appString(this.titleKey))
         .fontSize(22)
         .fontWeight(FontWeight.Bold)
         .fontColor(AppColor.textPrimary)
         .textAlign(TextAlign.Center)
-      Text('Feature service migration is queued for the next implementation slice.')
+      Text(appString('feature_stub_message'))
         .fontSize(15)
         .fontColor(AppColor.textSecondary)
         .textAlign(TextAlign.Center)
@@ -42,7 +46,7 @@ struct FeatureStubPage {
           .textAlign(TextAlign.Center)
           .margin({ top: 12 })
       }
-      Button('Back')
+      Button(appString('action_back'))
         .margin({ top: 28 })
         .onClick(() => router.back())
     }

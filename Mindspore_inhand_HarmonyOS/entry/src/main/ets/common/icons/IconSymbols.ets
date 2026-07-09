@@ -1,0 +1,68 @@
+export function iconLabel(token: string): string {
+  switch (token) {
+    case 'rocket':
+      return 'E';
+    case 'college':
+      return 'C';
+    case 'me':
+      return 'M';
+    case 'people':
+      return 'P';
+    case 'image':
+      return 'S';
+    case 'grid':
+      return 'I';
+    case 'hand':
+      return 'G';
+    case 'dance':
+      return 'D';
+    case 'poetry':
+      return 'Po';
+    case 'text':
+      return 'T';
+    case 'translate':
+      return 'Tr';
+    case 'photo':
+      return 'O';
+    case 'camera':
+      return 'R';
+    case 'style':
+      return 'St';
+    case 'model':
+      return 'M';
+    case 'summary':
+      return 'S';
+    case 'cloud':
+      return 'C';
+    case 'new':
+      return 'Q';
+    case 'train':
+      return 'T';
+    case 'inference':
+      return 'I';
+    case 'app':
+      return 'A';
+    case 'video':
+      return 'V';
+    case 'faq':
+      return '?';
+    case 'forum':
+      return 'F';
+    case 'share':
+      return 'S';
+    case 'qr':
+      return 'QR';
+    case 'star':
+      return '*';
+    case 'official':
+      return 'W';
+    case 'code':
+      return '<>';
+    case 'feedback':
+      return 'F';
+    case 'version':
+      return 'V';
+    default:
+      return token.length <= 2 ? token : token.substring(0, 2).toUpperCase();
+  }
+}

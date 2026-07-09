@@ -1,0 +1,226 @@
+export type AppStringKey =
+  'empty' |
+  'module_desc' |
+  'EntryAbility_desc' |
+  'EntryAbility_label' |
+  'main_tab_title_one' |
+  'main_tab_title_two' |
+  'main_tab_title_three' |
+  'tab_experience_one' |
+  'tab_speech_two' |
+  'experience_head_title' |
+  'experience_head_subtitle' |
+  'college_head_title' |
+  'college_head_subtitle' |
+  'me_head_title' |
+  'me_head_subtitle' |
+  'mindspore_college_title' |
+  'account_title' |
+  'feature_stub_title' |
+  'feature_stub_message' |
+  'action_back' |
+  'confirm' |
+  'title_button_text_angle' |
+  'title_pose_net' |
+  'title_segmentation' |
+  'title_image' |
+  'title_gesture_recognition' |
+  'title_dance' |
+  'title_intelligent_poetry' |
+  'title_text_extraction' |
+  'title_texttranslation' |
+  'title_object' |
+  'title_object_camera' |
+  'title_style_transfer' |
+  'title_custom_model' |
+  'college_summary_title' |
+  'college_cloud_title' |
+  'college_quick_title' |
+  'college_train_title' |
+  'college_execute_title' |
+  'college_app_title' |
+  'college_video_title' |
+  'college_faq_title' |
+  'college_ask_title' |
+  'college_light_title' |
+  'college_dialog_content' |
+  'me_share_title' |
+  'me_my_qr_code' |
+  'me_up_title' |
+  'me_official_title' |
+  'me_official_code_title' |
+  'me_qa_title' |
+  'me_version_title' |
+  'title_source';
+
+const APP_STRING_KEYS: AppStringKey[] = [
+  'empty',
+  'module_desc',
+  'EntryAbility_desc',
+  'EntryAbility_label',
+  'main_tab_title_one',
+  'main_tab_title_two',
+  'main_tab_title_three',
+  'tab_experience_one',
+  'tab_speech_two',
+  'experience_head_title',
+  'experience_head_subtitle',
+  'college_head_title',
+  'college_head_subtitle',
+  'me_head_title',
+  'me_head_subtitle',
+  'mindspore_college_title',
+  'account_title',
+  'feature_stub_title',
+  'feature_stub_message',
+  'action_back',
+  'confirm',
+  'title_button_text_angle',
+  'title_pose_net',
+  'title_segmentation',
+  'title_image',
+  'title_gesture_recognition',
+  'title_dance',
+  'title_intelligent_poetry',
+  'title_text_extraction',
+  'title_texttranslation',
+  'title_object',
+  'title_object_camera',
+  'title_style_transfer',
+  'title_custom_model',
+  'college_summary_title',
+  'college_cloud_title',
+  'college_quick_title',
+  'college_train_title',
+  'college_execute_title',
+  'college_app_title',
+  'college_video_title',
+  'college_faq_title',
+  'college_ask_title',
+  'college_light_title',
+  'college_dialog_content',
+  'me_share_title',
+  'me_my_qr_code',
+  'me_up_title',
+  'me_official_title',
+  'me_official_code_title',
+  'me_qa_title',
+  'me_version_title',
+  'title_source'
+];
+
+export function hasAppStringKey(key: AppStringKey): boolean {
+  return APP_STRING_KEYS.indexOf(key) >= 0;
+}
+
+export function appString(key: AppStringKey): ResourceStr {
+  switch (key) {
+    case 'module_desc':
+      return $r('app.string.module_desc');
+    case 'EntryAbility_desc':
+      return $r('app.string.EntryAbility_desc');
+    case 'EntryAbility_label':
+      return $r('app.string.EntryAbility_label');
+    case 'main_tab_title_one':
+      return $r('app.string.main_tab_title_one');
+    case 'main_tab_title_two':
+      return $r('app.string.main_tab_title_two');
+    case 'main_tab_title_three':
+      return $r('app.string.main_tab_title_three');
+    case 'tab_experience_one':
+      return $r('app.string.tab_experience_one');
+    case 'tab_speech_two':
+      return $r('app.string.tab_speech_two');
+    case 'experience_head_title':
+      return $r('app.string.experience_head_title');
+    case 'experience_head_subtitle':
+      return $r('app.string.experience_head_subtitle');
+    case 'college_head_title':
+      return $r('app.string.college_head_title');
+    case 'college_head_subtitle':
+      return $r('app.string.college_head_subtitle');
+    case 'me_head_title':
+      return $r('app.string.me_head_title');
+    case 'me_head_subtitle':
+      return $r('app.string.me_head_subtitle');
+    case 'mindspore_college_title':
+      return $r('app.string.mindspore_college_title');
+    case 'account_title':
+      return $r('app.string.account_title');
+    case 'feature_stub_title':
+      return $r('app.string.feature_stub_title');
+    case 'feature_stub_message':
+      return $r('app.string.feature_stub_message');
+    case 'action_back':
+      return $r('app.string.action_back');
+    case 'confirm':
+      return $r('app.string.confirm');
+    case 'title_button_text_angle':
+      return $r('app.string.title_button_text_angle');
+    case 'title_pose_net':
+      return $r('app.string.title_pose_net');
+    case 'title_segmentation':
+      return $r('app.string.title_segmentation');
+    case 'title_image':
+      return $r('app.string.title_image');
+    case 'title_gesture_recognition':
+      return $r('app.string.title_gesture_recognition');
+    case 'title_dance':
+      return $r('app.string.title_dance');
+    case 'title_intelligent_poetry':
+      return $r('app.string.title_intelligent_poetry');
+    case 'title_text_extraction':
+      return $r('app.string.title_text_extraction');
+    case 'title_texttranslation':
+      return $r('app.string.title_texttranslation');
+    case 'title_object':
+      return $r('app.string.title_object');
+    case 'title_object_camera':
+      return $r('app.string.title_object_camera');
+    case 'title_style_transfer':
+      return $r('app.string.title_style_transfer');
+    case 'title_custom_model':
+      return $r('app.string.title_custom_model');
+    case 'college_summary_title':
+      return $r('app.string.college_summary_title');
+    case 'college_cloud_title':
+      return $r('app.string.college_cloud_title');
+    case 'college_quick_title':
+      return $r('app.string.college_quick_title');
+    case 'college_train_title':
+      return $r('app.string.college_train_title');
+    case 'college_execute_title':
+      return $r('app.string.college_execute_title');
+    case 'college_app_title':
+      return $r('app.string.college_app_title');
+    case 'college_video_title':
+      return $r('app.string.college_video_title');
+    case 'college_faq_title':
+      return $r('app.string.college_faq_title');
+    case 'college_ask_title':
+      return $r('app.string.college_ask_title');
+    case 'college_light_title':
+      return $r('app.string.college_light_title');
+    case 'college_dialog_content':
+      return $r('app.string.college_dialog_content');
+    case 'me_share_title':
+      return $r('app.string.me_share_title');
+    case 'me_my_qr_code':
+      return $r('app.string.me_my_qr_code');
+    case 'me_up_title':
+      return $r('app.string.me_up_title');
+    case 'me_official_title':
+      return $r('app.string.me_official_title');
+    case 'me_official_code_title':
+      return $r('app.string.me_official_code_title');
+    case 'me_qa_title':
+      return $r('app.string.me_qa_title');
+    case 'me_version_title':
+      return $r('app.string.me_version_title');
+    case 'title_source':
+      return $r('app.string.title_source');
+    case 'empty':
+    default:
+      return '';
+  }
+}

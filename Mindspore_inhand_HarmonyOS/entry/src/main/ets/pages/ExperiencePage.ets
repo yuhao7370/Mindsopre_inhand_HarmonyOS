@@ -17,7 +17,8 @@ export struct ExperiencePage {
       url: route.page,
       params: {
         routeName: item.routeName,
-        title: item.title
+        title: item.title,
+        titleKey: item.titleKey
       }
     });
   }
@@ -26,13 +27,13 @@ export struct ExperiencePage {
     Scroll() {
       Column() {
         GradientTitleBar({
-          title: 'Experience',
-          subtitle: 'AI demos ready for the HarmonyOS shell'
+          titleKey: 'experience_head_title',
+          subtitleKey: 'experience_head_subtitle'
         })
         Column() {
           ForEach(visibleExperienceSections, (section: FeatureSection) => {
             Column() {
-              SectionTitle({ title: section.title })
+              SectionTitle({ titleKey: section.titleKey })
               Column() {
                 ForEach(section.items, (item: FeatureItem) => {
                   FeatureCard({

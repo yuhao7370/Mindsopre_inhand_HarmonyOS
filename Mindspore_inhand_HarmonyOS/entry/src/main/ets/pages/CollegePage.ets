@@ -5,17 +5,19 @@ import {
   collegeItems,
   CollegeItem,
   CollegeQuickAction,
-  mindSporeSummary
+  isCollegeItemUrlNavigable
 } from '../common/data/CollegeCatalog';
+import { iconLabel } from '../common/icons/IconSymbols';
+import { AppStringKey, appString } from '../common/i18n/AppStrings';
 import { AppColor, AppRadius, AppSpacing } from '../common/theme/AppTheme';
 
 @Component
 export struct CollegePage {
-  private openStub(title: string, url: string): void {
+  private openStub(titleKey: AppStringKey, url: string): void {
     router.pushUrl({
       url: 'pages/FeatureStubPage',
       params: {
-        title: title,
+        titleKey: titleKey,
         url: url
       }
     });
@@ -23,10 +25,10 @@ export struct CollegePage {
 
   private showSummary(): void {
     AlertDialog.show({
-      title: 'MindSpore Summary',
-      message: mindSporeSummary,
+      title: appString('college_summary_title'),
+      message: appString('college_dialog_content'),
       primaryButton: {
-        value: 'OK',
+        value: appString('confirm'),
         action: () => {}
       }
     });
@@ -35,34 +37,54 @@ export struct CollegePage {
   @Builder
   quickActionCard(action: CollegeQuickAction) {
     Column() {
-      Text(action.icon)
-        .fontSize(22)
-      Text(action.title)
+      Text(iconLabel(action.icon))
+        .fontSize(13)
+        .fontWeight(FontWeight.Bold)
+        .fontColor(Color.White)
+        .width(28)
+        .height(28)
+        .backgroundColor(AppColor.accent)
+        .borderRadius(14)
+        .textAlign(TextAlign.Center)
+        .maxLines(1)
+      Text(appString(action.titleKey))
         .fontSize(12)
         .fontColor(AppColor.textPrimary)
         .textAlign(TextAlign.Center)
+        .maxLines(1)
         .margin({ top: AppSpacing.sm })
     }
     .width('22%')
     .padding({ top: AppSpacing.md, bottom: AppSpacing.md, left: AppSpacing.xs, right: AppSpacing.xs })
     .backgroundColor(AppColor.cardBackground)
     .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
-    .onClick(() => this.openStub(action.title, action.url))
+    .onClick(() => this.openStub(action.titleKey, action.url))
   }
 
   @Builder
   collegeRow(item: CollegeItem) {
     Row() {
-      Text(item.icon)
-        .fontSize(22)
+      Text(iconLabel(item.icon))
+        .fontSize(13)
+        .fontWeight(FontWeight.Bold)
+        .fontColor(Color.White)
         .width(32)
-      Text(item.title)
+        .height(32)
+        .backgroundColor(AppColor.accent)
+        .borderRadius(16)
+        .textAlign(TextAlign.Center)
+        .maxLines(1)
+        .margin({ right: 8 })
+      Text(appString(item.titleKey))
         .fontSize(15)
         .fontColor(AppColor.textPrimary)
         .layoutWeight(1)
-      Text('>')
-        .fontSize(14)
-        .fontColor(AppColor.textMuted)
+        .maxLines(1)
+      if (item.type === 'summary' || isCollegeItemUrlNavigable(item)) {
+        Text('>')
+          .fontSize(14)
+          .fontColor(AppColor.textMuted)
+      }
     }
     .width('100%')
     .padding({ left: AppSpacing.md, right: AppSpacing.md, top: AppSpacing.md, bottom: AppSpacing.md })
@@ -73,7 +95,9 @@ export struct CollegePage {
         this.showSummary();
         return;
       }
-      this.openStub(item.title, item.url ?? '');
+      if (isCollegeItemUrlNavigable(item)) {
+        this.openStub(item.titleKey, item.url ?? '');
+      }
     })
   }
 
@@ -81,15 +105,15 @@ export struct CollegePage {
     Scroll() {
       Column() {
         GradientTitleBar({
-          title: 'College',
-          subtitle: 'Learning resources and quick-start links'
+          titleKey: 'college_head_title',
+          subtitleKey: 'college_head_subtitle'
         })
         Column() {
-          SectionTitle({ title: 'MindSpore College' })
+          SectionTitle({ titleKey: 'mindspore_college_title' })
           Column() {
             ForEach(collegeItems, (item: CollegeItem) => {
               if (item.type === 'footer') {
-                Text(item.title)
+                Text(appString(item.titleKey))
                   .width('100%')
                   .fontSize(13)
                   .fontColor(AppColor.textMuted)

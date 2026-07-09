@@ -1,6 +1,8 @@
 import { GradientTitleBar } from '../common/components/GradientTitleBar';
 import { SectionTitle } from '../common/components/SectionTitle';
 import { MeItem, visibleMeItems } from '../common/data/MeCatalog';
+import { iconLabel } from '../common/icons/IconSymbols';
+import { appString } from '../common/i18n/AppStrings';
 import { AppColor, AppRadius, AppSpacing } from '../common/theme/AppTheme';
 
 @Component
@@ -15,13 +17,22 @@ export struct MePage {
   @Builder
   meRow(item: MeItem) {
     Row() {
-      Text(item.icon)
-        .fontSize(22)
+      Text(iconLabel(item.icon))
+        .fontSize(13)
+        .fontWeight(FontWeight.Bold)
+        .fontColor(Color.White)
         .width(32)
-      Text(item.title)
+        .height(32)
+        .backgroundColor(AppColor.accent)
+        .borderRadius(16)
+        .textAlign(TextAlign.Center)
+        .maxLines(1)
+        .margin({ right: 8 })
+      Text(appString(item.titleKey))
         .fontSize(15)
         .fontColor(AppColor.textPrimary)
         .layoutWeight(1)
+        .maxLines(1)
       Text(this.valueForItem(item))
         .fontSize(13)
         .fontColor(AppColor.textSecondary)
@@ -36,11 +47,11 @@ export struct MePage {
     Scroll() {
       Column() {
         GradientTitleBar({
-          title: 'Me',
-          subtitle: 'Profile and app information'
+          titleKey: 'me_head_title',
+          subtitleKey: 'me_head_subtitle'
         })
         Column() {
-          SectionTitle({ title: 'Account' })
+          SectionTitle({ titleKey: 'account_title' })
           Column() {
             ForEach(visibleMeItems, (item: MeItem) => {
               Column() {
