@@ -18,6 +18,7 @@ export const collegeQuickVideoUrl: string =
   `${mindSporeBaseUrl}/tutorial/training/zh-CN/master/quick_start/quick_video.html`;
 export const collegeMainFaqUrl: string = `${mindSporeBaseUrl}/doc/faq/zh-CN/master/index.html`;
 export const collegeMainAskUrl: string = 'https://bbs.huaweicloud.com/forum/forum-1076-1.html';
+export const intelligentPoetryUrl: string = `${mindSporeBaseUrl}/resources/tech/nlp/poetry`;
 
 export const meApkUrl: string = 'https://download.mindspore.cn/model_zoo/official/lite/apk/mindmain.html';
 export const meHelpUrl: string =
@@ -49,8 +50,19 @@ const WEB_DESTINATION_MAPPINGS: WebDestinationMapping[] = [
   { sourceUrl: meStarUrl, titleKey: 'me_up_title' },
   { sourceUrl: mindSporeBaseUrl, titleKey: 'me_official_title' },
   { sourceUrl: meCodeUrl, titleKey: 'me_official_code_title' },
-  { sourceUrl: meHelpUrl, titleKey: 'me_qa_title' }
+  { sourceUrl: meHelpUrl, titleKey: 'me_qa_title' },
+  { sourceUrl: intelligentPoetryUrl, titleKey: 'title_intelligent_poetry' }
 ];
+
+export function webUrlForRouteName(routeName: string): string | undefined {
+  if (routeName === '/app/PrivacyPolicyActivity') {
+    return userPrivacyRulesUrl;
+  }
+  if (routeName === '/app/IntelligentPoetryWritingActivity') {
+    return intelligentPoetryUrl;
+  }
+  return undefined;
+}
 
 export function webDestinationForUrl(url: string, fallbackTitleKey: AppStringKey): WebDestination {
   const mapping = WEB_DESTINATION_MAPPINGS.find((item: WebDestinationMapping) => item.sourceUrl === url);

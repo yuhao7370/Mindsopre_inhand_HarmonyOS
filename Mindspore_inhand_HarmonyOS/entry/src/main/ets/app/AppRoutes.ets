@@ -45,7 +45,7 @@ export const AppRoute: AppRouteCatalog = {
   TEXT_RECOGNITION: { name: '/hms/TextRecognitionActivity', page: 'pages/FeatureRuntimePage' } as AppRouteInfo,
   TEXT_TRANSLATION: { name: '/hms/TextTranslationActivity', page: 'pages/FeatureRuntimePage' } as AppRouteInfo,
   DANCE: { name: '/dance/DanceMainActivity', page: 'pages/FeatureRuntimePage' } as AppRouteInfo,
-  POETRY: { name: '/app/IntelligentPoetryWritingActivity', page: 'pages/FeatureRuntimePage' } as AppRouteInfo,
+  POETRY: { name: '/app/IntelligentPoetryWritingActivity', page: webPagePath } as AppRouteInfo,
   MY_QR_CODE: { name: '/app/MyQRCodeActivity', page: 'pages/QrCodePage' } as AppRouteInfo,
   WEB: { name: '/app/WebViewUtilsActivity', page: webPagePath } as AppRouteInfo,
   PRIVACY: { name: '/app/PrivacyPolicyActivity', page: webPagePath } as AppRouteInfo

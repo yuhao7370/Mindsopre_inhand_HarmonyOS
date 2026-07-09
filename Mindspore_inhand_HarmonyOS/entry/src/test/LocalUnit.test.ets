@@ -146,8 +146,10 @@ import {
 import {
   collegeMainCloudUrl,
   harmonyPrivacyRawfile,
+  intelligentPoetryUrl,
   userPrivacyRulesUrl,
   webDestinationForUrl,
+  webUrlForRouteName,
   webPagePath
 } from '../main/ets/common/data/WebDestination';
 import { collegeItems, isCollegeItemUrlNavigable } from '../main/ets/common/data/CollegeCatalog';
@@ -622,6 +624,13 @@ export default function localUnitTest() {
       if (qrItem) {
         expect(qrItem.page).assertEqual(AppRoute.MY_QR_CODE.page);
       }
+    });
+
+    it('routesIntelligentPoetryToOriginalWebExperience', 0, () => {
+      expect(AppRoute.POETRY.page).assertEqual(webPagePath);
+      expect(webUrlForRouteName(AppRoute.POETRY.name)).assertEqual(intelligentPoetryUrl);
+      const poetryDestination = webDestinationForUrl(intelligentPoetryUrl, 'me_official_title');
+      expect(poetryDestination.titleKey).assertEqual('title_intelligent_poetry');
     });
 
     it('definesRuntimeWorkflowForEveryVisibleExperienceFeature', 0, () => {

@@ -6,6 +6,7 @@ import {
   mindSporeBaseUrl,
   userPrivacyRulesUrl,
   webDestinationForUrl,
+  webUrlForRouteName,
   WebDestination
 } from '../common/data/WebDestination';
 
@@ -28,7 +29,7 @@ struct WebPage {
   aboutToAppear() {
     const params = router.getParams() as WebPageParams;
     const fallbackTitleKey: AppStringKey = params?.titleKey ?? 'me_official_title';
-    const sourceUrl = params?.url ?? (params?.routeName === '/app/PrivacyPolicyActivity' ? userPrivacyRulesUrl : mindSporeBaseUrl);
+    const sourceUrl = params?.url ?? webUrlForRouteName(params?.routeName ?? '') ?? mindSporeBaseUrl;
     const destination: WebDestination = webDestinationForUrl(sourceUrl, fallbackTitleKey);
     this.titleKey = destination.titleKey;
     this.webUrl = destination.url;
