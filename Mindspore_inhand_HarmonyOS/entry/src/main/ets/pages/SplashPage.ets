@@ -3,6 +3,7 @@ import router from '@ohos.router';
 import { userPrivacyRulesUrl, webPagePath } from '../common/data/WebDestination';
 import { appString } from '../common/i18n/AppStrings';
 import { AppColor, AppRadius, AppSpacing } from '../common/theme/AppTheme';
+import { PermissionService } from '../services/permissions/PermissionService';
 import {
   HarmonyPrivacyConsentStore,
   PrivacyConsentService
@@ -19,7 +20,7 @@ export struct SplashPage {
   aboutToAppear() {
     const service = this.privacyConsentService();
     if (service !== undefined && service.hasAcceptedPrivacy()) {
-      this.startCountdown();
+      this.requestStartupPermissionsThenEnter();
       return;
     }
     this.showPrivacyDialog = true;
@@ -72,6 +73,17 @@ export struct SplashPage {
     }
   }
 
+  private requestStartupPermissionsThenEnter(): void {
+    const context = this.uiAbilityContext();
+    if (context === undefined) {
+      this.startCountdown();
+      return;
+    }
+    new PermissionService().requestStartup(context).then(() => {
+      this.startCountdown();
+    });
+  }
+
   private finishSplash(): void {
     this.stopCountdown();
     this.onFinished();
@@ -83,7 +95,7 @@ export struct SplashPage {
       service.acceptPrivacy();
     }
     this.showPrivacyDialog = false;
-    this.startCountdown();
+    this.requestStartupPermissionsThenEnter();
   }
 
   private declinePrivacy(): void {

@@ -128,7 +128,8 @@ import {
 import { FeatureWorkflow, workflowForRoute } from '../main/ets/features/runtime/FeatureWorkflowCatalog';
 import {
   declaredPermissionNames,
-  runtimePermissionNamesForWorkflow
+  runtimePermissionNamesForWorkflow,
+  startupPermissionNames
 } from '../main/ets/services/permissions/PermissionService';
 import {
   inputActionForKind,
@@ -2073,6 +2074,14 @@ export default function localUnitTest() {
       expect(permissionNames.indexOf('ohos.permission.READ_IMAGEVIDEO') >= 0).assertTrue();
       expect(permissionNames.indexOf('ohos.permission.INTERNET')).assertEqual(-1);
       expect(declaredPermissionNames.indexOf('ohos.permission.INTERNET') >= 0).assertTrue();
+    });
+
+    it('requestsAndroidStartupRuntimePermissionsWithoutInternet', 0, () => {
+      const permissionNames = startupPermissionNames();
+      expect(permissionNames.length).assertEqual(2);
+      expect(permissionNames.indexOf('ohos.permission.CAMERA') >= 0).assertTrue();
+      expect(permissionNames.indexOf('ohos.permission.READ_IMAGEVIDEO') >= 0).assertTrue();
+      expect(permissionNames.indexOf('ohos.permission.INTERNET')).assertEqual(-1);
     });
 
     it('mapsWorkflowInputsToPickerActions', 0, () => {

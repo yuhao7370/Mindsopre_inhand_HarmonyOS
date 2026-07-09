@@ -41,9 +41,26 @@ export function runtimePermissionNamesForWorkflow(workflow: FeatureWorkflow): Ar
   return names;
 }
 
+export function startupPermissionNames(): Array<Permissions> {
+  return [
+    cameraPermissionName,
+    mediaPermissionName
+  ];
+}
+
 export class PermissionService {
+  async requestStartup(context: common.UIAbilityContext): Promise<PermissionRequestSummary> {
+    return this.requestPermissionNames(context, startupPermissionNames());
+  }
+
   async requestForWorkflow(context: common.UIAbilityContext, workflow: FeatureWorkflow): Promise<PermissionRequestSummary> {
-    const permissionNames = runtimePermissionNamesForWorkflow(workflow);
+    return this.requestPermissionNames(context, runtimePermissionNamesForWorkflow(workflow));
+  }
+
+  private async requestPermissionNames(
+    context: common.UIAbilityContext,
+    permissionNames: Array<Permissions>
+  ): Promise<PermissionRequestSummary> {
     if (permissionNames.length === 0) {
       return { ok: true, requested: [] };
     }
