@@ -16,6 +16,7 @@ export const styleTransferModelDownloadUrl: string =
 export const styleTransferStyleImageSize: number = 256;
 export const styleTransferContentImageSize: number = 384;
 export const styleTransferChannels: number = 3;
+export const styleTransferMindSporeCpuThreadNum: number = 4;
 export const styleTransferOutputFloatCount: number =
   styleTransferContentImageSize * styleTransferContentImageSize * styleTransferChannels;
 export const builtInStyleTransferStyleCount: number = 19;
@@ -233,7 +234,10 @@ export class MindSporeLiteStyleTransferTensorRunner implements StyleTransferTens
         return this.cachedSelectedPredictModel;
       }
       const content = await this.modelFileReader.readFileContent(modelUri);
-      const model = await mindSporeLite.loadModelFromBuffer(rawfileContentToArrayBuffer(content), mindSporeLiteCpuContext());
+      const model = await mindSporeLite.loadModelFromBuffer(
+        rawfileContentToArrayBuffer(content),
+        mindSporeLiteCpuContext(styleTransferMindSporeCpuThreadNum)
+      );
       this.cachedPredictModelUri = modelUri;
       this.cachedSelectedPredictModel = model;
       return model;
@@ -243,7 +247,10 @@ export class MindSporeLiteStyleTransferTensorRunner implements StyleTransferTens
     }
 
     const content = await this.resourceManager.getRawFileContent(this.predictModelRawfilePath);
-    const model = await mindSporeLite.loadModelFromBuffer(rawfileContentToArrayBuffer(content), mindSporeLiteCpuContext());
+    const model = await mindSporeLite.loadModelFromBuffer(
+      rawfileContentToArrayBuffer(content),
+      mindSporeLiteCpuContext(styleTransferMindSporeCpuThreadNum)
+    );
     this.cachedPredictModel = model;
     return model;
   }
@@ -254,7 +261,10 @@ export class MindSporeLiteStyleTransferTensorRunner implements StyleTransferTens
         return this.cachedSelectedTransferModel;
       }
       const content = await this.modelFileReader.readFileContent(modelUri);
-      const model = await mindSporeLite.loadModelFromBuffer(rawfileContentToArrayBuffer(content), mindSporeLiteCpuContext());
+      const model = await mindSporeLite.loadModelFromBuffer(
+        rawfileContentToArrayBuffer(content),
+        mindSporeLiteCpuContext(styleTransferMindSporeCpuThreadNum)
+      );
       this.cachedTransferModelUri = modelUri;
       this.cachedSelectedTransferModel = model;
       return model;
@@ -264,7 +274,10 @@ export class MindSporeLiteStyleTransferTensorRunner implements StyleTransferTens
     }
 
     const content = await this.resourceManager.getRawFileContent(this.transferModelRawfilePath);
-    const model = await mindSporeLite.loadModelFromBuffer(rawfileContentToArrayBuffer(content), mindSporeLiteCpuContext());
+    const model = await mindSporeLite.loadModelFromBuffer(
+      rawfileContentToArrayBuffer(content),
+      mindSporeLiteCpuContext(styleTransferMindSporeCpuThreadNum)
+    );
     this.cachedTransferModel = model;
     return model;
   }

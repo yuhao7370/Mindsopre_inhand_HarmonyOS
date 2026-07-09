@@ -11,11 +11,11 @@ export interface MindSporeLiteModelRunnerOptions {
 
 export const mindSporeLiteCpuThreadNum: number = 2;
 
-export function mindSporeLiteCpuContext(): mindSporeLite.Context {
+export function mindSporeLiteCpuContext(threadNum: number = mindSporeLiteCpuThreadNum): mindSporeLite.Context {
   return {
     target: ['cpu'],
     cpu: {
-      threadNum: mindSporeLiteCpuThreadNum
+      threadNum: threadNum
     }
   };
 }

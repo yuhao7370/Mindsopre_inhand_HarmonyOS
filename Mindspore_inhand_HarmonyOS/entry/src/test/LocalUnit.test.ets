@@ -51,6 +51,7 @@ import {
   StyleTransferTensorOutput,
   StyleTransferTensorRunner,
   StyleTransferMindSporeRunner,
+  styleTransferMindSporeCpuThreadNum,
   stylePredictModelDownloadUrl,
   stylePredictModelRawfilePath,
   styleTransferContentImageSize,
@@ -1836,6 +1837,12 @@ export default function localUnitTest() {
       expect(styleTransferModelRawfilePath).assertEqual('model/style_transfer_quant.ms');
       expect(stylePredictModelDownloadUrl).assertEqual('https://download.mindspore.cn/model_zoo/official/lite/style_lite/style_predict_quant.ms');
       expect(styleTransferModelDownloadUrl).assertEqual('https://download.mindspore.cn/model_zoo/official/lite/style_lite/style_transfer_quant.ms');
+    });
+
+    it('usesAndroidStyleTransferMindSporeCpuThreadContract', 0, () => {
+      const context = mindSporeLiteCpuContext(styleTransferMindSporeCpuThreadNum);
+      expect(styleTransferMindSporeCpuThreadNum).assertEqual(4);
+      expect(context.cpu!.threadNum).assertEqual(4);
     });
 
     it('definesAndroidStyleTransferPreprocessContract', 0, () => {
