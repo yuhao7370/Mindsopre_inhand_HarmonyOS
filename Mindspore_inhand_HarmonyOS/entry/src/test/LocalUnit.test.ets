@@ -1593,6 +1593,10 @@ export default function localUnitTest() {
       expect(result.messageKey).assertEqual('feature_runtime_translation_unsupported');
       expect(result.detailText.indexOf('targetLanguage=zh') >= 0).assertTrue();
       expect(result.detailText.indexOf('source=MindSpore') >= 0).assertTrue();
+      expect(result.data?.kind).assertEqual('textTranslation');
+      expect(aiRunResultRows(result)[1].labelKey).assertEqual('feature_runtime_result_text');
+      expect(aiRunResultRows(result)[1].value).assertEqual('MindSpore\n');
+      expect(copyableTextForAiResult('translateText', aiRunResultRows(result))).assertEqual('MindSpore\n');
       expect(recognitionRunner.seenImageUris[0]).assertEqual('file://selected/text.jpg');
     });
 

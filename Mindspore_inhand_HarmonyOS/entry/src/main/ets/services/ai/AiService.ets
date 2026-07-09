@@ -533,17 +533,22 @@ export class DefaultAiService {
   }
 
   private translationUnsupportedResult(text: string): AiRunResult {
+    const result: TextTranslationResult = {
+      ok: false,
+      sourceText: text,
+      translatedText: '',
+      targetLanguage: text.length > 0 ? androidDefaultTranslationTargetLanguage(text) : ''
+    };
     return {
       ok: false,
       code: 'PLATFORM_UNSUPPORTED',
       aiMethod: 'translateText',
       messageKey: 'feature_runtime_translation_unsupported',
-      detailText: text.length > 0 ? this.textTranslationSummary({
-        ok: false,
-        sourceText: text,
-        translatedText: '',
-        targetLanguage: androidDefaultTranslationTargetLanguage(text)
-      }) : ''
+      detailText: text.length > 0 ? this.textTranslationSummary(result) : '',
+      data: text.length > 0 ? {
+        kind: 'textTranslation',
+        result: result
+      } : undefined
     };
   }
 
@@ -985,11 +990,14 @@ export function aiRunResultRows(result: AiRunResult): Array<AiRunResultRow> {
         resultRow('feature_runtime_result_text', data.result.text)
       ];
     case 'textTranslation':
-      return [
+      const translationRows: Array<AiRunResultRow> = [
         resultRow('feature_runtime_result_target_language', data.result.targetLanguage),
-        resultRow('feature_runtime_result_text', data.result.sourceText),
-        resultRow('feature_runtime_result_translated_text', data.result.translatedText)
+        resultRow('feature_runtime_result_text', data.result.sourceText)
       ];
+      if (data.result.translatedText.length > 0) {
+        translationRows.push(resultRow('feature_runtime_result_translated_text', data.result.translatedText));
+      }
+      return translationRows;
     case 'segmentation':
       const segmentationRows: Array<AiRunResultRow> = [
         resultRow('feature_runtime_result_subjects', `${data.result.subjectCount}`),
@@ -1083,7 +1091,8 @@ export function copyableTextForAiResult(aiMethod: string, rows: Array<AiRunResul
     return resultRowValue(rows, 'feature_runtime_result_text');
   }
   if (aiMethod === 'translateText') {
-    return resultRowValue(rows, 'feature_runtime_result_translated_text');
+    const translatedText = resultRowValue(rows, 'feature_runtime_result_translated_text');
+    return translatedText.length > 0 ? translatedText : resultRowValue(rows, 'feature_runtime_result_text');
   }
   return '';
 }
