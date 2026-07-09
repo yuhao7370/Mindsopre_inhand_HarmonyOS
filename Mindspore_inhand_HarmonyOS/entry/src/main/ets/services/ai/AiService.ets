@@ -27,6 +27,7 @@ import {
   PoseService
 } from './PoseService';
 import {
+  androidDefaultTranslationTargetLanguage,
   TextRecognitionResult,
   TextRecognitionService,
   TextTranslationResult,
@@ -351,21 +352,14 @@ export class DefaultAiService {
   }
 
   private async translateText(inputs: AiRunInputs): Promise<AiRunResult> {
-    if (this.textTranslationService === undefined) {
-      return this.platformUnsupportedResult('translateText', 'feature_runtime_translation_unsupported');
-    }
-
     let text = inputs.text ?? '';
     const imageUri = inputs.imageUri ?? '';
     if (text.length === 0 && imageUri.length > 0) {
       if (this.textRecognitionService === undefined) {
-        return {
-          ok: false,
-          code: 'NATIVE_ADAPTER_PENDING',
-          aiMethod: 'translateText',
-          messageKey: 'feature_runtime_pending_adapter',
-          detailText: ''
-        };
+        if (this.textTranslationService === undefined) {
+          return this.translationUnsupportedResult('');
+        }
+        return this.pendingAdapterResult('translateText');
       }
       const recognitionResult: TextRecognitionResult = await this.textRecognitionService.recognizeText(imageUri);
       if (!recognitionResult.ok || recognitionResult.text.length === 0) {
@@ -379,6 +373,7 @@ export class DefaultAiService {
       }
       text = recognitionResult.text;
     }
+
     if (text.length === 0) {
       return {
         ok: false,
@@ -387,6 +382,10 @@ export class DefaultAiService {
         messageKey: 'feature_runtime_missing_input',
         detailText: ''
       };
+    }
+
+    if (this.textTranslationService === undefined) {
+      return this.translationUnsupportedResult(text);
     }
 
     const result: TextTranslationResult = await this.textTranslationService.translateText(text);
@@ -409,6 +408,31 @@ export class DefaultAiService {
         kind: 'textTranslation',
         result: result
       }
+    };
+  }
+
+  private translationUnsupportedResult(text: string): AiRunResult {
+    return {
+      ok: false,
+      code: 'PLATFORM_UNSUPPORTED',
+      aiMethod: 'translateText',
+      messageKey: 'feature_runtime_translation_unsupported',
+      detailText: text.length > 0 ? this.textTranslationSummary({
+        ok: false,
+        sourceText: text,
+        translatedText: '',
+        targetLanguage: androidDefaultTranslationTargetLanguage(text)
+      }) : ''
+    };
+  }
+
+  private pendingAdapterResult(aiMethod: string): AiRunResult {
+    return {
+      ok: false,
+      code: 'NATIVE_ADAPTER_PENDING',
+      aiMethod: aiMethod,
+      messageKey: 'feature_runtime_pending_adapter',
+      detailText: ''
     };
   }
 

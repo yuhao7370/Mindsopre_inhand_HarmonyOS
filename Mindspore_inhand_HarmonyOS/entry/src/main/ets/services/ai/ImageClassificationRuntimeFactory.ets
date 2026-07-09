@@ -187,10 +187,15 @@ export async function createRuntimeAiServiceForWorkflow(
       textRecognitionService: createHarmonyTextRecognitionService(options)
     });
   }
-  if (workflow.aiMethod === 'translateText' && options.textTranslationRunner !== undefined) {
+  if (workflow.aiMethod === 'translateText') {
+    if (options.textTranslationRunner !== undefined) {
+      return new DefaultAiService({
+        textRecognitionService: createHarmonyTextRecognitionService(options),
+        textTranslationService: createHarmonyTextTranslationService(options)
+      });
+    }
     return new DefaultAiService({
-      textRecognitionService: createHarmonyTextRecognitionService(options),
-      textTranslationService: createHarmonyTextTranslationService(options)
+      textRecognitionService: createHarmonyTextRecognitionService(options)
     });
   }
   if (workflow.aiMethod === 'segmentPerson') {

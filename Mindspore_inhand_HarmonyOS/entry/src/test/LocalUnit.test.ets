@@ -1108,6 +1108,31 @@ export default function localUnitTest() {
       expect(translationRunner.seenTargetLanguages[0]).assertEqual('en');
     });
 
+    it('aiServiceRecognizesImageTextBeforeUnsupportedTranslation', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.TEXT_TRANSLATION.name);
+      expect(workflow !== undefined).assertTrue();
+      const recognitionRunner = new FixedTextRecognitionRunner({
+        ok: true,
+        text: 'MindSpore\n',
+        lineCount: 1,
+        blockCount: 1,
+        executionMs: 8
+      });
+
+      const result = await new DefaultAiService({
+        textRecognitionService: new TextRecognitionService({ runner: recognitionRunner })
+      }).run(workflow!, {
+        imageUri: 'file://selected/text.jpg'
+      });
+
+      expect(result.ok).assertFalse();
+      expect(result.code).assertEqual('PLATFORM_UNSUPPORTED');
+      expect(result.messageKey).assertEqual('feature_runtime_translation_unsupported');
+      expect(result.detailText.indexOf('targetLanguage=zh') >= 0).assertTrue();
+      expect(result.detailText.indexOf('source=MindSpore') >= 0).assertTrue();
+      expect(recognitionRunner.seenImageUris[0]).assertEqual('file://selected/text.jpg');
+    });
+
     it('copyableTextForTranslationReturnsTranslatedTextLikeAndroidCopyButton', 0, async () => {
       const workflow = workflowForRoute(AppRoute.TEXT_TRANSLATION.name);
       expect(workflow !== undefined).assertTrue();
@@ -2312,6 +2337,32 @@ export default function localUnitTest() {
       expect(result.code).assertEqual('TEXT_TRANSLATION_DONE');
       expect(recognitionRunner.seenImageUris[0]).assertEqual('file://selected/translation.jpg');
       expect(translationRunner.seenTexts[0]).assertEqual('你好\n');
+    });
+
+    it('runtimeFactoryInjectsOcrForImageTranslationWithoutTranslator', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.TEXT_TRANSLATION.name);
+      expect(workflow !== undefined).assertTrue();
+      const recognitionRunner: FixedTextRecognitionRunner = new FixedTextRecognitionRunner({
+        ok: true,
+        text: 'MindSpore\n',
+        lineCount: 1,
+        blockCount: 1,
+        executionMs: 7
+      });
+      const service = await createRuntimeAiServiceForWorkflow(workflow!, {
+        resourceManager: new ThrowingRawfileContentReader(),
+        textRecognitionRunner: recognitionRunner
+      });
+
+      const result: AiRunResult = await service.run(workflow!, {
+        imageUri: 'file://selected/translation.jpg'
+      });
+
+      expect(result.ok).assertFalse();
+      expect(result.code).assertEqual('PLATFORM_UNSUPPORTED');
+      expect(result.messageKey).assertEqual('feature_runtime_translation_unsupported');
+      expect(result.detailText.indexOf('source=MindSpore') >= 0).assertTrue();
+      expect(recognitionRunner.seenImageUris[0]).assertEqual('file://selected/translation.jpg');
     });
 
     it('runtimeFactoryReportsTranslationUnsupportedWithoutTranslator', 0, async () => {
