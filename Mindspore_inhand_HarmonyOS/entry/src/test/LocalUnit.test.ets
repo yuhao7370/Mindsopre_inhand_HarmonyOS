@@ -3077,8 +3077,8 @@ export default function localUnitTest() {
       expect(runtimeInputActionForWorkflowInput(imageCamera, 'camera')).assertEqual('startLiveCamera');
       expect(runtimeInputActionsForWorkflow(objectCamera).indexOf('startLiveCamera') >= 0).assertTrue();
       expect(runtimeInputActionForWorkflowInput(textRecognition, 'camera')).assertEqual('captureImage');
-      expect(gestureLive.liveMode).assertFalse();
-      expect(runtimeInputActionForWorkflowInput(gestureLive, 'camera')).assertEqual('captureImage');
+      expect(gestureLive.liveMode).assertTrue();
+      expect(runtimeInputActionForWorkflowInput(gestureLive, 'camera')).assertEqual('startLiveCamera');
     });
 
     it('liveCameraPreviewServiceRequiresSurfaceIdBeforeStarting', 0, async () => {
