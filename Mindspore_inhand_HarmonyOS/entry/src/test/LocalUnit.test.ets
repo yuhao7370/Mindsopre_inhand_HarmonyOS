@@ -5,6 +5,8 @@ import { hasAppStringKey } from '../main/ets/common/i18n/AppStrings';
 import { iconLabel } from '../main/ets/common/icons/IconSymbols';
 import { DefaultAiService } from '../main/ets/services/ai/AiService';
 import {
+  ImageClassificationService,
+  ImageClassificationScoreRunner,
   imageCategoryLabelCount,
   parseImageCategoryLabels,
   topClassificationResult
@@ -29,6 +31,24 @@ import {
 } from '../main/ets/common/data/FeatureCatalog';
 import { collegeItems, isCollegeItemUrlNavigable } from '../main/ets/common/data/CollegeCatalog';
 import { meItems, visibleMeItems } from '../main/ets/common/data/MeCatalog';
+
+class FixedScoreRunner implements ImageClassificationScoreRunner {
+  private readonly scores: Array<number>;
+
+  constructor(scores: Array<number>) {
+    this.scores = scores;
+  }
+
+  async predictScores(_imageUri: string): Promise<Array<number>> {
+    return this.scores;
+  }
+}
+
+class RejectingScoreRunner implements ImageClassificationScoreRunner {
+  async predictScores(_imageUri: string): Promise<Array<number>> {
+    throw new Error('native runner failed');
+  }
+}
 
 export default function localUnitTest() {
   describe('mindsporePortFoundation', () => {
@@ -208,6 +228,100 @@ export default function localUnitTest() {
       const result = topClassificationResult([], ['tench']);
       expect(result.ok).assertFalse();
       expect(result.index).assertEqual(-1);
+    });
+
+    it('preservesAndroidClassificationDefaultForNonPositiveScores', 0, () => {
+      const result = topClassificationResult([-0.2, -0.1], ['tench', 'goldfish']);
+      expect(result.ok).assertTrue();
+      expect(result.index).assertEqual(0);
+      expect(result.label).assertEqual('tench');
+      expect(result.score).assertEqual(0);
+    });
+
+    it('ignoresScoresAfterAndroidImageNetClassCount', 0, () => {
+      const labels: Array<string> = [];
+      const scores: Array<number> = [];
+      for (let index = 0; index < imageCategoryLabelCount; index++) {
+        labels.push(`label_${index}`);
+        scores.push(0.1);
+      }
+      labels[999] = 'toilet_tissue';
+      scores[999] = 0.8;
+      scores.push(0.99);
+
+      const result = topClassificationResult(scores, labels);
+      expect(result.ok).assertTrue();
+      expect(result.index).assertEqual(999);
+      expect(result.label).assertEqual('toilet_tissue');
+    });
+
+    it('classificationRequiresImageInput', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.IMAGE_CAMERA.name);
+      expect(workflow !== undefined).assertTrue();
+      const result = await new DefaultAiService().run(workflow!);
+      expect(result.ok).assertFalse();
+      expect(result.code).assertEqual('MISSING_INPUT');
+    });
+
+    it('classificationReportsModelRunnerPendingWithoutAdapter', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.IMAGE_CAMERA.name);
+      expect(workflow !== undefined).assertTrue();
+      const result = await new DefaultAiService().run(workflow!, {
+        imageUri: 'file://selected/cat.jpg'
+      });
+      expect(result.ok).assertFalse();
+      expect(result.code).assertEqual('CLASSIFICATION_MODEL_PENDING');
+      expect(result.messageKey).assertEqual('feature_runtime_classification_pending');
+    });
+
+    it('classificationMapsRunnerScoresToAndroidLabel', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.IMAGE_CAMERA.name);
+      expect(workflow !== undefined).assertTrue();
+      const scoreRunner: ImageClassificationScoreRunner = new FixedScoreRunner([0.1, 0.9, 0.2]);
+      const service = new ImageClassificationService({
+        labels: ['tench', 'goldfish', 'great_white_shark'],
+        scoreRunner: scoreRunner
+      });
+      const result = await new DefaultAiService({ imageClassificationService: service }).run(workflow!, {
+        imageUri: 'file://selected/fish.jpg'
+      });
+      expect(result.ok).assertTrue();
+      expect(result.code).assertEqual('CLASSIFICATION_DONE');
+      expect(result.messageKey).assertEqual('feature_runtime_classification_done');
+      expect(result.detailText.indexOf('label=goldfish') >= 0).assertTrue();
+      expect(result.detailText.indexOf('score=0.900000') >= 0).assertTrue();
+      expect(result.detailText.indexOf('fish.jpg') >= 0).assertTrue();
+    });
+
+    it('classificationFailsWhenRunnerScoresDoNotMapToLabel', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.IMAGE_CAMERA.name);
+      expect(workflow !== undefined).assertTrue();
+      const scoreRunner: ImageClassificationScoreRunner = new FixedScoreRunner([0.1, 0.9]);
+      const service = new ImageClassificationService({
+        labels: ['tench'],
+        scoreRunner: scoreRunner
+      });
+      const result = await new DefaultAiService({ imageClassificationService: service }).run(workflow!, {
+        imageUri: 'file://selected/fish.jpg'
+      });
+      expect(result.ok).assertFalse();
+      expect(result.code).assertEqual('CLASSIFICATION_FAILED');
+      expect(result.messageKey).assertEqual('feature_runtime_classification_failed');
+    });
+
+    it('classificationHandlesRunnerRejectionAsFailedResult', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.IMAGE_CAMERA.name);
+      expect(workflow !== undefined).assertTrue();
+      const service = new ImageClassificationService({
+        labels: ['tench'],
+        scoreRunner: new RejectingScoreRunner()
+      });
+      const result = await new DefaultAiService({ imageClassificationService: service }).run(workflow!, {
+        imageUri: 'file://selected/fish.jpg'
+      });
+      expect(result.ok).assertFalse();
+      expect(result.code).assertEqual('CLASSIFICATION_FAILED');
+      expect(result.messageKey).assertEqual('feature_runtime_classification_failed');
     });
 
     it('mapsWorkflowPermissionsToHarmonyPermissionNames', 0, () => {

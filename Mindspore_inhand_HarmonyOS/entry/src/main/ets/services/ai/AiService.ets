@@ -1,10 +1,18 @@
 import { FeatureWorkflow } from '../../features/runtime/FeatureWorkflowCatalog';
 import { AppStringKey } from '../../common/i18n/AppStrings';
+import {
+  ImageClassificationResult,
+  ImageClassificationRunResult,
+  ImageClassificationService
+} from './ImageClassificationService';
 
 export type AiRunCode =
   'NATIVE_ADAPTER_PENDING' |
   'MISSING_INPUT' |
-  'CUSTOM_MODEL_SIMULATED';
+  'CUSTOM_MODEL_SIMULATED' |
+  'CLASSIFICATION_MODEL_PENDING' |
+  'CLASSIFICATION_DONE' |
+  'CLASSIFICATION_FAILED';
 
 export interface AiRunInputs {
   readonly imageUri?: string;
@@ -20,8 +28,23 @@ export interface AiRunResult {
   readonly detailText: string;
 }
 
+export interface AiServiceOptions {
+  readonly imageClassificationService?: ImageClassificationService;
+}
+
 export class DefaultAiService {
+  private readonly imageClassificationService: ImageClassificationService;
+
+  constructor(options?: AiServiceOptions) {
+    this.imageClassificationService = options?.imageClassificationService ?? new ImageClassificationService({
+      labels: []
+    });
+  }
+
   async run(workflow: FeatureWorkflow, inputs: AiRunInputs = {}): Promise<AiRunResult> {
+    if (workflow.aiMethod === 'classifyImage') {
+      return this.classifyImage(inputs);
+    }
     if (workflow.aiMethod === 'runCustomModel') {
       return this.runCustomModel(inputs);
     }
@@ -31,6 +54,46 @@ export class DefaultAiService {
       aiMethod: workflow.aiMethod,
       messageKey: 'feature_runtime_pending_adapter',
       detailText: ''
+    };
+  }
+
+  private async classifyImage(inputs: AiRunInputs): Promise<AiRunResult> {
+    const imageUri = inputs.imageUri ?? '';
+    if (imageUri.length === 0) {
+      return {
+        ok: false,
+        code: 'MISSING_INPUT',
+        aiMethod: 'classifyImage',
+        messageKey: 'feature_runtime_missing_input',
+        detailText: ''
+      };
+    }
+
+    const result: ImageClassificationRunResult = await this.imageClassificationService.classifyImage(imageUri);
+    if (result.code === 'MODEL_PENDING') {
+      return {
+        ok: false,
+        code: 'CLASSIFICATION_MODEL_PENDING',
+        aiMethod: 'classifyImage',
+        messageKey: 'feature_runtime_classification_pending',
+        detailText: ''
+      };
+    }
+    if (result.ok) {
+      return {
+        ok: true,
+        code: 'CLASSIFICATION_DONE',
+        aiMethod: 'classifyImage',
+        messageKey: 'feature_runtime_classification_done',
+        detailText: this.imageClassificationSummary(result.classification, imageUri)
+      };
+    }
+    return {
+      ok: false,
+      code: 'CLASSIFICATION_FAILED',
+      aiMethod: 'classifyImage',
+      messageKey: 'feature_runtime_classification_failed',
+      detailText: this.imageClassificationFailureSummary(result, imageUri)
     };
   }
 
@@ -66,6 +129,26 @@ export class DefaultAiService {
       const value = ((seed + (index + 1) * 7919) % 100000) / 100000;
       lines.push(`output[${index}]=${value.toFixed(6)}`);
     }
+    return lines.join('\n');
+  }
+
+  private imageClassificationSummary(classification: ImageClassificationResult, imageUri: string): string {
+    const lines: Array<string> = [
+      `label=${classification.label}`,
+      `score=${classification.score.toFixed(6)}`,
+      `index=${classification.index}`,
+      `image=${this.lastPathSegment(imageUri)}`
+    ];
+    return lines.join('\n');
+  }
+
+  private imageClassificationFailureSummary(result: ImageClassificationRunResult, imageUri: string): string {
+    const lines: Array<string> = [
+      `image=${this.lastPathSegment(imageUri)}`,
+      `reason=${result.code}`,
+      `index=${result.classification.index}`,
+      `score=${result.classification.score.toFixed(6)}`
+    ];
     return lines.join('\n');
   }
 

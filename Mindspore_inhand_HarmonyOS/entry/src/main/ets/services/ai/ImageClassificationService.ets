@@ -8,6 +8,71 @@ export interface ImageClassificationResult {
   readonly score: number;
 }
 
+export type ImageClassificationRunCode =
+  'MISSING_INPUT' |
+  'MODEL_PENDING' |
+  'CLASSIFICATION_DONE' |
+  'CLASSIFICATION_INVALID_OUTPUT';
+
+export interface ImageClassificationRunResult {
+  readonly ok: boolean;
+  readonly code: ImageClassificationRunCode;
+  readonly classification: ImageClassificationResult;
+}
+
+export interface ImageClassificationScoreRunner {
+  predictScores(imageUri: string): Promise<Array<number>>;
+}
+
+export interface ImageClassificationServiceOptions {
+  readonly labels: Array<string>;
+  readonly scoreRunner?: ImageClassificationScoreRunner;
+}
+
+export class ImageClassificationService {
+  private readonly labels: Array<string>;
+  private readonly scoreRunner?: ImageClassificationScoreRunner;
+
+  constructor(options: ImageClassificationServiceOptions) {
+    this.labels = options.labels;
+    this.scoreRunner = options.scoreRunner;
+  }
+
+  async classifyImage(imageUri: string): Promise<ImageClassificationRunResult> {
+    if (imageUri.length === 0) {
+      return this.runResult(false, 'MISSING_INPUT', emptyClassificationResult());
+    }
+    if (!this.scoreRunner) {
+      return this.runResult(false, 'MODEL_PENDING', emptyClassificationResult());
+    }
+
+    let scores: Array<number>;
+    try {
+      scores = await this.scoreRunner.predictScores(imageUri);
+    } catch (_) {
+      return this.runResult(false, 'CLASSIFICATION_INVALID_OUTPUT', emptyClassificationResult());
+    }
+
+    const classification = topClassificationResult(scores, this.labels);
+    if (!classification.ok) {
+      return this.runResult(false, 'CLASSIFICATION_INVALID_OUTPUT', classification);
+    }
+    return this.runResult(true, 'CLASSIFICATION_DONE', classification);
+  }
+
+  private runResult(
+    ok: boolean,
+    code: ImageClassificationRunCode,
+    classification: ImageClassificationResult
+  ): ImageClassificationRunResult {
+    return {
+      ok: ok,
+      code: code,
+      classification: classification
+    };
+  }
+}
+
 export function parseImageCategoryLabels(rawText: string): Array<string> {
   const labels: Array<string> = [];
   rawText.split('\n').forEach((line: string) => {
@@ -25,8 +90,9 @@ export function topClassificationResult(scores: Array<number>, labels: Array<str
   }
 
   let maxIndex = 0;
-  let maxScore = scores[0];
-  for (let index = 1; index < scores.length; index++) {
+  let maxScore = 0;
+  const scanLimit = Math.min(scores.length, imageCategoryLabelCount);
+  for (let index = 0; index < scanLimit; index++) {
     const score = scores[index];
     if (score > maxScore) {
       maxScore = score;
