@@ -19,9 +19,11 @@ import { cachedRuntimeAiServiceForHarmonyResourceManager } from '../services/ai/
 import { PermissionRequestSummary, PermissionService } from '../services/permissions/PermissionService';
 import { ClipboardService, CopyTextResult } from '../services/clipboard/ClipboardService';
 import { PickerService, PickResult } from '../services/picker/PickerService';
+import { styleTransferPixelMapFromRgbaOutput } from '../services/ai/StyleTransferService';
 import { AppStringKey, appString } from '../common/i18n/AppStrings';
 import { AppColor, AppRadius, AppSpacing } from '../common/theme/AppTheme';
 import { common } from '@kit.AbilityKit';
+import { image } from '@kit.ImageKit';
 import { webPagePath } from '../common/data/WebDestination';
 
 interface FeatureRuntimeParams {
@@ -45,6 +47,7 @@ struct FeatureRuntimePage {
   @State styleImageUri: string = '';
   @State modelInputUri: string = '';
   @State userText: string = '';
+  @State styledImagePixelMap: image.PixelMap | undefined = undefined;
   @State helpUrl: string = '';
   @State inputKinds: Array<FeatureInputKind> = [];
   @State permissionKinds: Array<FeaturePermissionKind> = [];
@@ -72,6 +75,8 @@ struct FeatureRuntimePage {
   private prepareInput(inputKind: FeatureInputKind): void {
     this.statusKey = 'feature_runtime_status_preparing';
     this.resultRows = [];
+    this.resultText = '';
+    this.styledImagePixelMap = undefined;
     if (inputKind === 'text') {
       this.statusKey = this.userText.length > 0 ? 'feature_runtime_text_ready' : 'feature_runtime_status_idle';
       this.selectedInputSummary = this.userText;
@@ -148,15 +153,42 @@ struct FeatureRuntimePage {
         this.statusKey = 'feature_runtime_permission_denied';
         this.resultText = permission.requested.join(', ');
         this.resultRows = [];
+        this.styledImagePixelMap = undefined;
         return;
       }
       cachedRuntimeAiServiceForHarmonyResourceManager(workflow, context.resourceManager).then((aiService: DefaultAiService) => {
         aiService.run(workflow, this.aiRunInputs()).then((result: AiRunResult) => {
-          this.statusKey = result.messageKey;
-          this.resultText = result.detailText.length > 0 ? result.detailText : `${result.aiMethod}: ${result.code}`;
-          this.resultRows = aiRunResultRows(result);
+          this.applyAiResult(result);
         });
       });
+    });
+  }
+
+  private applyAiResult(result: AiRunResult): void {
+    this.statusKey = result.messageKey;
+    this.resultText = result.detailText.length > 0 ? result.detailText : `${result.aiMethod}: ${result.code}`;
+    this.resultRows = aiRunResultRows(result);
+    this.styledImagePixelMap = undefined;
+    this.updateStyledImagePreview(result);
+  }
+
+  private updateStyledImagePreview(result: AiRunResult): void {
+    const data = result.data;
+    if (data === undefined || data.kind !== 'styleTransfer') {
+      return;
+    }
+
+    const rgba = data.result.outputImageRgba;
+    const width = data.result.outputImageWidth ?? 0;
+    const height = data.result.outputImageHeight ?? 0;
+    if (rgba === undefined || rgba.byteLength === 0 || width <= 0 || height <= 0) {
+      return;
+    }
+
+    styleTransferPixelMapFromRgbaOutput(rgba, width, height).then((pixelMap: image.PixelMap) => {
+      this.styledImagePixelMap = pixelMap;
+    }).catch(() => {
+      this.styledImagePixelMap = undefined;
     });
   }
 
@@ -232,6 +264,25 @@ struct FeatureRuntimePage {
       Image(uri)
         .width('100%')
         .height(156)
+        .objectFit(ImageFit.Contain)
+        .backgroundColor('#F7F8FA')
+        .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
+        .margin({ top: AppSpacing.xs })
+    }
+    .width('100%')
+    .margin({ top: AppSpacing.sm })
+  }
+
+  @Builder
+  pixelMapPreview(labelKey: AppStringKey, pixelMap: image.PixelMap) {
+    Column() {
+      Text(appString(labelKey))
+        .fontSize(12)
+        .fontColor(AppColor.textSecondary)
+        .width('100%')
+      Image(pixelMap)
+        .width('100%')
+        .height(220)
         .objectFit(ImageFit.Contain)
         .backgroundColor('#F7F8FA')
         .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
@@ -416,6 +467,9 @@ struct FeatureRuntimePage {
             ForEach(this.resultRows, (row: AiRunResultRow) => {
               this.resultRow(row)
             }, (row: AiRunResultRow) => row.labelKey)
+          }
+          if (this.styledImagePixelMap !== undefined) {
+            this.pixelMapPreview('feature_runtime_result_styled_image', this.styledImagePixelMap)
           }
           if (this.recognizedTextForCopy().length > 0) {
             Button(appString('feature_runtime_copy_text'))

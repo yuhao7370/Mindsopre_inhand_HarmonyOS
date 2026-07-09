@@ -115,6 +115,7 @@
     { "name": "feature_runtime_result_model", "value": "Model" },
     { "name": "feature_runtime_result_content_image", "value": "Content image" },
     { "name": "feature_runtime_result_style_image", "value": "Style image" },
+    { "name": "feature_runtime_result_styled_image", "value": "Styled result" },
     { "name": "feature_runtime_result_output", "value": "Output" },
     { "name": "feature_runtime_result_target_language", "value": "Target language" },
     { "name": "feature_runtime_result_translated_text", "value": "Translation" },

@@ -46,6 +46,8 @@ import {
   styleTransferModelDownloadUrl,
   styleTransferModelRawfilePath,
   styleTransferOutputFloatCount,
+  styleTransferPixelMapOptions,
+  styleTransferRgbaOutputFromFloatOutput,
   styleTransferRgbUnitInputFromRgba,
   styleTransferStyleImageSize
 } from '../main/ets/services/ai/StyleTransferService';
@@ -1398,6 +1400,28 @@ export default function localUnitTest() {
       expect(contentOptions.desiredSize!.height).assertEqual(384);
     });
 
+    it('convertsAndroidStyleTransferFloatOutputToRgbaPixels', 0, () => {
+      const output = new Float32Array([0, 0.5, 1, 2, -1, 0.25]);
+      const rgba = new Uint8Array(styleTransferRgbaOutputFromFloatOutput(output, 2, 1));
+      expect(rgba.length).assertEqual(8);
+      expect(rgba[0]).assertEqual(0);
+      expect(rgba[1]).assertEqual(127);
+      expect(rgba[2]).assertEqual(255);
+      expect(rgba[3]).assertEqual(255);
+      expect(rgba[4]).assertEqual(255);
+      expect(rgba[5]).assertEqual(0);
+      expect(rgba[6]).assertEqual(63);
+      expect(rgba[7]).assertEqual(255);
+    });
+
+    it('requestsStyleTransferOutputPixelMapAsRgba', 0, () => {
+      const options: image.InitializationOptions = styleTransferPixelMapOptions(384, 256);
+      expect(options.size.width).assertEqual(384);
+      expect(options.size.height).assertEqual(256);
+      expect(options.srcPixelFormat).assertEqual(image.PixelMapFormat.RGBA_8888);
+      expect(options.pixelFormat).assertEqual(image.PixelMapFormat.RGBA_8888);
+    });
+
     it('styleTransferMindSporeRunnerBridgesPreprocessorToTensorRunner', 0, async () => {
       const input: StyleTransferInput = {
         contentInputBuffer: new ArrayBuffer(384 * 384 * 3 * 4),
@@ -1419,6 +1443,9 @@ export default function localUnitTest() {
 
       expect(result.ok).assertTrue();
       expect(result.outputFloatCount).assertEqual(styleTransferOutputFloatCount);
+      expect(result.outputImageRgba?.byteLength).assertEqual(styleTransferContentImageSize * styleTransferContentImageSize * 4);
+      expect(result.outputImageWidth).assertEqual(styleTransferContentImageSize);
+      expect(result.outputImageHeight).assertEqual(styleTransferContentImageSize);
       expect(result.predictMs).assertEqual(7);
       expect(result.transferMs).assertEqual(9);
       expect(preprocessor.seenContentUris[0]).assertEqual('file://selected/content.jpg');

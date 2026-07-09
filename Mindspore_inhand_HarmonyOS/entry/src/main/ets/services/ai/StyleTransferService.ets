@@ -20,6 +20,9 @@ export const styleTransferOutputFloatCount: number =
 export interface StyleTransferResult {
   readonly ok: boolean;
   readonly outputFloatCount: number;
+  readonly outputImageRgba?: ArrayBuffer;
+  readonly outputImageWidth?: number;
+  readonly outputImageHeight?: number;
   readonly predictMs: number;
   readonly transferMs: number;
   readonly executionMs: number;
@@ -66,9 +69,18 @@ export class StyleTransferMindSporeRunner implements StyleTransferRunner {
     const startedAt = Date.now();
     const input = await this.preprocessor.createInput(contentImageUri, styleImageUri);
     const output = await this.tensorRunner.runStyleTransfer(input);
+    const outputImageRgba = output.output.length >= styleTransferOutputFloatCount ?
+      styleTransferRgbaOutputFromFloatOutput(
+        output.output,
+        styleTransferContentImageSize,
+        styleTransferContentImageSize
+      ) : new ArrayBuffer(0);
     return {
-      ok: output.output.length > 0,
+      ok: outputImageRgba.byteLength > 0,
       outputFloatCount: output.output.length,
+      outputImageRgba: outputImageRgba,
+      outputImageWidth: styleTransferContentImageSize,
+      outputImageHeight: styleTransferContentImageSize,
       predictMs: output.predictMs,
       transferMs: output.transferMs,
       executionMs: Date.now() - startedAt
@@ -208,6 +220,25 @@ export function styleTransferDecodeOptions(size: number): image.DecodingOptions 
   };
 }
 
+export function styleTransferPixelMapOptions(width: number, height: number): image.InitializationOptions {
+  return {
+    size: {
+      width: width,
+      height: height
+    },
+    srcPixelFormat: image.PixelMapFormat.RGBA_8888,
+    pixelFormat: image.PixelMapFormat.RGBA_8888
+  };
+}
+
+export async function styleTransferPixelMapFromRgbaOutput(
+  rgba: ArrayBuffer,
+  width: number,
+  height: number
+): Promise<image.PixelMap> {
+  return image.createPixelMap(rgba, styleTransferPixelMapOptions(width, height));
+}
+
 export function styleTransferRgbUnitInputFromRgba(rgba: Uint8Array, size: number): ArrayBuffer {
   const expectedLength = size * size * 4;
   if (rgba.length !== expectedLength) {
@@ -223,4 +254,32 @@ export function styleTransferRgbUnitInputFromRgba(rgba: Uint8Array, size: number
     outputIndex += styleTransferChannels;
   }
   return input.buffer as ArrayBuffer;
+}
+
+export function styleTransferRgbaOutputFromFloatOutput(
+  output: Float32Array,
+  width: number,
+  height: number
+): ArrayBuffer {
+  const pixelCount = width * height;
+  const expectedLength = pixelCount * styleTransferChannels;
+  if (output.length < expectedLength) {
+    throw new Error(`Expected at least ${expectedLength} style output floats, got ${output.length}.`);
+  }
+
+  const rgba = new Uint8Array(pixelCount * 4);
+  for (let pixelIndex = 0; pixelIndex < pixelCount; pixelIndex++) {
+    const sourceIndex = pixelIndex * styleTransferChannels;
+    const targetIndex = pixelIndex * 4;
+    rgba[targetIndex] = styleTransferOutputByte(output[sourceIndex]);
+    rgba[targetIndex + 1] = styleTransferOutputByte(output[sourceIndex + 1]);
+    rgba[targetIndex + 2] = styleTransferOutputByte(output[sourceIndex + 2]);
+    rgba[targetIndex + 3] = 255;
+  }
+  return rgba.buffer as ArrayBuffer;
+}
+
+function styleTransferOutputByte(value: number): number {
+  const scaled = Math.trunc(value * 255);
+  return Math.min(255, Math.max(0, scaled));
 }
