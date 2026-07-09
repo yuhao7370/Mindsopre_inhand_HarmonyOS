@@ -4,6 +4,11 @@ import { MainTab, mainTabs } from '../main/ets/app/AppState';
 import { hasAppStringKey } from '../main/ets/common/i18n/AppStrings';
 import { iconLabel } from '../main/ets/common/icons/IconSymbols';
 import { DefaultAiService } from '../main/ets/services/ai/AiService';
+import {
+  imageCategoryLabelCount,
+  parseImageCategoryLabels,
+  topClassificationResult
+} from '../main/ets/services/ai/ImageClassificationService';
 import { FeatureWorkflow, workflowForRoute } from '../main/ets/features/runtime/FeatureWorkflowCatalog';
 import {
   declaredPermissionNames,
@@ -181,6 +186,28 @@ export default function localUnitTest() {
       expect(result.code).assertEqual('CUSTOM_MODEL_SIMULATED');
       expect(result.detailText.indexOf('output[0]') >= 0).assertTrue();
       expect(result.detailText.indexOf('custom_model.ms') >= 0).assertTrue();
+    });
+
+    it('parsesAndroidImageClassificationLabels', 0, () => {
+      const labels = parseImageCategoryLabels('tench\r\ngoldfish\n\ntoilet_tissue\n');
+      expect(labels.length).assertEqual(3);
+      expect(labels[0]).assertEqual('tench');
+      expect(labels[2]).assertEqual('toilet_tissue');
+      expect(imageCategoryLabelCount).assertEqual(1000);
+    });
+
+    it('mapsTopClassificationScoreToLabel', 0, () => {
+      const result = topClassificationResult([0.1, 0.9, 0.2], ['tench', 'goldfish', 'great_white_shark']);
+      expect(result.ok).assertTrue();
+      expect(result.index).assertEqual(1);
+      expect(result.label).assertEqual('goldfish');
+      expect(result.score).assertEqual(0.9);
+    });
+
+    it('rejectsEmptyClassificationScores', 0, () => {
+      const result = topClassificationResult([], ['tench']);
+      expect(result.ok).assertFalse();
+      expect(result.index).assertEqual(-1);
     });
 
     it('mapsWorkflowPermissionsToHarmonyPermissionNames', 0, () => {
