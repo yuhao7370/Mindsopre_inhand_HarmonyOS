@@ -4,11 +4,13 @@ import { FeaturePermissionKind, FeatureWorkflow } from '../../features/runtime/F
 export const cameraPermissionName: Permissions = 'ohos.permission.CAMERA';
 export const mediaPermissionName: Permissions = 'ohos.permission.READ_IMAGEVIDEO';
 export const internetPermissionName: Permissions = 'ohos.permission.INTERNET';
+export const shortTermWriteImageVideoPermissionName: Permissions = 'ohos.permission.SHORT_TERM_WRITE_IMAGEVIDEO';
 
 export const declaredPermissionNames: Array<Permissions> = [
   cameraPermissionName,
   mediaPermissionName,
-  internetPermissionName
+  internetPermissionName,
+  shortTermWriteImageVideoPermissionName
 ];
 
 export interface PermissionRequestSummary {

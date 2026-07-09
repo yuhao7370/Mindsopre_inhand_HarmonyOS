@@ -195,6 +195,12 @@ import {
   PrivacyConsentStore,
   privacyConsentPreferenceKey
 } from '../main/ets/services/storage/PrivacyConsentService';
+import {
+  QrCodeAssetWriter,
+  QrCodeMediaReader,
+  isFullQrCodeWrite,
+  QrCodeSaveService
+} from '../main/ets/services/media/QrCodeSaveService';
 
 class FixedScoreRunner implements ImageClassificationScoreRunner {
   private readonly scores: Array<number>;
@@ -586,6 +592,44 @@ class RejectingClipboardWriter implements TextClipboardWriter {
   }
 }
 
+class FixedQrCodeMediaReader implements QrCodeMediaReader {
+  private readonly imageBytes: ArrayBuffer;
+
+  constructor(imageBytes: ArrayBuffer) {
+    this.imageBytes = imageBytes;
+  }
+
+  readQrCodeImage(): ArrayBuffer {
+    return this.imageBytes;
+  }
+}
+
+class RejectingQrCodeMediaReader implements QrCodeMediaReader {
+  readQrCodeImage(): ArrayBuffer {
+    throw new Error('qr image missing');
+  }
+}
+
+class RecordingQrCodeAssetWriter implements QrCodeAssetWriter {
+  readonly writtenBytes: Array<Uint8Array> = [];
+  private readonly nextUri: string;
+
+  constructor(nextUri: string) {
+    this.nextUri = nextUri;
+  }
+
+  async writeJpeg(bytes: ArrayBuffer): Promise<string> {
+    this.writtenBytes.push(new Uint8Array(bytes));
+    return this.nextUri;
+  }
+}
+
+class RejectingQrCodeAssetWriter implements QrCodeAssetWriter {
+  async writeJpeg(_bytes: ArrayBuffer): Promise<string> {
+    throw new Error('gallery rejected');
+  }
+}
+
 class RecordingLiveCameraPreviewDriver implements LiveCameraPreviewDriver {
   startedSurfaceIds: Array<string> = [];
   private readonly failStart: boolean;
@@ -796,6 +840,8 @@ export default function localUnitTest() {
       expect(hasAppStringKey('feature_runtime_result_text')).assertTrue();
       expect(hasAppStringKey('feature_runtime_copy_text')).assertTrue();
       expect(hasAppStringKey('feature_runtime_copy_done')).assertTrue();
+      expect(hasAppStringKey('qr_code_save_done')).assertTrue();
+      expect(hasAppStringKey('qr_code_save_failed')).assertTrue();
     });
 
     it('clipboardServiceCopiesRecognizedText', 0, async () => {
@@ -813,6 +859,50 @@ export default function localUnitTest() {
 
       expect(blankResult.ok).assertFalse();
       expect(failedResult.ok).assertFalse();
+    });
+
+    it('qrCodeSaveServiceWritesBundledQrCodeToGallery', 0, async () => {
+      const writer = new RecordingQrCodeAssetWriter('file://media/gallery/qr.jpg');
+      const result = await new QrCodeSaveService(
+        new FixedQrCodeMediaReader(new Uint8Array([9, 8, 7]).buffer as ArrayBuffer),
+        writer
+      ).save();
+
+      expect(result.ok).assertTrue();
+      expect(result.uri).assertEqual('file://media/gallery/qr.jpg');
+      expect(result.messageKey).assertEqual('qr_code_save_done');
+      expect(writer.writtenBytes[0][0]).assertEqual(9);
+      expect(writer.writtenBytes[0][2]).assertEqual(7);
+    });
+
+    it('qrCodeSaveServiceReportsFailureWhenReadOrWriteFails', 0, async () => {
+      const rejectedRead = await new QrCodeSaveService(
+        new RejectingQrCodeMediaReader(),
+        new RecordingQrCodeAssetWriter('file://media/gallery/qr.jpg')
+      ).save();
+      const rejectedWrite = await new QrCodeSaveService(
+        new FixedQrCodeMediaReader(new Uint8Array([1]).buffer as ArrayBuffer),
+        new RejectingQrCodeAssetWriter()
+      ).save();
+      const emptyUri = await new QrCodeSaveService(
+        new FixedQrCodeMediaReader(new Uint8Array([1]).buffer as ArrayBuffer),
+        new RecordingQrCodeAssetWriter('')
+      ).save();
+
+      expect(rejectedRead.ok).assertFalse();
+      expect(rejectedWrite.ok).assertFalse();
+      expect(emptyUri.ok).assertFalse();
+      expect(rejectedRead.messageKey).assertEqual('qr_code_save_failed');
+      expect(rejectedWrite.messageKey).assertEqual('qr_code_save_failed');
+      expect(emptyUri.messageKey).assertEqual('qr_code_save_failed');
+    });
+
+    it('qrCodeWriteCompletesOnlyWhenAllBytesAreWritten', 0, () => {
+      const bytes = new Uint8Array([1, 2, 3]).buffer as ArrayBuffer;
+
+      expect(isFullQrCodeWrite(bytes, 3)).assertTrue();
+      expect(isFullQrCodeWrite(bytes, 2)).assertFalse();
+      expect(isFullQrCodeWrite(bytes, 4)).assertFalse();
     });
 
     it('doesNotNavigateQuickStartParentWithEmptyUrl', 0, () => {
@@ -2437,6 +2527,7 @@ export default function localUnitTest() {
       expect(permissionNames.indexOf('ohos.permission.READ_IMAGEVIDEO') >= 0).assertTrue();
       expect(permissionNames.indexOf('ohos.permission.INTERNET')).assertEqual(-1);
       expect(declaredPermissionNames.indexOf('ohos.permission.INTERNET') >= 0).assertTrue();
+      expect(declaredPermissionNames.indexOf('ohos.permission.SHORT_TERM_WRITE_IMAGEVIDEO') >= 0).assertTrue();
     });
 
     it('requestsAndroidStartupRuntimePermissionsWithoutInternet', 0, () => {
@@ -2445,6 +2536,7 @@ export default function localUnitTest() {
       expect(permissionNames.indexOf('ohos.permission.CAMERA') >= 0).assertTrue();
       expect(permissionNames.indexOf('ohos.permission.READ_IMAGEVIDEO') >= 0).assertTrue();
       expect(permissionNames.indexOf('ohos.permission.INTERNET')).assertEqual(-1);
+      expect(permissionNames.indexOf('ohos.permission.SHORT_TERM_WRITE_IMAGEVIDEO')).assertEqual(-1);
     });
 
     it('mapsWorkflowInputsToPickerActions', 0, () => {

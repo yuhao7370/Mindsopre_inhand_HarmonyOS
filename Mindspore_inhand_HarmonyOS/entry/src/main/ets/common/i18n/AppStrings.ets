@@ -59,6 +59,8 @@ export type AppStringKey =
   'me_privacy' |
   'me_user_agreements' |
   'me_version_title' |
+  'qr_code_save_done' |
+  'qr_code_save_failed' |
   'feature_runtime_inputs_title' |
   'feature_runtime_permissions_title' |
   'feature_runtime_result_title' |
@@ -214,6 +216,8 @@ const APP_STRING_KEYS: AppStringKey[] = [
   'me_privacy',
   'me_user_agreements',
   'me_version_title',
+  'qr_code_save_done',
+  'qr_code_save_failed',
   'feature_runtime_inputs_title',
   'feature_runtime_permissions_title',
   'feature_runtime_result_title',
@@ -433,6 +437,10 @@ export function appString(key: AppStringKey): ResourceStr {
       return $r('app.string.me_user_agreements');
     case 'me_version_title':
       return $r('app.string.me_version_title');
+    case 'qr_code_save_done':
+      return $r('app.string.qr_code_save_done');
+    case 'qr_code_save_failed':
+      return $r('app.string.qr_code_save_failed');
     case 'feature_runtime_inputs_title':
       return $r('app.string.feature_runtime_inputs_title');
     case 'feature_runtime_permissions_title':
