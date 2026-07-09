@@ -26,6 +26,7 @@ import {
 } from '../services/ai/ObjectDetectionService';
 import {
   SegmentationRectangle,
+  SegmentationResult,
   SegmentationRectanglePercent,
   segmentationRectanglePercent
 } from '../services/ai/SegmentationService';
@@ -73,6 +74,7 @@ struct FeatureRuntimePage {
   @State objectDetectionImageWidth: number = 0;
   @State objectDetectionImageHeight: number = 0;
   @State segmentationImageUri: string = '';
+  @State segmentationForegroundPixelMap: image.PixelMap | undefined = undefined;
   @State segmentationRectangles: Array<SegmentationRectangle> = [];
   @State segmentationImageWidth: number = 0;
   @State segmentationImageHeight: number = 0;
@@ -232,6 +234,7 @@ struct FeatureRuntimePage {
     this.objectDetectionImageWidth = 0;
     this.objectDetectionImageHeight = 0;
     this.segmentationImageUri = '';
+    this.segmentationForegroundPixelMap = undefined;
     this.segmentationRectangles = [];
     this.segmentationImageWidth = 0;
     this.segmentationImageHeight = 0;
@@ -263,6 +266,22 @@ struct FeatureRuntimePage {
     this.segmentationRectangles = data.result.rectangles;
     this.segmentationImageWidth = data.result.imageWidth ?? this.segmentationSourceWidth(data.result.rectangles);
     this.segmentationImageHeight = data.result.imageHeight ?? this.segmentationSourceHeight(data.result.rectangles);
+    this.updateSegmentationForegroundPreview(data.result);
+  }
+
+  private updateSegmentationForegroundPreview(result: SegmentationResult): void {
+    const rgba = result.foregroundImageRgba;
+    const width = result.foregroundImageWidth ?? 0;
+    const height = result.foregroundImageHeight ?? 0;
+    if (rgba === undefined || rgba.byteLength === 0 || width <= 0 || height <= 0) {
+      return;
+    }
+
+    styleTransferPixelMapFromRgbaOutput(rgba, width, height).then((pixelMap: image.PixelMap) => {
+      this.segmentationForegroundPixelMap = pixelMap;
+    }).catch(() => {
+      this.segmentationForegroundPixelMap = undefined;
+    });
   }
 
   private updatePosePreview(result: AiRunResult): void {
@@ -850,6 +869,9 @@ struct FeatureRuntimePage {
           }
           if (this.objectDetectionImageUri.length > 0 && this.objectDetections.length > 0) {
             this.objectDetectionPreview('feature_runtime_result_detection_overlay', this.objectDetectionImageUri)
+          }
+          if (this.segmentationForegroundPixelMap !== undefined) {
+            this.pixelMapPreview('feature_runtime_result_foreground', this.segmentationForegroundPixelMap)
           }
           if (this.segmentationImageUri.length > 0 && this.segmentationRectangles.length > 0) {
             this.segmentationPreview('feature_runtime_result_segmentation_overlay', this.segmentationImageUri)

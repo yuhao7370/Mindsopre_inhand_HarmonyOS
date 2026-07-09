@@ -1082,6 +1082,9 @@ export default function localUnitTest() {
         subjectCount: 1,
         detailCount: 1,
         foregroundAvailable: true,
+        foregroundImageRgba: new Uint8Array([255, 0, 0, 255]).buffer as ArrayBuffer,
+        foregroundImageWidth: 1,
+        foregroundImageHeight: 1,
         rectangles: [rectangle],
         executionMs: 13
       });
@@ -1100,6 +1103,12 @@ export default function localUnitTest() {
       expect(result.detailText.indexOf('[1,2,100,200]') >= 0).assertTrue();
       expect(aiRunResultRows(result)[0].labelKey).assertEqual('feature_runtime_result_subjects');
       expect(aiRunResultRows(result)[0].value).assertEqual('1');
+      expect(result.data?.kind).assertEqual('segmentation');
+      if (result.data?.kind === 'segmentation') {
+        expect(result.data.result.foregroundImageWidth).assertEqual(1);
+        expect(result.data.result.foregroundImageHeight).assertEqual(1);
+        expect(result.data.result.foregroundImageRgba?.byteLength).assertEqual(4);
+      }
       expect(runner.seenImageUris[0]).assertEqual('file://selected/person.jpg');
     });
 

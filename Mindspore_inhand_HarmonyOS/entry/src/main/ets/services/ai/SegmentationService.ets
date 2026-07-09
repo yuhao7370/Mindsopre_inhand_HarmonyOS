@@ -14,10 +14,19 @@ export interface SegmentationResult {
   readonly subjectCount: number;
   readonly detailCount: number;
   readonly foregroundAvailable: boolean;
+  readonly foregroundImageRgba?: ArrayBuffer;
+  readonly foregroundImageWidth?: number;
+  readonly foregroundImageHeight?: number;
   readonly imageWidth?: number;
   readonly imageHeight?: number;
   readonly rectangles: Array<SegmentationRectangle>;
   readonly executionMs: number;
+}
+
+interface SegmentationForegroundImage {
+  readonly rgba: ArrayBuffer;
+  readonly width: number;
+  readonly height: number;
 }
 
 export interface SegmentationRectanglePercent {
@@ -77,7 +86,7 @@ export class HarmonySubjectSegmentationRunner implements SegmentationRunner {
         enableSubjectDetails: true,
         enableSubjectForegroundImage: true
       });
-      const segmentationResult = segmentationResultFromCoreVision(
+      const segmentationResult = await segmentationResultFromCoreVision(
         result,
         Date.now() - startMs,
         imageInfo.size.width,
@@ -99,12 +108,12 @@ export class HarmonySubjectSegmentationRunner implements SegmentationRunner {
   }
 }
 
-export function segmentationResultFromCoreVision(
+export async function segmentationResultFromCoreVision(
   result: subjectSegmentation.SegmentationResult,
   executionMs: number,
   imageWidth: number = 0,
   imageHeight: number = 0
-): SegmentationResult {
+): Promise<SegmentationResult> {
   const rectangles: Array<SegmentationRectangle> = [];
   rectangles.push(rectangleFromCoreVision(result.fullSubject.subjectRectangle));
   if (result.subjectDetails !== undefined) {
@@ -112,11 +121,15 @@ export function segmentationResultFromCoreVision(
       rectangles.push(rectangleFromCoreVision(subject.subjectRectangle));
     });
   }
+  const foreground = await foregroundImageFromSubject(result.fullSubject);
   return {
     ok: result.subjectCount > 0,
     subjectCount: result.subjectCount,
     detailCount: result.subjectDetails?.length ?? 0,
-    foregroundAvailable: true,
+    foregroundAvailable: foreground !== undefined,
+    foregroundImageRgba: foreground?.rgba,
+    foregroundImageWidth: foreground?.width,
+    foregroundImageHeight: foreground?.height,
     imageWidth: imageWidth,
     imageHeight: imageHeight,
     rectangles: rectangles,
@@ -161,6 +174,28 @@ function rectangleFromCoreVision(rectangle: subjectSegmentation.Rectangle): Segm
     width: rectangle.width,
     height: rectangle.height
   };
+}
+
+async function foregroundImageFromSubject(
+  subject: subjectSegmentation.SubjectResult
+): Promise<SegmentationForegroundImage | undefined> {
+  try {
+    const imageInfo: image.ImageInfo = await subject.foregroundImage.getImageInfo();
+    const width = imageInfo.size.width;
+    const height = imageInfo.size.height;
+    if (width <= 0 || height <= 0) {
+      return undefined;
+    }
+    const rgba = new ArrayBuffer(width * height * 4);
+    await subject.foregroundImage.readPixelsToBuffer(rgba);
+    return {
+      rgba: rgba,
+      width: width,
+      height: height
+    };
+  } catch (_) {
+    return undefined;
+  }
 }
 
 async function releaseSegmentationResultImages(result: subjectSegmentation.SegmentationResult): Promise<void> {
