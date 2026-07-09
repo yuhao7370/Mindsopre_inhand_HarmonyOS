@@ -7,6 +7,10 @@ import { AppStringKey } from '../../common/i18n/AppStrings';
 export const liveCameraXComponentId = 'liveCameraPreview';
 export const liveRuntimeIntervalMs = 1000;
 export const liveImageClassificationIntervalMs = liveRuntimeIntervalMs;
+export const liveFrameImagePackingOption: image.PackingOption = {
+  format: 'image/jpeg',
+  quality: 90
+};
 
 export interface LiveCameraPreviewResult {
   readonly ok: boolean;
@@ -253,11 +257,15 @@ export class HarmonyLiveCameraPreviewDriver implements LiveCameraPreviewDriver {
 export class HarmonyLiveFrameImageEncoder implements LiveFrameImageEncoder {
   async encodeSurfaceFrame(surfaceId: string): Promise<ArrayBuffer> {
     let pixelMap: image.PixelMap | undefined = undefined;
+    let packer: image.ImagePacker | undefined = undefined;
     try {
       pixelMap = await image.createPixelMapFromSurface(surfaceId);
-      const packer = image.createImagePacker();
-      return await packer.packToData(pixelMap, { format: 'image/jpeg', quality: 90 });
+      packer = image.createImagePacker();
+      return await packer.packToData(pixelMap, liveFrameImagePackingOption);
     } finally {
+      if (packer !== undefined) {
+        await packer.release();
+      }
       if (pixelMap !== undefined) {
         await pixelMap.release();
       }

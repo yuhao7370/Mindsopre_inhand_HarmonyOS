@@ -180,6 +180,7 @@ import {
   liveImageClassificationIntervalMs,
   liveRuntimeIntervalMs,
   liveCameraXComponentId,
+  liveFrameImagePackingOption,
   shouldRunLiveRuntimeLoop,
   shouldRunLiveImageClassificationLoop,
   shouldCaptureLiveFrameImage
@@ -3041,6 +3042,11 @@ export default function localUnitTest() {
       expect(encoder.seenSurfaceIds[0]).assertEqual('surface-1');
       expect(store.seenCacheDirs[0]).assertEqual('/cache');
       expect(store.seenBytes[0][2]).assertEqual(3);
+    });
+
+    it('liveFrameImageEncoderUsesAndroidLikeJpegPacking', 0, () => {
+      expect(liveFrameImagePackingOption.format).assertEqual('image/jpeg');
+      expect(liveFrameImagePackingOption.quality).assertEqual(90);
     });
 
     it('liveFrameImageServiceReportsCaptureFailureWithoutWritingCache', 0, async () => {
