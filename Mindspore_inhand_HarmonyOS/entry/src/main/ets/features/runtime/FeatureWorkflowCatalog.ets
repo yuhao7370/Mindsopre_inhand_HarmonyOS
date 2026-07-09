@@ -25,6 +25,7 @@ export type AiMethodName =
   'segmentPerson' |
   'detectPose' |
   'detectGesture' |
+  'detectScene' |
   'recognizeText' |
   'translateText';
 
@@ -36,6 +37,7 @@ export type FeatureResultKind =
   'segmentationMask' |
   'poseOverlay' |
   'gestureLabel' |
+  'sceneLabels' |
   'recognizedText' |
   'translationText';
 
@@ -135,6 +137,26 @@ export const featureWorkflows: Array<FeatureWorkflow> = [
     inputKinds: ['camera'],
     requiredPermissions: ['camera'],
     resultKind: 'gestureLabel',
+    liveMode: true
+  },
+  {
+    routeName: AppRoute.SCENE_STILL.name,
+    titleKey: 'title_scene_detection',
+    summaryKey: 'workflow_summary_scene',
+    aiMethod: 'detectScene',
+    inputKinds: ['photo', 'camera'],
+    requiredPermissions: ['camera', 'media'],
+    resultKind: 'sceneLabels',
+    liveMode: false
+  },
+  {
+    routeName: AppRoute.SCENE_LIVE.name,
+    titleKey: 'title_scene_detection',
+    summaryKey: 'workflow_summary_scene',
+    aiMethod: 'detectScene',
+    inputKinds: ['camera'],
+    requiredPermissions: ['camera'],
+    resultKind: 'sceneLabels',
     liveMode: true
   },
   {

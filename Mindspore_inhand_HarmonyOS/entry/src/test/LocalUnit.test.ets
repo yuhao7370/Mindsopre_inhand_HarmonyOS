@@ -46,6 +46,12 @@ import {
   GestureService
 } from '../main/ets/services/ai/GestureService';
 import {
+  SceneDetection,
+  SceneDetectionResult,
+  SceneDetectionRunner,
+  SceneDetectionService
+} from '../main/ets/services/ai/SceneDetectionService';
+import {
   StyleTransferInput,
   builtInStyleTransferStyleCount,
   builtInStyleTransferStyles,
@@ -670,6 +676,26 @@ class RejectingGestureRunner implements GestureRunner {
   }
 }
 
+class FixedSceneDetectionRunner implements SceneDetectionRunner {
+  readonly seenImageUris: Array<string> = [];
+  private readonly result: SceneDetectionResult;
+
+  constructor(result: SceneDetectionResult) {
+    this.result = result;
+  }
+
+  async detectScenes(imageUri: string): Promise<SceneDetectionResult> {
+    this.seenImageUris.push(imageUri);
+    return this.result;
+  }
+}
+
+class RejectingSceneDetectionRunner implements SceneDetectionRunner {
+  async detectScenes(_imageUri: string): Promise<SceneDetectionResult> {
+    throw new Error('scene detection failed');
+  }
+}
+
 class RecordingClipboardWriter implements TextClipboardWriter {
   readonly copiedTexts: Array<string> = [];
 
@@ -924,13 +950,15 @@ export default function localUnitTest() {
       expect(AppRoute.TEXT_TRANSLATION.name).assertEqual('/hms/TextTranslationActivity');
     });
 
-    it('keepsAndroidSceneDetectionRoutesAsHiddenStubs', 0, () => {
+    it('keepsAndroidSceneDetectionRoutesHiddenButRuntimeReady', 0, () => {
       expect(AppRoute.SCENE_STILL.name).assertEqual('/hms/SenceDetectionStillAnalyseActivity');
       expect(AppRoute.SCENE_LIVE.name).assertEqual('/hms/SenceDetectionLiveAnalyseActivity');
-      expect(findRouteByName(AppRoute.SCENE_STILL.name)?.page).assertEqual('pages/FeatureStubPage');
-      expect(findRouteByName(AppRoute.SCENE_LIVE.name)?.page).assertEqual('pages/FeatureStubPage');
+      expect(findRouteByName(AppRoute.SCENE_STILL.name)?.page).assertEqual('pages/FeatureRuntimePage');
+      expect(findRouteByName(AppRoute.SCENE_LIVE.name)?.page).assertEqual('pages/FeatureRuntimePage');
       expect(findFeatureByRoute(AppRoute.SCENE_STILL.name) === undefined).assertTrue();
       expect(findFeatureByRoute(AppRoute.SCENE_LIVE.name) === undefined).assertTrue();
+      expect(workflowForRoute(AppRoute.SCENE_STILL.name)?.aiMethod).assertEqual('detectScene');
+      expect(workflowForRoute(AppRoute.SCENE_LIVE.name)?.liveMode).assertTrue();
     });
 
     it('keepsHiddenAndroidFeaturesRouteReady', 0, () => {
@@ -1042,6 +1070,11 @@ export default function localUnitTest() {
       expect(hasAppStringKey('feature_runtime_gesture_unsupported')).assertTrue();
       expect(hasAppStringKey('feature_runtime_gesture_done')).assertTrue();
       expect(hasAppStringKey('feature_runtime_gesture_failed')).assertTrue();
+      expect(hasAppStringKey('title_scene_detection')).assertTrue();
+      expect(hasAppStringKey('feature_runtime_scene_unsupported')).assertTrue();
+      expect(hasAppStringKey('feature_runtime_scene_done')).assertTrue();
+      expect(hasAppStringKey('feature_runtime_scene_failed')).assertTrue();
+      expect(hasAppStringKey('workflow_summary_scene')).assertTrue();
       expect(hasAppStringKey('feature_runtime_translation_unsupported')).assertTrue();
       expect(hasAppStringKey('feature_runtime_text_recognition_done')).assertTrue();
       expect(hasAppStringKey('feature_runtime_text_translation_failed')).assertTrue();
@@ -1979,6 +2012,69 @@ export default function localUnitTest() {
       expect(result.messageKey).assertEqual('feature_runtime_gesture_failed');
     });
 
+    it('sceneDetectionRequiresImageInputWhenServiceIsProvided', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.SCENE_STILL.name);
+      expect(workflow !== undefined).assertTrue();
+      const service = new SceneDetectionService({
+        runner: new FixedSceneDetectionRunner({
+          ok: true,
+          scenes: [],
+          executionMs: 3
+        })
+      });
+
+      const result = await new DefaultAiService({ sceneDetectionService: service }).run(workflow!);
+
+      expect(result.ok).assertFalse();
+      expect(result.code).assertEqual('MISSING_INPUT');
+    });
+
+    it('aiServiceUsesSceneDetectionServiceWhenProvided', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.SCENE_STILL.name);
+      expect(workflow !== undefined).assertTrue();
+      const scene: SceneDetection = {
+        label: 'beach',
+        score: 0.96
+      };
+      const runner = new FixedSceneDetectionRunner({
+        ok: true,
+        scenes: [scene],
+        executionMs: 9
+      });
+      const service = new SceneDetectionService({
+        runner: runner
+      });
+
+      const result = await new DefaultAiService({ sceneDetectionService: service }).run(workflow!, {
+        imageUri: 'file://selected/beach.jpg'
+      });
+
+      expect(result.ok).assertTrue();
+      expect(result.code).assertEqual('SCENE_DETECTION_DONE');
+      expect(result.messageKey).assertEqual('feature_runtime_scene_done');
+      expect(result.detailText.indexOf('beach 96.00%') >= 0).assertTrue();
+      expect(aiRunResultRows(result)[0].labelKey).assertEqual('feature_runtime_result_label');
+      expect(aiRunResultRows(result)[0].value).assertEqual('beach');
+      expect(result.data?.kind).assertEqual('scenes');
+      expect(runner.seenImageUris[0]).assertEqual('file://selected/beach.jpg');
+    });
+
+    it('aiServiceReportsSceneDetectionFailureWithI18nKey', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.SCENE_STILL.name);
+      expect(workflow !== undefined).assertTrue();
+      const service = new SceneDetectionService({
+        runner: new RejectingSceneDetectionRunner()
+      });
+
+      const result = await new DefaultAiService({ sceneDetectionService: service }).run(workflow!, {
+        imageUri: 'file://selected/unknown.jpg'
+      });
+
+      expect(result.ok).assertFalse();
+      expect(result.code).assertEqual('SCENE_DETECTION_FAILED');
+      expect(result.messageKey).assertEqual('feature_runtime_scene_failed');
+    });
+
     it('customModelRequiresModelAndImageInputs', 0, async () => {
       const workflow = workflowForRoute(AppRoute.CUSTOM_MODEL.name);
       expect(workflow !== undefined).assertTrue();
@@ -2846,6 +2942,22 @@ export default function localUnitTest() {
       expect(result.messageKey).assertEqual('feature_runtime_gesture_unsupported');
     });
 
+    it('reportsSceneDetectionAsPlatformUnsupportedWithoutRunner', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.SCENE_STILL.name);
+      expect(workflow !== undefined).assertTrue();
+      const service = await createRuntimeAiServiceForWorkflow(workflow!, {
+        resourceManager: new ThrowingRawfileContentReader()
+      });
+
+      const result = await service.run(workflow!, {
+        imageUri: 'file://selected/scene.jpg'
+      });
+
+      expect(result.ok).assertFalse();
+      expect(result.code).assertEqual('PLATFORM_UNSUPPORTED');
+      expect(result.messageKey).assertEqual('feature_runtime_scene_unsupported');
+    });
+
     it('runtimeFactoryInjectsCustomModelServiceForCustomModelWorkflow', 0, async () => {
       const workflow = workflowForRoute(AppRoute.CUSTOM_MODEL.name);
       expect(workflow !== undefined).assertTrue();
@@ -3018,6 +3130,31 @@ export default function localUnitTest() {
       expect(result.ok).assertTrue();
       expect(result.code).assertEqual('GESTURE_DETECTION_DONE');
       expect(runner.seenImageUris[0]).assertEqual('file://selected/gesture.jpg');
+    });
+
+    it('runtimeFactoryInjectsSceneDetectionServiceForSceneWorkflow', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.SCENE_STILL.name);
+      expect(workflow !== undefined).assertTrue();
+      const runner = new FixedSceneDetectionRunner({
+        ok: true,
+        scenes: [{
+          label: 'food',
+          score: 0.82
+        }],
+        executionMs: 7
+      });
+      const service = await createRuntimeAiServiceForWorkflow(workflow!, {
+        resourceManager: new ThrowingRawfileContentReader(),
+        sceneDetectionRunner: runner
+      });
+
+      const result: AiRunResult = await service.run(workflow!, {
+        imageUri: 'file://selected/food.jpg'
+      });
+
+      expect(result.ok).assertTrue();
+      expect(result.code).assertEqual('SCENE_DETECTION_DONE');
+      expect(runner.seenImageUris[0]).assertEqual('file://selected/food.jpg');
     });
 
     it('runtimeFactoryInjectsSegmentationServiceForSegmentationWorkflow', 0, async () => {

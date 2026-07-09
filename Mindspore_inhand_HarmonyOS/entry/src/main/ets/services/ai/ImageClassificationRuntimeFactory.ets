@@ -59,6 +59,10 @@ import {
   GestureService
 } from './GestureService';
 import {
+  SceneDetectionRunner,
+  SceneDetectionService
+} from './SceneDetectionService';
+import {
   HarmonyTextRecognitionRunner,
   TextRecognitionRunner,
   TextRecognitionService,
@@ -83,6 +87,7 @@ export interface HarmonyImageClassificationRuntimeOptions {
   readonly segmentationRunner?: SegmentationRunner;
   readonly poseRunner?: PoseRunner;
   readonly gestureRunner?: GestureRunner;
+  readonly sceneDetectionRunner?: SceneDetectionRunner;
 }
 
 let cachedHarmonyDefaultAiService: Promise<DefaultAiService> | undefined = undefined;
@@ -166,6 +171,11 @@ export async function cachedRuntimeAiServiceForWorkflow(
       resourceManager: resourceManager
     });
   }
+  if (workflow.aiMethod === 'detectScene') {
+    return createRuntimeAiServiceForWorkflow(workflow, {
+      resourceManager: resourceManager
+    });
+  }
   return new DefaultAiService();
 }
 
@@ -222,6 +232,14 @@ export async function createRuntimeAiServiceForWorkflow(
     if (options.gestureRunner !== undefined) {
       return new DefaultAiService({
         gestureService: createHarmonyGestureService(options.gestureRunner)
+      });
+    }
+    return new DefaultAiService();
+  }
+  if (workflow.aiMethod === 'detectScene') {
+    if (options.sceneDetectionRunner !== undefined) {
+      return new DefaultAiService({
+        sceneDetectionService: createHarmonySceneDetectionService(options.sceneDetectionRunner)
       });
     }
     return new DefaultAiService();
@@ -347,6 +365,12 @@ export function createHarmonyPoseService(
 
 export function createHarmonyGestureService(runner: GestureRunner): GestureService {
   return new GestureService({
+    runner: runner
+  });
+}
+
+export function createHarmonySceneDetectionService(runner: SceneDetectionRunner): SceneDetectionService {
+  return new SceneDetectionService({
     runner: runner
   });
 }

@@ -33,6 +33,11 @@ import {
   GestureService
 } from './GestureService';
 import {
+  SceneDetection,
+  SceneDetectionResult,
+  SceneDetectionService
+} from './SceneDetectionService';
+import {
   androidDefaultTranslationTargetLanguage,
   TextRecognitionResult,
   TextRecognitionService,
@@ -62,7 +67,9 @@ export type AiRunCode =
   'POSE_DETECTION_DONE' |
   'POSE_DETECTION_FAILED' |
   'GESTURE_DETECTION_DONE' |
-  'GESTURE_DETECTION_FAILED';
+  'GESTURE_DETECTION_FAILED' |
+  'SCENE_DETECTION_DONE' |
+  'SCENE_DETECTION_FAILED';
 
 export interface AiRunInputs {
   readonly imageUri?: string;
@@ -84,6 +91,7 @@ export type AiRunData =
   AiSegmentationData |
   AiPoseData |
   AiGestureData |
+  AiSceneData |
   AiCustomModelData;
 
 export interface AiClassificationData {
@@ -136,6 +144,12 @@ export interface AiGestureData {
   readonly result: GestureResult;
 }
 
+export interface AiSceneData {
+  readonly kind: 'scenes';
+  readonly imageUri: string;
+  readonly result: SceneDetectionResult;
+}
+
 export interface AiCustomModelData {
   readonly kind: 'customModel';
   readonly imageUri: string;
@@ -168,6 +182,7 @@ export interface AiServiceOptions {
   readonly segmentationService?: SegmentationService;
   readonly poseService?: PoseService;
   readonly gestureService?: GestureService;
+  readonly sceneDetectionService?: SceneDetectionService;
 }
 
 export class DefaultAiService {
@@ -180,6 +195,7 @@ export class DefaultAiService {
   private readonly segmentationService?: SegmentationService;
   private readonly poseService?: PoseService;
   private readonly gestureService?: GestureService;
+  private readonly sceneDetectionService?: SceneDetectionService;
 
   constructor(options?: AiServiceOptions) {
     this.imageClassificationService = options?.imageClassificationService ?? new ImageClassificationService({
@@ -193,6 +209,7 @@ export class DefaultAiService {
     this.segmentationService = options?.segmentationService;
     this.poseService = options?.poseService;
     this.gestureService = options?.gestureService;
+    this.sceneDetectionService = options?.sceneDetectionService;
   }
 
   async run(workflow: FeatureWorkflow, inputs: AiRunInputs = {}): Promise<AiRunResult> {
@@ -219,6 +236,9 @@ export class DefaultAiService {
     }
     if (workflow.aiMethod === 'detectGesture') {
       return this.detectGesture(inputs);
+    }
+    if (workflow.aiMethod === 'detectScene') {
+      return this.detectScene(inputs);
     }
     if (workflow.aiMethod === 'runCustomModel') {
       return this.runCustomModel(inputs);
@@ -266,6 +286,46 @@ export class DefaultAiService {
       detailText: this.gestureSummary(result, imageUri),
       data: {
         kind: 'gesture',
+        imageUri: imageUri,
+        result: result
+      }
+    };
+  }
+
+  private async detectScene(inputs: AiRunInputs): Promise<AiRunResult> {
+    if (this.sceneDetectionService === undefined) {
+      return this.platformUnsupportedResult('detectScene', 'feature_runtime_scene_unsupported');
+    }
+
+    const imageUri = inputs.imageUri ?? '';
+    if (imageUri.length === 0) {
+      return {
+        ok: false,
+        code: 'MISSING_INPUT',
+        aiMethod: 'detectScene',
+        messageKey: 'feature_runtime_missing_input',
+        detailText: ''
+      };
+    }
+
+    const result: SceneDetectionResult = await this.sceneDetectionService.detectScenes(imageUri);
+    if (!result.ok || result.scenes.length === 0) {
+      return {
+        ok: false,
+        code: 'SCENE_DETECTION_FAILED',
+        aiMethod: 'detectScene',
+        messageKey: 'feature_runtime_scene_failed',
+        detailText: this.sceneDetectionSummary(result, imageUri)
+      };
+    }
+    return {
+      ok: true,
+      code: 'SCENE_DETECTION_DONE',
+      aiMethod: 'detectScene',
+      messageKey: 'feature_runtime_scene_done',
+      detailText: this.sceneDetectionSummary(result, imageUri),
+      data: {
+        kind: 'scenes',
         imageUri: imageUri,
         result: result
       }
@@ -833,6 +893,18 @@ export class DefaultAiService {
     return lines.join('\n');
   }
 
+  private sceneDetectionSummary(result: SceneDetectionResult, imageUri: string): string {
+    const lines: Array<string> = [
+      `image=${this.lastPathSegment(imageUri)}`,
+      `count=${result.scenes.length}`,
+      `executionMs=${result.executionMs}`
+    ];
+    result.scenes.forEach((scene: SceneDetection, index: number) => {
+      lines.push(`${index + 1}. ${scene.label} ${(scene.score * 100).toFixed(2)}%`);
+    });
+    return lines.join('\n');
+  }
+
   private gestureLine(gesture: GestureDetection): string {
     const label = gesture.label.length > 0 ? gesture.label : `${gesture.category}`;
     let line = `${label} ${(gesture.score * 100).toFixed(2)}%`;
@@ -944,6 +1016,8 @@ export function aiRunResultRows(result: AiRunResult): Array<AiRunResultRow> {
       return poseRows;
     case 'gesture':
       return gestureResultRows(data);
+    case 'scenes':
+      return sceneDetectionResultRows(data);
     case 'customModel':
       return [
         resultRow('feature_runtime_result_model', runtimePathSegment(data.modelUri)),
@@ -976,6 +1050,20 @@ function gestureResultRows(data: AiGestureData): Array<AiRunResultRow> {
   if (data.result.gestures.length > 0) {
     const top = data.result.gestures[0];
     rows.unshift(resultRow('feature_runtime_result_label', top.label.length > 0 ? top.label : `${top.category}`));
+    rows.push(resultRow('feature_runtime_result_score', `${(top.score * 100).toFixed(2)}%`));
+  }
+  rows.push(resultRow('feature_runtime_result_image', runtimePathSegment(data.imageUri)));
+  rows.push(resultRow('feature_runtime_result_execution_time', `${data.result.executionMs}ms`));
+  return rows;
+}
+
+function sceneDetectionResultRows(data: AiSceneData): Array<AiRunResultRow> {
+  const rows: Array<AiRunResultRow> = [
+    resultRow('feature_runtime_result_count', `${data.result.scenes.length}`)
+  ];
+  if (data.result.scenes.length > 0) {
+    const top = data.result.scenes[0];
+    rows.unshift(resultRow('feature_runtime_result_label', top.label));
     rows.push(resultRow('feature_runtime_result_score', `${(top.score * 100).toFixed(2)}%`));
   }
   rows.push(resultRow('feature_runtime_result_image', runtimePathSegment(data.imageUri)));
