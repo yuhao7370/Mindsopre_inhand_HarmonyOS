@@ -29,6 +29,11 @@ import {
   SegmentationRectanglePercent,
   segmentationRectanglePercent
 } from '../services/ai/SegmentationService';
+import {
+  PosePoint,
+  PosePointPercent,
+  posePointPercent
+} from '../services/ai/PoseService';
 import { styleTransferPixelMapFromRgbaOutput } from '../services/ai/StyleTransferService';
 import { AppStringKey, appString } from '../common/i18n/AppStrings';
 import { AppColor, AppRadius, AppSpacing } from '../common/theme/AppTheme';
@@ -66,6 +71,10 @@ struct FeatureRuntimePage {
   @State segmentationRectangles: Array<SegmentationRectangle> = [];
   @State segmentationImageWidth: number = 0;
   @State segmentationImageHeight: number = 0;
+  @State poseImageUri: string = '';
+  @State posePoints: Array<PosePoint> = [];
+  @State poseImageWidth: number = 0;
+  @State poseImageHeight: number = 0;
   @State helpUrl: string = '';
   @State inputKinds: Array<FeatureInputKind> = [];
   @State permissionKinds: Array<FeaturePermissionKind> = [];
@@ -189,6 +198,7 @@ struct FeatureRuntimePage {
     this.clearVisualResults();
     this.updateObjectDetectionPreview(result);
     this.updateSegmentationPreview(result);
+    this.updatePosePreview(result);
     this.updateStyledImagePreview(result);
   }
 
@@ -202,6 +212,10 @@ struct FeatureRuntimePage {
     this.segmentationRectangles = [];
     this.segmentationImageWidth = 0;
     this.segmentationImageHeight = 0;
+    this.poseImageUri = '';
+    this.posePoints = [];
+    this.poseImageWidth = 0;
+    this.poseImageHeight = 0;
   }
 
   private updateObjectDetectionPreview(result: AiRunResult): void {
@@ -226,6 +240,34 @@ struct FeatureRuntimePage {
     this.segmentationRectangles = data.result.rectangles;
     this.segmentationImageWidth = data.result.imageWidth ?? this.segmentationSourceWidth(data.result.rectangles);
     this.segmentationImageHeight = data.result.imageHeight ?? this.segmentationSourceHeight(data.result.rectangles);
+  }
+
+  private updatePosePreview(result: AiRunResult): void {
+    const data = result.data;
+    if (data === undefined || data.kind !== 'pose' || data.result.points.length === 0) {
+      return;
+    }
+
+    this.poseImageUri = data.imageUri;
+    this.posePoints = data.result.points;
+    this.poseImageWidth = data.result.imageWidth ?? this.poseSourceWidth(data.result.points);
+    this.poseImageHeight = data.result.imageHeight ?? this.poseSourceHeight(data.result.points);
+  }
+
+  private poseSourceWidth(points: Array<PosePoint>): number {
+    let width = 0;
+    points.forEach((point: PosePoint) => {
+      width = Math.max(width, point.x);
+    });
+    return width;
+  }
+
+  private poseSourceHeight(points: Array<PosePoint>): number {
+    let height = 0;
+    points.forEach((point: PosePoint) => {
+      height = Math.max(height, point.y);
+    });
+    return height;
   }
 
   private segmentationSourceWidth(rectangles: Array<SegmentationRectangle>): number {
@@ -368,6 +410,13 @@ struct FeatureRuntimePage {
     return this.segmentationImageWidth / this.segmentationImageHeight;
   }
 
+  private poseAspectRatio(): number {
+    if (this.poseImageWidth <= 0 || this.poseImageHeight <= 0) {
+      return 1;
+    }
+    return this.poseImageWidth / this.poseImageHeight;
+  }
+
   private objectDetectionAspectRatio(): number {
     if (this.objectDetectionImageWidth <= 0 || this.objectDetectionImageHeight <= 0) {
       return 1;
@@ -388,6 +437,14 @@ struct FeatureRuntimePage {
     );
   }
 
+  private posePointStyle(point: PosePoint): PosePointPercent {
+    return posePointPercent(
+      point,
+      this.poseImageWidth,
+      this.poseImageHeight
+    );
+  }
+
   private segmentationBoxStyle(rectangle: SegmentationRectangle): SegmentationRectanglePercent {
     return segmentationRectanglePercent(
       rectangle,
@@ -398,6 +455,48 @@ struct FeatureRuntimePage {
 
   private percentLength(value: number): string {
     return `${value}%`;
+  }
+
+  @Builder
+  posePreview(labelKey: AppStringKey, uri: string) {
+    Column() {
+      Text(appString(labelKey))
+        .fontSize(12)
+        .fontColor(AppColor.textSecondary)
+        .width('100%')
+      Stack({ alignContent: Alignment.TopStart }) {
+        Image(uri)
+          .width('100%')
+          .height('100%')
+          .objectFit(ImageFit.Fill)
+        ForEach(this.posePoints, (point: PosePoint) => {
+          this.posePoint(point)
+        }, (point: PosePoint) => `${point.type}-${point.x}-${point.y}-${point.score}`)
+      }
+      .width('100%')
+      .aspectRatio(this.poseAspectRatio())
+      .backgroundColor('#F7F8FA')
+      .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
+      .clip(true)
+      .margin({ top: AppSpacing.xs })
+    }
+    .width('100%')
+    .margin({ top: AppSpacing.sm })
+  }
+
+  @Builder
+  posePoint(point: PosePoint) {
+    Column() {
+    }
+    .width(8)
+    .height(8)
+    .borderRadius(4)
+    .backgroundColor('#FF5A5F')
+    .border({ width: 1, color: '#FFFFFF' })
+    .position({
+      x: this.percentLength(this.posePointStyle(point).x),
+      y: this.percentLength(this.posePointStyle(point).y)
+    })
   }
 
   @Builder
@@ -690,6 +789,9 @@ struct FeatureRuntimePage {
           }
           if (this.segmentationImageUri.length > 0 && this.segmentationRectangles.length > 0) {
             this.segmentationPreview('feature_runtime_result_segmentation_overlay', this.segmentationImageUri)
+          }
+          if (this.poseImageUri.length > 0 && this.posePoints.length > 0) {
+            this.posePreview('feature_runtime_result_pose_overlay', this.poseImageUri)
           }
           if (this.recognizedTextForCopy().length > 0) {
             Button(appString('feature_runtime_copy_text'))

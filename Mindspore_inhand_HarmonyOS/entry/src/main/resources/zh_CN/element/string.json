@@ -118,6 +118,7 @@
     { "name": "feature_runtime_result_styled_image", "value": "风格化结果" },
     { "name": "feature_runtime_result_detection_overlay", "value": "检测框预览" },
     { "name": "feature_runtime_result_segmentation_overlay", "value": "分割预览" },
+    { "name": "feature_runtime_result_pose_overlay", "value": "姿态点预览" },
     { "name": "feature_runtime_result_output", "value": "输出" },
     { "name": "feature_runtime_result_target_language", "value": "目标语言" },
     { "name": "feature_runtime_result_translated_text", "value": "译文" },

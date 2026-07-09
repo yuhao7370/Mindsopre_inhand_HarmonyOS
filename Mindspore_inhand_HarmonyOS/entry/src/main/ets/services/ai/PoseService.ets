@@ -13,8 +13,15 @@ export interface PoseResult {
   readonly ok: boolean;
   readonly skeletonCount: number;
   readonly pointCount: number;
+  readonly imageWidth?: number;
+  readonly imageHeight?: number;
   readonly points: Array<PosePoint>;
   readonly executionMs: number;
+}
+
+export interface PosePointPercent {
+  readonly x: number;
+  readonly y: number;
 }
 
 export interface PoseRunner {
@@ -58,6 +65,7 @@ export class HarmonySkeletonDetectionRunner implements PoseRunner {
     try {
       imageFile = await openPoseImageFile(imageUri);
       imageSource = image.createImageSource(imageFile.fd);
+      const imageInfo: image.ImageInfo = await imageSource.getImageInfo();
       pixelMap = await imageSource.createPixelMap();
       detector = await skeletonDetection.SkeletonDetector.create();
       const request = new visionBase.Request();
@@ -66,7 +74,12 @@ export class HarmonySkeletonDetectionRunner implements PoseRunner {
       };
       request.inputData = inputData;
       const response = await detector.process(request);
-      return poseResultFromCoreVision(response.skeletons, Date.now() - startMs);
+      return poseResultFromCoreVision(
+        response.skeletons,
+        Date.now() - startMs,
+        imageInfo.size.width,
+        imageInfo.size.height
+      );
     } finally {
       if (detector !== undefined) {
         await destroySkeletonDetector(detector);
@@ -86,7 +99,9 @@ export class HarmonySkeletonDetectionRunner implements PoseRunner {
 
 export function poseResultFromCoreVision(
   skeletons: Array<skeletonDetection.Skeleton>,
-  executionMs: number
+  executionMs: number,
+  imageWidth: number = 0,
+  imageHeight: number = 0
 ): PoseResult {
   const points: Array<PosePoint> = [];
   skeletons.forEach((skeleton: skeletonDetection.Skeleton) => {
@@ -103,9 +118,28 @@ export function poseResultFromCoreVision(
     ok: skeletons.length > 0,
     skeletonCount: skeletons.length,
     pointCount: points.length,
+    imageWidth: imageWidth,
+    imageHeight: imageHeight,
     points: points,
     executionMs: executionMs
   };
+}
+
+export function posePointPercent(point: PosePoint, imageWidth: number, imageHeight: number): PosePointPercent {
+  if (imageWidth <= 0 || imageHeight <= 0) {
+    return {
+      x: 0,
+      y: 0
+    };
+  }
+  return {
+    x: posePercent(point.x, imageWidth),
+    y: posePercent(point.y, imageHeight)
+  };
+}
+
+function posePercent(value: number, sourceLength: number): number {
+  return Math.min(100, Math.max(0, value * 100 / sourceLength));
 }
 
 async function destroySkeletonDetector(detector: skeletonDetection.SkeletonDetector): Promise<void> {

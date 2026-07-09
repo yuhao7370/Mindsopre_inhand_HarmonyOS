@@ -29,7 +29,8 @@ import {
   PosePoint,
   PoseResult,
   PoseRunner,
-  PoseService
+  PoseService,
+  posePointPercent
 } from '../main/ets/services/ai/PoseService';
 import {
   StyleTransferInput,
@@ -1170,6 +1171,20 @@ export default function localUnitTest() {
       expect(aiRunResultRows(result)[1].labelKey).assertEqual('feature_runtime_result_points');
       expect(aiRunResultRows(result)[1].value).assertEqual('1');
       expect(runner.seenImageUris[0]).assertEqual('file://selected/pose.jpg');
+    });
+
+    it('mapsPosePointToPercentOverlay', 0, () => {
+      const point: PosePoint = {
+        type: 0,
+        score: 0.95,
+        x: 25,
+        y: 175
+      };
+
+      const marker = posePointPercent(point, 200, 200);
+
+      expect(marker.x.toFixed(1)).assertEqual('12.5');
+      expect(marker.y.toFixed(1)).assertEqual('87.5');
     });
 
     it('aiServiceReportsPoseFailureWithI18nKey', 0, async () => {
