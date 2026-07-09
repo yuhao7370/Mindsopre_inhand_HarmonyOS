@@ -1,3 +1,10 @@
+import { image } from '@kit.ImageKit';
+import { mindSporeLite } from '@kit.MindSporeLiteKit';
+import {
+  RawfileContentReader,
+  rawfileContentToArrayBuffer
+} from './MindSporeLiteModelRunner';
+
 export const stylePredictModelRawfilePath: string = 'model/style_predict_quant.ms';
 export const styleTransferModelRawfilePath: string = 'model/style_transfer_quant.ms';
 export const stylePredictModelDownloadUrl: string =
@@ -18,8 +25,144 @@ export interface StyleTransferResult {
   readonly executionMs: number;
 }
 
+export interface StyleTransferInput {
+  readonly contentInputBuffer: ArrayBuffer;
+  readonly styleInputBuffer: ArrayBuffer;
+}
+
+export interface StyleTransferInputPreprocessor {
+  createInput(contentImageUri: string, styleImageUri: string): Promise<StyleTransferInput>;
+}
+
+export interface StyleTransferTensorOutput {
+  readonly output: Float32Array;
+  readonly predictMs: number;
+  readonly transferMs: number;
+}
+
+export interface StyleTransferTensorRunner {
+  runStyleTransfer(input: StyleTransferInput): Promise<StyleTransferTensorOutput>;
+}
+
 export interface StyleTransferRunner {
   run(contentImageUri: string, styleImageUri: string): Promise<StyleTransferResult>;
+}
+
+export interface StyleTransferMindSporeRunnerOptions {
+  readonly preprocessor: StyleTransferInputPreprocessor;
+  readonly tensorRunner: StyleTransferTensorRunner;
+}
+
+export class StyleTransferMindSporeRunner implements StyleTransferRunner {
+  private readonly preprocessor: StyleTransferInputPreprocessor;
+  private readonly tensorRunner: StyleTransferTensorRunner;
+
+  constructor(options: StyleTransferMindSporeRunnerOptions) {
+    this.preprocessor = options.preprocessor;
+    this.tensorRunner = options.tensorRunner;
+  }
+
+  async run(contentImageUri: string, styleImageUri: string): Promise<StyleTransferResult> {
+    const startedAt = Date.now();
+    const input = await this.preprocessor.createInput(contentImageUri, styleImageUri);
+    const output = await this.tensorRunner.runStyleTransfer(input);
+    return {
+      ok: output.output.length > 0,
+      outputFloatCount: output.output.length,
+      predictMs: output.predictMs,
+      transferMs: output.transferMs,
+      executionMs: Date.now() - startedAt
+    };
+  }
+}
+
+export interface MindSporeLiteStyleTransferTensorRunnerOptions {
+  readonly resourceManager: RawfileContentReader;
+  readonly predictModelRawfilePath: string;
+  readonly transferModelRawfilePath: string;
+}
+
+export class MindSporeLiteStyleTransferTensorRunner implements StyleTransferTensorRunner {
+  private readonly resourceManager: RawfileContentReader;
+  private readonly predictModelRawfilePath: string;
+  private readonly transferModelRawfilePath: string;
+  private cachedPredictModel?: mindSporeLite.Model;
+  private cachedTransferModel?: mindSporeLite.Model;
+
+  constructor(options: MindSporeLiteStyleTransferTensorRunnerOptions) {
+    this.resourceManager = options.resourceManager;
+    this.predictModelRawfilePath = options.predictModelRawfilePath;
+    this.transferModelRawfilePath = options.transferModelRawfilePath;
+  }
+
+  async runStyleTransfer(input: StyleTransferInput): Promise<StyleTransferTensorOutput> {
+    const predictStartedAt = Date.now();
+    const styleVector = await this.predictStyleVector(input.styleInputBuffer);
+    const predictMs = Date.now() - predictStartedAt;
+
+    const transferStartedAt = Date.now();
+    const output = await this.transferStyle(styleVector.buffer as ArrayBuffer, input.contentInputBuffer);
+    const transferMs = Date.now() - transferStartedAt;
+
+    return {
+      output: output,
+      predictMs: predictMs,
+      transferMs: transferMs
+    };
+  }
+
+  private async predictStyleVector(styleInputBuffer: ArrayBuffer): Promise<Float32Array> {
+    const model = await this.loadPredictModel();
+    const inputs = model.getInputs();
+    if (inputs.length === 0) {
+      return new Float32Array(0);
+    }
+
+    inputs[0].setData(styleInputBuffer);
+    const outputs = await model.predict(inputs);
+    if (outputs.length === 0) {
+      return new Float32Array(0);
+    }
+    return new Float32Array(outputs[0].getData());
+  }
+
+  private async transferStyle(styleVectorBuffer: ArrayBuffer, contentInputBuffer: ArrayBuffer): Promise<Float32Array> {
+    const model = await this.loadTransferModel();
+    const inputs = model.getInputs();
+    if (inputs.length < 2 || styleVectorBuffer.byteLength === 0) {
+      return new Float32Array(0);
+    }
+
+    inputs[0].setData(styleVectorBuffer);
+    inputs[1].setData(contentInputBuffer);
+    const outputs = await model.predict(inputs);
+    if (outputs.length === 0) {
+      return new Float32Array(0);
+    }
+    return new Float32Array(outputs[0].getData());
+  }
+
+  private async loadPredictModel(): Promise<mindSporeLite.Model> {
+    if (this.cachedPredictModel !== undefined) {
+      return this.cachedPredictModel;
+    }
+
+    const content = await this.resourceManager.getRawFileContent(this.predictModelRawfilePath);
+    const model = await mindSporeLite.loadModelFromBuffer(rawfileContentToArrayBuffer(content));
+    this.cachedPredictModel = model;
+    return model;
+  }
+
+  private async loadTransferModel(): Promise<mindSporeLite.Model> {
+    if (this.cachedTransferModel !== undefined) {
+      return this.cachedTransferModel;
+    }
+
+    const content = await this.resourceManager.getRawFileContent(this.transferModelRawfilePath);
+    const model = await mindSporeLite.loadModelFromBuffer(rawfileContentToArrayBuffer(content));
+    this.cachedTransferModel = model;
+    return model;
+  }
 }
 
 export interface StyleTransferServiceOptions {
@@ -53,4 +196,31 @@ function emptyStyleTransferResult(): StyleTransferResult {
     transferMs: 0,
     executionMs: 0
   };
+}
+
+export function styleTransferDecodeOptions(size: number): image.DecodingOptions {
+  return {
+    desiredSize: {
+      width: size,
+      height: size
+    },
+    desiredPixelFormat: image.PixelMapFormat.RGBA_8888
+  };
+}
+
+export function styleTransferRgbUnitInputFromRgba(rgba: Uint8Array, size: number): ArrayBuffer {
+  const expectedLength = size * size * 4;
+  if (rgba.length !== expectedLength) {
+    throw new Error(`Expected ${expectedLength} RGBA bytes, got ${rgba.length}.`);
+  }
+
+  const input = new Float32Array(size * size * styleTransferChannels);
+  let outputIndex = 0;
+  for (let index = 0; index < rgba.length; index += 4) {
+    input[outputIndex] = rgba[index] / 255;
+    input[outputIndex + 1] = rgba[index + 1] / 255;
+    input[outputIndex + 2] = rgba[index + 2] / 255;
+    outputIndex += styleTransferChannels;
+  }
+  return input.buffer as ArrayBuffer;
 }

@@ -10,6 +10,7 @@ import {
 import { HarmonyCustomModelInputPreprocessor } from './HarmonyCustomModelInputPreprocessor';
 import { HarmonyImageClassificationInputPreprocessor } from './HarmonyImageInputPreprocessor';
 import { HarmonyObjectDetectionInputPreprocessor } from './HarmonyObjectDetectionInputPreprocessor';
+import { HarmonyStyleTransferInputPreprocessor } from './HarmonyStyleTransferInputPreprocessor';
 import {
   ImageClassificationInputPreprocessor,
   ImageClassificationMindSporeScoreRunner,
@@ -22,8 +23,14 @@ import {
   parseImageCategoryLabels
 } from './ImageClassificationService';
 import {
+  MindSporeLiteStyleTransferTensorRunner,
   StyleTransferRunner,
-  StyleTransferService
+  StyleTransferService,
+  StyleTransferInputPreprocessor,
+  StyleTransferMindSporeRunner,
+  StyleTransferTensorRunner,
+  stylePredictModelRawfilePath,
+  styleTransferModelRawfilePath
 } from './StyleTransferService';
 import {
   MindSporeLiteObjectDetectionTensorRunner,
@@ -47,7 +54,9 @@ export interface HarmonyImageClassificationRuntimeOptions {
   readonly objectDetectionPreprocessor?: ObjectDetectionInputPreprocessor;
   readonly objectDetectionRunner?: ObjectDetectionRunner;
   readonly objectDetectionTensorRunner?: ObjectDetectionTensorRunner;
+  readonly styleTransferPreprocessor?: StyleTransferInputPreprocessor;
   readonly styleTransferRunner?: StyleTransferRunner;
+  readonly styleTransferTensorRunner?: StyleTransferTensorRunner;
 }
 
 let cachedHarmonyDefaultAiService: Promise<DefaultAiService> | undefined = undefined;
@@ -198,8 +207,22 @@ export function createHarmonyObjectDetectionRunner(
 export function createHarmonyStyleTransferService(
   options: HarmonyImageClassificationRuntimeOptions
 ): StyleTransferService {
+  const runner = options.styleTransferRunner ?? createHarmonyStyleTransferRunner(options);
   return new StyleTransferService({
-    runner: options.styleTransferRunner
+    runner: runner
+  });
+}
+
+export function createHarmonyStyleTransferRunner(
+  options: HarmonyImageClassificationRuntimeOptions
+): StyleTransferRunner {
+  return new StyleTransferMindSporeRunner({
+    preprocessor: options.styleTransferPreprocessor ?? new HarmonyStyleTransferInputPreprocessor(),
+    tensorRunner: options.styleTransferTensorRunner ?? new MindSporeLiteStyleTransferTensorRunner({
+      resourceManager: options.resourceManager,
+      predictModelRawfilePath: stylePredictModelRawfilePath,
+      transferModelRawfilePath: styleTransferModelRawfilePath
+    })
   });
 }
 

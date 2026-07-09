@@ -5,9 +5,23 @@ import { hasAppStringKey } from '../main/ets/common/i18n/AppStrings';
 import { iconLabel } from '../main/ets/common/icons/IconSymbols';
 import { AiRunResult, DefaultAiService } from '../main/ets/services/ai/AiService';
 import {
+  StyleTransferInput,
+  StyleTransferInputPreprocessor,
   StyleTransferResult,
   StyleTransferRunner,
-  StyleTransferService
+  StyleTransferService,
+  StyleTransferTensorOutput,
+  StyleTransferTensorRunner,
+  StyleTransferMindSporeRunner,
+  stylePredictModelDownloadUrl,
+  stylePredictModelRawfilePath,
+  styleTransferContentImageSize,
+  styleTransferDecodeOptions,
+  styleTransferModelDownloadUrl,
+  styleTransferModelRawfilePath,
+  styleTransferOutputFloatCount,
+  styleTransferRgbUnitInputFromRgba,
+  styleTransferStyleImageSize
 } from '../main/ets/services/ai/StyleTransferService';
 import {
   ImageClassificationService,
@@ -286,6 +300,38 @@ class FixedStyleTransferRunner implements StyleTransferRunner {
 class RejectingStyleTransferRunner implements StyleTransferRunner {
   async run(_contentImageUri: string, _styleImageUri: string): Promise<StyleTransferResult> {
     throw new Error('style transfer failed');
+  }
+}
+
+class FixedStyleTransferPreprocessor implements StyleTransferInputPreprocessor {
+  readonly seenContentUris: Array<string> = [];
+  readonly seenStyleUris: Array<string> = [];
+  private readonly input: StyleTransferInput;
+
+  constructor(input: StyleTransferInput) {
+    this.input = input;
+  }
+
+  async createInput(contentImageUri: string, styleImageUri: string): Promise<StyleTransferInput> {
+    this.seenContentUris.push(contentImageUri);
+    this.seenStyleUris.push(styleImageUri);
+    return this.input;
+  }
+}
+
+class FixedStyleTransferTensorRunner implements StyleTransferTensorRunner {
+  readonly seenContentBytes: Array<number> = [];
+  readonly seenStyleBytes: Array<number> = [];
+  private readonly output: StyleTransferTensorOutput;
+
+  constructor(output: StyleTransferTensorOutput) {
+    this.output = output;
+  }
+
+  async runStyleTransfer(input: StyleTransferInput): Promise<StyleTransferTensorOutput> {
+    this.seenContentBytes.push(input.contentInputBuffer.byteLength);
+    this.seenStyleBytes.push(input.styleInputBuffer.byteLength);
+    return this.output;
   }
 }
 
@@ -637,6 +683,69 @@ export default function localUnitTest() {
       expect(result.ok).assertFalse();
       expect(result.code).assertEqual('STYLE_TRANSFER_FAILED');
       expect(result.messageKey).assertEqual('feature_runtime_style_transfer_failed');
+    });
+
+    it('usesAndroidStyleTransferModelAssetContract', 0, () => {
+      expect(stylePredictModelRawfilePath).assertEqual('model/style_predict_quant.ms');
+      expect(styleTransferModelRawfilePath).assertEqual('model/style_transfer_quant.ms');
+      expect(stylePredictModelDownloadUrl).assertEqual('https://download.mindspore.cn/model_zoo/official/lite/style_lite/style_predict_quant.ms');
+      expect(styleTransferModelDownloadUrl).assertEqual('https://download.mindspore.cn/model_zoo/official/lite/style_lite/style_transfer_quant.ms');
+    });
+
+    it('definesAndroidStyleTransferPreprocessContract', 0, () => {
+      expect(styleTransferStyleImageSize).assertEqual(256);
+      expect(styleTransferContentImageSize).assertEqual(384);
+      expect(styleTransferOutputFloatCount).assertEqual(384 * 384 * 3);
+    });
+
+    it('normalizesStyleTransferRgbaToRgbUnitInput', 0, () => {
+      const rgba: Uint8Array = new Uint8Array(styleTransferStyleImageSize * styleTransferStyleImageSize * 4);
+      rgba[0] = 255;
+      rgba[1] = 128;
+      rgba[2] = 0;
+      rgba[3] = 99;
+
+      const input = new Float32Array(styleTransferRgbUnitInputFromRgba(rgba, styleTransferStyleImageSize));
+
+      expect(input.length).assertEqual(styleTransferStyleImageSize * styleTransferStyleImageSize * 3);
+      expect(input[0].toFixed(6)).assertEqual('1.000000');
+      expect(input[1].toFixed(6)).assertEqual('0.501961');
+      expect(input[2].toFixed(6)).assertEqual('0.000000');
+    });
+
+    it('requestsStyleTransferDecodeAsAndroidRgbaSizes', 0, () => {
+      const styleOptions: image.DecodingOptions = styleTransferDecodeOptions(styleTransferStyleImageSize);
+      const contentOptions: image.DecodingOptions = styleTransferDecodeOptions(styleTransferContentImageSize);
+      expect(styleOptions.desiredSize!.width).assertEqual(256);
+      expect(styleOptions.desiredPixelFormat).assertEqual(image.PixelMapFormat.RGBA_8888);
+      expect(contentOptions.desiredSize!.height).assertEqual(384);
+    });
+
+    it('styleTransferMindSporeRunnerBridgesPreprocessorToTensorRunner', 0, async () => {
+      const input: StyleTransferInput = {
+        contentInputBuffer: new ArrayBuffer(384 * 384 * 3 * 4),
+        styleInputBuffer: new ArrayBuffer(256 * 256 * 3 * 4)
+      };
+      const preprocessor: FixedStyleTransferPreprocessor = new FixedStyleTransferPreprocessor(input);
+      const tensorRunner: FixedStyleTransferTensorRunner = new FixedStyleTransferTensorRunner({
+        output: new Float32Array(styleTransferOutputFloatCount),
+        predictMs: 7,
+        transferMs: 9
+      });
+      const runner = new StyleTransferMindSporeRunner({
+        preprocessor: preprocessor,
+        tensorRunner: tensorRunner
+      });
+
+      const result: StyleTransferResult =
+        await runner.run('file://selected/content.jpg', 'file://selected/style.jpg');
+
+      expect(result.ok).assertTrue();
+      expect(result.outputFloatCount).assertEqual(styleTransferOutputFloatCount);
+      expect(result.predictMs).assertEqual(7);
+      expect(result.transferMs).assertEqual(9);
+      expect(preprocessor.seenContentUris[0]).assertEqual('file://selected/content.jpg');
+      expect(tensorRunner.seenStyleBytes[0]).assertEqual(256 * 256 * 3 * 4);
     });
 
     it('parsesAndroidImageClassificationLabels', 0, () => {
