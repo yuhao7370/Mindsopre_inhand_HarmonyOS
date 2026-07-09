@@ -44,6 +44,13 @@ import {
   FileUriContentReader,
   FileUriDescriptor
 } from '../main/ets/services/ai/FileUriContentReader';
+import {
+  objectDetectionModelDownloadUrl,
+  objectDetectionModelRawfilePath,
+  objectCategoryLabelCount,
+  objectCategoryLabelRawfilePath,
+  parseObjectCategoryLabels
+} from '../main/ets/services/ai/ObjectDetectionService';
 import { image } from '@kit.ImageKit';
 import {
   imageClassificationCropOffset,
@@ -479,6 +486,21 @@ export default function localUnitTest() {
     it('usesAndroidMobilenetV2ModelAssetContract', 0, () => {
       expect(imageClassificationModelRawfilePath).assertEqual('model/mobilenetv2.ms');
       expect(imageClassificationModelDownloadUrl).assertEqual('https://download.mindspore.cn/model_zoo/official/lite/mobilenetv2_imagenet/mobilenetv2.ms');
+    });
+
+    it('parsesAndroidObjectDetectionLabels', 0, () => {
+      const labels = parseObjectCategoryLabels('background\r\nhuman\nbike\n\ntoothbrush\n');
+      expect(labels.length).assertEqual(4);
+      expect(labels[0]).assertEqual('background');
+      expect(labels[1]).assertEqual('human');
+      expect(labels[3]).assertEqual('toothbrush');
+      expect(objectCategoryLabelCount).assertEqual(81);
+    });
+
+    it('usesAndroidSsdObjectDetectionAssetContract', 0, () => {
+      expect(objectCategoryLabelRawfilePath).assertEqual('labels/object_category.txt');
+      expect(objectDetectionModelRawfilePath).assertEqual('model/ssd.ms');
+      expect(objectDetectionModelDownloadUrl).assertEqual('https://download.mindspore.cn/model_zoo/official/lite/ssd_mobilenetv2_lite/ssd.ms');
     });
 
     it('copiesRawfileViewToExactModelBuffer', 0, () => {

@@ -1,0 +1,81 @@
+background
+human
+bike
+automobile
+motorbike
+aircraft
+motorbus
+train
+motortruck
+boat
+traffic signal
+fireplug
+stop sign
+parking meter
+seat
+bird
+cat
+dog
+horse
+sheep
+cow
+elephant
+bear
+zebra
+giraffe
+knapsack
+bumbershoot
+purse
+neckwear
+traveling bag
+frisbee
+skis
+snowboard
+sports ball
+kite
+baseball bat
+baseball glove
+skateboard
+surfboard
+tennis racket
+bottle
+wine glass
+cup
+fork
+knife
+spoon
+bowl
+banana
+apple
+sandwich
+orange
+broccoli
+carrot
+hot dog
+pizza
+donut
+cake
+chair
+couch
+houseplant
+bed
+dinner table
+toilet
+television
+notebook computer
+mouse
+remote
+keyboard
+smartphone
+microwave
+oven
+toaster
+water sink
+fridge
+book
+bell
+vase
+shears
+toy bear
+hair drier
+toothbrush
