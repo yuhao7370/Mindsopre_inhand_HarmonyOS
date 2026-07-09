@@ -63,14 +63,16 @@ export const allExperienceFeatures: FeatureItem[] = experienceSections.reduce(
   [] as FeatureItem[]
 );
 
+function createVisibleSection(section: FeatureSection): FeatureSection {
+  return {
+    id: section.id,
+    title: section.title,
+    items: section.items.filter((item: FeatureItem) => item.visibleByDefault)
+  };
+}
+
 export const visibleExperienceSections: FeatureSection[] = experienceSections
-  .map((section: FeatureSection) => {
-    return {
-      id: section.id,
-      title: section.title,
-      items: section.items.filter((item: FeatureItem) => item.visibleByDefault)
-    };
-  })
+  .map((section: FeatureSection) => createVisibleSection(section))
   .filter((section: FeatureSection) => section.items.length > 0);
 
 export function findFeatureByRoute(routeName: string): FeatureItem | undefined {

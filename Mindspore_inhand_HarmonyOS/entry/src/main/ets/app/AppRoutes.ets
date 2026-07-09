@@ -3,7 +3,29 @@ export interface AppRouteInfo {
   readonly page: string;
 }
 
-export const AppRoute = {
+export interface AppRouteCatalog {
+  readonly MAIN: AppRouteInfo;
+  readonly OBJECT_PHOTO: AppRouteInfo;
+  readonly OBJECT_CAMERA: AppRouteInfo;
+  readonly IMAGE_CAMERA: AppRouteInfo;
+  readonly STYLE_TRANSFER: AppRouteInfo;
+  readonly CUSTOM_MODEL: AppRouteInfo;
+  readonly POSENET: AppRouteInfo;
+  readonly LIVE_SKELETON: AppRouteInfo;
+  readonly SEGMENTATION_STILL: AppRouteInfo;
+  readonly SEGMENTATION_LIVE: AppRouteInfo;
+  readonly PORTRAIT_SEGMENTATION: AppRouteInfo;
+  readonly GESTURE_STILL: AppRouteInfo;
+  readonly GESTURE_LIVE: AppRouteInfo;
+  readonly TEXT_RECOGNITION: AppRouteInfo;
+  readonly TEXT_TRANSLATION: AppRouteInfo;
+  readonly DANCE: AppRouteInfo;
+  readonly POETRY: AppRouteInfo;
+  readonly MY_QR_CODE: AppRouteInfo;
+  readonly PRIVACY: AppRouteInfo;
+}
+
+export const AppRoute: AppRouteCatalog = {
   MAIN: { name: '/app/MainActivity', page: 'pages/Index' } as AppRouteInfo,
   OBJECT_PHOTO: { name: '/imageobject/ObjectPhotoActivity', page: 'pages/FeatureStubPage' } as AppRouteInfo,
   OBJECT_CAMERA: { name: '/imageobject/ObjectCameraActivity', page: 'pages/FeatureStubPage' } as AppRouteInfo,
