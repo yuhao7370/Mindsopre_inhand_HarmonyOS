@@ -27,6 +27,11 @@ import {
   PoseService
 } from './PoseService';
 import {
+  GestureDetection,
+  GestureResult,
+  GestureService
+} from './GestureService';
+import {
   androidDefaultTranslationTargetLanguage,
   TextRecognitionResult,
   TextRecognitionService,
@@ -55,7 +60,9 @@ export type AiRunCode =
   'SEGMENTATION_DONE' |
   'SEGMENTATION_FAILED' |
   'POSE_DETECTION_DONE' |
-  'POSE_DETECTION_FAILED';
+  'POSE_DETECTION_FAILED' |
+  'GESTURE_DETECTION_DONE' |
+  'GESTURE_DETECTION_FAILED';
 
 export interface AiRunInputs {
   readonly imageUri?: string;
@@ -75,6 +82,7 @@ export type AiRunData =
   AiTextTranslationData |
   AiSegmentationData |
   AiPoseData |
+  AiGestureData |
   AiCustomModelData;
 
 export interface AiClassificationData {
@@ -120,6 +128,12 @@ export interface AiPoseData {
   readonly result: PoseResult;
 }
 
+export interface AiGestureData {
+  readonly kind: 'gesture';
+  readonly imageUri: string;
+  readonly result: GestureResult;
+}
+
 export interface AiCustomModelData {
   readonly kind: 'customModel';
   readonly imageUri: string;
@@ -151,6 +165,7 @@ export interface AiServiceOptions {
   readonly textTranslationService?: TextTranslationService;
   readonly segmentationService?: SegmentationService;
   readonly poseService?: PoseService;
+  readonly gestureService?: GestureService;
 }
 
 export class DefaultAiService {
@@ -162,6 +177,7 @@ export class DefaultAiService {
   private readonly textTranslationService?: TextTranslationService;
   private readonly segmentationService?: SegmentationService;
   private readonly poseService?: PoseService;
+  private readonly gestureService?: GestureService;
 
   constructor(options?: AiServiceOptions) {
     this.imageClassificationService = options?.imageClassificationService ?? new ImageClassificationService({
@@ -174,6 +190,7 @@ export class DefaultAiService {
     this.textTranslationService = options?.textTranslationService;
     this.segmentationService = options?.segmentationService;
     this.poseService = options?.poseService;
+    this.gestureService = options?.gestureService;
   }
 
   async run(workflow: FeatureWorkflow, inputs: AiRunInputs = {}): Promise<AiRunResult> {
@@ -199,7 +216,7 @@ export class DefaultAiService {
       return this.detectPose(inputs);
     }
     if (workflow.aiMethod === 'detectGesture') {
-      return this.platformUnsupportedResult('detectGesture', 'feature_runtime_gesture_unsupported');
+      return this.detectGesture(inputs);
     }
     if (workflow.aiMethod === 'runCustomModel') {
       return this.runCustomModel(inputs);
@@ -210,6 +227,46 @@ export class DefaultAiService {
       aiMethod: workflow.aiMethod,
       messageKey: 'feature_runtime_pending_adapter',
       detailText: ''
+    };
+  }
+
+  private async detectGesture(inputs: AiRunInputs): Promise<AiRunResult> {
+    if (this.gestureService === undefined) {
+      return this.platformUnsupportedResult('detectGesture', 'feature_runtime_gesture_unsupported');
+    }
+
+    const imageUri = inputs.imageUri ?? '';
+    if (imageUri.length === 0) {
+      return {
+        ok: false,
+        code: 'MISSING_INPUT',
+        aiMethod: 'detectGesture',
+        messageKey: 'feature_runtime_missing_input',
+        detailText: ''
+      };
+    }
+
+    const result: GestureResult = await this.gestureService.detectGesture(imageUri);
+    if (!result.ok || result.gestures.length === 0) {
+      return {
+        ok: false,
+        code: 'GESTURE_DETECTION_FAILED',
+        aiMethod: 'detectGesture',
+        messageKey: 'feature_runtime_gesture_failed',
+        detailText: this.gestureSummary(result, imageUri)
+      };
+    }
+    return {
+      ok: true,
+      code: 'GESTURE_DETECTION_DONE',
+      aiMethod: 'detectGesture',
+      messageKey: 'feature_runtime_gesture_done',
+      detailText: this.gestureSummary(result, imageUri),
+      data: {
+        kind: 'gesture',
+        imageUri: imageUri,
+        result: result
+      }
     };
   }
 
@@ -779,6 +836,31 @@ export class DefaultAiService {
     return lines.join('\n');
   }
 
+  private gestureSummary(result: GestureResult, imageUri: string): string {
+    const lines: Array<string> = [
+      `image=${this.lastPathSegment(imageUri)}`,
+      `count=${result.gestures.length}`,
+      `executionMs=${result.executionMs}`
+    ];
+    const displayCount = Math.min(5, result.gestures.length);
+    for (let index = 0; index < displayCount; index++) {
+      const gesture = result.gestures[index];
+      lines.push(`${index + 1}. ${this.gestureLine(gesture)}`);
+    }
+    return lines.join('\n');
+  }
+
+  private gestureLine(gesture: GestureDetection): string {
+    const label = gesture.label.length > 0 ? gesture.label : `${gesture.category}`;
+    let line = `${label} ${(gesture.score * 100).toFixed(2)}%`;
+    if (gesture.rect !== undefined) {
+      line += ` [` +
+        `${gesture.rect.left.toFixed(0)},${gesture.rect.top.toFixed(0)},` +
+        `${gesture.rect.width.toFixed(0)},${gesture.rect.height.toFixed(0)}]`;
+    }
+    return line;
+  }
+
   private textTranslationSummary(result: TextTranslationResult): string {
     const lines: Array<string> = [
       `targetLanguage=${result.targetLanguage}`,
@@ -875,6 +957,8 @@ export function aiRunResultRows(result: AiRunResult): Array<AiRunResultRow> {
         resultRow('feature_runtime_result_points', `${data.result.pointCount}`),
         resultRow('feature_runtime_result_execution_time', `${data.result.executionMs}ms`)
       ];
+    case 'gesture':
+      return gestureResultRows(data);
     case 'customModel':
       return [
         resultRow('feature_runtime_result_model', runtimePathSegment(data.modelUri)),
@@ -897,6 +981,20 @@ function objectDetectionResultRows(data: AiObjectDetectionsData): Array<AiRunRes
   if (data.modelUri.length > 0) {
     rows.push(resultRow('feature_runtime_result_model', runtimePathSegment(data.modelUri)));
   }
+  return rows;
+}
+
+function gestureResultRows(data: AiGestureData): Array<AiRunResultRow> {
+  const rows: Array<AiRunResultRow> = [
+    resultRow('feature_runtime_result_count', `${data.result.gestures.length}`)
+  ];
+  if (data.result.gestures.length > 0) {
+    const top = data.result.gestures[0];
+    rows.unshift(resultRow('feature_runtime_result_label', top.label.length > 0 ? top.label : `${top.category}`));
+    rows.push(resultRow('feature_runtime_result_score', `${(top.score * 100).toFixed(2)}%`));
+  }
+  rows.push(resultRow('feature_runtime_result_image', runtimePathSegment(data.imageUri)));
+  rows.push(resultRow('feature_runtime_result_execution_time', `${data.result.executionMs}ms`));
   return rows;
 }
 

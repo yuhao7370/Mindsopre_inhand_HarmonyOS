@@ -38,6 +38,12 @@ import {
   poseSkeletonLines
 } from '../main/ets/services/ai/PoseService';
 import {
+  GestureDetection,
+  GestureResult,
+  GestureRunner,
+  GestureService
+} from '../main/ets/services/ai/GestureService';
+import {
   StyleTransferInput,
   builtInStyleTransferStyleCount,
   builtInStyleTransferStyles,
@@ -595,6 +601,26 @@ class RejectingPoseRunner implements PoseRunner {
   }
 }
 
+class FixedGestureRunner implements GestureRunner {
+  readonly seenImageUris: Array<string> = [];
+  private readonly result: GestureResult;
+
+  constructor(result: GestureResult) {
+    this.result = result;
+  }
+
+  async detectGesture(imageUri: string): Promise<GestureResult> {
+    this.seenImageUris.push(imageUri);
+    return this.result;
+  }
+}
+
+class RejectingGestureRunner implements GestureRunner {
+  async detectGesture(_imageUri: string): Promise<GestureResult> {
+    throw new Error('gesture detection failed');
+  }
+}
+
 class RecordingClipboardWriter implements TextClipboardWriter {
   readonly copiedTexts: Array<string> = [];
 
@@ -914,6 +940,8 @@ export default function localUnitTest() {
       expect(hasAppStringKey(meItems[0].titleKey)).assertTrue();
       expect(hasAppStringKey('feature_runtime_custom_model_failed')).assertTrue();
       expect(hasAppStringKey('feature_runtime_gesture_unsupported')).assertTrue();
+      expect(hasAppStringKey('feature_runtime_gesture_done')).assertTrue();
+      expect(hasAppStringKey('feature_runtime_gesture_failed')).assertTrue();
       expect(hasAppStringKey('feature_runtime_translation_unsupported')).assertTrue();
       expect(hasAppStringKey('feature_runtime_text_recognition_done')).assertTrue();
       expect(hasAppStringKey('feature_runtime_text_translation_failed')).assertTrue();
@@ -1611,6 +1639,96 @@ export default function localUnitTest() {
       expect(result.ok).assertFalse();
       expect(result.code).assertEqual('POSE_DETECTION_FAILED');
       expect(result.messageKey).assertEqual('feature_runtime_pose_failed');
+    });
+
+    it('gestureDetectionRequiresImageInputWhenServiceIsProvided', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.GESTURE_STILL.name);
+      expect(workflow !== undefined).assertTrue();
+      const service = new GestureService({
+        runner: new FixedGestureRunner({
+          ok: true,
+          gestures: [],
+          executionMs: 3
+        })
+      });
+
+      const result = await new DefaultAiService({ gestureService: service }).run(workflow!);
+
+      expect(result.ok).assertFalse();
+      expect(result.code).assertEqual('MISSING_INPUT');
+    });
+
+    it('aiServiceUsesRealGestureServiceWhenProvided', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.GESTURE_STILL.name);
+      expect(workflow !== undefined).assertTrue();
+      const gesture: GestureDetection = {
+        category: 12,
+        label: 'Thumb up',
+        score: 0.88,
+        rect: {
+          left: 4,
+          top: 8,
+          width: 40,
+          height: 60
+        }
+      };
+      const runner: FixedGestureRunner = new FixedGestureRunner({
+        ok: true,
+        gestures: [gesture],
+        executionMs: 15
+      });
+      const service = new GestureService({
+        runner: runner
+      });
+
+      const result = await new DefaultAiService({ gestureService: service }).run(workflow!, {
+        imageUri: 'file://selected/hand.jpg'
+      });
+
+      expect(result.ok).assertTrue();
+      expect(result.code).assertEqual('GESTURE_DETECTION_DONE');
+      expect(result.messageKey).assertEqual('feature_runtime_gesture_done');
+      expect(result.detailText.indexOf('count=1') >= 0).assertTrue();
+      expect(result.detailText.indexOf('Thumb up 88.00% [4,8,40,60]') >= 0).assertTrue();
+      expect(aiRunResultRows(result)[0].labelKey).assertEqual('feature_runtime_result_label');
+      expect(aiRunResultRows(result)[0].value).assertEqual('Thumb up');
+      expect(runner.seenImageUris[0]).assertEqual('file://selected/hand.jpg');
+    });
+
+    it('aiServiceReportsGestureFailureWithI18nKey', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.GESTURE_STILL.name);
+      expect(workflow !== undefined).assertTrue();
+      const service = new GestureService({
+        runner: new RejectingGestureRunner()
+      });
+
+      const result = await new DefaultAiService({ gestureService: service }).run(workflow!, {
+        imageUri: 'file://selected/hand.jpg'
+      });
+
+      expect(result.ok).assertFalse();
+      expect(result.code).assertEqual('GESTURE_DETECTION_FAILED');
+      expect(result.messageKey).assertEqual('feature_runtime_gesture_failed');
+    });
+
+    it('aiServiceReportsEmptyGestureResultAsFailureWithI18nKey', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.GESTURE_STILL.name);
+      expect(workflow !== undefined).assertTrue();
+      const service = new GestureService({
+        runner: new FixedGestureRunner({
+          ok: true,
+          gestures: [],
+          executionMs: 5
+        })
+      });
+
+      const result = await new DefaultAiService({ gestureService: service }).run(workflow!, {
+        imageUri: 'file://selected/empty-hand.jpg'
+      });
+
+      expect(result.ok).assertFalse();
+      expect(result.code).assertEqual('GESTURE_DETECTION_FAILED');
+      expect(result.messageKey).assertEqual('feature_runtime_gesture_failed');
     });
 
     it('customModelRequiresModelAndImageInputs', 0, async () => {
@@ -2627,6 +2745,32 @@ export default function localUnitTest() {
       expect(result.ok).assertFalse();
       expect(result.code).assertEqual('PLATFORM_UNSUPPORTED');
       expect(result.messageKey).assertEqual('feature_runtime_translation_unsupported');
+    });
+
+    it('runtimeFactoryInjectsGestureServiceForGestureWorkflow', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.GESTURE_STILL.name);
+      expect(workflow !== undefined).assertTrue();
+      const runner: FixedGestureRunner = new FixedGestureRunner({
+        ok: true,
+        gestures: [{
+          category: 10,
+          label: 'Fist',
+          score: 0.91
+        }],
+        executionMs: 6
+      });
+      const service = await createRuntimeAiServiceForWorkflow(workflow!, {
+        resourceManager: new ThrowingRawfileContentReader(),
+        gestureRunner: runner
+      });
+
+      const result: AiRunResult = await service.run(workflow!, {
+        imageUri: 'file://selected/gesture.jpg'
+      });
+
+      expect(result.ok).assertTrue();
+      expect(result.code).assertEqual('GESTURE_DETECTION_DONE');
+      expect(runner.seenImageUris[0]).assertEqual('file://selected/gesture.jpg');
     });
 
     it('runtimeFactoryInjectsSegmentationServiceForSegmentationWorkflow', 0, async () => {

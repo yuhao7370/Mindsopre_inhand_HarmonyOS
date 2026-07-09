@@ -78,6 +78,8 @@
     { "name": "feature_runtime_live_frame_failed", "value": "实时相机画面抓取失败。" },
     { "name": "feature_runtime_pending_adapter", "value": "HarmonyOS 服务边界已就绪，下一步接入原生 AI 适配器。" },
     { "name": "feature_runtime_gesture_unsupported", "value": "当前 HarmonyOS SDK 暂无手势识别等价能力，Android 版本依赖 HMS 手势识别模型。" },
+    { "name": "feature_runtime_gesture_done", "value": "手势识别已完成。" },
+    { "name": "feature_runtime_gesture_failed", "value": "未检测到手势，请换一张图片再试。" },
     { "name": "feature_runtime_translation_unsupported", "value": "当前 HarmonyOS SDK/资源未提供通用文本翻译能力，请接入翻译 runner 或服务后启用。" },
     { "name": "feature_runtime_unknown_route", "value": "该路由暂未映射到功能工作流。" },
     { "name": "feature_runtime_missing_input", "value": "请先选择所需输入后再运行。" },
