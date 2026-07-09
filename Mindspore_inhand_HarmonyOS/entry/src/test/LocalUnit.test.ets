@@ -164,6 +164,11 @@ import {
   collegeProgressKeyForItemId,
   collegeProgressKeyForQuickActionId
 } from '../main/ets/services/storage/CollegeProgressService';
+import {
+  PrivacyConsentService,
+  PrivacyConsentStore,
+  privacyConsentPreferenceKey
+} from '../main/ets/services/storage/PrivacyConsentService';
 
 class FixedScoreRunner implements ImageClassificationScoreRunner {
   private readonly scores: Array<number>;
@@ -414,6 +419,22 @@ class MemoryCollegeProgressStore implements CollegeProgressStore {
   }
 }
 
+class MemoryPrivacyConsentStore implements PrivacyConsentStore {
+  readonly values: Map<string, boolean> = new Map<string, boolean>();
+
+  getBoolean(key: string, defaultValue: boolean): boolean {
+    const value = this.values.get(key);
+    return value === undefined ? defaultValue : value;
+  }
+
+  putBoolean(key: string, value: boolean): void {
+    this.values.set(key, value);
+  }
+
+  flush(): void {
+  }
+}
+
 class FixedTextRecognitionRunner implements TextRecognitionRunner {
   readonly seenImageUris: Array<string> = [];
   private readonly result: TextRecognitionResult;
@@ -608,6 +629,25 @@ export default function localUnitTest() {
       expect(service.isQuickActionChecked('video')).assertTrue();
       expect(service.isItemChecked('quick')).assertTrue();
       expect(store.values.get('preferences_college_quick')).assertTrue();
+    });
+
+    it('usesAndroidPreferenceKeyForPrivacyConsent', 0, () => {
+      expect(privacyConsentPreferenceKey).assertEqual('preferences_privacy');
+    });
+
+    it('privacyConsentPersistsSplashDecisionLikeAndroid', 0, () => {
+      const store = new MemoryPrivacyConsentStore();
+      const service = new PrivacyConsentService(store);
+
+      expect(service.hasAcceptedPrivacy()).assertFalse();
+
+      service.acceptPrivacy();
+      expect(service.hasAcceptedPrivacy()).assertTrue();
+      expect(store.values.get('preferences_privacy')).assertTrue();
+
+      service.declinePrivacy();
+      expect(service.hasAcceptedPrivacy()).assertFalse();
+      expect(store.values.get('preferences_privacy')).assertFalse();
     });
 
     it('formatsAppVersionNameLikeAndroidPackageInfo', 0, () => {

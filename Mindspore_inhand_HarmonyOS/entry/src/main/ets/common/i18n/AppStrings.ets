@@ -10,6 +10,8 @@ export type AppStringKey =
   'tab_speech_two' |
   'experience_head_title' |
   'experience_head_subtitle' |
+  'title_splash_welcome' |
+  'splash_count_down' |
   'college_head_title' |
   'college_head_subtitle' |
   'me_head_title' |
@@ -51,6 +53,10 @@ export type AppStringKey =
   'me_official_title' |
   'me_official_code_title' |
   'me_qa_title' |
+  'me_agree' |
+  'me_disagree_and_exit' |
+  'me_user_agreement' |
+  'me_privacy' |
   'me_user_agreements' |
   'me_version_title' |
   'feature_runtime_inputs_title' |
@@ -145,6 +151,8 @@ const APP_STRING_KEYS: AppStringKey[] = [
   'tab_speech_two',
   'experience_head_title',
   'experience_head_subtitle',
+  'title_splash_welcome',
+  'splash_count_down',
   'college_head_title',
   'college_head_subtitle',
   'me_head_title',
@@ -186,6 +194,10 @@ const APP_STRING_KEYS: AppStringKey[] = [
   'me_official_title',
   'me_official_code_title',
   'me_qa_title',
+  'me_agree',
+  'me_disagree_and_exit',
+  'me_user_agreement',
+  'me_privacy',
   'me_user_agreements',
   'me_version_title',
   'feature_runtime_inputs_title',
@@ -295,6 +307,10 @@ export function appString(key: AppStringKey): ResourceStr {
       return $r('app.string.experience_head_title');
     case 'experience_head_subtitle':
       return $r('app.string.experience_head_subtitle');
+    case 'title_splash_welcome':
+      return $r('app.string.title_splash_welcome');
+    case 'splash_count_down':
+      return $r('app.string.splash_count_down');
     case 'college_head_title':
       return $r('app.string.college_head_title');
     case 'college_head_subtitle':
@@ -377,6 +393,14 @@ export function appString(key: AppStringKey): ResourceStr {
       return $r('app.string.me_official_code_title');
     case 'me_qa_title':
       return $r('app.string.me_qa_title');
+    case 'me_agree':
+      return $r('app.string.me_agree');
+    case 'me_disagree_and_exit':
+      return $r('app.string.me_disagree_and_exit');
+    case 'me_user_agreement':
+      return $r('app.string.me_user_agreement');
+    case 'me_privacy':
+      return $r('app.string.me_privacy');
     case 'me_user_agreements':
       return $r('app.string.me_user_agreements');
     case 'me_version_title':
