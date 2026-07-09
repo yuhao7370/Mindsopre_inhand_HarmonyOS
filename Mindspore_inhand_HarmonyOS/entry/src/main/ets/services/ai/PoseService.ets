@@ -16,6 +16,7 @@ export interface PoseResult {
   readonly imageWidth?: number;
   readonly imageHeight?: number;
   readonly points: Array<PosePoint>;
+  readonly similarity?: number;
   readonly executionMs: number;
 }
 
@@ -43,6 +44,18 @@ interface PoseLineTypePair {
   readonly endType: number;
 }
 
+interface PoseBounds {
+  readonly minX: number;
+  readonly minY: number;
+  readonly width: number;
+  readonly height: number;
+}
+
+interface NormalizedPosePoint {
+  readonly x: number;
+  readonly y: number;
+}
+
 export interface PoseRunner {
   detectPose(imageUri: string): Promise<PoseResult>;
 }
@@ -52,6 +65,23 @@ export interface PoseServiceOptions {
 }
 
 export const poseMinPointScore = 0.2;
+
+export const androidLiveSkeletonTemplatePoints: Array<PosePoint> = [
+  { x: 416.6629, y: 312.46442, type: 101, score: 0.8042025 },
+  { x: 382.3348, y: 519.43396, type: 102, score: 0.86383355 },
+  { x: 381.0387, y: 692.09515, type: 103, score: 0.7551306 },
+  { x: 659.49194, y: 312.24445, type: 104, score: 0.8305682 },
+  { x: 693.5356, y: 519.4844, type: 105, score: 0.8932837 },
+  { x: 694.0054, y: 692.4169, type: 106, score: 0.8742422 },
+  { x: 485.08786, y: 726.8787, type: 107, score: 0.6004682 },
+  { x: 485.02808, y: 935.4897, type: 108, score: 0.7334503 },
+  { x: 485.09384, y: 1177.127, type: 109, score: 0.67240065 },
+  { x: 623.7807, y: 726.7474, type: 110, score: 0.5483011 },
+  { x: 624.5828, y: 936.3222, type: 111, score: 0.730425 },
+  { x: 625.81915, y: 1212.2491, type: 112, score: 0.72417295 },
+  { x: 521.47363, y: 103.95903, type: 113, score: 0.7780853 },
+  { x: 521.6231, y: 277.2533, type: 114, score: 0.7745689 }
+];
 
 const poseSkeletonLineTypePairs: Array<PoseLineTypePair> = [
   {
@@ -114,7 +144,7 @@ export class PoseService {
   async detectPose(imageUri: string): Promise<PoseResult> {
     const startMs = Date.now();
     try {
-      return await this.runner.detectPose(imageUri);
+      return poseResultWithAndroidTemplateSimilarity(await this.runner.detectPose(imageUri));
     } catch (_) {
       return {
         ok: false,
@@ -212,6 +242,110 @@ export function posePointPercent(point: PosePoint, imageWidth: number, imageHeig
 
 export function isPosePointVisible(point: PosePoint): boolean {
   return point.score >= poseMinPointScore && (point.x !== 0 || point.y !== 0);
+}
+
+export function poseSimilarityToAndroidTemplate(points: Array<PosePoint>): number | undefined {
+  return poseSimilarityToTemplate(points, androidLiveSkeletonTemplatePoints);
+}
+
+export function poseSimilarityPercent(similarity: number): string {
+  return `${Math.floor(clampPoseSimilarity(similarity) * 100)}%`;
+}
+
+function poseResultWithAndroidTemplateSimilarity(result: PoseResult): PoseResult {
+  if (!result.ok || result.similarity !== undefined) {
+    return result;
+  }
+  const similarity = poseSimilarityToAndroidTemplate(result.points);
+  if (similarity === undefined) {
+    return result;
+  }
+  return {
+    ok: result.ok,
+    skeletonCount: result.skeletonCount,
+    pointCount: result.pointCount,
+    imageWidth: result.imageWidth,
+    imageHeight: result.imageHeight,
+    points: result.points,
+    similarity: similarity,
+    executionMs: result.executionMs
+  };
+}
+
+function poseSimilarityToTemplate(
+  points: Array<PosePoint>,
+  templatePoints: Array<PosePoint>
+): number | undefined {
+  const pointByType: Map<number, PosePoint> = visiblePosePointMap(points);
+  const visibleTemplatePoints: Array<PosePoint> = templatePoints.filter((point: PosePoint) => isPosePointVisible(point));
+  const matchedPoints: Array<PosePoint> = [];
+  const matchedTemplatePoints: Array<PosePoint> = [];
+
+  visibleTemplatePoints.forEach((templatePoint: PosePoint) => {
+    const point = pointByType.get(templatePoint.type);
+    if (point !== undefined) {
+      matchedPoints.push(point);
+      matchedTemplatePoints.push(templatePoint);
+    }
+  });
+
+  if (matchedPoints.length < 2) {
+    return undefined;
+  }
+
+  const pointBounds = poseBounds(matchedPoints);
+  const templateBounds = poseBounds(matchedTemplatePoints);
+  let distanceSum = 0;
+  for (let index = 0; index < matchedPoints.length; index++) {
+    const point = normalizePosePoint(matchedPoints[index], pointBounds);
+    const templatePoint = normalizePosePoint(matchedTemplatePoints[index], templateBounds);
+    const deltaX = point.x - templatePoint.x;
+    const deltaY = point.y - templatePoint.y;
+    distanceSum += Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+  }
+
+  const averageDistance = distanceSum / matchedPoints.length;
+  return clampPoseSimilarity(1 - averageDistance / Math.SQRT2);
+}
+
+function visiblePosePointMap(points: Array<PosePoint>): Map<number, PosePoint> {
+  const pointByType: Map<number, PosePoint> = new Map<number, PosePoint>();
+  points.forEach((point: PosePoint) => {
+    if (isPosePointVisible(point)) {
+      pointByType.set(point.type, point);
+    }
+  });
+  return pointByType;
+}
+
+function poseBounds(points: Array<PosePoint>): PoseBounds {
+  let minX = points[0].x;
+  let maxX = points[0].x;
+  let minY = points[0].y;
+  let maxY = points[0].y;
+  points.forEach((point: PosePoint) => {
+    minX = Math.min(minX, point.x);
+    maxX = Math.max(maxX, point.x);
+    minY = Math.min(minY, point.y);
+    maxY = Math.max(maxY, point.y);
+  });
+  return {
+    minX: minX,
+    minY: minY,
+    width: maxX - minX,
+    height: maxY - minY
+  };
+}
+
+function normalizePosePoint(point: PosePoint, bounds: PoseBounds): NormalizedPosePoint {
+  return {
+    x: bounds.width <= 0 ? 0.5 : (point.x - bounds.minX) / bounds.width,
+    y: bounds.height <= 0 ? 0.5 : (point.y - bounds.minY) / bounds.height
+  };
+}
+
+function clampPoseSimilarity(value: number): number {
+  return Math.min(1, Math.max(0, value));
 }
 
 export function poseSkeletonLines(points: Array<PosePoint>): Array<PoseLine> {

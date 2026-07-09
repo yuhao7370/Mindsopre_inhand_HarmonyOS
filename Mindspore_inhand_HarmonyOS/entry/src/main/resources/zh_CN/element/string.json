@@ -132,6 +132,7 @@
     { "name": "feature_runtime_result_details", "value": "细节数" },
     { "name": "feature_runtime_result_skeletons", "value": "骨架数" },
     { "name": "feature_runtime_result_points", "value": "关键点" },
+    { "name": "feature_runtime_result_similarity", "value": "相似度" },
     { "name": "feature_runtime_result_execution_time", "value": "耗时" },
     { "name": "feature_runtime_result_image", "value": "图片" },
     { "name": "feature_runtime_result_model", "value": "模型" },

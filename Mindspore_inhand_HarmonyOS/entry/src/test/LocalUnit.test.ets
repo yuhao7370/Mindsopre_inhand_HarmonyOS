@@ -3,7 +3,7 @@ import { AppRoute, findRouteByName } from '../main/ets/app/AppRoutes';
 import { MainTab, mainTabs } from '../main/ets/app/AppState';
 import { hasAppStringKey } from '../main/ets/common/i18n/AppStrings';
 import { iconLabel } from '../main/ets/common/icons/IconSymbols';
-import { AiRunResult, DefaultAiService, aiRunResultRows, copyableTextForAiResult } from '../main/ets/services/ai/AiService';
+import { AiRunResult, AiRunResultRow, DefaultAiService, aiRunResultRows, copyableTextForAiResult } from '../main/ets/services/ai/AiService';
 import { ClipboardService, TextClipboardWriter } from '../main/ets/services/clipboard/ClipboardService';
 import {
   androidDefaultTranslationTargetLanguage,
@@ -32,9 +32,11 @@ import {
   PoseResult,
   PoseRunner,
   PoseService,
+  androidLiveSkeletonTemplatePoints,
   isPosePointVisible,
   poseLinePercent,
   posePointPercent,
+  poseSimilarityToAndroidTemplate,
   poseSkeletonLines
 } from '../main/ets/services/ai/PoseService';
 import {
@@ -1035,6 +1037,7 @@ export default function localUnitTest() {
       expect(hasAppStringKey('feature_runtime_switch_camera')).assertTrue();
       expect(hasAppStringKey('feature_runtime_result_count')).assertTrue();
       expect(hasAppStringKey('feature_runtime_result_text')).assertTrue();
+      expect(hasAppStringKey('feature_runtime_result_similarity')).assertTrue();
       expect(hasAppStringKey('feature_runtime_copy_text')).assertTrue();
       expect(hasAppStringKey('feature_runtime_copy_done')).assertTrue();
       expect(hasAppStringKey('feature_runtime_model_cache_failed')).assertTrue();
@@ -1708,6 +1711,48 @@ export default function localUnitTest() {
       expect(runner.seenImageUris[0]).assertEqual('file://selected/pose.jpg');
     });
 
+    it('poseServiceAddsAndroidLiveSkeletonTemplateSimilarity', 0, async () => {
+      const runner: FixedPoseRunner = new FixedPoseRunner({
+        ok: true,
+        skeletonCount: 1,
+        pointCount: androidLiveSkeletonTemplatePoints.length,
+        points: androidLiveSkeletonTemplatePoints,
+        executionMs: 9
+      });
+
+      const result = await new PoseService({
+        runner: runner
+      }).detectPose('file://selected/live-pose.jpg');
+      const similarity: number = result.similarity ?? -1;
+
+      expect(similarity.toFixed(2)).assertEqual('1.00');
+      expect(runner.seenImageUris[0]).assertEqual('file://selected/live-pose.jpg');
+    });
+
+    it('aiServiceShowsLiveSkeletonSimilarityLikeAndroidRuntime', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.LIVE_SKELETON.name);
+      expect(workflow !== undefined).assertTrue();
+      const service = new PoseService({
+        runner: new FixedPoseRunner({
+          ok: true,
+          skeletonCount: 1,
+          pointCount: androidLiveSkeletonTemplatePoints.length,
+          points: androidLiveSkeletonTemplatePoints,
+          executionMs: 16
+        })
+      });
+
+      const result = await new DefaultAiService({ poseService: service }).run(workflow!, {
+        imageUri: 'file://selected/live-pose.jpg'
+      });
+      const rows: Array<AiRunResultRow> = aiRunResultRows(result);
+
+      expect(result.ok).assertTrue();
+      expect(result.detailText.indexOf('similarity=100%') >= 0).assertTrue();
+      expect(rows[2].labelKey).assertEqual('feature_runtime_result_similarity');
+      expect(rows[2].value).assertEqual('100%');
+    });
+
     it('mapsPosePointToPercentOverlay', 0, () => {
       const point: PosePoint = {
         type: 0,
@@ -1774,6 +1819,22 @@ export default function localUnitTest() {
       expect(firstLine.endY.toFixed(1)).assertEqual('20.0');
       expect(firstLine.length.toFixed(1)).assertEqual('36.1');
       expect(firstLine.angle.toFixed(1)).assertEqual('123.7');
+    });
+
+    it('calculatesAndroidLiveSkeletonTemplateSimilarityFromMatchedPointTypes', 0, () => {
+      const shiftedPoints: Array<PosePoint> = androidLiveSkeletonTemplatePoints.map((point: PosePoint): PosePoint => {
+        return {
+          type: point.type,
+          score: point.score,
+          x: point.x * 0.5 + 12,
+          y: point.y * 0.5 + 30
+        };
+      });
+
+      const similarity: number = poseSimilarityToAndroidTemplate(shiftedPoints) ?? -1;
+
+      expect(androidLiveSkeletonTemplatePoints.length).assertEqual(14);
+      expect(similarity.toFixed(2)).assertEqual('1.00');
     });
 
     it('aiServiceReportsPoseFailureWithI18nKey', 0, async () => {

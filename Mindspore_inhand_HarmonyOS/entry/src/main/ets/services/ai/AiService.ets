@@ -24,7 +24,8 @@ import {
 import {
   PosePoint,
   PoseResult,
-  PoseService
+  PoseService,
+  poseSimilarityPercent
 } from './PoseService';
 import {
   GestureDetection,
@@ -771,6 +772,9 @@ export class DefaultAiService {
       `pointCount=${result.pointCount}`,
       `executionMs=${result.executionMs}`
     ];
+    if (result.similarity !== undefined) {
+      lines.push(`similarity=${poseSimilarityPercent(result.similarity)}`);
+    }
     result.points.forEach((point: PosePoint, index: number) => {
       lines.push(`${index + 1}. ${point.type} ${(point.score * 100).toFixed(2)}% ` +
         `[${point.x.toFixed(0)},${point.y.toFixed(0)}]`);
@@ -915,11 +919,15 @@ export function aiRunResultRows(result: AiRunResult): Array<AiRunResultRow> {
         resultRow('feature_runtime_result_execution_time', `${data.result.executionMs}ms`)
       ];
     case 'pose':
-      return [
+      const poseRows: Array<AiRunResultRow> = [
         resultRow('feature_runtime_result_skeletons', `${data.result.skeletonCount}`),
-        resultRow('feature_runtime_result_points', `${data.result.pointCount}`),
-        resultRow('feature_runtime_result_execution_time', `${data.result.executionMs}ms`)
+        resultRow('feature_runtime_result_points', `${data.result.pointCount}`)
       ];
+      if (data.result.similarity !== undefined) {
+        poseRows.push(resultRow('feature_runtime_result_similarity', poseSimilarityPercent(data.result.similarity)));
+      }
+      poseRows.push(resultRow('feature_runtime_result_execution_time', `${data.result.executionMs}ms`));
+      return poseRows;
     case 'gesture':
       return gestureResultRows(data);
     case 'customModel':

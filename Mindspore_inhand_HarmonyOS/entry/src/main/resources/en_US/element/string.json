@@ -132,6 +132,7 @@
     { "name": "feature_runtime_result_details", "value": "Details" },
     { "name": "feature_runtime_result_skeletons", "value": "Skeletons" },
     { "name": "feature_runtime_result_points", "value": "Points" },
+    { "name": "feature_runtime_result_similarity", "value": "Similarity" },
     { "name": "feature_runtime_result_execution_time", "value": "Time" },
     { "name": "feature_runtime_result_image", "value": "Image" },
     { "name": "feature_runtime_result_model", "value": "Model" },
