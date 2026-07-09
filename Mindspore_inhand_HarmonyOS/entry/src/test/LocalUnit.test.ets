@@ -3,7 +3,7 @@ import { AppRoute, findRouteByName } from '../main/ets/app/AppRoutes';
 import { MainTab, mainTabs } from '../main/ets/app/AppState';
 import { hasAppStringKey } from '../main/ets/common/i18n/AppStrings';
 import { iconLabel } from '../main/ets/common/icons/IconSymbols';
-import { AiRunResult, DefaultAiService, aiRunResultRows } from '../main/ets/services/ai/AiService';
+import { AiRunResult, DefaultAiService, aiRunResultRows, copyableTextForAiResult } from '../main/ets/services/ai/AiService';
 import { ClipboardService, TextClipboardWriter } from '../main/ets/services/clipboard/ClipboardService';
 import {
   androidDefaultTranslationTargetLanguage,
@@ -836,6 +836,46 @@ export default function localUnitTest() {
       expect(result.detailText.indexOf('translated=hello') >= 0).assertTrue();
       expect(runner.seenTexts[0]).assertEqual('你好');
       expect(runner.seenTargetLanguages[0]).assertEqual('en');
+    });
+
+    it('aiServiceRecognizesImageTextBeforeTextTranslationLikeAndroid', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.TEXT_TRANSLATION.name);
+      expect(workflow !== undefined).assertTrue();
+      const recognitionRunner = new FixedTextRecognitionRunner({
+        ok: true,
+        text: '你好\n',
+        lineCount: 1,
+        blockCount: 1,
+        executionMs: 8
+      });
+      const translationRunner: FixedTextTranslationRunner = new FixedTextTranslationRunner('hello');
+
+      const result = await new DefaultAiService({
+        textRecognitionService: new TextRecognitionService({ runner: recognitionRunner }),
+        textTranslationService: new TextTranslationService({ runner: translationRunner })
+      }).run(workflow!, {
+        imageUri: 'file://selected/text.jpg'
+      });
+
+      expect(result.ok).assertTrue();
+      expect(result.code).assertEqual('TEXT_TRANSLATION_DONE');
+      expect(recognitionRunner.seenImageUris[0]).assertEqual('file://selected/text.jpg');
+      expect(translationRunner.seenTexts[0]).assertEqual('你好\n');
+      expect(translationRunner.seenTargetLanguages[0]).assertEqual('en');
+    });
+
+    it('copyableTextForTranslationReturnsTranslatedTextLikeAndroidCopyButton', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.TEXT_TRANSLATION.name);
+      expect(workflow !== undefined).assertTrue();
+      const service = new TextTranslationService({
+        runner: new FixedTextTranslationRunner('hello')
+      });
+
+      const result = await new DefaultAiService({ textTranslationService: service }).run(workflow!, {
+        text: '你好'
+      });
+
+      expect(copyableTextForAiResult('translateText', aiRunResultRows(result))).assertEqual('hello');
     });
 
     it('aiServiceReportsTextTranslationFailureWithI18nKey', 0, async () => {
@@ -1800,6 +1840,33 @@ export default function localUnitTest() {
       expect(result.ok).assertTrue();
       expect(result.code).assertEqual('TEXT_RECOGNITION_DONE');
       expect(runner.seenImageUris[0]).assertEqual('file://selected/ocr.jpg');
+    });
+
+    it('runtimeFactoryInjectsOcrAndTranslatorForImageTranslationWorkflow', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.TEXT_TRANSLATION.name);
+      expect(workflow !== undefined).assertTrue();
+      const recognitionRunner: FixedTextRecognitionRunner = new FixedTextRecognitionRunner({
+        ok: true,
+        text: '你好\n',
+        lineCount: 1,
+        blockCount: 1,
+        executionMs: 7
+      });
+      const translationRunner: FixedTextTranslationRunner = new FixedTextTranslationRunner('hello');
+      const service = await createRuntimeAiServiceForWorkflow(workflow!, {
+        resourceManager: new ThrowingRawfileContentReader(),
+        textRecognitionRunner: recognitionRunner,
+        textTranslationRunner: translationRunner
+      });
+
+      const result: AiRunResult = await service.run(workflow!, {
+        imageUri: 'file://selected/translation.jpg'
+      });
+
+      expect(result.ok).assertTrue();
+      expect(result.code).assertEqual('TEXT_TRANSLATION_DONE');
+      expect(recognitionRunner.seenImageUris[0]).assertEqual('file://selected/translation.jpg');
+      expect(translationRunner.seenTexts[0]).assertEqual('你好\n');
     });
 
     it('runtimeFactoryKeepsTranslationPendingWithoutTranslator', 0, async () => {

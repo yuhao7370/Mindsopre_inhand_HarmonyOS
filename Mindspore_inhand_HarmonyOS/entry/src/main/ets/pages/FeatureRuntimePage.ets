@@ -7,7 +7,14 @@ import {
   permissionLabelKey,
   workflowForRoute
 } from '../features/runtime/FeatureWorkflowCatalog';
-import { AiRunInputs, AiRunResult, AiRunResultRow, DefaultAiService, aiRunResultRows } from '../services/ai/AiService';
+import {
+  AiRunInputs,
+  AiRunResult,
+  AiRunResultRow,
+  DefaultAiService,
+  aiRunResultRows,
+  copyableTextForAiResult
+} from '../services/ai/AiService';
 import { cachedRuntimeAiServiceForHarmonyResourceManager } from '../services/ai/ImageClassificationRuntimeFactory';
 import { PermissionRequestSummary, PermissionService } from '../services/permissions/PermissionService';
 import { ClipboardService, CopyTextResult } from '../services/clipboard/ClipboardService';
@@ -167,16 +174,7 @@ struct FeatureRuntimePage {
   }
 
   private recognizedTextForCopy(): string {
-    if (this.aiMethod !== 'recognizeText') {
-      return '';
-    }
-    for (let index = 0; index < this.resultRows.length; index++) {
-      const row = this.resultRows[index];
-      if (row.labelKey === 'feature_runtime_result_text') {
-        return row.value;
-      }
-    }
-    return '';
+    return copyableTextForAiResult(this.aiMethod, this.resultRows);
   }
 
   private copyRecognizedText(): void {

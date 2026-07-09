@@ -354,7 +354,30 @@ export class DefaultAiService {
       };
     }
 
-    const text = inputs.text ?? '';
+    let text = inputs.text ?? '';
+    const imageUri = inputs.imageUri ?? '';
+    if (text.length === 0 && imageUri.length > 0) {
+      if (this.textRecognitionService === undefined) {
+        return {
+          ok: false,
+          code: 'NATIVE_ADAPTER_PENDING',
+          aiMethod: 'translateText',
+          messageKey: 'feature_runtime_pending_adapter',
+          detailText: ''
+        };
+      }
+      const recognitionResult: TextRecognitionResult = await this.textRecognitionService.recognizeText(imageUri);
+      if (!recognitionResult.ok || recognitionResult.text.length === 0) {
+        return {
+          ok: false,
+          code: 'TEXT_RECOGNITION_FAILED',
+          aiMethod: 'translateText',
+          messageKey: 'feature_runtime_text_recognition_failed',
+          detailText: this.textRecognitionSummary(recognitionResult, imageUri)
+        };
+      }
+      text = recognitionResult.text;
+    }
     if (text.length === 0) {
       return {
         ok: false,
@@ -843,6 +866,26 @@ function resultRow(labelKey: AppStringKey, value: string): AiRunResultRow {
     labelKey: labelKey,
     value: value
   };
+}
+
+export function copyableTextForAiResult(aiMethod: string, rows: Array<AiRunResultRow>): string {
+  if (aiMethod === 'recognizeText') {
+    return resultRowValue(rows, 'feature_runtime_result_text');
+  }
+  if (aiMethod === 'translateText') {
+    return resultRowValue(rows, 'feature_runtime_result_translated_text');
+  }
+  return '';
+}
+
+function resultRowValue(rows: Array<AiRunResultRow>, labelKey: AppStringKey): string {
+  for (let index = 0; index < rows.length; index++) {
+    const row = rows[index];
+    if (row.labelKey === labelKey) {
+      return row.value;
+    }
+  }
+  return '';
 }
 
 function runtimePathSegment(uri: string): string {

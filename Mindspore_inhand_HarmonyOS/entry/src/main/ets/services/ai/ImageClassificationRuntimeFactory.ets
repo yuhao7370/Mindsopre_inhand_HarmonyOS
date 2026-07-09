@@ -189,6 +189,7 @@ export async function createRuntimeAiServiceForWorkflow(
   }
   if (workflow.aiMethod === 'translateText' && options.textTranslationRunner !== undefined) {
     return new DefaultAiService({
+      textRecognitionService: createHarmonyTextRecognitionService(options),
       textTranslationService: createHarmonyTextTranslationService(options)
     });
   }
