@@ -1,0 +1,29 @@
+# HarmonyOS / DevEco Studio
+/local.properties
+/.idea/
+/.hvigor/
+/.appanalyzer/
+
+# Dependencies
+/node_modules/
+/oh_modules/
+
+# Build and generated outputs
+**/build/
+**/.preview/
+**/.test/
+**/.cxx/
+
+# Local native tooling cache
+/.clangd
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+ohpm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
