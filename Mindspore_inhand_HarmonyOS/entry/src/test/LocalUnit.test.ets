@@ -17,6 +17,15 @@ import {
   floatScoresFromOutputBuffer,
   rawfileContentToArrayBuffer
 } from '../main/ets/services/ai/MindSporeLiteModelRunner';
+import {
+  imageClassificationCropOffset,
+  imageClassificationCropSize,
+  imageClassificationInputFloatCount,
+  imageClassificationMean,
+  imageClassificationResizedSize,
+  imageClassificationStd,
+  normalizedRgbInputFromResizedRgba
+} from '../main/ets/services/ai/ImageClassificationPreprocess';
 import { FeatureWorkflow, workflowForRoute } from '../main/ets/features/runtime/FeatureWorkflowCatalog';
 import {
   declaredPermissionNames,
@@ -243,6 +252,31 @@ export default function localUnitTest() {
       const scores: Array<number> = floatScoresFromOutputBuffer(outputBuffer);
       expect(scores.length).assertEqual(3);
       expect(scores[1].toFixed(6)).assertEqual('0.900000');
+    });
+
+    it('definesAndroidImageClassificationPreprocessContract', 0, () => {
+      expect(imageClassificationResizedSize).assertEqual(256);
+      expect(imageClassificationCropSize).assertEqual(224);
+      expect(imageClassificationCropOffset).assertEqual(16);
+      expect(imageClassificationInputFloatCount).assertEqual(224 * 224 * 3);
+      expect(imageClassificationMean[0].toFixed(3)).assertEqual('0.485');
+      expect(imageClassificationStd[2].toFixed(3)).assertEqual('0.225');
+    });
+
+    it('normalizesCenterCroppedRgbaToRgbHwcInput', 0, () => {
+      const rgba: Uint8Array = new Uint8Array(imageClassificationResizedSize * imageClassificationResizedSize * 4);
+      const cropTopLeftRgbaOffset = ((imageClassificationCropOffset * imageClassificationResizedSize) +
+        imageClassificationCropOffset) * 4;
+      rgba[cropTopLeftRgbaOffset] = 255;
+      rgba[cropTopLeftRgbaOffset + 1] = 0;
+      rgba[cropTopLeftRgbaOffset + 2] = 0;
+      rgba[cropTopLeftRgbaOffset + 3] = 13;
+
+      const input = new Float32Array(normalizedRgbInputFromResizedRgba(rgba));
+      expect(input.length).assertEqual(imageClassificationInputFloatCount);
+      expect(input[0].toFixed(6)).assertEqual('2.248908');
+      expect(input[1].toFixed(6)).assertEqual('-2.035714');
+      expect(input[2].toFixed(6)).assertEqual('-1.804444');
     });
 
     it('mapsTopClassificationScoreToLabel', 0, () => {
