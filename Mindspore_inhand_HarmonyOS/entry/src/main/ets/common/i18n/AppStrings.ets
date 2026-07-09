@@ -11,6 +11,8 @@ export type AppStringKey =
   'experience_head_title' |
   'experience_head_subtitle' |
   'title_splash_welcome' |
+  'title_share' |
+  'title_share_commend' |
   'splash_count_down' |
   'college_head_title' |
   'college_head_subtitle' |
@@ -59,6 +61,8 @@ export type AppStringKey =
   'me_privacy' |
   'me_user_agreements' |
   'me_version_title' |
+  'me_share_done' |
+  'me_share_failed' |
   'qr_code_save_done' |
   'qr_code_save_failed' |
   'feature_runtime_inputs_title' |
@@ -168,6 +172,8 @@ const APP_STRING_KEYS: AppStringKey[] = [
   'experience_head_title',
   'experience_head_subtitle',
   'title_splash_welcome',
+  'title_share',
+  'title_share_commend',
   'splash_count_down',
   'college_head_title',
   'college_head_subtitle',
@@ -216,6 +222,8 @@ const APP_STRING_KEYS: AppStringKey[] = [
   'me_privacy',
   'me_user_agreements',
   'me_version_title',
+  'me_share_done',
+  'me_share_failed',
   'qr_code_save_done',
   'qr_code_save_failed',
   'feature_runtime_inputs_title',
@@ -341,6 +349,10 @@ export function appString(key: AppStringKey): ResourceStr {
       return $r('app.string.experience_head_subtitle');
     case 'title_splash_welcome':
       return $r('app.string.title_splash_welcome');
+    case 'title_share':
+      return $r('app.string.title_share');
+    case 'title_share_commend':
+      return $r('app.string.title_share_commend');
     case 'splash_count_down':
       return $r('app.string.splash_count_down');
     case 'college_head_title':
@@ -437,6 +449,10 @@ export function appString(key: AppStringKey): ResourceStr {
       return $r('app.string.me_user_agreements');
     case 'me_version_title':
       return $r('app.string.me_version_title');
+    case 'me_share_done':
+      return $r('app.string.me_share_done');
+    case 'me_share_failed':
+      return $r('app.string.me_share_failed');
     case 'qr_code_save_done':
       return $r('app.string.qr_code_save_done');
     case 'qr_code_save_failed':

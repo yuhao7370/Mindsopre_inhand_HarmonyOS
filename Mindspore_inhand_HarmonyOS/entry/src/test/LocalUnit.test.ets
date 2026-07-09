@@ -176,6 +176,7 @@ import {
   helpObjectDetectionUrl,
   helpStyleTransferUrl,
   intelligentPoetryUrl,
+  meApkUrl,
   userPrivacyRulesUrl,
   webDestinationForUrl,
   webUrlForRouteName,
@@ -201,6 +202,12 @@ import {
   isFullQrCodeWrite,
   QrCodeSaveService
 } from '../main/ets/services/media/QrCodeSaveService';
+import {
+  ShareService,
+  ShareTextPayload,
+  TextShareWriter,
+  mindSporeInhandShareText
+} from '../main/ets/services/share/ShareService';
 
 class FixedScoreRunner implements ImageClassificationScoreRunner {
   private readonly scores: Array<number>;
@@ -592,6 +599,20 @@ class RejectingClipboardWriter implements TextClipboardWriter {
   }
 }
 
+class RecordingShareWriter implements TextShareWriter {
+  readonly payloads: Array<ShareTextPayload> = [];
+
+  async shareText(payload: ShareTextPayload): Promise<void> {
+    this.payloads.push(payload);
+  }
+}
+
+class RejectingShareWriter implements TextShareWriter {
+  async shareText(_payload: ShareTextPayload): Promise<void> {
+    throw new Error('share rejected');
+  }
+}
+
 class FixedQrCodeMediaReader implements QrCodeMediaReader {
   private readonly imageBytes: ArrayBuffer;
 
@@ -842,6 +863,10 @@ export default function localUnitTest() {
       expect(hasAppStringKey('feature_runtime_copy_done')).assertTrue();
       expect(hasAppStringKey('qr_code_save_done')).assertTrue();
       expect(hasAppStringKey('qr_code_save_failed')).assertTrue();
+      expect(hasAppStringKey('title_share')).assertTrue();
+      expect(hasAppStringKey('title_share_commend')).assertTrue();
+      expect(hasAppStringKey('me_share_done')).assertTrue();
+      expect(hasAppStringKey('me_share_failed')).assertTrue();
     });
 
     it('clipboardServiceCopiesRecognizedText', 0, async () => {
@@ -905,6 +930,38 @@ export default function localUnitTest() {
       expect(isFullQrCodeWrite(bytes, 4)).assertFalse();
     });
 
+    it('shareServiceUsesAndroidMindSporeTextPayload', 0, async () => {
+      const writer = new RecordingShareWriter();
+      const shareText = mindSporeInhandShareText('MindSpore inhand:');
+      const result = await new ShareService(writer).shareText({
+        title: 'Share',
+        text: shareText
+      });
+
+      expect(shareText).assertEqual(`MindSpore inhand: ${meApkUrl}`);
+      expect(result.ok).assertTrue();
+      expect(result.messageKey).assertEqual('me_share_done');
+      expect(result.sharedTextLength).assertEqual(shareText.length);
+      expect(writer.payloads[0].title).assertEqual('Share');
+      expect(writer.payloads[0].text).assertEqual(shareText);
+    });
+
+    it('shareServiceRejectsBlankOrFailedText', 0, async () => {
+      const blankResult = await new ShareService(new RecordingShareWriter()).shareText({
+        title: 'Share',
+        text: ''
+      });
+      const failedResult = await new ShareService(new RejectingShareWriter()).shareText({
+        title: 'Share',
+        text: 'MindSpore'
+      });
+
+      expect(blankResult.ok).assertFalse();
+      expect(failedResult.ok).assertFalse();
+      expect(blankResult.messageKey).assertEqual('me_share_failed');
+      expect(failedResult.messageKey).assertEqual('me_share_failed');
+    });
+
     it('doesNotNavigateQuickStartParentWithEmptyUrl', 0, () => {
       expect(isCollegeItemUrlNavigable(collegeItems[1])).assertTrue();
       expect(isCollegeItemUrlNavigable(collegeItems[2])).assertFalse();
@@ -924,6 +981,13 @@ export default function localUnitTest() {
     });
 
     it('retainsHiddenNavigableMeWebEntries', 0, () => {
+      const shareItem = meItems.find((item: MeItem) => item.id === 'share');
+      expect(shareItem !== undefined).assertTrue();
+      if (shareItem) {
+        expect(shareItem.visibleByDefault).assertFalse();
+        expect(isMeItemUrlNavigable(shareItem)).assertFalse();
+      }
+
       const privacyItem = meItems.find((item: MeItem) => item.id === 'privacy');
       expect(privacyItem !== undefined).assertTrue();
       if (privacyItem) {

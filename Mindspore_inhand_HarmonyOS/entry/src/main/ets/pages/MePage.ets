@@ -1,22 +1,33 @@
+import { common } from '@kit.AbilityKit';
 import router from '@ohos.router';
 import { GradientTitleBar } from '../common/components/GradientTitleBar';
 import { SectionTitle } from '../common/components/SectionTitle';
 import { MeItem, isMeItemPageNavigable, isMeItemUrlNavigable, visibleMeItems } from '../common/data/MeCatalog';
 import { webPagePath } from '../common/data/WebDestination';
 import { iconLabel } from '../common/icons/IconSymbols';
-import { appString } from '../common/i18n/AppStrings';
+import { AppStringKey, appString } from '../common/i18n/AppStrings';
 import { AppColor, AppRadius, AppSpacing } from '../common/theme/AppTheme';
 import { AppVersionService } from '../services/app/AppVersionService';
+import {
+  HarmonySystemShareTextWriter,
+  ShareService,
+  mindSporeInhandShareText
+} from '../services/share/ShareService';
 
 @Component
 export struct MePage {
   @State versionLabel: string = 'V1.0.0';
+  @State statusKey: AppStringKey = 'empty';
 
   aboutToAppear() {
     this.versionLabel = new AppVersionService().currentVersionLabel();
   }
 
   private openItem(item: MeItem): void {
+    if (item.id === 'share') {
+      this.shareApp();
+      return;
+    }
     if (isMeItemPageNavigable(item)) {
       router.pushUrl({
         url: item.page ?? '',
@@ -36,6 +47,36 @@ export struct MePage {
         url: item.url ?? ''
       }
     });
+  }
+
+  private uiAbilityContext(): common.UIAbilityContext | undefined {
+    const context = this.getUIContext().getHostContext();
+    if (!context) {
+      return undefined;
+    }
+    return context as common.UIAbilityContext;
+  }
+
+  private shareApp(): void {
+    const context = this.uiAbilityContext();
+    if (context === undefined) {
+      this.statusKey = 'me_share_failed';
+      return;
+    }
+
+    this.shareAppWithContext(context).catch(() => {
+      this.statusKey = 'me_share_failed';
+    });
+  }
+
+  private async shareAppWithContext(context: common.UIAbilityContext): Promise<void> {
+    const title = await context.resourceManager.getStringValue($r('app.string.title_share').id);
+    const recommendation = await context.resourceManager.getStringValue($r('app.string.title_share_commend').id);
+    const result = await new ShareService(new HarmonySystemShareTextWriter(context)).shareText({
+      title: title,
+      text: mindSporeInhandShareText(recommendation)
+    });
+    this.statusKey = result.messageKey;
   }
 
   private valueForItem(item: MeItem): string {
@@ -97,6 +138,13 @@ export struct MePage {
               }
                 .margin({ top: AppSpacing.md })
             }, (item: MeItem) => item.id)
+          }
+          if (this.statusKey !== 'empty') {
+            Text(appString(this.statusKey))
+              .fontSize(13)
+              .fontColor(AppColor.textSecondary)
+              .textAlign(TextAlign.Center)
+              .margin({ top: AppSpacing.md })
           }
         }
         .width('100%')
