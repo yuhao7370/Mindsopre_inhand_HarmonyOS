@@ -162,7 +162,9 @@ import {
   LiveRuntimeLoopScheduler,
   LiveRuntimeLoopService,
   liveImageClassificationIntervalMs,
+  liveRuntimeIntervalMs,
   liveCameraXComponentId,
+  shouldRunLiveRuntimeLoop,
   shouldRunLiveImageClassificationLoop,
   shouldCaptureLiveFrameImage
 } from '../main/ets/services/camera/LiveCameraService';
@@ -2754,6 +2756,22 @@ export default function localUnitTest() {
       expect(shouldRunLiveImageClassificationLoop('detectObjects', true, true)).assertFalse();
       expect(shouldRunLiveImageClassificationLoop('classifyImage', false, true)).assertFalse();
       expect(liveImageClassificationIntervalMs).assertEqual(1000);
+      expect(liveRuntimeIntervalMs).assertEqual(1000);
+    });
+
+    it('runsLiveLoopForImplementedLiveCameraAiMethodsOnly', 0, () => {
+      expect(shouldRunLiveRuntimeLoop('classifyImage', true, true, true)).assertTrue();
+      expect(shouldRunLiveRuntimeLoop('detectObjects', true, true, true)).assertTrue();
+      expect(shouldRunLiveRuntimeLoop('segmentPerson', true, true, true)).assertTrue();
+      expect(shouldRunLiveRuntimeLoop('detectPose', true, true, true)).assertTrue();
+      expect(shouldRunLiveRuntimeLoop('detectGesture', true, true, true)).assertFalse();
+      expect(shouldRunLiveRuntimeLoop('runStyleTransfer', true, true, true)).assertFalse();
+      expect(shouldRunLiveRuntimeLoop('translateText', true, true, true)).assertFalse();
+      expect(shouldRunLiveRuntimeLoop('runCustomModel', true, true, true)).assertFalse();
+      expect(shouldRunLiveRuntimeLoop('runStyleTransfer', false, true, true)).assertFalse();
+      expect(shouldRunLiveRuntimeLoop('detectObjects', false, true, true)).assertFalse();
+      expect(shouldRunLiveRuntimeLoop('detectObjects', true, false, true)).assertFalse();
+      expect(shouldRunLiveRuntimeLoop('detectObjects', true, true, false)).assertFalse();
     });
 
     it('liveRuntimeLoopRunsImmediatelyThenOnEachInterval', 0, async () => {

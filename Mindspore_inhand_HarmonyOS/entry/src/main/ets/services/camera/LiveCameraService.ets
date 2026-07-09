@@ -5,7 +5,8 @@ import { image } from '@kit.ImageKit';
 import { AppStringKey } from '../../common/i18n/AppStrings';
 
 export const liveCameraXComponentId = 'liveCameraPreview';
-export const liveImageClassificationIntervalMs = 1000;
+export const liveRuntimeIntervalMs = 1000;
+export const liveImageClassificationIntervalMs = liveRuntimeIntervalMs;
 
 export interface LiveCameraPreviewResult {
   readonly ok: boolean;
@@ -61,6 +62,21 @@ export function shouldRunLiveImageClassificationLoop(
   liveCameraActive: boolean
 ): boolean {
   return aiMethod === 'classifyImage' && liveCameraInputSelected && liveCameraActive;
+}
+
+export function shouldRunLiveRuntimeLoop(
+  aiMethod: string,
+  workflowLiveMode: boolean,
+  liveCameraInputSelected: boolean,
+  liveCameraActive: boolean
+): boolean {
+  if (!workflowLiveMode || !liveCameraInputSelected || !liveCameraActive) {
+    return false;
+  }
+  return aiMethod === 'classifyImage' ||
+    aiMethod === 'detectObjects' ||
+    aiMethod === 'segmentPerson' ||
+    aiMethod === 'detectPose';
 }
 
 export class HarmonyLiveRuntimeLoopScheduler implements LiveRuntimeLoopScheduler {

@@ -29,9 +29,9 @@ import {
   LiveFrameImageService,
   LiveRuntimeFrameRunner,
   LiveRuntimeLoopService,
-  liveImageClassificationIntervalMs,
+  liveRuntimeIntervalMs,
   liveCameraXComponentId,
-  shouldRunLiveImageClassificationLoop,
+  shouldRunLiveRuntimeLoop,
   shouldCaptureLiveFrameImage
 } from '../services/camera/LiveCameraService';
 import {
@@ -324,7 +324,9 @@ struct FeatureRuntimePage {
   }
 
   private runWorkflow(): void {
-    if (shouldRunLiveImageClassificationLoop(this.aiMethod, this.liveCameraInputSelected, this.liveCameraActive)) {
+    const workflow = workflowForRoute(this.routeName);
+    if (workflow &&
+      shouldRunLiveRuntimeLoop(workflow.aiMethod, workflow.liveMode, this.liveCameraInputSelected, this.liveCameraActive)) {
       this.startLiveRuntimeLoop();
       return;
     }
@@ -336,7 +338,7 @@ struct FeatureRuntimePage {
     const runner = new PageLiveRuntimeFrameRunner(async (): Promise<void> => {
       await this.runWorkflowAsync();
     });
-    this.liveRuntimeLoopService.start(liveImageClassificationIntervalMs, runner);
+    this.liveRuntimeLoopService.start(liveRuntimeIntervalMs, runner);
   }
 
   private stopLiveRuntimeLoop(): void {
