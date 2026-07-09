@@ -1314,6 +1314,11 @@ export default function localUnitTest() {
       expect(workflowForRoute(AppRoute.SEGMENTATION_STILL.name) !== undefined).assertTrue();
     });
 
+    it('keepsHiddenDanceRouteAsStubUntilDanceWorkflowIsPorted', 0, () => {
+      expect(findRouteByName(AppRoute.DANCE.name)?.page).assertEqual('pages/FeatureStubPage');
+      expect(workflowForRoute(AppRoute.DANCE.name) === undefined).assertTrue();
+    });
+
     it('routesVisibleFeaturesToRuntimePage', 0, () => {
       visibleExperienceSections.forEach((section: FeatureSection) => {
         section.items.forEach((item: FeatureItem) => {

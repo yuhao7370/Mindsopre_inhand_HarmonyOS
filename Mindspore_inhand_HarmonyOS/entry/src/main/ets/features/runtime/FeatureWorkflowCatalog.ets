@@ -196,16 +196,6 @@ export const featureWorkflows: Array<FeatureWorkflow> = [
     requiredPermissions: ['camera', 'media'],
     resultKind: 'tensorSummary',
     liveMode: false
-  },
-  {
-    routeName: AppRoute.DANCE.name,
-    titleKey: 'title_dance',
-    summaryKey: 'workflow_summary_pose',
-    aiMethod: 'detectPose',
-    inputKinds: ['camera'],
-    requiredPermissions: ['camera'],
-    resultKind: 'poseOverlay',
-    liveMode: true
   }
 ];
 
