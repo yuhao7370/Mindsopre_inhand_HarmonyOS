@@ -27,7 +27,11 @@ import {
   LiveCameraPreviewService,
   LiveFrameImageResult,
   LiveFrameImageService,
+  LiveRuntimeFrameRunner,
+  LiveRuntimeLoopService,
+  liveImageClassificationIntervalMs,
   liveCameraXComponentId,
+  shouldRunLiveImageClassificationLoop,
   shouldCaptureLiveFrameImage
 } from '../services/camera/LiveCameraService';
 import {
@@ -66,6 +70,18 @@ import { webPagePath } from '../common/data/WebDestination';
 interface FeatureRuntimeParams {
   titleKey?: AppStringKey;
   routeName?: string;
+}
+
+class PageLiveRuntimeFrameRunner implements LiveRuntimeFrameRunner {
+  private readonly runFrame: () => Promise<void>;
+
+  constructor(runFrame: () => Promise<void>) {
+    this.runFrame = runFrame;
+  }
+
+  async runOnce(): Promise<void> {
+    await this.runFrame();
+  }
 }
 
 @Entry
@@ -107,6 +123,8 @@ struct FeatureRuntimePage {
   @State liveCameraActive: boolean = false;
   private liveCameraController: XComponentController = new XComponentController();
   private liveCameraService: LiveCameraPreviewService | undefined = undefined;
+  private liveCameraInputSelected: boolean = false;
+  private liveRuntimeLoopService: LiveRuntimeLoopService = new LiveRuntimeLoopService();
 
   aboutToAppear() {
     const params = router.getParams() as FeatureRuntimeParams;
@@ -137,12 +155,17 @@ struct FeatureRuntimePage {
     this.resultRows = [];
     this.resultText = '';
     this.clearVisualResults();
+    const liveCameraInput = this.isLiveCameraInput(inputKind);
+    this.liveCameraInputSelected = liveCameraInput;
+    if (!liveCameraInput) {
+      this.stopLiveRuntimeLoop();
+    }
     if (inputKind === 'text') {
       this.statusKey = this.userText.length > 0 ? 'feature_runtime_text_ready' : 'feature_runtime_status_idle';
       this.selectedInputSummary = this.userText;
       return;
     }
-    if (this.isLiveCameraInput(inputKind)) {
+    if (liveCameraInput) {
       this.startLiveCameraPreview();
       return;
     }
@@ -190,7 +213,11 @@ struct FeatureRuntimePage {
     const workflow = workflowForRoute(this.routeName);
     const context = this.uiAbilityContext();
     if (!workflow || !context) {
-      this.statusKey = 'feature_runtime_permission_denied';
+      this.applyLiveCameraPreviewResult({
+        ok: false,
+        surfaceId: '',
+        messageKey: 'feature_runtime_permission_denied'
+      });
       return;
     }
 
@@ -201,7 +228,11 @@ struct FeatureRuntimePage {
     try {
       const permission = await new PermissionService().requestForWorkflow(context, workflow);
       if (!permission.ok) {
-        this.statusKey = 'feature_runtime_permission_denied';
+        this.applyLiveCameraPreviewResult({
+          ok: false,
+          surfaceId: '',
+          messageKey: 'feature_runtime_permission_denied'
+        });
         this.resultText = permission.requested.join(', ');
         return;
       }
@@ -226,9 +257,15 @@ struct FeatureRuntimePage {
     this.liveCameraActive = result.ok;
     this.liveCameraSurfaceId = result.surfaceId;
     this.selectedInputSummary = result.surfaceId;
+    if (!result.ok) {
+      this.liveCameraInputSelected = false;
+      this.stopLiveRuntimeLoop();
+    }
   }
 
   private stopLiveCameraPreview(): void {
+    this.stopLiveRuntimeLoop();
+    this.liveCameraInputSelected = false;
     this.liveCameraActive = false;
     const service = this.liveCameraService;
     this.liveCameraService = undefined;
@@ -287,7 +324,23 @@ struct FeatureRuntimePage {
   }
 
   private runWorkflow(): void {
+    if (shouldRunLiveImageClassificationLoop(this.aiMethod, this.liveCameraInputSelected, this.liveCameraActive)) {
+      this.startLiveRuntimeLoop();
+      return;
+    }
+    this.stopLiveRuntimeLoop();
     this.runWorkflowAsync();
+  }
+
+  private startLiveRuntimeLoop(): void {
+    const runner = new PageLiveRuntimeFrameRunner(async (): Promise<void> => {
+      await this.runWorkflowAsync();
+    });
+    this.liveRuntimeLoopService.start(liveImageClassificationIntervalMs, runner);
+  }
+
+  private stopLiveRuntimeLoop(): void {
+    this.liveRuntimeLoopService.stop();
   }
 
   private async runWorkflowAsync(): Promise<void> {
@@ -335,7 +388,7 @@ struct FeatureRuntimePage {
   }
 
   private async prepareLiveFrameImageInput(context: common.UIAbilityContext): Promise<boolean> {
-    if (!shouldCaptureLiveFrameImage(this.hasLiveCameraInput(), this.imageInputUri, this.liveCameraActive)) {
+    if (!shouldCaptureLiveFrameImage(this.liveCameraInputSelected, this.imageInputUri, this.liveCameraActive)) {
       return true;
     }
 

@@ -5,6 +5,7 @@ import { image } from '@kit.ImageKit';
 import { AppStringKey } from '../../common/i18n/AppStrings';
 
 export const liveCameraXComponentId = 'liveCameraPreview';
+export const liveImageClassificationIntervalMs = 1000;
 
 export interface LiveCameraPreviewResult {
   readonly ok: boolean;
@@ -31,18 +32,91 @@ export interface LiveFrameImageStore {
   writeJpeg(cacheDir: string, bytes: ArrayBuffer): Promise<string>;
 }
 
+export interface LiveRuntimeFrameRunner {
+  runOnce(): Promise<void>;
+}
+
+export interface LiveRuntimeLoopScheduler {
+  schedule(intervalMs: number, tick: () => void): number;
+  cancel(timerId: number): void;
+}
+
 export function shouldCaptureLiveFrameImage(
-  hasLiveCameraInput: boolean,
+  liveCameraInputSelected: boolean,
   imageInputUri: string,
   liveCameraActive: boolean
 ): boolean {
-  if (!hasLiveCameraInput) {
+  if (!liveCameraInputSelected) {
     return false;
   }
   if (imageInputUri.length > 0 && !liveCameraActive) {
     return false;
   }
   return true;
+}
+
+export function shouldRunLiveImageClassificationLoop(
+  aiMethod: string,
+  liveCameraInputSelected: boolean,
+  liveCameraActive: boolean
+): boolean {
+  return aiMethod === 'classifyImage' && liveCameraInputSelected && liveCameraActive;
+}
+
+export class HarmonyLiveRuntimeLoopScheduler implements LiveRuntimeLoopScheduler {
+  schedule(intervalMs: number, tick: () => void): number {
+    return setInterval(tick, intervalMs);
+  }
+
+  cancel(timerId: number): void {
+    clearInterval(timerId);
+  }
+}
+
+export class LiveRuntimeLoopService {
+  private readonly scheduler: LiveRuntimeLoopScheduler;
+  private timerId: number = -1;
+  private running: boolean = false;
+  private frameRunning: boolean = false;
+
+  constructor(scheduler?: LiveRuntimeLoopScheduler) {
+    this.scheduler = scheduler ?? new HarmonyLiveRuntimeLoopScheduler();
+  }
+
+  start(intervalMs: number, runner: LiveRuntimeFrameRunner): void {
+    if (this.running) {
+      return;
+    }
+    this.running = true;
+    this.runFrame(runner);
+    this.timerId = this.scheduler.schedule(intervalMs, () => this.runFrame(runner));
+  }
+
+  stop(): void {
+    this.running = false;
+    if (this.timerId >= 0) {
+      this.scheduler.cancel(this.timerId);
+      this.timerId = -1;
+    }
+  }
+
+  isRunning(): boolean {
+    return this.running;
+  }
+
+  private runFrame(runner: LiveRuntimeFrameRunner): void {
+    if (!this.running || this.frameRunning) {
+      return;
+    }
+    this.frameRunning = true;
+    runner.runOnce()
+      .then(() => {
+        this.frameRunning = false;
+      })
+      .catch(() => {
+        this.frameRunning = false;
+      });
+  }
 }
 
 export class LiveCameraPreviewService {

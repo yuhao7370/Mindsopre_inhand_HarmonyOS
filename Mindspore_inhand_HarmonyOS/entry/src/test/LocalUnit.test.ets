@@ -158,7 +158,12 @@ import {
   LiveFrameImageEncoder,
   LiveFrameImageService,
   LiveFrameImageStore,
+  LiveRuntimeFrameRunner,
+  LiveRuntimeLoopScheduler,
+  LiveRuntimeLoopService,
+  liveImageClassificationIntervalMs,
   liveCameraXComponentId,
+  shouldRunLiveImageClassificationLoop,
   shouldCaptureLiveFrameImage
 } from '../main/ets/services/camera/LiveCameraService';
 import {
@@ -703,6 +708,59 @@ class RecordingLiveFrameImageStore implements LiveFrameImageStore {
     this.seenCacheDirs.push(cacheDir);
     this.seenBytes.push(new Uint8Array(bytes));
     return this.nextPath;
+  }
+}
+
+class ManualLiveRuntimeLoopScheduler implements LiveRuntimeLoopScheduler {
+  readonly intervalMsValues: Array<number> = [];
+  readonly cancelledIds: Array<number> = [];
+  private nextId: number = 1;
+  private tickCallback: (() => void) | undefined = undefined;
+
+  schedule(intervalMs: number, tick: () => void): number {
+    this.intervalMsValues.push(intervalMs);
+    this.tickCallback = tick;
+    const id = this.nextId;
+    this.nextId += 1;
+    return id;
+  }
+
+  cancel(timerId: number): void {
+    this.cancelledIds.push(timerId);
+    this.tickCallback = undefined;
+  }
+
+  tick(): void {
+    if (this.tickCallback !== undefined) {
+      this.tickCallback();
+    }
+  }
+}
+
+class RecordingLiveRuntimeFrameRunner implements LiveRuntimeFrameRunner {
+  runCount: number = 0;
+
+  async runOnce(): Promise<void> {
+    this.runCount += 1;
+  }
+}
+
+class BlockingLiveRuntimeFrameRunner implements LiveRuntimeFrameRunner {
+  runCount: number = 0;
+  private resolver: (() => void) | undefined = undefined;
+
+  async runOnce(): Promise<void> {
+    this.runCount += 1;
+    await new Promise<void>((resolve: () => void) => {
+      this.resolver = resolve;
+    });
+  }
+
+  finish(): void {
+    if (this.resolver !== undefined) {
+      this.resolver();
+      this.resolver = undefined;
+    }
   }
 }
 
@@ -2684,9 +2742,57 @@ export default function localUnitTest() {
 
     it('capturesLiveFrameOnlyWhenLiveCameraIsTheActiveImageSource', 0, () => {
       expect(shouldCaptureLiveFrameImage(false, '', false)).assertFalse();
+      expect(shouldCaptureLiveFrameImage(false, '/cache/selected.jpg', true)).assertFalse();
       expect(shouldCaptureLiveFrameImage(true, '', false)).assertTrue();
       expect(shouldCaptureLiveFrameImage(true, '/cache/selected.jpg', false)).assertFalse();
       expect(shouldCaptureLiveFrameImage(true, '/cache/previous.jpg', true)).assertTrue();
+    });
+
+    it('startsLiveLoopOnlyForActiveImageClassificationCameraWorkflow', 0, () => {
+      expect(shouldRunLiveImageClassificationLoop('classifyImage', true, true)).assertTrue();
+      expect(shouldRunLiveImageClassificationLoop('classifyImage', true, false)).assertFalse();
+      expect(shouldRunLiveImageClassificationLoop('detectObjects', true, true)).assertFalse();
+      expect(shouldRunLiveImageClassificationLoop('classifyImage', false, true)).assertFalse();
+      expect(liveImageClassificationIntervalMs).assertEqual(1000);
+    });
+
+    it('liveRuntimeLoopRunsImmediatelyThenOnEachInterval', 0, async () => {
+      const scheduler = new ManualLiveRuntimeLoopScheduler();
+      const runner = new RecordingLiveRuntimeFrameRunner();
+      const service = new LiveRuntimeLoopService(scheduler);
+
+      service.start(liveImageClassificationIntervalMs, runner);
+      await Promise.resolve();
+      scheduler.tick();
+      await Promise.resolve();
+
+      expect(scheduler.intervalMsValues[0]).assertEqual(1000);
+      expect(runner.runCount).assertEqual(2);
+    });
+
+    it('liveRuntimeLoopSkipsReentryAndCancelsOnStop', 0, async () => {
+      const scheduler = new ManualLiveRuntimeLoopScheduler();
+      const runner = new BlockingLiveRuntimeFrameRunner();
+      const service = new LiveRuntimeLoopService(scheduler);
+
+      service.start(liveImageClassificationIntervalMs, runner);
+      await Promise.resolve();
+      scheduler.tick();
+      await Promise.resolve();
+      expect(runner.runCount).assertEqual(1);
+
+      runner.finish();
+      await Promise.resolve();
+      await Promise.resolve();
+      scheduler.tick();
+      await Promise.resolve();
+      expect(runner.runCount).assertEqual(2);
+
+      service.stop();
+      scheduler.tick();
+      await Promise.resolve();
+      expect(scheduler.cancelledIds[0]).assertEqual(1);
+      expect(runner.runCount).assertEqual(2);
     });
 
     it('usesMindSporeModelFileSuffixForModelPicker', 0, () => {
