@@ -31,6 +31,8 @@ struct FeatureRuntimePage {
   @State resultText: string = '';
   @State selectedInputSummary: string = '';
   @State imageInputUri: string = '';
+  @State contentImageUri: string = '';
+  @State styleImageUri: string = '';
   @State modelInputUri: string = '';
   @State userText: string = '';
   @State inputKinds: Array<FeatureInputKind> = [];
@@ -81,6 +83,10 @@ struct FeatureRuntimePage {
       this.selectedInputSummary = '';
       if (inputKind === 'modelFile') {
         this.modelInputUri = '';
+      } else if (inputKind === 'contentImage') {
+        this.contentImageUri = '';
+      } else if (inputKind === 'styleImage') {
+        this.styleImageUri = '';
       } else {
         this.imageInputUri = '';
       }
@@ -90,6 +96,10 @@ struct FeatureRuntimePage {
     this.selectedInputSummary = result.uri;
     if (inputKind === 'modelFile') {
       this.modelInputUri = result.uri;
+    } else if (inputKind === 'contentImage') {
+      this.contentImageUri = result.uri;
+    } else if (inputKind === 'styleImage') {
+      this.styleImageUri = result.uri;
     } else {
       this.imageInputUri = result.uri;
     }
@@ -98,6 +108,8 @@ struct FeatureRuntimePage {
   private aiRunInputs(): AiRunInputs {
     return {
       imageUri: this.imageInputUri,
+      contentImageUri: this.contentImageUri,
+      styleImageUri: this.styleImageUri,
       modelUri: this.modelInputUri,
       text: this.userText
     };

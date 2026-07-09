@@ -11,6 +11,10 @@ import {
   ObjectDetectionRunResult,
   ObjectDetectionService
 } from './ObjectDetectionService';
+import {
+  StyleTransferResult,
+  StyleTransferService
+} from './StyleTransferService';
 
 export type AiRunCode =
   'NATIVE_ADAPTER_PENDING' |
@@ -22,10 +26,14 @@ export type AiRunCode =
   'CLASSIFICATION_DONE' |
   'CLASSIFICATION_FAILED' |
   'OBJECT_DETECTION_DONE' |
-  'OBJECT_DETECTION_FAILED';
+  'OBJECT_DETECTION_FAILED' |
+  'STYLE_TRANSFER_DONE' |
+  'STYLE_TRANSFER_FAILED';
 
 export interface AiRunInputs {
   readonly imageUri?: string;
+  readonly contentImageUri?: string;
+  readonly styleImageUri?: string;
   readonly modelUri?: string;
   readonly text?: string;
 }
@@ -42,12 +50,14 @@ export interface AiServiceOptions {
   readonly imageClassificationService?: ImageClassificationService;
   readonly customModelService?: CustomModelService;
   readonly objectDetectionService?: ObjectDetectionService;
+  readonly styleTransferService?: StyleTransferService;
 }
 
 export class DefaultAiService {
   private readonly imageClassificationService: ImageClassificationService;
   private readonly customModelService?: CustomModelService;
   private readonly objectDetectionService?: ObjectDetectionService;
+  private readonly styleTransferService?: StyleTransferService;
 
   constructor(options?: AiServiceOptions) {
     this.imageClassificationService = options?.imageClassificationService ?? new ImageClassificationService({
@@ -55,6 +65,7 @@ export class DefaultAiService {
     });
     this.customModelService = options?.customModelService;
     this.objectDetectionService = options?.objectDetectionService;
+    this.styleTransferService = options?.styleTransferService;
   }
 
   async run(workflow: FeatureWorkflow, inputs: AiRunInputs = {}): Promise<AiRunResult> {
@@ -63,6 +74,9 @@ export class DefaultAiService {
     }
     if (workflow.aiMethod === 'detectObjects') {
       return this.detectObjects(inputs);
+    }
+    if (workflow.aiMethod === 'runStyleTransfer') {
+      return this.runStyleTransfer(inputs);
     }
     if (workflow.aiMethod === 'runCustomModel') {
       return this.runCustomModel(inputs);
@@ -73,6 +87,48 @@ export class DefaultAiService {
       aiMethod: workflow.aiMethod,
       messageKey: 'feature_runtime_pending_adapter',
       detailText: ''
+    };
+  }
+
+  private async runStyleTransfer(inputs: AiRunInputs): Promise<AiRunResult> {
+    if (this.styleTransferService === undefined) {
+      return {
+        ok: false,
+        code: 'NATIVE_ADAPTER_PENDING',
+        aiMethod: 'runStyleTransfer',
+        messageKey: 'feature_runtime_pending_adapter',
+        detailText: ''
+      };
+    }
+
+    const contentImageUri = inputs.contentImageUri ?? '';
+    const styleImageUri = inputs.styleImageUri ?? '';
+    if (contentImageUri.length === 0 || styleImageUri.length === 0) {
+      return {
+        ok: false,
+        code: 'MISSING_INPUT',
+        aiMethod: 'runStyleTransfer',
+        messageKey: 'feature_runtime_missing_input',
+        detailText: ''
+      };
+    }
+
+    const result = await this.styleTransferService.run(contentImageUri, styleImageUri);
+    if (!result.ok) {
+      return {
+        ok: false,
+        code: 'STYLE_TRANSFER_FAILED',
+        aiMethod: 'runStyleTransfer',
+        messageKey: 'feature_runtime_style_transfer_failed',
+        detailText: this.styleTransferSummary(result, contentImageUri, styleImageUri)
+      };
+    }
+    return {
+      ok: true,
+      code: 'STYLE_TRANSFER_DONE',
+      aiMethod: 'runStyleTransfer',
+      messageKey: 'feature_runtime_style_transfer_done',
+      detailText: this.styleTransferSummary(result, contentImageUri, styleImageUri)
     };
   }
 
@@ -295,6 +351,22 @@ export class DefaultAiService {
     if (modelUri.length > 0) {
       lines.push(`model=${this.lastPathSegment(modelUri)}`);
     }
+    return lines.join('\n');
+  }
+
+  private styleTransferSummary(
+    result: StyleTransferResult,
+    contentImageUri: string,
+    styleImageUri: string
+  ): string {
+    const lines: Array<string> = [
+      `content=${this.lastPathSegment(contentImageUri)}`,
+      `style=${this.lastPathSegment(styleImageUri)}`,
+      `outputFloats=${result.outputFloatCount}`,
+      `predictMs=${result.predictMs}`,
+      `transferMs=${result.transferMs}`,
+      `executionMs=${result.executionMs}`
+    ];
     return lines.join('\n');
   }
 

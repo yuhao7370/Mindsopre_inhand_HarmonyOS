@@ -5,6 +5,11 @@ import { hasAppStringKey } from '../main/ets/common/i18n/AppStrings';
 import { iconLabel } from '../main/ets/common/icons/IconSymbols';
 import { AiRunResult, DefaultAiService } from '../main/ets/services/ai/AiService';
 import {
+  StyleTransferResult,
+  StyleTransferRunner,
+  StyleTransferService
+} from '../main/ets/services/ai/StyleTransferService';
+import {
   ImageClassificationService,
   ImageClassificationScoreRunner,
   imageClassificationModelDownloadUrl,
@@ -259,6 +264,28 @@ class FixedObjectDetectionRunner implements ObjectDetectionRunner {
 class RejectingObjectDetectionRunner implements ObjectDetectionRunner {
   async detectObjects(_imageUri: string, _modelUri?: string): Promise<Array<ObjectDetection>> {
     throw new Error('object detection failed');
+  }
+}
+
+class FixedStyleTransferRunner implements StyleTransferRunner {
+  readonly seenContentUris: Array<string> = [];
+  readonly seenStyleUris: Array<string> = [];
+  private readonly result: StyleTransferResult;
+
+  constructor(result: StyleTransferResult) {
+    this.result = result;
+  }
+
+  async run(contentImageUri: string, styleImageUri: string): Promise<StyleTransferResult> {
+    this.seenContentUris.push(contentImageUri);
+    this.seenStyleUris.push(styleImageUri);
+    return this.result;
+  }
+}
+
+class RejectingStyleTransferRunner implements StyleTransferRunner {
+  async run(_contentImageUri: string, _styleImageUri: string): Promise<StyleTransferResult> {
+    throw new Error('style transfer failed');
   }
 }
 
@@ -544,6 +571,72 @@ export default function localUnitTest() {
       expect(result.ok).assertFalse();
       expect(result.code).assertEqual('CUSTOM_MODEL_FAILED');
       expect(result.messageKey).assertEqual('feature_runtime_custom_model_failed');
+    });
+
+    it('styleTransferRequiresContentAndStyleInputsWhenServiceIsProvided', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.STYLE_TRANSFER.name);
+      expect(workflow !== undefined).assertTrue();
+      const styleTransferService = new StyleTransferService({
+        runner: new FixedStyleTransferRunner({
+          ok: true,
+          outputFloatCount: 384 * 384 * 3,
+          predictMs: 1,
+          transferMs: 2,
+          executionMs: 3
+        })
+      });
+
+      const result: AiRunResult = await new DefaultAiService({ styleTransferService: styleTransferService }).run(workflow!, {
+        contentImageUri: 'file://selected/content.jpg'
+      });
+
+      expect(result.ok).assertFalse();
+      expect(result.code).assertEqual('MISSING_INPUT');
+    });
+
+    it('aiServiceUsesRealStyleTransferServiceWhenProvided', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.STYLE_TRANSFER.name);
+      expect(workflow !== undefined).assertTrue();
+      const runner: FixedStyleTransferRunner = new FixedStyleTransferRunner({
+        ok: true,
+        outputFloatCount: 384 * 384 * 3,
+        predictMs: 11,
+        transferMs: 22,
+        executionMs: 40
+      });
+      const styleTransferService = new StyleTransferService({
+        runner: runner
+      });
+
+      const result: AiRunResult = await new DefaultAiService({ styleTransferService: styleTransferService }).run(workflow!, {
+        contentImageUri: 'file://selected/content.jpg',
+        styleImageUri: 'file://selected/style.jpg'
+      });
+
+      expect(result.ok).assertTrue();
+      expect(result.code).assertEqual('STYLE_TRANSFER_DONE');
+      expect(result.messageKey).assertEqual('feature_runtime_style_transfer_done');
+      expect(result.detailText.indexOf('outputFloats=442368') >= 0).assertTrue();
+      expect(result.detailText.indexOf('predictMs=11') >= 0).assertTrue();
+      expect(runner.seenContentUris[0]).assertEqual('file://selected/content.jpg');
+      expect(runner.seenStyleUris[0]).assertEqual('file://selected/style.jpg');
+    });
+
+    it('aiServiceReportsStyleTransferRunnerFailureWithI18nKey', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.STYLE_TRANSFER.name);
+      expect(workflow !== undefined).assertTrue();
+      const styleTransferService = new StyleTransferService({
+        runner: new RejectingStyleTransferRunner()
+      });
+
+      const result: AiRunResult = await new DefaultAiService({ styleTransferService: styleTransferService }).run(workflow!, {
+        contentImageUri: 'file://selected/content.jpg',
+        styleImageUri: 'file://selected/style.jpg'
+      });
+
+      expect(result.ok).assertFalse();
+      expect(result.code).assertEqual('STYLE_TRANSFER_FAILED');
+      expect(result.messageKey).assertEqual('feature_runtime_style_transfer_failed');
     });
 
     it('parsesAndroidImageClassificationLabels', 0, () => {
@@ -1014,7 +1107,7 @@ export default function localUnitTest() {
     });
 
     it('keepsNonClassificationWorkflowsOnDefaultPendingRuntime', 0, async () => {
-      const workflow = workflowForRoute(AppRoute.STYLE_TRANSFER.name);
+      const workflow = workflowForRoute(AppRoute.POSENET.name);
       expect(workflow !== undefined).assertTrue();
       const service = await createRuntimeAiServiceForWorkflow(workflow!, {
         resourceManager: new ThrowingRawfileContentReader()
@@ -1043,6 +1136,30 @@ export default function localUnitTest() {
       expect(result.ok).assertTrue();
       expect(result.code).assertEqual('CUSTOM_MODEL_DONE');
       expect(result.detailText.indexOf('Value[0]: 0.200000') >= 0).assertTrue();
+    });
+
+    it('runtimeFactoryInjectsStyleTransferServiceForStyleWorkflow', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.STYLE_TRANSFER.name);
+      expect(workflow !== undefined).assertTrue();
+      const service = await createRuntimeAiServiceForWorkflow(workflow!, {
+        resourceManager: new ThrowingRawfileContentReader(),
+        styleTransferRunner: new FixedStyleTransferRunner({
+          ok: true,
+          outputFloatCount: 384 * 384 * 3,
+          predictMs: 5,
+          transferMs: 6,
+          executionMs: 12
+        })
+      });
+
+      const result: AiRunResult = await service.run(workflow!, {
+        contentImageUri: 'file://selected/content.jpg',
+        styleImageUri: 'file://selected/style.jpg'
+      });
+
+      expect(result.ok).assertTrue();
+      expect(result.code).assertEqual('STYLE_TRANSFER_DONE');
+      expect(result.detailText.indexOf('transferMs=6') >= 0).assertTrue();
     });
 
     it('mapsWorkflowPermissionsToHarmonyPermissionNames', 0, () => {

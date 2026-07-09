@@ -22,6 +22,10 @@ import {
   parseImageCategoryLabels
 } from './ImageClassificationService';
 import {
+  StyleTransferRunner,
+  StyleTransferService
+} from './StyleTransferService';
+import {
   MindSporeLiteObjectDetectionTensorRunner,
   objectCategoryLabelRawfilePath,
   objectDetectionModelRawfilePath,
@@ -43,6 +47,7 @@ export interface HarmonyImageClassificationRuntimeOptions {
   readonly objectDetectionPreprocessor?: ObjectDetectionInputPreprocessor;
   readonly objectDetectionRunner?: ObjectDetectionRunner;
   readonly objectDetectionTensorRunner?: ObjectDetectionTensorRunner;
+  readonly styleTransferRunner?: StyleTransferRunner;
 }
 
 let cachedHarmonyDefaultAiService: Promise<DefaultAiService> | undefined = undefined;
@@ -96,6 +101,11 @@ export async function cachedRuntimeAiServiceForWorkflow(
       resourceManager: resourceManager
     });
   }
+  if (workflow.aiMethod === 'runStyleTransfer') {
+    return createRuntimeAiServiceForWorkflow(workflow, {
+      resourceManager: resourceManager
+    });
+  }
   return new DefaultAiService();
 }
 
@@ -115,6 +125,11 @@ export async function createRuntimeAiServiceForWorkflow(
     const objectDetectionService = await createHarmonyObjectDetectionService(options);
     return new DefaultAiService({
       objectDetectionService: objectDetectionService
+    });
+  }
+  if (workflow.aiMethod === 'runStyleTransfer') {
+    return new DefaultAiService({
+      styleTransferService: createHarmonyStyleTransferService(options)
     });
   }
   return new DefaultAiService();
@@ -177,6 +192,14 @@ export function createHarmonyObjectDetectionRunner(
       resourceManager: options.resourceManager,
       modelRawfilePath: objectDetectionModelRawfilePath
     })
+  });
+}
+
+export function createHarmonyStyleTransferService(
+  options: HarmonyImageClassificationRuntimeOptions
+): StyleTransferService {
+  return new StyleTransferService({
+    runner: options.styleTransferRunner
   });
 }
 
