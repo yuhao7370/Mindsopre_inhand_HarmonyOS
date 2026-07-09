@@ -40,6 +40,12 @@ import {
   shouldCaptureLiveFrameImage
 } from '../services/camera/LiveCameraService';
 import {
+  HarmonyResultImageAssetWriter,
+  HarmonyResultImagePixelMapEncoder,
+  ResultImageSaveResult,
+  ResultImageSaveService
+} from '../services/media/ResultImageSaveService';
+import {
   ObjectDetection,
   ObjectDetectionBoxPercent,
   objectDetectionBoxPercent
@@ -658,6 +664,25 @@ struct FeatureRuntimePage {
     });
   }
 
+  private saveResultImage(pixelMap: image.PixelMap | undefined): void {
+    const context = this.uiAbilityContext();
+    if (!context) {
+      this.statusKey = 'feature_runtime_save_image_failed';
+      return;
+    }
+    new ResultImageSaveService(
+      new HarmonyResultImagePixelMapEncoder(),
+      new HarmonyResultImageAssetWriter(context)
+    ).save(pixelMap).then((result: ResultImageSaveResult) => {
+      this.statusKey = result.messageKey;
+      if (result.ok) {
+        this.selectedInputSummary = result.uri;
+      }
+    }).catch(() => {
+      this.statusKey = 'feature_runtime_save_image_failed';
+    });
+  }
+
   @Builder
   inputChip(inputKind: FeatureInputKind) {
     Text(appString(inputLabelKey(inputKind)))
@@ -1064,6 +1089,28 @@ struct FeatureRuntimePage {
   }
 
   @Builder
+  resultImageSaveControl(pixelMap: image.PixelMap | undefined) {
+    Row() {
+      SaveButton({
+        icon: SaveIconStyle.FULL_FILLED,
+        text: SaveDescription.SAVE_IMAGE,
+        buttonType: ButtonType.Capsule
+      })
+        .height(36)
+        .onClick((_event: ClickEvent, result: SaveButtonOnClickResult) => {
+          if (result === SaveButtonOnClickResult.SUCCESS) {
+            this.saveResultImage(pixelMap);
+            return;
+          }
+          this.statusKey = 'feature_runtime_save_image_failed';
+        })
+    }
+    .width('100%')
+    .justifyContent(FlexAlign.Center)
+    .margin({ top: AppSpacing.sm })
+  }
+
+  @Builder
   filePreview(labelKey: AppStringKey, uri: string) {
     Row() {
       Text(appString(labelKey))
@@ -1253,12 +1300,14 @@ struct FeatureRuntimePage {
           }
           if (this.styledImagePixelMap !== undefined) {
             this.pixelMapPreview('feature_runtime_result_styled_image', this.styledImagePixelMap)
+            this.resultImageSaveControl(this.styledImagePixelMap)
           }
           if (this.objectDetectionImageUri.length > 0 && this.objectDetections.length > 0) {
             this.objectDetectionPreview('feature_runtime_result_detection_overlay', this.objectDetectionImageUri)
           }
           if (this.segmentationForegroundPixelMap !== undefined) {
             this.pixelMapPreview('feature_runtime_result_foreground', this.segmentationForegroundPixelMap)
+            this.resultImageSaveControl(this.segmentationForegroundPixelMap)
           }
           if (this.segmentationImageUri.length > 0 && this.segmentationRectangles.length > 0) {
             this.segmentationPreview('feature_runtime_result_segmentation_overlay', this.segmentationImageUri)

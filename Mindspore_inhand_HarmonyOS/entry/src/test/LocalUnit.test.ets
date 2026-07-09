@@ -226,6 +226,13 @@ import {
   QrCodeSaveService
 } from '../main/ets/services/media/QrCodeSaveService';
 import {
+  ResultImageAssetWriter,
+  ResultImagePixelMapEncoder,
+  ResultImageSaveService,
+  resultImagePackingOption,
+  isFullResultImageWrite
+} from '../main/ets/services/media/ResultImageSaveService';
+import {
   ShareService,
   ShareTextPayload,
   TextShareWriter,
@@ -718,6 +725,46 @@ class RejectingQrCodeAssetWriter implements QrCodeAssetWriter {
   }
 }
 
+class FixedResultImagePixelMapEncoder implements ResultImagePixelMapEncoder {
+  seenPixelMapCount: number = 0;
+  private readonly imageBytes: ArrayBuffer;
+
+  constructor(imageBytes: ArrayBuffer) {
+    this.imageBytes = imageBytes;
+  }
+
+  async encodeJpeg(_pixelMap: image.PixelMap): Promise<ArrayBuffer> {
+    this.seenPixelMapCount += 1;
+    return this.imageBytes;
+  }
+}
+
+class RejectingResultImagePixelMapEncoder implements ResultImagePixelMapEncoder {
+  async encodeJpeg(_pixelMap: image.PixelMap): Promise<ArrayBuffer> {
+    throw new Error('pixelmap encode failed');
+  }
+}
+
+class RecordingResultImageAssetWriter implements ResultImageAssetWriter {
+  readonly writtenBytes: Array<Uint8Array> = [];
+  private readonly nextUri: string;
+
+  constructor(nextUri: string) {
+    this.nextUri = nextUri;
+  }
+
+  async writeJpeg(bytes: ArrayBuffer): Promise<string> {
+    this.writtenBytes.push(new Uint8Array(bytes));
+    return this.nextUri;
+  }
+}
+
+class RejectingResultImageAssetWriter implements ResultImageAssetWriter {
+  async writeJpeg(_bytes: ArrayBuffer): Promise<string> {
+    throw new Error('gallery rejected');
+  }
+}
+
 class RecordingLiveCameraPreviewDriver implements LiveCameraPreviewDriver {
   startedSurfaceIds: Array<string> = [];
   private readonly failStart: boolean;
@@ -984,6 +1031,10 @@ export default function localUnitTest() {
       expect(hasAppStringKey('feature_runtime_copy_text')).assertTrue();
       expect(hasAppStringKey('feature_runtime_copy_done')).assertTrue();
       expect(hasAppStringKey('feature_runtime_model_cache_failed')).assertTrue();
+      expect(hasAppStringKey('feature_runtime_save_image')).assertTrue();
+      expect(hasAppStringKey('feature_runtime_save_image_done')).assertTrue();
+      expect(hasAppStringKey('feature_runtime_save_image_failed')).assertTrue();
+      expect(hasAppStringKey('feature_runtime_save_image_missing')).assertTrue();
       expect(hasAppStringKey('qr_code_save_done')).assertTrue();
       expect(hasAppStringKey('qr_code_save_failed')).assertTrue();
       expect(hasAppStringKey('title_share')).assertTrue();
@@ -1051,6 +1102,62 @@ export default function localUnitTest() {
       expect(isFullQrCodeWrite(bytes, 3)).assertTrue();
       expect(isFullQrCodeWrite(bytes, 2)).assertFalse();
       expect(isFullQrCodeWrite(bytes, 4)).assertFalse();
+    });
+
+    it('resultImageSaveServiceEncodesProcessedPixelMapToGalleryJpeg', 0, async () => {
+      const encoder = new FixedResultImagePixelMapEncoder(new Uint8Array([4, 5, 6]).buffer as ArrayBuffer);
+      const writer = new RecordingResultImageAssetWriter('file://media/gallery/result.jpg');
+      const pixelMap = {} as image.PixelMap;
+
+      const result = await new ResultImageSaveService(encoder, writer).save(pixelMap);
+
+      expect(result.ok).assertTrue();
+      expect(result.uri).assertEqual('file://media/gallery/result.jpg');
+      expect(result.messageKey).assertEqual('feature_runtime_save_image_done');
+      expect(encoder.seenPixelMapCount).assertEqual(1);
+      expect(writer.writtenBytes[0][0]).assertEqual(4);
+      expect(writer.writtenBytes[0][2]).assertEqual(6);
+    });
+
+    it('resultImageSaveServiceReportsMissingOrFailedProcessedImage', 0, async () => {
+      const missing = await new ResultImageSaveService(
+        new FixedResultImagePixelMapEncoder(new Uint8Array([1]).buffer as ArrayBuffer),
+        new RecordingResultImageAssetWriter('file://media/gallery/result.jpg')
+      ).save(undefined);
+      const rejectedEncode = await new ResultImageSaveService(
+        new RejectingResultImagePixelMapEncoder(),
+        new RecordingResultImageAssetWriter('file://media/gallery/result.jpg')
+      ).save({} as image.PixelMap);
+      const rejectedWrite = await new ResultImageSaveService(
+        new FixedResultImagePixelMapEncoder(new Uint8Array([1]).buffer as ArrayBuffer),
+        new RejectingResultImageAssetWriter()
+      ).save({} as image.PixelMap);
+      const emptyUri = await new ResultImageSaveService(
+        new FixedResultImagePixelMapEncoder(new Uint8Array([1]).buffer as ArrayBuffer),
+        new RecordingResultImageAssetWriter('')
+      ).save({} as image.PixelMap);
+
+      expect(missing.ok).assertFalse();
+      expect(rejectedEncode.ok).assertFalse();
+      expect(rejectedWrite.ok).assertFalse();
+      expect(emptyUri.ok).assertFalse();
+      expect(missing.messageKey).assertEqual('feature_runtime_save_image_missing');
+      expect(rejectedEncode.messageKey).assertEqual('feature_runtime_save_image_failed');
+      expect(rejectedWrite.messageKey).assertEqual('feature_runtime_save_image_failed');
+      expect(emptyUri.messageKey).assertEqual('feature_runtime_save_image_failed');
+    });
+
+    it('resultImageWriteCompletesOnlyWhenAllBytesAreWritten', 0, () => {
+      const bytes = new Uint8Array([1, 2, 3]).buffer as ArrayBuffer;
+
+      expect(isFullResultImageWrite(bytes, 3)).assertTrue();
+      expect(isFullResultImageWrite(bytes, 2)).assertFalse();
+      expect(isFullResultImageWrite(bytes, 4)).assertFalse();
+    });
+
+    it('resultImageSaveServiceUsesAndroidJpegQuality', 0, () => {
+      expect(resultImagePackingOption.format).assertEqual('image/jpeg');
+      expect(resultImagePackingOption.quality).assertEqual(100);
     });
 
     it('shareServiceUsesAndroidMindSporeTextPayload', 0, async () => {

@@ -110,6 +110,10 @@ export type AppStringKey =
   'feature_runtime_copy_text' |
   'feature_runtime_copy_done' |
   'feature_runtime_copy_failed' |
+  'feature_runtime_save_image' |
+  'feature_runtime_save_image_done' |
+  'feature_runtime_save_image_failed' |
+  'feature_runtime_save_image_missing' |
   'feature_runtime_preview_title' |
   'feature_runtime_preview_image' |
   'feature_runtime_preview_content' |
@@ -274,6 +278,10 @@ const APP_STRING_KEYS: AppStringKey[] = [
   'feature_runtime_copy_text',
   'feature_runtime_copy_done',
   'feature_runtime_copy_failed',
+  'feature_runtime_save_image',
+  'feature_runtime_save_image_done',
+  'feature_runtime_save_image_failed',
+  'feature_runtime_save_image_missing',
   'feature_runtime_preview_title',
   'feature_runtime_preview_image',
   'feature_runtime_preview_content',
@@ -553,6 +561,14 @@ export function appString(key: AppStringKey): ResourceStr {
       return $r('app.string.feature_runtime_copy_done');
     case 'feature_runtime_copy_failed':
       return $r('app.string.feature_runtime_copy_failed');
+    case 'feature_runtime_save_image':
+      return $r('app.string.feature_runtime_save_image');
+    case 'feature_runtime_save_image_done':
+      return $r('app.string.feature_runtime_save_image_done');
+    case 'feature_runtime_save_image_failed':
+      return $r('app.string.feature_runtime_save_image_failed');
+    case 'feature_runtime_save_image_missing':
+      return $r('app.string.feature_runtime_save_image_missing');
     case 'feature_runtime_preview_title':
       return $r('app.string.feature_runtime_preview_title');
     case 'feature_runtime_preview_image':
