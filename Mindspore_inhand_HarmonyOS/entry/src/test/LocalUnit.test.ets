@@ -182,6 +182,7 @@ import {
   liveCameraXComponentId,
   liveFrameImagePackingOption,
   shouldRunLiveRuntimeLoop,
+  shouldAutoRunLiveRuntimeAfterPreview,
   shouldRunLiveImageClassificationLoop,
   shouldCaptureLiveFrameImage
 } from '../main/ets/services/camera/LiveCameraService';
@@ -3102,6 +3103,16 @@ export default function localUnitTest() {
       expect(shouldRunLiveRuntimeLoop('detectObjects', false, true, true)).assertFalse();
       expect(shouldRunLiveRuntimeLoop('detectObjects', true, false, true)).assertFalse();
       expect(shouldRunLiveRuntimeLoop('detectObjects', true, true, false)).assertFalse();
+    });
+
+    it('autoRunsLiveRuntimeAfterPreviewIsReadyLikeAndroidLensEnginePages', 0, () => {
+      expect(shouldAutoRunLiveRuntimeAfterPreview('classifyImage', true, true)).assertTrue();
+      expect(shouldAutoRunLiveRuntimeAfterPreview('detectObjects', true, true)).assertTrue();
+      expect(shouldAutoRunLiveRuntimeAfterPreview('segmentPerson', true, true)).assertTrue();
+      expect(shouldAutoRunLiveRuntimeAfterPreview('detectPose', true, true)).assertTrue();
+      expect(shouldAutoRunLiveRuntimeAfterPreview('detectGesture', false, true)).assertFalse();
+      expect(shouldAutoRunLiveRuntimeAfterPreview('runStyleTransfer', false, true)).assertFalse();
+      expect(shouldAutoRunLiveRuntimeAfterPreview('detectObjects', true, false)).assertFalse();
     });
 
     it('liveRuntimeLoopRunsImmediatelyThenOnEachInterval', 0, async () => {

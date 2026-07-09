@@ -37,6 +37,7 @@ import {
   liveRuntimeIntervalMs,
   liveCameraXComponentId,
   shouldRunLiveRuntimeLoop,
+  shouldAutoRunLiveRuntimeAfterPreview,
   shouldCaptureLiveFrameImage
 } from '../services/camera/LiveCameraService';
 import {
@@ -304,6 +305,11 @@ struct FeatureRuntimePage {
     if (!result.ok) {
       this.liveCameraInputSelected = false;
       this.stopLiveRuntimeLoop();
+      return;
+    }
+    const workflow = workflowForRoute(this.routeName);
+    if (shouldAutoRunLiveRuntimeAfterPreview(this.aiMethod, workflow?.liveMode ?? false, result.ok)) {
+      this.startLiveRuntimeLoop();
     }
   }
 

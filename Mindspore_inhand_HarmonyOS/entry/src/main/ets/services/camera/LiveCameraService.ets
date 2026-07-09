@@ -83,6 +83,14 @@ export function shouldRunLiveRuntimeLoop(
     aiMethod === 'detectPose';
 }
 
+export function shouldAutoRunLiveRuntimeAfterPreview(
+  aiMethod: string,
+  workflowLiveMode: boolean,
+  previewReady: boolean
+): boolean {
+  return shouldRunLiveRuntimeLoop(aiMethod, workflowLiveMode, true, previewReady);
+}
+
 export class HarmonyLiveRuntimeLoopScheduler implements LiveRuntimeLoopScheduler {
   schedule(intervalMs: number, tick: () => void): number {
     return setInterval(tick, intervalMs);
