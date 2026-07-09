@@ -17,6 +17,8 @@ export interface AppRouteCatalog {
   readonly SEGMENTATION_STILL: AppRouteInfo;
   readonly SEGMENTATION_LIVE: AppRouteInfo;
   readonly PORTRAIT_SEGMENTATION: AppRouteInfo;
+  readonly SCENE_STILL: AppRouteInfo;
+  readonly SCENE_LIVE: AppRouteInfo;
   readonly GESTURE_STILL: AppRouteInfo;
   readonly GESTURE_LIVE: AppRouteInfo;
   readonly TEXT_RECOGNITION: AppRouteInfo;
@@ -40,6 +42,8 @@ export const AppRoute: AppRouteCatalog = {
   SEGMENTATION_STILL: { name: '/hms/ImageSegmentationActivity', page: 'pages/FeatureRuntimePage' } as AppRouteInfo,
   SEGMENTATION_LIVE: { name: '/hms/ImageSegmentationLiveAnalyseActivity', page: 'pages/FeatureRuntimePage' } as AppRouteInfo,
   PORTRAIT_SEGMENTATION: { name: '/hms/PortraitSegmentationActivity', page: 'pages/FeatureRuntimePage' } as AppRouteInfo,
+  SCENE_STILL: { name: '/hms/SenceDetectionStillAnalyseActivity', page: 'pages/FeatureStubPage' } as AppRouteInfo,
+  SCENE_LIVE: { name: '/hms/SenceDetectionLiveAnalyseActivity', page: 'pages/FeatureStubPage' } as AppRouteInfo,
   GESTURE_STILL: { name: '/hms/StillHandGestureAnalyseActivity', page: 'pages/FeatureRuntimePage' } as AppRouteInfo,
   GESTURE_LIVE: { name: '/hms/LiveHandGestureAnalyseActivity', page: 'pages/FeatureRuntimePage' } as AppRouteInfo,
   TEXT_RECOGNITION: { name: '/hms/TextRecognitionActivity', page: 'pages/FeatureRuntimePage' } as AppRouteInfo,
@@ -63,6 +67,8 @@ export const appRoutes: AppRouteInfo[] = [
   AppRoute.SEGMENTATION_STILL,
   AppRoute.SEGMENTATION_LIVE,
   AppRoute.PORTRAIT_SEGMENTATION,
+  AppRoute.SCENE_STILL,
+  AppRoute.SCENE_LIVE,
   AppRoute.GESTURE_STILL,
   AppRoute.GESTURE_LIVE,
   AppRoute.TEXT_RECOGNITION,

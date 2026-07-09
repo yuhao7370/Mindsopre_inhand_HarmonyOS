@@ -919,6 +919,15 @@ export default function localUnitTest() {
       expect(AppRoute.TEXT_TRANSLATION.name).assertEqual('/hms/TextTranslationActivity');
     });
 
+    it('keepsAndroidSceneDetectionRoutesAsHiddenStubs', 0, () => {
+      expect(AppRoute.SCENE_STILL.name).assertEqual('/hms/SenceDetectionStillAnalyseActivity');
+      expect(AppRoute.SCENE_LIVE.name).assertEqual('/hms/SenceDetectionLiveAnalyseActivity');
+      expect(findRouteByName(AppRoute.SCENE_STILL.name)?.page).assertEqual('pages/FeatureStubPage');
+      expect(findRouteByName(AppRoute.SCENE_LIVE.name)?.page).assertEqual('pages/FeatureStubPage');
+      expect(findFeatureByRoute(AppRoute.SCENE_STILL.name) === undefined).assertTrue();
+      expect(findFeatureByRoute(AppRoute.SCENE_LIVE.name) === undefined).assertTrue();
+    });
+
     it('keepsHiddenAndroidFeaturesRouteReady', 0, () => {
       const dance = findFeatureByRoute('/dance/DanceMainActivity');
       const poetry = findFeatureByRoute('/app/IntelligentPoetryWritingActivity');
