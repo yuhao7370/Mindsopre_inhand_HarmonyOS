@@ -1,5 +1,6 @@
 import { describe, it, expect } from '@ohos/hypium';
 import { AppRoute } from '../main/ets/app/AppRoutes';
+import { MainTab, mainTabs } from '../main/ets/app/AppState';
 import {
   allExperienceFeatures,
   findFeatureByRoute,
@@ -35,6 +36,13 @@ export default function localUnitTest() {
       expect(collegeItems.length).assertEqual(6);
       expect(visibleMeItems.length).assertEqual(1);
       expect(visibleMeItems[0].title).assertEqual('Version');
+    });
+
+    it('definesThreeMainTabsInAndroidOrder', 0, () => {
+      expect(mainTabs.length).assertEqual(3);
+      expect(mainTabs[0].id).assertEqual(MainTab.EXPERIENCE);
+      expect(mainTabs[1].title).assertEqual('College');
+      expect(mainTabs[2].title).assertEqual('Me');
     });
   });
 }
