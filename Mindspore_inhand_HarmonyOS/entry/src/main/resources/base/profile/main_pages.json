@@ -1,6 +1,7 @@
 {
   "src": [
     "pages/Index",
-    "pages/FeatureStubPage"
+    "pages/FeatureStubPage",
+    "pages/FeatureRuntimePage"
   ]
 }

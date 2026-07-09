@@ -51,6 +51,32 @@ export type AppStringKey =
   'me_official_code_title' |
   'me_qa_title' |
   'me_version_title' |
+  'feature_runtime_inputs_title' |
+  'feature_runtime_permissions_title' |
+  'feature_runtime_result_title' |
+  'feature_runtime_run' |
+  'feature_runtime_status_idle' |
+  'feature_runtime_pending_adapter' |
+  'feature_runtime_unknown_route' |
+  'feature_input_camera' |
+  'feature_input_photo' |
+  'feature_input_content_image' |
+  'feature_input_style_image' |
+  'feature_input_model_file' |
+  'feature_input_text' |
+  'feature_permission_camera' |
+  'feature_permission_media' |
+  'feature_permission_internet' |
+  'workflow_summary_classification' |
+  'workflow_summary_object_photo' |
+  'workflow_summary_object_camera' |
+  'workflow_summary_style_transfer' |
+  'workflow_summary_custom_model' |
+  'workflow_summary_segmentation' |
+  'workflow_summary_pose' |
+  'workflow_summary_gesture' |
+  'workflow_summary_text_recognition' |
+  'workflow_summary_text_translation' |
   'title_source';
 
 const APP_STRING_KEYS: AppStringKey[] = [
@@ -106,6 +132,32 @@ const APP_STRING_KEYS: AppStringKey[] = [
   'me_official_code_title',
   'me_qa_title',
   'me_version_title',
+  'feature_runtime_inputs_title',
+  'feature_runtime_permissions_title',
+  'feature_runtime_result_title',
+  'feature_runtime_run',
+  'feature_runtime_status_idle',
+  'feature_runtime_pending_adapter',
+  'feature_runtime_unknown_route',
+  'feature_input_camera',
+  'feature_input_photo',
+  'feature_input_content_image',
+  'feature_input_style_image',
+  'feature_input_model_file',
+  'feature_input_text',
+  'feature_permission_camera',
+  'feature_permission_media',
+  'feature_permission_internet',
+  'workflow_summary_classification',
+  'workflow_summary_object_photo',
+  'workflow_summary_object_camera',
+  'workflow_summary_style_transfer',
+  'workflow_summary_custom_model',
+  'workflow_summary_segmentation',
+  'workflow_summary_pose',
+  'workflow_summary_gesture',
+  'workflow_summary_text_recognition',
+  'workflow_summary_text_translation',
   'title_source'
 ];
 
@@ -217,6 +269,58 @@ export function appString(key: AppStringKey): ResourceStr {
       return $r('app.string.me_qa_title');
     case 'me_version_title':
       return $r('app.string.me_version_title');
+    case 'feature_runtime_inputs_title':
+      return $r('app.string.feature_runtime_inputs_title');
+    case 'feature_runtime_permissions_title':
+      return $r('app.string.feature_runtime_permissions_title');
+    case 'feature_runtime_result_title':
+      return $r('app.string.feature_runtime_result_title');
+    case 'feature_runtime_run':
+      return $r('app.string.feature_runtime_run');
+    case 'feature_runtime_status_idle':
+      return $r('app.string.feature_runtime_status_idle');
+    case 'feature_runtime_pending_adapter':
+      return $r('app.string.feature_runtime_pending_adapter');
+    case 'feature_runtime_unknown_route':
+      return $r('app.string.feature_runtime_unknown_route');
+    case 'feature_input_camera':
+      return $r('app.string.feature_input_camera');
+    case 'feature_input_photo':
+      return $r('app.string.feature_input_photo');
+    case 'feature_input_content_image':
+      return $r('app.string.feature_input_content_image');
+    case 'feature_input_style_image':
+      return $r('app.string.feature_input_style_image');
+    case 'feature_input_model_file':
+      return $r('app.string.feature_input_model_file');
+    case 'feature_input_text':
+      return $r('app.string.feature_input_text');
+    case 'feature_permission_camera':
+      return $r('app.string.feature_permission_camera');
+    case 'feature_permission_media':
+      return $r('app.string.feature_permission_media');
+    case 'feature_permission_internet':
+      return $r('app.string.feature_permission_internet');
+    case 'workflow_summary_classification':
+      return $r('app.string.workflow_summary_classification');
+    case 'workflow_summary_object_photo':
+      return $r('app.string.workflow_summary_object_photo');
+    case 'workflow_summary_object_camera':
+      return $r('app.string.workflow_summary_object_camera');
+    case 'workflow_summary_style_transfer':
+      return $r('app.string.workflow_summary_style_transfer');
+    case 'workflow_summary_custom_model':
+      return $r('app.string.workflow_summary_custom_model');
+    case 'workflow_summary_segmentation':
+      return $r('app.string.workflow_summary_segmentation');
+    case 'workflow_summary_pose':
+      return $r('app.string.workflow_summary_pose');
+    case 'workflow_summary_gesture':
+      return $r('app.string.workflow_summary_gesture');
+    case 'workflow_summary_text_recognition':
+      return $r('app.string.workflow_summary_text_recognition');
+    case 'workflow_summary_text_translation':
+      return $r('app.string.workflow_summary_text_translation');
     case 'title_source':
       return $r('app.string.title_source');
     case 'empty':

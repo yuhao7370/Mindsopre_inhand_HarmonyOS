@@ -1,10 +1,14 @@
 import { describe, it, expect } from '@ohos/hypium';
-import { AppRoute } from '../main/ets/app/AppRoutes';
+import { AppRoute, findRouteByName } from '../main/ets/app/AppRoutes';
 import { MainTab, mainTabs } from '../main/ets/app/AppState';
 import { hasAppStringKey } from '../main/ets/common/i18n/AppStrings';
 import { iconLabel } from '../main/ets/common/icons/IconSymbols';
+import { DefaultAiService } from '../main/ets/services/ai/AiService';
+import { FeatureWorkflow, workflowForRoute } from '../main/ets/features/runtime/FeatureWorkflowCatalog';
 import {
   allExperienceFeatures,
+  FeatureItem,
+  FeatureSection,
   findFeatureByRoute,
   experienceSections,
   visibleExperienceSections
@@ -66,6 +70,75 @@ export default function localUnitTest() {
     it('doesNotNavigateQuickStartParentWithEmptyUrl', 0, () => {
       expect(isCollegeItemUrlNavigable(collegeItems[1])).assertTrue();
       expect(isCollegeItemUrlNavigable(collegeItems[2])).assertFalse();
+    });
+
+    it('definesRuntimeWorkflowForEveryVisibleExperienceFeature', 0, () => {
+      visibleExperienceSections.forEach((section: FeatureSection) => {
+        section.items.forEach((item: FeatureItem) => {
+          const workflow = workflowForRoute(item.routeName);
+          expect(workflow !== undefined).assertTrue();
+          expect(workflow!.titleKey).assertEqual(item.titleKey);
+        });
+      });
+    });
+
+    it('mapsCoreFeatureRoutesToExpectedRuntimeCapabilities', 0, () => {
+      const classification: FeatureWorkflow = workflowForRoute(AppRoute.IMAGE_CAMERA.name)!;
+      expect(classification.aiMethod).assertEqual('classifyImage');
+      expect(classification.inputKinds.indexOf('camera') >= 0).assertTrue();
+
+      const styleTransfer: FeatureWorkflow = workflowForRoute(AppRoute.STYLE_TRANSFER.name)!;
+      expect(styleTransfer.aiMethod).assertEqual('runStyleTransfer');
+      expect(styleTransfer.inputKinds.indexOf('contentImage') >= 0).assertTrue();
+      expect(styleTransfer.inputKinds.indexOf('styleImage') >= 0).assertTrue();
+
+      const translation: FeatureWorkflow = workflowForRoute(AppRoute.TEXT_TRANSLATION.name)!;
+      expect(translation.aiMethod).assertEqual('translateText');
+      expect(translation.inputKinds.indexOf('text') >= 0).assertTrue();
+      expect(translation.inputKinds.indexOf('camera') >= 0).assertTrue();
+      expect(translation.inputKinds.indexOf('photo') >= 0).assertTrue();
+      expect(translation.requiredPermissions.indexOf('internet') >= 0).assertTrue();
+    });
+
+    it('recordsPlatformNeedsFromOriginalAndroidFlows', 0, () => {
+      const posenet: FeatureWorkflow = workflowForRoute(AppRoute.POSENET.name)!;
+      expect(posenet.inputKinds.indexOf('camera') >= 0).assertTrue();
+      expect(posenet.inputKinds.indexOf('photo') >= 0).assertTrue();
+
+      const objectPhoto: FeatureWorkflow = workflowForRoute(AppRoute.OBJECT_PHOTO.name)!;
+      expect(objectPhoto.inputKinds.indexOf('modelFile') >= 0).assertTrue();
+      expect(objectPhoto.requiredPermissions.indexOf('media') >= 0).assertTrue();
+
+      const objectCamera: FeatureWorkflow = workflowForRoute(AppRoute.OBJECT_CAMERA.name)!;
+      expect(objectCamera.inputKinds.indexOf('modelFile') >= 0).assertTrue();
+      expect(objectCamera.requiredPermissions.indexOf('media') >= 0).assertTrue();
+
+      const customModel: FeatureWorkflow = workflowForRoute(AppRoute.CUSTOM_MODEL.name)!;
+      expect(customModel.inputKinds.indexOf('camera') >= 0).assertTrue();
+      expect(customModel.inputKinds.indexOf('photo') >= 0).assertTrue();
+      expect(customModel.inputKinds.indexOf('modelFile') >= 0).assertTrue();
+    });
+
+    it('definesRuntimeWorkflowForEveryRuntimeRoute', 0, () => {
+      expect(workflowForRoute(AppRoute.LIVE_SKELETON.name) !== undefined).assertTrue();
+      expect(workflowForRoute(AppRoute.SEGMENTATION_STILL.name) !== undefined).assertTrue();
+    });
+
+    it('routesVisibleFeaturesToRuntimePage', 0, () => {
+      visibleExperienceSections.forEach((section: FeatureSection) => {
+        section.items.forEach((item: FeatureItem) => {
+          expect(findRouteByName(item.routeName)?.page).assertEqual('pages/FeatureRuntimePage');
+        });
+      });
+    });
+
+    it('aiServiceReturnsExplicitPendingAdapterFailure', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.OBJECT_PHOTO.name);
+      expect(workflow !== undefined).assertTrue();
+      const result = await new DefaultAiService().run(workflow!);
+      expect(result.ok).assertFalse();
+      expect(result.code).assertEqual('NATIVE_ADAPTER_PENDING');
+      expect(result.aiMethod).assertEqual('detectObjects');
     });
   });
 }
