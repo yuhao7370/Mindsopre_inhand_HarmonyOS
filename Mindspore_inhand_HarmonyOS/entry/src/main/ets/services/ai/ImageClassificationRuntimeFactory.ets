@@ -1,6 +1,13 @@
 import { resourceManager } from '@kit.LocalizationKit';
 import { FeatureWorkflow } from '../../features/runtime/FeatureWorkflowCatalog';
 import { DefaultAiService } from './AiService';
+import {
+  CustomModelInputPreprocessor,
+  CustomModelSelectedFileRunner,
+  CustomModelService,
+  CustomModelTensorRunner
+} from './CustomModelService';
+import { HarmonyCustomModelInputPreprocessor } from './HarmonyCustomModelInputPreprocessor';
 import { HarmonyImageClassificationInputPreprocessor } from './HarmonyImageInputPreprocessor';
 import {
   ImageClassificationInputPreprocessor,
@@ -19,6 +26,8 @@ export interface HarmonyImageClassificationRuntimeOptions {
   readonly resourceManager: RawfileContentReader;
   readonly inputPreprocessor?: ImageClassificationInputPreprocessor;
   readonly tensorRunner?: ImageClassificationTensorRunner;
+  readonly customModelPreprocessor?: CustomModelInputPreprocessor;
+  readonly customModelTensorRunner?: CustomModelTensorRunner;
 }
 
 let cachedHarmonyDefaultAiService: Promise<DefaultAiService> | undefined = undefined;
@@ -60,6 +69,13 @@ export async function cachedRuntimeAiServiceForWorkflow(
   if (workflow.aiMethod === 'classifyImage') {
     return cachedHarmonyDefaultAiServiceForResourceManager(resourceManager);
   }
+  if (workflow.aiMethod === 'runCustomModel') {
+    return new DefaultAiService({
+      customModelService: createHarmonyCustomModelService({
+        resourceManager: resourceManager
+      })
+    });
+  }
   return new DefaultAiService();
 }
 
@@ -69,6 +85,11 @@ export async function createRuntimeAiServiceForWorkflow(
 ): Promise<DefaultAiService> {
   if (workflow.aiMethod === 'classifyImage') {
     return createHarmonyDefaultAiService(options);
+  }
+  if (workflow.aiMethod === 'runCustomModel') {
+    return new DefaultAiService({
+      customModelService: createHarmonyCustomModelService(options)
+    });
   }
   return new DefaultAiService();
 }
@@ -98,6 +119,15 @@ export async function createHarmonyImageClassificationService(
   return new ImageClassificationService({
     labels: labels,
     scoreRunner: scoreRunner
+  });
+}
+
+export function createHarmonyCustomModelService(
+  options: HarmonyImageClassificationRuntimeOptions
+): CustomModelService {
+  return new CustomModelService({
+    preprocessor: options.customModelPreprocessor ?? new HarmonyCustomModelInputPreprocessor(),
+    tensorRunner: options.customModelTensorRunner ?? new CustomModelSelectedFileRunner()
   });
 }
 

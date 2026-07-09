@@ -20,6 +20,16 @@ import {
 } from '../main/ets/services/ai/ImageClassificationPipeline';
 import { imageClassificationDecodeOptions } from '../main/ets/services/ai/HarmonyImageInputPreprocessor';
 import {
+  CustomModelInputPreprocessor,
+  CustomModelMindSporeRunner,
+  CustomModelService,
+  CustomModelTensorRunner,
+  customModelDecodeOptions,
+  customModelInputFloatCount,
+  customModelInputSize,
+  rgbUnitInputFromResizedRgba
+} from '../main/ets/services/ai/CustomModelService';
+import {
   createHarmonyDefaultAiService,
   createRuntimeAiServiceForWorkflow,
   rawfileAsciiContentToText
@@ -168,6 +178,42 @@ class ThrowingFileUriContentBackend extends FixedFileUriContentBackend {
   }
 }
 
+class FixedCustomModelPreprocessor implements CustomModelInputPreprocessor {
+  readonly seenImageUris: Array<string> = [];
+  private readonly inputBuffer: ArrayBuffer;
+
+  constructor(inputBuffer: ArrayBuffer) {
+    this.inputBuffer = inputBuffer;
+  }
+
+  async createInputBuffer(imageUri: string): Promise<ArrayBuffer> {
+    this.seenImageUris.push(imageUri);
+    return this.inputBuffer;
+  }
+}
+
+class FixedCustomModelTensorRunner implements CustomModelTensorRunner {
+  readonly seenModelUris: Array<string> = [];
+  readonly seenInputBytes: Array<number> = [];
+  private readonly outputScores: Array<number>;
+
+  constructor(outputScores: Array<number>) {
+    this.outputScores = outputScores;
+  }
+
+  async predictOutput(modelUri: string, inputBuffer: ArrayBuffer): Promise<Array<number>> {
+    this.seenModelUris.push(modelUri);
+    this.seenInputBytes.push(inputBuffer.byteLength);
+    return this.outputScores;
+  }
+}
+
+class RejectingCustomModelTensorRunner implements CustomModelTensorRunner {
+  async predictOutput(_modelUri: string, _inputBuffer: ArrayBuffer): Promise<Array<number>> {
+    throw new Error('custom model failed');
+  }
+}
+
 export default function localUnitTest() {
   describe('mindsporePortFoundation', () => {
     it('preservesAndroidRouteNames', 0, () => {
@@ -217,6 +263,7 @@ export default function localUnitTest() {
       expect(hasAppStringKey(allExperienceFeatures[0].titleKey)).assertTrue();
       expect(hasAppStringKey(collegeItems[0].titleKey)).assertTrue();
       expect(hasAppStringKey(meItems[0].titleKey)).assertTrue();
+      expect(hasAppStringKey('feature_runtime_custom_model_failed')).assertTrue();
     });
 
     it('doesNotNavigateQuickStartParentWithEmptyUrl', 0, () => {
@@ -324,6 +371,101 @@ export default function localUnitTest() {
       expect(result.code).assertEqual('CUSTOM_MODEL_SIMULATED');
       expect(result.detailText.indexOf('output[0]') >= 0).assertTrue();
       expect(result.detailText.indexOf('custom_model.ms') >= 0).assertTrue();
+    });
+
+    it('normalizesCustomModelRgbaToRgbUnitInput', 0, () => {
+      const rgba: Uint8Array = new Uint8Array(customModelInputSize * customModelInputSize * 4);
+      rgba[0] = 255;
+      rgba[1] = 128;
+      rgba[2] = 0;
+      rgba[3] = 99;
+
+      const input = new Float32Array(rgbUnitInputFromResizedRgba(rgba));
+      expect(customModelInputSize).assertEqual(224);
+      expect(input.length).assertEqual(customModelInputFloatCount);
+      expect(input[0].toFixed(6)).assertEqual('1.000000');
+      expect(input[1].toFixed(6)).assertEqual('0.501961');
+      expect(input[2].toFixed(6)).assertEqual('0.000000');
+    });
+
+    it('requestsCustomModelDecodeAsAndroid224Rgba', 0, () => {
+      const options: image.DecodingOptions = customModelDecodeOptions();
+      expect(options.desiredSize!.width).assertEqual(224);
+      expect(options.desiredSize!.height).assertEqual(224);
+      expect(options.desiredPixelFormat).assertEqual(image.PixelMapFormat.RGBA_8888);
+    });
+
+    it('customModelServiceRunsSelectedModelWithAndroidInputContract', 0, async () => {
+      const inputBuffer: ArrayBuffer = new ArrayBuffer(224 * 224 * 3 * 4);
+      const preprocessor: FixedCustomModelPreprocessor = new FixedCustomModelPreprocessor(inputBuffer);
+      const tensorRunner: FixedCustomModelTensorRunner = new FixedCustomModelTensorRunner([0.1, 0.2, 0.3]);
+      const service = new CustomModelService({
+        preprocessor: preprocessor,
+        tensorRunner: tensorRunner
+      });
+
+      const result = await service.run('file://selected/custom_model.ms', 'file://selected/input.png');
+
+      expect(result.ok).assertTrue();
+      expect(result.output.length).assertEqual(3);
+      expect(preprocessor.seenImageUris[0]).assertEqual('file://selected/input.png');
+      expect(tensorRunner.seenModelUris[0]).assertEqual('file://selected/custom_model.ms');
+      expect(tensorRunner.seenInputBytes[0]).assertEqual(inputBuffer.byteLength);
+    });
+
+    it('customModelMindSporeRunnerBridgesPreprocessorToSelectedModelRunner', 0, async () => {
+      const inputBuffer: ArrayBuffer = new ArrayBuffer(12);
+      const preprocessor: FixedCustomModelPreprocessor = new FixedCustomModelPreprocessor(inputBuffer);
+      const tensorRunner: FixedCustomModelTensorRunner = new FixedCustomModelTensorRunner([0.4, 0.6]);
+      const runner = new CustomModelMindSporeRunner({
+        preprocessor: preprocessor,
+        tensorRunner: tensorRunner
+      });
+
+      const result = await runner.run('file://selected/custom_model.ms', 'file://selected/input.png');
+
+      expect(result.ok).assertTrue();
+      expect(result.output[1]).assertEqual(0.6);
+      expect(preprocessor.seenImageUris[0]).assertEqual('file://selected/input.png');
+      expect(tensorRunner.seenModelUris[0]).assertEqual('file://selected/custom_model.ms');
+    });
+
+    it('aiServiceUsesRealCustomModelServiceWhenProvided', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.CUSTOM_MODEL.name);
+      expect(workflow !== undefined).assertTrue();
+      const customModelService = new CustomModelService({
+        preprocessor: new FixedCustomModelPreprocessor(new ArrayBuffer(12)),
+        tensorRunner: new FixedCustomModelTensorRunner([0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1])
+      });
+
+      const result = await new DefaultAiService({ customModelService: customModelService }).run(workflow!, {
+        imageUri: 'file://selected/input.png',
+        modelUri: 'file://selected/custom_model.ms'
+      });
+
+      expect(result.ok).assertTrue();
+      expect(result.code).assertEqual('CUSTOM_MODEL_DONE');
+      expect(result.detailText.indexOf('Model execution completed!') >= 0).assertTrue();
+      expect(result.detailText.indexOf('Value[0]: 0.100000') >= 0).assertTrue();
+      expect(result.detailText.indexOf('... (showing first 10 values)') >= 0).assertTrue();
+    });
+
+    it('aiServiceReportsCustomModelRunnerFailureWithI18nKey', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.CUSTOM_MODEL.name);
+      expect(workflow !== undefined).assertTrue();
+      const customModelService = new CustomModelService({
+        preprocessor: new FixedCustomModelPreprocessor(new ArrayBuffer(12)),
+        tensorRunner: new RejectingCustomModelTensorRunner()
+      });
+
+      const result = await new DefaultAiService({ customModelService: customModelService }).run(workflow!, {
+        imageUri: 'file://selected/input.png',
+        modelUri: 'file://selected/custom_model.ms'
+      });
+
+      expect(result.ok).assertFalse();
+      expect(result.code).assertEqual('CUSTOM_MODEL_FAILED');
+      expect(result.messageKey).assertEqual('feature_runtime_custom_model_failed');
     });
 
     it('parsesAndroidImageClassificationLabels', 0, () => {
@@ -573,6 +715,25 @@ export default function localUnitTest() {
 
       expect(result.ok).assertFalse();
       expect(result.code).assertEqual('NATIVE_ADAPTER_PENDING');
+    });
+
+    it('runtimeFactoryInjectsCustomModelServiceForCustomModelWorkflow', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.CUSTOM_MODEL.name);
+      expect(workflow !== undefined).assertTrue();
+      const service = await createRuntimeAiServiceForWorkflow(workflow!, {
+        resourceManager: new ThrowingRawfileContentReader(),
+        customModelPreprocessor: new FixedCustomModelPreprocessor(new ArrayBuffer(12)),
+        customModelTensorRunner: new FixedCustomModelTensorRunner([0.2])
+      });
+
+      const result = await service.run(workflow!, {
+        modelUri: 'file://selected/custom_model.ms',
+        imageUri: 'file://selected/input.png'
+      });
+
+      expect(result.ok).assertTrue();
+      expect(result.code).assertEqual('CUSTOM_MODEL_DONE');
+      expect(result.detailText.indexOf('Value[0]: 0.200000') >= 0).assertTrue();
     });
 
     it('mapsWorkflowPermissionsToHarmonyPermissionNames', 0, () => {

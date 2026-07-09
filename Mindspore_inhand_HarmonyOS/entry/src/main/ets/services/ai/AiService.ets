@@ -5,11 +5,14 @@ import {
   ImageClassificationRunResult,
   ImageClassificationService
 } from './ImageClassificationService';
+import { CustomModelRunResult, CustomModelService } from './CustomModelService';
 
 export type AiRunCode =
   'NATIVE_ADAPTER_PENDING' |
   'MISSING_INPUT' |
   'CUSTOM_MODEL_SIMULATED' |
+  'CUSTOM_MODEL_DONE' |
+  'CUSTOM_MODEL_FAILED' |
   'CLASSIFICATION_MODEL_PENDING' |
   'CLASSIFICATION_DONE' |
   'CLASSIFICATION_FAILED';
@@ -30,15 +33,18 @@ export interface AiRunResult {
 
 export interface AiServiceOptions {
   readonly imageClassificationService?: ImageClassificationService;
+  readonly customModelService?: CustomModelService;
 }
 
 export class DefaultAiService {
   private readonly imageClassificationService: ImageClassificationService;
+  private readonly customModelService?: CustomModelService;
 
   constructor(options?: AiServiceOptions) {
     this.imageClassificationService = options?.imageClassificationService ?? new ImageClassificationService({
       labels: []
     });
+    this.customModelService = options?.customModelService;
   }
 
   async run(workflow: FeatureWorkflow, inputs: AiRunInputs = {}): Promise<AiRunResult> {
@@ -97,7 +103,7 @@ export class DefaultAiService {
     };
   }
 
-  private runCustomModel(inputs: AiRunInputs): AiRunResult {
+  private async runCustomModel(inputs: AiRunInputs): Promise<AiRunResult> {
     const modelUri = inputs.modelUri ?? '';
     const imageUri = inputs.imageUri ?? '';
     if (modelUri.length === 0 || imageUri.length === 0) {
@@ -109,12 +115,47 @@ export class DefaultAiService {
         detailText: ''
       };
     }
+    if (this.customModelService !== undefined) {
+      return this.runCustomModelWithService(this.customModelService, modelUri, imageUri);
+    }
     return {
       ok: true,
       code: 'CUSTOM_MODEL_SIMULATED',
       aiMethod: 'runCustomModel',
       messageKey: 'feature_runtime_custom_model_done',
       detailText: this.customModelSummary(modelUri, imageUri)
+    };
+  }
+
+  private async runCustomModelWithService(
+    service: CustomModelService,
+    modelUri: string,
+    imageUri: string
+  ): Promise<AiRunResult> {
+    try {
+      const result = await service.run(modelUri, imageUri);
+      if (!result.ok) {
+        return this.customModelFailedResult(modelUri, imageUri);
+      }
+      return {
+        ok: true,
+        code: 'CUSTOM_MODEL_DONE',
+        aiMethod: 'runCustomModel',
+        messageKey: 'feature_runtime_custom_model_done',
+        detailText: this.customModelExecutionSummary(result)
+      };
+    } catch (_) {
+      return this.customModelFailedResult(modelUri, imageUri);
+    }
+  }
+
+  private customModelFailedResult(modelUri: string, imageUri: string): AiRunResult {
+    return {
+      ok: false,
+      code: 'CUSTOM_MODEL_FAILED',
+      aiMethod: 'runCustomModel',
+      messageKey: 'feature_runtime_custom_model_failed',
+      detailText: `model=${this.lastPathSegment(modelUri)}\nimage=${this.lastPathSegment(imageUri)}`
     };
   }
 
@@ -128,6 +169,24 @@ export class DefaultAiService {
     for (let index = 0; index < 10; index++) {
       const value = ((seed + (index + 1) * 7919) % 100000) / 100000;
       lines.push(`output[${index}]=${value.toFixed(6)}`);
+    }
+    return lines.join('\n');
+  }
+
+  private customModelExecutionSummary(result: CustomModelRunResult): string {
+    const lines: Array<string> = [
+      'Model execution completed!',
+      '',
+      `Execution time: ${result.executionMs}ms`,
+      '',
+      'Output data (first 10 values):'
+    ];
+    const displayCount = Math.min(10, result.output.length);
+    for (let index = 0; index < displayCount; index++) {
+      lines.push(`Value[${index}]: ${result.output[index].toFixed(6)}`);
+    }
+    if (result.output.length > 10) {
+      lines.push('... (showing first 10 values)');
     }
     return lines.join('\n');
   }
