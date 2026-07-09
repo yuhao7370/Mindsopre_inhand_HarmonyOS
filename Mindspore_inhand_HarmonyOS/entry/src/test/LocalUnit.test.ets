@@ -4,6 +4,7 @@ import { MainTab, mainTabs } from '../main/ets/app/AppState';
 import { hasAppStringKey } from '../main/ets/common/i18n/AppStrings';
 import { iconLabel } from '../main/ets/common/icons/IconSymbols';
 import { AiRunResult, DefaultAiService, aiRunResultRows } from '../main/ets/services/ai/AiService';
+import { ClipboardService, TextClipboardWriter } from '../main/ets/services/clipboard/ClipboardService';
 import {
   androidDefaultTranslationTargetLanguage,
   containsAndroidChineseText,
@@ -452,6 +453,20 @@ class RejectingPoseRunner implements PoseRunner {
   }
 }
 
+class RecordingClipboardWriter implements TextClipboardWriter {
+  readonly copiedTexts: Array<string> = [];
+
+  async copyText(text: string): Promise<void> {
+    this.copiedTexts.push(text);
+  }
+}
+
+class RejectingClipboardWriter implements TextClipboardWriter {
+  async copyText(_text: string): Promise<void> {
+    throw new Error('clipboard rejected');
+  }
+}
+
 class FixedObjectDetectionPreprocessor implements ObjectDetectionInputPreprocessor {
   readonly seenImageUris: Array<string> = [];
   private readonly input: ObjectDetectionInput;
@@ -539,6 +554,25 @@ export default function localUnitTest() {
       expect(hasAppStringKey('feature_runtime_preview_title')).assertTrue();
       expect(hasAppStringKey('feature_runtime_result_count')).assertTrue();
       expect(hasAppStringKey('feature_runtime_result_text')).assertTrue();
+      expect(hasAppStringKey('feature_runtime_copy_text')).assertTrue();
+      expect(hasAppStringKey('feature_runtime_copy_done')).assertTrue();
+    });
+
+    it('clipboardServiceCopiesRecognizedText', 0, async () => {
+      const writer = new RecordingClipboardWriter();
+      const result = await new ClipboardService(writer).copyText('MindSpore\nHarmonyOS');
+
+      expect(result.ok).assertTrue();
+      expect(result.copiedTextLength).assertEqual(19);
+      expect(writer.copiedTexts[0]).assertEqual('MindSpore\nHarmonyOS');
+    });
+
+    it('clipboardServiceRejectsBlankOrFailedText', 0, async () => {
+      const blankResult = await new ClipboardService(new RecordingClipboardWriter()).copyText('');
+      const failedResult = await new ClipboardService(new RejectingClipboardWriter()).copyText('MindSpore');
+
+      expect(blankResult.ok).assertFalse();
+      expect(failedResult.ok).assertFalse();
     });
 
     it('doesNotNavigateQuickStartParentWithEmptyUrl', 0, () => {

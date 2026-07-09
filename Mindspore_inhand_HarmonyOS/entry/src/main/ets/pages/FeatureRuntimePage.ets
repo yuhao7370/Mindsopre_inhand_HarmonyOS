@@ -10,6 +10,7 @@ import {
 import { AiRunInputs, AiRunResult, AiRunResultRow, DefaultAiService, aiRunResultRows } from '../services/ai/AiService';
 import { cachedRuntimeAiServiceForHarmonyResourceManager } from '../services/ai/ImageClassificationRuntimeFactory';
 import { PermissionRequestSummary, PermissionService } from '../services/permissions/PermissionService';
+import { ClipboardService, CopyTextResult } from '../services/clipboard/ClipboardService';
 import { PickerService, PickResult } from '../services/picker/PickerService';
 import { AppStringKey, appString } from '../common/i18n/AppStrings';
 import { AppColor, AppRadius, AppSpacing } from '../common/theme/AppTheme';
@@ -163,6 +164,25 @@ struct FeatureRuntimePage {
       return uri;
     }
     return parts[parts.length - 1];
+  }
+
+  private recognizedTextForCopy(): string {
+    if (this.aiMethod !== 'recognizeText') {
+      return '';
+    }
+    for (let index = 0; index < this.resultRows.length; index++) {
+      const row = this.resultRows[index];
+      if (row.labelKey === 'feature_runtime_result_text') {
+        return row.value;
+      }
+    }
+    return '';
+  }
+
+  private copyRecognizedText(): void {
+    new ClipboardService().copyText(this.recognizedTextForCopy()).then((result: CopyTextResult) => {
+      this.statusKey = result.ok ? 'feature_runtime_copy_done' : 'feature_runtime_copy_failed';
+    });
   }
 
   @Builder
@@ -376,6 +396,12 @@ struct FeatureRuntimePage {
             ForEach(this.resultRows, (row: AiRunResultRow) => {
               this.resultRow(row)
             }, (row: AiRunResultRow) => row.labelKey)
+          }
+          if (this.recognizedTextForCopy().length > 0) {
+            Button(appString('feature_runtime_copy_text'))
+              .height(36)
+              .margin({ top: AppSpacing.md })
+              .onClick(() => this.copyRecognizedText())
           }
           if (this.resultText.length > 0) {
             Text(this.resultText)
