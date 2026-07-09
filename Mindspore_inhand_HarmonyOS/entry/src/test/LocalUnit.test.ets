@@ -146,6 +146,9 @@ import {
 import {
   collegeMainCloudUrl,
   harmonyPrivacyRawfile,
+  helpImageClassificationUrl,
+  helpObjectDetectionUrl,
+  helpStyleTransferUrl,
   intelligentPoetryUrl,
   userPrivacyRulesUrl,
   webDestinationForUrl,
@@ -708,6 +711,13 @@ export default function localUnitTest() {
       expect(customModel.inputKinds.indexOf('camera') >= 0).assertTrue();
       expect(customModel.inputKinds.indexOf('photo') >= 0).assertTrue();
       expect(customModel.inputKinds.indexOf('modelFile') >= 0).assertTrue();
+    });
+
+    it('mapsAndroidHelpUrlsForRuntimeWorkflows', 0, () => {
+      expect(workflowForRoute(AppRoute.IMAGE_CAMERA.name)?.helpUrl).assertEqual(helpImageClassificationUrl);
+      expect(workflowForRoute(AppRoute.OBJECT_PHOTO.name)?.helpUrl).assertEqual(helpObjectDetectionUrl);
+      expect(workflowForRoute(AppRoute.OBJECT_CAMERA.name)?.helpUrl).assertEqual(helpObjectDetectionUrl);
+      expect(workflowForRoute(AppRoute.STYLE_TRANSFER.name)?.helpUrl).assertEqual(helpStyleTransferUrl);
     });
 
     it('definesRuntimeWorkflowForEveryRuntimeRoute', 0, () => {

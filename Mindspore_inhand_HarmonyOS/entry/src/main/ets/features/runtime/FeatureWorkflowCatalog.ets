@@ -1,5 +1,10 @@
 import { AppRoute } from '../../app/AppRoutes';
 import { AppStringKey } from '../../common/i18n/AppStrings';
+import {
+  helpImageClassificationUrl,
+  helpObjectDetectionUrl,
+  helpStyleTransferUrl
+} from '../../common/data/WebDestination';
 
 export type FeatureInputKind =
   'camera' |
@@ -42,6 +47,7 @@ export interface FeatureWorkflow {
   readonly requiredPermissions: Array<FeaturePermissionKind>;
   readonly resultKind: FeatureResultKind;
   readonly liveMode: boolean;
+  readonly helpUrl?: string;
 }
 
 export const featureWorkflows: Array<FeatureWorkflow> = [
@@ -103,7 +109,8 @@ export const featureWorkflows: Array<FeatureWorkflow> = [
     inputKinds: ['camera'],
     requiredPermissions: ['camera'],
     resultKind: 'classification',
-    liveMode: true
+    liveMode: true,
+    helpUrl: helpImageClassificationUrl
   },
   {
     routeName: AppRoute.GESTURE_STILL.name,
@@ -153,7 +160,8 @@ export const featureWorkflows: Array<FeatureWorkflow> = [
     inputKinds: ['photo', 'modelFile'],
     requiredPermissions: ['media'],
     resultKind: 'detections',
-    liveMode: false
+    liveMode: false,
+    helpUrl: helpObjectDetectionUrl
   },
   {
     routeName: AppRoute.OBJECT_CAMERA.name,
@@ -163,7 +171,8 @@ export const featureWorkflows: Array<FeatureWorkflow> = [
     inputKinds: ['camera', 'modelFile'],
     requiredPermissions: ['camera', 'media'],
     resultKind: 'detections',
-    liveMode: true
+    liveMode: true,
+    helpUrl: helpObjectDetectionUrl
   },
   {
     routeName: AppRoute.STYLE_TRANSFER.name,
@@ -173,7 +182,8 @@ export const featureWorkflows: Array<FeatureWorkflow> = [
     inputKinds: ['camera', 'contentImage', 'styleImage', 'modelFile'],
     requiredPermissions: ['camera', 'media'],
     resultKind: 'styledImage',
-    liveMode: false
+    liveMode: false,
+    helpUrl: helpStyleTransferUrl
   },
   {
     routeName: AppRoute.CUSTOM_MODEL.name,

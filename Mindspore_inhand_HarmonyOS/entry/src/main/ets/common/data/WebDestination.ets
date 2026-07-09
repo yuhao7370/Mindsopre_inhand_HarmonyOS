@@ -5,6 +5,9 @@ export const harmonyPrivacyRawfile: string = 'privacy.html';
 
 export const mindSporeBaseUrl: string = 'https://www.mindspore.cn';
 export const mindSporeDocBaseUrl: string = `${mindSporeBaseUrl}/doc/note/zh-CN/master`;
+export const helpImageClassificationUrl: string = `${mindSporeDocBaseUrl}/image_classification_lite.html`;
+export const helpObjectDetectionUrl: string = `${mindSporeDocBaseUrl}/object_detection_lite.html`;
+export const helpStyleTransferUrl: string = `${mindSporeDocBaseUrl}/style_transfer_lite.html`;
 
 export const userPrivacyRulesUrl: string = 'file:///android_asset/privacy.html';
 export const collegeMainCloudUrl: string = `${mindSporeBaseUrl}/news/newschildren?id=354`;
@@ -51,6 +54,9 @@ const WEB_DESTINATION_MAPPINGS: WebDestinationMapping[] = [
   { sourceUrl: mindSporeBaseUrl, titleKey: 'me_official_title' },
   { sourceUrl: meCodeUrl, titleKey: 'me_official_code_title' },
   { sourceUrl: meHelpUrl, titleKey: 'me_qa_title' },
+  { sourceUrl: helpImageClassificationUrl, titleKey: 'title_image' },
+  { sourceUrl: helpObjectDetectionUrl, titleKey: 'title_object' },
+  { sourceUrl: helpStyleTransferUrl, titleKey: 'title_style_transfer' },
   { sourceUrl: intelligentPoetryUrl, titleKey: 'title_intelligent_poetry' }
 ];
 

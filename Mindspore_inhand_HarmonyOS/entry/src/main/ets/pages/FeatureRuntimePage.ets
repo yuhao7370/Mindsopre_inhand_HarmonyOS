@@ -22,6 +22,7 @@ import { PickerService, PickResult } from '../services/picker/PickerService';
 import { AppStringKey, appString } from '../common/i18n/AppStrings';
 import { AppColor, AppRadius, AppSpacing } from '../common/theme/AppTheme';
 import { common } from '@kit.AbilityKit';
+import { webPagePath } from '../common/data/WebDestination';
 
 interface FeatureRuntimeParams {
   titleKey?: AppStringKey;
@@ -44,6 +45,7 @@ struct FeatureRuntimePage {
   @State styleImageUri: string = '';
   @State modelInputUri: string = '';
   @State userText: string = '';
+  @State helpUrl: string = '';
   @State inputKinds: Array<FeatureInputKind> = [];
   @State permissionKinds: Array<FeaturePermissionKind> = [];
 
@@ -54,6 +56,7 @@ struct FeatureRuntimePage {
     this.titleKey = params?.titleKey ?? workflow?.titleKey ?? this.titleKey;
     this.summaryKey = workflow?.summaryKey ?? this.summaryKey;
     this.aiMethod = workflow?.aiMethod ?? '';
+    this.helpUrl = workflow?.helpUrl ?? '';
     this.inputKinds = workflow?.inputKinds ?? [];
     this.permissionKinds = workflow?.requiredPermissions ?? [];
   }
@@ -154,6 +157,19 @@ struct FeatureRuntimePage {
           this.resultRows = aiRunResultRows(result);
         });
       });
+    });
+  }
+
+  private openHelpPage(): void {
+    if (this.helpUrl.length === 0) {
+      return;
+    }
+    router.pushUrl({
+      url: webPagePath,
+      params: {
+        titleKey: this.titleKey,
+        url: this.helpUrl
+      }
     });
   }
 
@@ -292,6 +308,12 @@ struct FeatureRuntimePage {
             .fontSize(12)
             .fontColor(AppColor.textMuted)
             .margin({ top: AppSpacing.sm })
+          if (this.helpUrl.length > 0) {
+            Button(appString('title_source'))
+              .height(32)
+              .margin({ top: AppSpacing.md })
+              .onClick(() => this.openHelpPage())
+          }
         }
         .width('100%')
         .padding(AppSpacing.md)
