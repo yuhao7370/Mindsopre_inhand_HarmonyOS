@@ -1308,12 +1308,15 @@ export default function localUnitTest() {
       expect(posenet.inputKinds.indexOf('photo') >= 0).assertTrue();
 
       const objectPhoto: FeatureWorkflow = workflowForRoute(AppRoute.OBJECT_PHOTO.name)!;
-      expect(objectPhoto.inputKinds.indexOf('modelFile') >= 0).assertTrue();
+      expect(objectPhoto.inputKinds.indexOf('photo') >= 0).assertTrue();
+      expect(objectPhoto.inputKinds.indexOf('modelFile')).assertEqual(-1);
       expect(objectPhoto.requiredPermissions.indexOf('media') >= 0).assertTrue();
 
       const objectCamera: FeatureWorkflow = workflowForRoute(AppRoute.OBJECT_CAMERA.name)!;
-      expect(objectCamera.inputKinds.indexOf('modelFile') >= 0).assertTrue();
-      expect(objectCamera.requiredPermissions.indexOf('media') >= 0).assertTrue();
+      expect(objectCamera.inputKinds.indexOf('camera') >= 0).assertTrue();
+      expect(objectCamera.inputKinds.indexOf('modelFile')).assertEqual(-1);
+      expect(objectCamera.requiredPermissions.indexOf('camera') >= 0).assertTrue();
+      expect(objectCamera.requiredPermissions.indexOf('media')).assertEqual(-1);
 
       const customModel: FeatureWorkflow = workflowForRoute(AppRoute.CUSTOM_MODEL.name)!;
       expect(customModel.inputKinds.indexOf('camera') >= 0).assertTrue();
@@ -3069,7 +3072,7 @@ export default function localUnitTest() {
       expect(actions.indexOf('pickImage') >= 0).assertTrue();
       expect(actions.indexOf('pickModelFile')).assertEqual(-1);
       const objectPhoto: FeatureWorkflow = workflowForRoute(AppRoute.OBJECT_PHOTO.name)!;
-      expect(runtimeInputActionsForWorkflow(objectPhoto).indexOf('pickModelFile') >= 0).assertTrue();
+      expect(runtimeInputActionsForWorkflow(objectPhoto).indexOf('pickModelFile')).assertEqual(-1);
       expect(inputActionForKind('camera')).assertEqual('captureImage');
       expect(inputActionForKind('photo')).assertEqual('pickImage');
       expect(inputActionForKind('text')).assertEqual('enterText');
