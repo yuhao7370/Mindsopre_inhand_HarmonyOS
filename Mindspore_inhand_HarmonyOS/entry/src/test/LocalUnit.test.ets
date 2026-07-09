@@ -1,33 +1,40 @@
-import { describe, beforeAll, beforeEach, afterEach, afterAll, it, expect } from '@ohos/hypium';
+import { describe, it, expect } from '@ohos/hypium';
+import { AppRoute } from '../main/ets/app/AppRoutes';
+import {
+  allExperienceFeatures,
+  findFeatureByRoute,
+  visibleExperienceSections
+} from '../main/ets/common/data/FeatureCatalog';
+import { collegeItems } from '../main/ets/common/data/CollegeCatalog';
+import { visibleMeItems } from '../main/ets/common/data/MeCatalog';
 
 export default function localUnitTest() {
-  describe('localUnitTest', () => {
-    // Defines a test suite. Two parameters are supported: test suite name and test suite function.
-    beforeAll(() => {
-      // Presets an action, which is performed only once before all test cases of the test suite start.
-      // This API supports only one parameter: preset action function.
+  describe('mindsporePortFoundation', () => {
+    it('preservesAndroidRouteNames', 0, () => {
+      expect(AppRoute.OBJECT_PHOTO.name).assertEqual('/imageobject/ObjectPhotoActivity');
+      expect(AppRoute.STYLE_TRANSFER.name).assertEqual('/styletransfer/StyleMainActivity');
+      expect(AppRoute.TEXT_TRANSLATION.name).assertEqual('/hms/TextTranslationActivity');
     });
-    beforeEach(() => {
-      // Presets an action, which is performed before each unit test case starts.
-      // The number of execution times is the same as the number of test cases defined by **it**.
-      // This API supports only one parameter: preset action function.
+
+    it('keepsHiddenAndroidFeaturesRouteReady', 0, () => {
+      const dance = findFeatureByRoute('/dance/DanceMainActivity');
+      const poetry = findFeatureByRoute('/app/IntelligentPoetryWritingActivity');
+      expect(dance?.visibleByDefault).assertFalse();
+      expect(poetry?.visibleByDefault).assertFalse();
     });
-    afterEach(() => {
-      // Presets a clear action, which is performed after each unit test case ends.
-      // The number of execution times is the same as the number of test cases defined by **it**.
-      // This API supports only one parameter: clear action function.
+
+    it('showsExpectedVisibleExperienceFeatures', 0, () => {
+      const visibleCount = visibleExperienceSections
+        .map((section) => section.items.length)
+        .reduce((sum, count) => sum + count, 0);
+      expect(visibleCount).assertEqual(10);
+      expect(allExperienceFeatures.length).assertEqual(12);
     });
-    afterAll(() => {
-      // Presets a clear action, which is performed after all test cases of the test suite end.
-      // This API supports only one parameter: clear action function.
-    });
-    it('assertContain', 0, () => {
-      // Defines a test case. This API supports three parameters: test case name, filter parameter, and test case function.
-      let a = 'abc';
-      let b = 'b';
-      // Defines a variety of assertion methods, which are used to declare expected boolean conditions.
-      expect(a).assertContain(b);
-      expect(a).assertEqual(a);
+
+    it('definesCollegeAndMeRows', 0, () => {
+      expect(collegeItems.length).assertEqual(6);
+      expect(visibleMeItems.length).assertEqual(1);
+      expect(visibleMeItems[0].title).assertEqual('Version');
     });
   });
 }
