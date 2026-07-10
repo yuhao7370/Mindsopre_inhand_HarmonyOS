@@ -257,6 +257,7 @@ import {
   inputKindReplacesPrimaryInput,
   inputLabelKey,
   initialInputKindForWorkflow,
+  initialPreviewActionForWorkflow,
   initialLiveCameraPositionForWorkflow,
   runtimeInputKindsForWorkflow,
   sampleImageUriForWorkflow,
@@ -5465,6 +5466,17 @@ export default function localUnitTest() {
       expect(initialInputKindForWorkflow(workflowForRoute(AppRoute.OBJECT_CAMERA.name)!)).assertUndefined();
       expect(initialInputKindForWorkflow(workflowForRoute(AppRoute.POSENET.name)!)).assertUndefined();
       expect(initialInputKindForWorkflow(workflowForRoute(AppRoute.TEXT_RECOGNITION.name)!)).assertUndefined();
+    });
+
+    it('previewsAndroidPoseNetSampleOnEntryWithoutAutoDetecting', 0, () => {
+      const posenet: FeatureWorkflow = workflowForRoute(AppRoute.POSENET.name)!;
+      const initialPreview = initialPreviewActionForWorkflow(posenet)!;
+
+      expect(initialPreview.inputKind).assertEqual('sampleImage');
+      expect(initialPreview.uri).assertEqual('rawfile://posenet/skeleton_image.JPG');
+      expect(initialPreview.readyKey).assertEqual('feature_runtime_image_ready');
+      expect(initialPreview.shouldRunWorkflow).assertFalse();
+      expect(initialPreviewActionForWorkflow(workflowForRoute(AppRoute.OBJECT_PHOTO.name)!)).assertUndefined();
     });
 
     it('liveCameraPreviewServiceRequiresSurfaceIdBeforeStarting', 0, async () => {

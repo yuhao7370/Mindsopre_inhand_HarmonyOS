@@ -67,6 +67,13 @@ export interface WorkflowInputReadyAction {
   readonly textInputVisible: boolean;
 }
 
+export interface WorkflowInitialPreviewAction {
+  readonly inputKind: FeatureInputKind;
+  readonly uri: string;
+  readonly readyKey: AppStringKey;
+  readonly shouldRunWorkflow: boolean;
+}
+
 export const featureWorkflows: Array<FeatureWorkflow> = [
   {
     routeName: AppRoute.POSENET.name,
@@ -273,6 +280,22 @@ export function initialInputKindForWorkflow(workflow: FeatureWorkflow): FeatureI
     return 'photo';
   }
   return undefined;
+}
+
+export function initialPreviewActionForWorkflow(workflow: FeatureWorkflow): WorkflowInitialPreviewAction | undefined {
+  if (workflow.routeName !== AppRoute.POSENET.name) {
+    return undefined;
+  }
+  const uri = sampleImageUriForWorkflow(workflow);
+  if (uri.length === 0) {
+    return undefined;
+  }
+  return {
+    inputKind: 'sampleImage',
+    uri: uri,
+    readyKey: 'feature_runtime_image_ready',
+    shouldRunWorkflow: false
+  };
 }
 
 export function initialLiveCameraPositionForWorkflow(

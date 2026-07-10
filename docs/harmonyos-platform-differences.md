@@ -38,6 +38,9 @@ Current HarmonyOS behavior:
   detection after an image input is ready.
 - The Android sample `skeleton_image.JPG` is bundled as
   `rawfile://posenet/skeleton_image.JPG`.
+- The still page opens with that Android sample image already previewed, but it
+  does not auto-run detection until the user taps the run action, matching the
+  Android page's default image plus separate Detect button.
 - The still page exposes a localized Real-time action that routes to
   `/posenet/LiveSkeletonAnalyseActivity`.
 - `/posenet/LiveSkeletonAnalyseActivity` remains the camera-only live route,

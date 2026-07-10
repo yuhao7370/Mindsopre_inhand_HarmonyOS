@@ -9,6 +9,7 @@ import {
   inputKindReplacesPrimaryInput,
   inputLabelKey,
   initialInputKindForWorkflow,
+  initialPreviewActionForWorkflow,
   initialLiveCameraPositionForWorkflow,
   permissionLabelKey,
   runtimeInputKindsForWorkflow,
@@ -339,6 +340,15 @@ struct FeatureRuntimePage {
     if (!workflow) {
       return;
     }
+    const initialPreviewAction = initialPreviewActionForWorkflow(workflow);
+    if (initialPreviewAction !== undefined) {
+      this.initialInputPrepared = true;
+      this.applyPickResult({
+        ok: true,
+        uri: initialPreviewAction.uri
+      }, initialPreviewAction.readyKey, initialPreviewAction.inputKind, initialPreviewAction.shouldRunWorkflow);
+      return;
+    }
     const inputKind = initialInputKindForWorkflow(workflow);
     if (inputKind !== undefined) {
       this.initialInputPrepared = true;
@@ -433,7 +443,12 @@ struct FeatureRuntimePage {
     }
   }
 
-  private applyPickResult(result: PickResult, readyKey: AppStringKey, inputKind: FeatureInputKind): void {
+  private applyPickResult(
+    result: PickResult,
+    readyKey: AppStringKey,
+    inputKind: FeatureInputKind,
+    shouldRunReadyWorkflow: boolean = true
+  ): void {
     if (!result.ok) {
       this.statusKey = 'feature_runtime_pick_cancelled';
       this.selectedInputSummary = '';
@@ -474,7 +489,7 @@ struct FeatureRuntimePage {
       this.imageInputUri = result.uri;
     }
     const workflow = workflowForRoute(this.routeName);
-    if (workflow) {
+    if (workflow && shouldRunReadyWorkflow) {
       const inputReadyAction = workflowInputReadyAction(workflow, inputKind, this.userText);
       this.userText = inputReadyAction.userText;
       this.textInputVisible = inputReadyAction.textInputVisible;
