@@ -1,4 +1,4 @@
-import { ImageClassificationScoreRunner, imageCategoryLabelCount } from './ImageClassificationService';
+import { ImageClassificationScoreRunner, parseImageCategoryLabels } from './ImageClassificationService';
 
 export interface SceneDetection {
   readonly label: string;
@@ -21,6 +21,9 @@ export interface SceneDetectionServiceOptions {
   readonly runner: SceneDetectionRunner;
 }
 
+export const sceneDetectionLabelRawfilePath: string = 'labels/places365.txt';
+export const sceneDetectionModelRawfilePath: string = 'model/resnet18-place365.ms';
+export const places365SceneLabelCount: number = 365;
 export const localSceneDetectionMaxSceneCount: number = 3;
 export const androidSceneDetectionLabels: Array<string> = [
   'stage', 'beach', 'bluesky', 'sunset', 'food', 'flower', 'greenplant', 'snow', 'night', 'Text',
@@ -50,10 +53,35 @@ interface SceneLabelKeywordMap {
   readonly keywords: Array<string>;
 }
 
+interface SceneLabelAliasMap {
+  readonly sceneLabel: string;
+  readonly aliases: Array<string>;
+}
+
 const localSceneLabelDenyList: Array<string> = [
   'crane',
   'sea_lion',
   'tiger_beetle'
+];
+
+const places365SceneLabelAliasMaps: Array<SceneLabelAliasMap> = [
+  { sceneLabel: 'aircraft', aliases: ['airfield', 'airplane_cabin', 'airport_terminal'] },
+  { sceneLabel: 'baseballfield', aliases: ['baseball_field'] },
+  { sceneLabel: 'indoorbasketballco', aliases: ['basketball_court'] },
+  { sceneLabel: 'washroom', aliases: ['bathroom'] },
+  { sceneLabel: 'bowlingalley', aliases: ['bowling_alley'] },
+  { sceneLabel: 'carinside', aliases: ['car_interior'] },
+  { sceneLabel: 'cathedralhall', aliases: ['church'] },
+  { sceneLabel: 'meetingroom', aliases: ['conference_center', 'conference_room'] },
+  { sceneLabel: 'construction', aliases: ['construction_site'] },
+  { sceneLabel: 'diningroom', aliases: ['dining_room'] },
+  { sceneLabel: 'footballfield', aliases: ['football_field', 'soccer_field'] },
+  { sceneLabel: 'greenplant', aliases: ['bamboo_forest', 'corn_field', 'forest', 'forest_path', 'forest_road', 'greenhouse', 'hayfield', 'rainforest'] },
+  { sceneLabel: 'islam', aliases: ['mosque'] },
+  { sceneLabel: 'livingroom', aliases: ['living_room'] },
+  { sceneLabel: 'mallcourtyard', aliases: ['shopping_mall'] },
+  { sceneLabel: 'swimmingpool', aliases: ['swimming_hole', 'swimming_pool'] },
+  { sceneLabel: 'train', aliases: ['train_interior', 'train_station'] }
 ];
 
 const localSceneLabelKeywordMaps: Array<SceneLabelKeywordMap> = [
@@ -163,7 +191,7 @@ export function topLocalSceneDetections(
   maxScenes: number = localSceneDetectionMaxSceneCount
 ): Array<SceneDetection> {
   const candidates: Array<SceneDetection> = [];
-  const scanLimit = Math.min(scores.length, labels.length, imageCategoryLabelCount);
+  const scanLimit = Math.min(scores.length, labels.length);
   for (let index = 0; index < scanLimit; index++) {
     const score = scores[index];
     if (score > 0) {
@@ -189,6 +217,10 @@ export function topLocalSceneDetections(
   return scenes;
 }
 
+export function parseSceneDetectionLabels(rawText: string): Array<string> {
+  return parseImageCategoryLabels(rawText);
+}
+
 export function sceneLabelForImageClassificationLabel(label: string): string {
   const normalized = normalizeSceneLabel(label);
   if (isDeniedSceneLabel(normalized)) {
@@ -197,6 +229,10 @@ export function sceneLabelForImageClassificationLabel(label: string): string {
   const androidSceneLabel = androidSceneLabelForNormalizedLabel(normalized);
   if (androidSceneLabel.length > 0) {
     return androidSceneLabel;
+  }
+  const places365SceneLabel = sceneLabelForPlaces365Label(normalized);
+  if (places365SceneLabel.length > 0) {
+    return places365SceneLabel;
   }
   for (let index = 0; index < localSceneLabelKeywordMaps.length; index++) {
     const entry = localSceneLabelKeywordMaps[index];
@@ -214,6 +250,18 @@ function androidSceneLabelForNormalizedLabel(normalizedLabel: string): string {
     const label = androidSceneDetectionLabels[index];
     if (normalizeSceneLabel(label) === normalizedLabel) {
       return label;
+    }
+  }
+  return '';
+}
+
+function sceneLabelForPlaces365Label(normalizedLabel: string): string {
+  for (let index = 0; index < places365SceneLabelAliasMaps.length; index++) {
+    const entry = places365SceneLabelAliasMaps[index];
+    for (let aliasIndex = 0; aliasIndex < entry.aliases.length; aliasIndex++) {
+      if (normalizeSceneLabel(entry.aliases[aliasIndex]) === normalizedLabel) {
+        return entry.sceneLabel;
+      }
     }
   }
   return '';

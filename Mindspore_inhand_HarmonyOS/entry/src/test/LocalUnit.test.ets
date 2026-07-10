@@ -98,11 +98,16 @@ import {
 import {
   androidSceneDetectionLabels,
   ImageClassificationSceneDetectionRunner,
+  parseSceneDetectionLabels,
+  places365SceneLabelCount,
   SceneDetection,
   SceneDetectionResult,
   SceneDetectionRunner,
   SceneDetectionService,
-  sceneLabelForImageClassificationLabel
+  sceneDetectionLabelRawfilePath,
+  sceneDetectionModelRawfilePath,
+  sceneLabelForImageClassificationLabel,
+  topLocalSceneDetections
 } from '../main/ets/services/ai/SceneDetectionService';
 import {
   StyleTransferInput,
@@ -3130,6 +3135,11 @@ export default function localUnitTest() {
       expect(sceneLabelForImageClassificationLabel('espresso')).assertEqual('food');
       expect(sceneLabelForImageClassificationLabel('seashore')).assertEqual('beach');
       expect(sceneLabelForImageClassificationLabel('sports_car')).assertEqual('car');
+      expect(sceneLabelForImageClassificationLabel('bathroom')).assertEqual('washroom');
+      expect(sceneLabelForImageClassificationLabel('dining_room')).assertEqual('diningroom');
+      expect(sceneLabelForImageClassificationLabel('living_room')).assertEqual('livingroom');
+      expect(sceneLabelForImageClassificationLabel('bowling_alley')).assertEqual('bowlingalley');
+      expect(sceneLabelForImageClassificationLabel('conference_room')).assertEqual('meetingroom');
       expect(sceneLabelForImageClassificationLabel('tiger_cat')).assertEqual('cat');
       expect(sceneLabelForImageClassificationLabel('tiger_shark')).assertEqual('ornamentalfish');
       expect(sceneLabelForImageClassificationLabel('tiger_beetle')).assertEqual('other');
@@ -3150,6 +3160,34 @@ export default function localUnitTest() {
       expect(result.scenes[0].score).assertEqual(0.91);
       expect(result.scenes[1].label).assertEqual('beach');
       expect(result.scenes[1].score).assertEqual(0.82);
+    });
+
+    it('parseSceneDetectionLabelsReadsPlaces365List', 0, () => {
+      expect(sceneDetectionLabelRawfilePath).assertEqual('labels/places365.txt');
+      expect(sceneDetectionModelRawfilePath).assertEqual('model/resnet18-place365.ms');
+      expect(places365SceneLabelCount).assertEqual(365);
+      const labels = parseSceneDetectionLabels('airfield\r\nairplane_cabin\n\nzen_garden\n');
+      expect(labels.length).assertEqual(3);
+      expect(labels[0]).assertEqual('airfield');
+      expect(labels[1]).assertEqual('airplane_cabin');
+      expect(labels[2]).assertEqual('zen_garden');
+    });
+
+    it('topLocalSceneDetectionsUsesAllProvidedSceneLabels', 0, () => {
+      const labels: Array<string> = [];
+      const scores: Array<number> = [];
+      for (let index = 0; index < 1002; index++) {
+        labels.push(`placeholder_${index}`);
+        scores.push(0);
+      }
+      labels[1001] = 'stage';
+      scores[1001] = 0.77;
+
+      const scenes = topLocalSceneDetections(scores, labels, 1);
+
+      expect(scenes.length).assertEqual(1);
+      expect(scenes[0].label).assertEqual('stage');
+      expect(scenes[0].score.toFixed(2)).assertEqual('0.77');
     });
 
     it('customModelRequiresModelAndImageInputs', 0, async () => {
@@ -4157,9 +4195,9 @@ export default function localUnitTest() {
       const workflow = workflowForRoute(AppRoute.SCENE_STILL.name);
       expect(workflow !== undefined).assertTrue();
       const labelContent: Uint8Array = new Uint8Array([
-        116, 101, 110, 99, 104, 10,
-        101, 115, 112, 114, 101, 115, 115, 111, 10,
-        115, 101, 97, 115, 104, 111, 114, 101
+        97, 105, 114, 102, 105, 101, 108, 100, 10,
+        97, 105, 114, 112, 108, 97, 110, 101, 95, 99, 97, 98, 105, 110, 10,
+        98, 101, 97, 99, 104
       ]);
       const resourceManager: FixedRawfileContentReader = new FixedRawfileContentReader(labelContent);
       const service = await createRuntimeAiServiceForWorkflow(workflow!, {
@@ -4172,18 +4210,19 @@ export default function localUnitTest() {
         imageUri: 'file://selected/scene.jpg'
       });
 
-      expect(resourceManager.seenPaths[0]).assertEqual('labels/image_category_old.txt');
+      expect(resourceManager.seenPaths[0]).assertEqual('labels/places365.txt');
       expect(result.ok).assertTrue();
       expect(result.code).assertEqual('SCENE_DETECTION_DONE');
-      expect(result.detailText.indexOf('food 92.00%') >= 0).assertTrue();
+      expect(result.detailText.indexOf('aircraft 92.00%') >= 0).assertTrue();
     });
 
     it('cachedRuntimeFactoryReusesLocalSceneDetectionServiceForLiveLoops', 0, async () => {
+      resetHarmonyRuntimeAiServiceCachesForTests();
       const workflow = workflowForRoute(AppRoute.SCENE_LIVE.name);
       expect(workflow !== undefined).assertTrue();
       const labelContent: Uint8Array = new Uint8Array([
-        116, 101, 110, 99, 104, 10,
-        101, 115, 112, 114, 101, 115, 115, 111
+        97, 105, 114, 102, 105, 101, 108, 100, 10,
+        97, 105, 114, 112, 108, 97, 110, 101, 95, 99, 97, 98, 105, 110
       ]);
       const resourceManager: FixedRawfileContentReader = new FixedRawfileContentReader(labelContent);
 
@@ -4192,7 +4231,31 @@ export default function localUnitTest() {
 
       expect(firstService === secondService).assertTrue();
       expect(resourceManager.seenPaths.length).assertEqual(1);
-      expect(resourceManager.seenPaths[0]).assertEqual('labels/image_category_old.txt');
+      expect(resourceManager.seenPaths[0]).assertEqual('labels/places365.txt');
+    });
+
+    it('cachedRuntimeFactoryRetriesLocalSceneDetectionServiceAfterLoadFailure', 0, async () => {
+      resetHarmonyRuntimeAiServiceCachesForTests();
+      const workflow = workflowForRoute(AppRoute.SCENE_LIVE.name);
+      expect(workflow !== undefined).assertTrue();
+      let rejected = false;
+      try {
+        await cachedRuntimeAiServiceForWorkflow(workflow!, new ThrowingRawfileContentReader());
+      } catch (_) {
+        rejected = true;
+      }
+      expect(rejected).assertTrue();
+
+      const labelContent: Uint8Array = new Uint8Array([
+        97, 105, 114, 102, 105, 101, 108, 100, 10,
+        97, 105, 114, 112, 108, 97, 110, 101, 95, 99, 97, 98, 105, 110
+      ]);
+      const resourceManager: FixedRawfileContentReader = new FixedRawfileContentReader(labelContent);
+      const service = await cachedRuntimeAiServiceForWorkflow(workflow!, resourceManager);
+
+      expect(service !== undefined).assertTrue();
+      expect(resourceManager.seenPaths.length).assertEqual(1);
+      expect(resourceManager.seenPaths[0]).assertEqual('labels/places365.txt');
     });
 
     it('runtimeFactoryInjectsCustomModelServiceForCustomModelWorkflow', 0, async () => {

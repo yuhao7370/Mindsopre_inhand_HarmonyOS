@@ -63,8 +63,11 @@ import {
 } from './GestureService';
 import {
   ImageClassificationSceneDetectionRunner,
+  parseSceneDetectionLabels,
   SceneDetectionRunner,
-  SceneDetectionService
+  SceneDetectionService,
+  sceneDetectionLabelRawfilePath,
+  sceneDetectionModelRawfilePath
 } from './SceneDetectionService';
 import {
   HarmonyTextRecognitionRunner,
@@ -132,7 +135,13 @@ export function cachedHarmonyLocalSceneDetectionAiServiceForResourceManager(
   resourceManager: RawfileContentReader
 ): Promise<DefaultAiService> {
   if (cachedHarmonyLocalSceneDetectionAiService === undefined) {
-    cachedHarmonyLocalSceneDetectionAiService = createHarmonyLocalSceneDetectionAiService(resourceManager);
+    const servicePromise = createHarmonyLocalSceneDetectionAiService(resourceManager);
+    cachedHarmonyLocalSceneDetectionAiService = servicePromise;
+    servicePromise.catch(() => {
+      if (cachedHarmonyLocalSceneDetectionAiService === servicePromise) {
+        cachedHarmonyLocalSceneDetectionAiService = undefined;
+      }
+    });
   }
   return cachedHarmonyLocalSceneDetectionAiService;
 }
@@ -459,10 +468,10 @@ export function createHarmonySceneDetectionService(runner: SceneDetectionRunner)
 export async function createHarmonyLocalSceneDetectionService(
   options: HarmonyImageClassificationRuntimeOptions
 ): Promise<SceneDetectionService> {
-  const labels = await loadImageClassificationLabels(options.resourceManager);
+  const labels = await loadSceneDetectionLabels(options.resourceManager);
   const tensorRunner = options.tensorRunner ?? new MindSporeLiteModelRunner({
     resourceManager: options.resourceManager,
-    modelRawfilePath: imageClassificationModelRawfilePath
+    modelRawfilePath: sceneDetectionModelRawfilePath
   });
   const preprocessor = options.inputPreprocessor ?? new HarmonyImageClassificationInputPreprocessor();
   const scoreRunner = new ImageClassificationMindSporeScoreRunner({
@@ -475,6 +484,11 @@ export async function createHarmonyLocalSceneDetectionService(
       scoreRunner: scoreRunner
     })
   });
+}
+
+export async function loadSceneDetectionLabels(resourceManager: RawfileContentReader): Promise<Array<string>> {
+  const content = await resourceManager.getRawFileContent(sceneDetectionLabelRawfilePath);
+  return parseSceneDetectionLabels(rawfileAsciiContentToText(content));
 }
 
 export async function loadImageClassificationLabels(resourceManager: RawfileContentReader): Promise<Array<string>> {
