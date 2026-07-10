@@ -7,6 +7,11 @@ import {
   ObjectDetectionInput,
   ObjectDetectionInputPreprocessor
 } from './ObjectDetectionService';
+import {
+  decodingOptionsWithImageRotation,
+  imageRotationDegreesFromImageSource,
+  rotatedImageSize
+} from './ImageDecodeOrientation';
 
 export class HarmonyObjectDetectionInputPreprocessor implements ObjectDetectionInputPreprocessor {
   async createInput(imageUri: string): Promise<ObjectDetectionInput> {
@@ -17,13 +22,18 @@ export class HarmonyObjectDetectionInputPreprocessor implements ObjectDetectionI
       imageFile = await openObjectDetectionImageFile(imageUri);
       imageSource = image.createImageSource(imageFile.fd);
       const imageInfo: image.ImageInfo = await imageSource.getImageInfo();
-      pixelMap = await imageSource.createPixelMap(objectDetectionDecodeOptions());
+      const rotationDegrees = await imageRotationDegreesFromImageSource(imageSource);
+      const displaySize = rotatedImageSize(imageInfo.size.width, imageInfo.size.height, rotationDegrees);
+      pixelMap = await imageSource.createPixelMap(decodingOptionsWithImageRotation(
+        objectDetectionDecodeOptions(),
+        rotationDegrees
+      ));
       const rgbaBuffer = new ArrayBuffer(objectDetectionInputSize * objectDetectionInputSize * 4);
       await pixelMap.readPixelsToBuffer(rgbaBuffer);
       return {
         inputBuffer: normalizedObjectDetectionRgbInputFromRgba(new Uint8Array(rgbaBuffer)),
-        imageWidth: imageInfo.size.width,
-        imageHeight: imageInfo.size.height
+        imageWidth: displaySize.width,
+        imageHeight: displaySize.height
       };
     } finally {
       if (pixelMap !== undefined) {

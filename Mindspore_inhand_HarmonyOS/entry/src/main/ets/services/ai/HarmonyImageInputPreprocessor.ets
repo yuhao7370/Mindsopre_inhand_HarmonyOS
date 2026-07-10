@@ -5,6 +5,7 @@ import {
   imageClassificationResizedSize,
   normalizedRgbInputFromResizedRgba
 } from './ImageClassificationPreprocess';
+import { createPixelMapWithExifOrientation } from './ImageDecodeOrientation';
 
 export class HarmonyImageClassificationInputPreprocessor implements ImageClassificationInputPreprocessor {
   async createInputBuffer(imageUri: string): Promise<ArrayBuffer> {
@@ -14,7 +15,7 @@ export class HarmonyImageClassificationInputPreprocessor implements ImageClassif
     try {
       imageFile = await openImageFile(imageUri);
       imageSource = image.createImageSource(imageFile.fd);
-      pixelMap = await imageSource.createPixelMap(imageClassificationDecodeOptions());
+      pixelMap = await createPixelMapWithExifOrientation(imageSource, imageClassificationDecodeOptions());
       const rgbaBuffer = new ArrayBuffer(imageClassificationResizedSize * imageClassificationResizedSize * 4);
       await pixelMap.readPixelsToBuffer(rgbaBuffer);
       return normalizedRgbInputFromResizedRgba(new Uint8Array(rgbaBuffer));

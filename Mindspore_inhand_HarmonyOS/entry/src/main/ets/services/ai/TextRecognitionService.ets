@@ -1,6 +1,7 @@
 import { fileIo } from '@kit.CoreFileKit';
 import { image } from '@kit.ImageKit';
 import { textRecognition } from '@kit.CoreVisionKit';
+import { createPixelMapWithExifOrientation } from './ImageDecodeOrientation';
 
 export const translationLanguagePairsRawfilePath = 'hms/Country_pair_new.txt';
 
@@ -61,7 +62,7 @@ export class HarmonyTextRecognitionRunner implements TextRecognitionRunner {
     try {
       imageFile = await openTextRecognitionImageFile(imageUri);
       imageSource = image.createImageSource(imageFile.fd);
-      pixelMap = await imageSource.createPixelMap();
+      pixelMap = await createPixelMapWithExifOrientation(imageSource);
       const result = await textRecognition.recognizeText({
         pixelMap: pixelMap
       }, {

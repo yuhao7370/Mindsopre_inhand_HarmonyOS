@@ -101,6 +101,7 @@ import {
   portraitSegmentationBackgroundUri,
   portraitSegmentationCustomBackgroundId
 } from '../features/runtime/PortraitSegmentationBackgroundCatalog';
+import { featureRuntimeOverlayPreviewImageOrientationForUri } from '../features/runtime/FeatureRuntimeOverlayPreview';
 import { segmentationBackgroundReplacementComponentId } from '../features/runtime/FeatureRuntimeViewIds';
 import { AppStringKey, appString } from '../common/i18n/AppStrings';
 import { AppColor, AppRadius, AppSpacing } from '../common/theme/AppTheme';
@@ -150,20 +151,25 @@ struct FeatureRuntimePage {
   @State textInputVisible: boolean = true;
   @State styledImagePixelMap: image.PixelMap | undefined = undefined;
   @State objectDetectionImageUri: string = '';
+  @State objectDetectionImageOrientation: ImageRotateOrientation = ImageRotateOrientation.UP;
   @State objectDetections: Array<ObjectDetection> = [];
   @State objectDetectionImageWidth: number = 0;
   @State objectDetectionImageHeight: number = 0;
   @State segmentationImageUri: string = '';
+  @State segmentationImageOrientation: ImageRotateOrientation = ImageRotateOrientation.UP;
   @State segmentationBackgroundImageUri: string = '';
+  @State segmentationBackgroundImageOrientation: ImageRotateOrientation = ImageRotateOrientation.UP;
   @State segmentationForegroundPixelMap: image.PixelMap | undefined = undefined;
   @State segmentationRectangles: Array<SegmentationRectangle> = [];
   @State segmentationImageWidth: number = 0;
   @State segmentationImageHeight: number = 0;
   @State poseImageUri: string = '';
+  @State poseImageOrientation: ImageRotateOrientation = ImageRotateOrientation.UP;
   @State posePoints: Array<PosePoint> = [];
   @State poseImageWidth: number = 0;
   @State poseImageHeight: number = 0;
   @State gestureImageUri: string = '';
+  @State gestureImageOrientation: ImageRotateOrientation = ImageRotateOrientation.UP;
   @State gestureDetections: Array<GestureDetection> = [];
   @State gestureImageWidth: number = 0;
   @State gestureImageHeight: number = 0;
@@ -599,20 +605,25 @@ struct FeatureRuntimePage {
   private clearVisualResults(): void {
     this.styledImagePixelMap = undefined;
     this.objectDetectionImageUri = '';
+    this.objectDetectionImageOrientation = ImageRotateOrientation.UP;
     this.objectDetections = [];
     this.objectDetectionImageWidth = 0;
     this.objectDetectionImageHeight = 0;
     this.segmentationImageUri = '';
+    this.segmentationImageOrientation = ImageRotateOrientation.UP;
     this.segmentationBackgroundImageUri = '';
+    this.segmentationBackgroundImageOrientation = ImageRotateOrientation.UP;
     this.segmentationForegroundPixelMap = undefined;
     this.segmentationRectangles = [];
     this.segmentationImageWidth = 0;
     this.segmentationImageHeight = 0;
     this.poseImageUri = '';
+    this.poseImageOrientation = ImageRotateOrientation.UP;
     this.posePoints = [];
     this.poseImageWidth = 0;
     this.poseImageHeight = 0;
     this.gestureImageUri = '';
+    this.gestureImageOrientation = ImageRotateOrientation.UP;
     this.gestureDetections = [];
     this.gestureImageWidth = 0;
     this.gestureImageHeight = 0;
@@ -625,6 +636,7 @@ struct FeatureRuntimePage {
     }
 
     this.objectDetectionImageUri = data.imageUri;
+    this.updateObjectDetectionImageOrientation(data.imageUri);
     this.objectDetections = data.detections;
     this.objectDetectionImageWidth = this.objectDetectionSourceWidth(data.detections);
     this.objectDetectionImageHeight = this.objectDetectionSourceHeight(data.detections);
@@ -637,7 +649,9 @@ struct FeatureRuntimePage {
     }
 
     this.segmentationImageUri = data.imageUri;
+    this.updateSegmentationImageOrientation(data.imageUri);
     this.segmentationBackgroundImageUri = data.backgroundImageUri;
+    this.updateSegmentationBackgroundImageOrientation(data.backgroundImageUri);
     this.segmentationRectangles = data.result.rectangles;
     this.segmentationImageWidth = data.result.imageWidth ?? this.segmentationSourceWidth(data.result.rectangles);
     this.segmentationImageHeight = data.result.imageHeight ?? this.segmentationSourceHeight(data.result.rectangles);
@@ -666,6 +680,7 @@ struct FeatureRuntimePage {
     }
 
     this.poseImageUri = data.imageUri;
+    this.updatePoseImageOrientation(data.imageUri);
     this.posePoints = data.result.points;
     this.poseImageWidth = data.result.imageWidth ?? this.poseSourceWidth(data.result.points);
     this.poseImageHeight = data.result.imageHeight ?? this.poseSourceHeight(data.result.points);
@@ -678,6 +693,7 @@ struct FeatureRuntimePage {
     }
 
     this.gestureImageUri = data.imageUri;
+    this.updateGestureImageOrientation(data.imageUri);
     this.gestureDetections = data.result.gestures;
     this.gestureImageWidth = data.result.imageWidth ?? this.gestureSourceWidth(data.result.gestures);
     this.gestureImageHeight = data.result.imageHeight ?? this.gestureSourceHeight(data.result.gestures);
@@ -1300,6 +1316,59 @@ struct FeatureRuntimePage {
     return `${value}%`;
   }
 
+  private updateObjectDetectionImageOrientation(uri: string): void {
+    this.updateOverlayPreviewImageOrientation(uri, (orientation: ImageRotateOrientation) => {
+      if (this.objectDetectionImageUri === uri) {
+        this.objectDetectionImageOrientation = orientation;
+      }
+    });
+  }
+
+  private updateSegmentationImageOrientation(uri: string): void {
+    this.updateOverlayPreviewImageOrientation(uri, (orientation: ImageRotateOrientation) => {
+      if (this.segmentationImageUri === uri) {
+        this.segmentationImageOrientation = orientation;
+      }
+    });
+  }
+
+  private updateSegmentationBackgroundImageOrientation(uri: string): void {
+    this.updateOverlayPreviewImageOrientation(uri, (orientation: ImageRotateOrientation) => {
+      if (this.segmentationBackgroundImageUri === uri) {
+        this.segmentationBackgroundImageOrientation = orientation;
+      }
+    });
+  }
+
+  private updatePoseImageOrientation(uri: string): void {
+    this.updateOverlayPreviewImageOrientation(uri, (orientation: ImageRotateOrientation) => {
+      if (this.poseImageUri === uri) {
+        this.poseImageOrientation = orientation;
+      }
+    });
+  }
+
+  private updateGestureImageOrientation(uri: string): void {
+    this.updateOverlayPreviewImageOrientation(uri, (orientation: ImageRotateOrientation) => {
+      if (this.gestureImageUri === uri) {
+        this.gestureImageOrientation = orientation;
+      }
+    });
+  }
+
+  private updateOverlayPreviewImageOrientation(
+    uri: string,
+    applyOrientation: (orientation: ImageRotateOrientation) => void
+  ): void {
+    if (uri.length === 0) {
+      applyOrientation(ImageRotateOrientation.UP);
+      return;
+    }
+    featureRuntimeOverlayPreviewImageOrientationForUri(uri)
+      .then((orientation: ImageRotateOrientation) => applyOrientation(orientation))
+      .catch(() => applyOrientation(ImageRotateOrientation.UP));
+  }
+
   @Builder
   posePreview(labelKey: AppStringKey, uri: string) {
     Column() {
@@ -1309,6 +1378,7 @@ struct FeatureRuntimePage {
         .width('100%')
       Stack({ alignContent: Alignment.TopStart }) {
         Image(uri)
+          .orientation(this.poseImageOrientation)
           .width('100%')
           .height('100%')
           .objectFit(ImageFit.Fill)
@@ -1394,6 +1464,7 @@ struct FeatureRuntimePage {
         .width('100%')
       Stack({ alignContent: Alignment.TopStart }) {
         Image(uri)
+          .orientation(this.segmentationImageOrientation)
           .width('100%')
           .height('100%')
           .objectFit(ImageFit.Fill)
@@ -1422,6 +1493,7 @@ struct FeatureRuntimePage {
         .width('100%')
       Stack({ alignContent: Alignment.TopStart }) {
         Image(this.segmentationBackgroundImageUri)
+          .orientation(this.segmentationBackgroundImageOrientation)
           .width('100%')
           .height('100%')
           .objectFit(ImageFit.Fill)
@@ -1464,6 +1536,7 @@ struct FeatureRuntimePage {
         .width('100%')
       Stack({ alignContent: Alignment.TopStart }) {
         Image(uri)
+          .orientation(this.objectDetectionImageOrientation)
           .width('100%')
           .height('100%')
           .objectFit(ImageFit.Fill)
@@ -1491,6 +1564,7 @@ struct FeatureRuntimePage {
         .width('100%')
       Stack({ alignContent: Alignment.TopStart }) {
         Image(uri)
+          .orientation(this.gestureImageOrientation)
           .width('100%')
           .height('100%')
           .objectFit(ImageFit.Fill)

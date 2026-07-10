@@ -13,6 +13,7 @@ import {
   styleTransferRgbUnitInputFromRgba,
   styleTransferStyleImageSize
 } from './StyleTransferService';
+import { createPixelMapWithExifOrientation } from './ImageDecodeOrientation';
 
 export interface HarmonyStyleTransferInputPreprocessorOptions {
   readonly resourceManager?: RawfileContentReader;
@@ -63,7 +64,7 @@ async function createStyleTransferImageInput(
       imageFile = await openStyleTransferImageFile(imageUri);
       imageSource = image.createImageSource(imageFile.fd);
     }
-    pixelMap = await imageSource.createPixelMap(styleTransferDecodeOptions(size));
+    pixelMap = await createPixelMapWithExifOrientation(imageSource, styleTransferDecodeOptions(size));
     const rgbaBuffer = new ArrayBuffer(size * size * 4);
     await pixelMap.readPixelsToBuffer(rgbaBuffer);
     return styleTransferRgbUnitInputFromRgba(new Uint8Array(rgbaBuffer), size);

@@ -212,6 +212,11 @@ import {
 } from '../main/ets/services/ai/ObjectDetectionService';
 import { image } from '@kit.ImageKit';
 import {
+  decodingOptionsWithImageRotation,
+  imageRotationDegreesFromOrientationProperty,
+  rotatedImageSize
+} from '../main/ets/services/ai/ImageDecodeOrientation';
+import {
   imageClassificationCropOffset,
   imageClassificationCropSize,
   imageClassificationInputFloatCount,
@@ -246,6 +251,7 @@ import {
   portraitSegmentationCustomBackgroundId
 } from '../main/ets/features/runtime/PortraitSegmentationBackgroundCatalog';
 import { segmentationBackgroundReplacementComponentId } from '../main/ets/features/runtime/FeatureRuntimeViewIds';
+import { featureRuntimeOverlayPreviewImageOrientationFromRotationDegrees } from '../main/ets/features/runtime/FeatureRuntimeOverlayPreview';
 import {
   declaredPermissionNames,
   PermissionRequestSummary,
@@ -2460,6 +2466,14 @@ export default function localUnitTest() {
       });
     });
 
+    it('featureRuntimeMapsOverlayPreviewOrientationWithoutMirroring', 0, () => {
+      expect(featureRuntimeOverlayPreviewImageOrientationFromRotationDegrees(0)).assertEqual(ImageRotateOrientation.UP);
+      expect(featureRuntimeOverlayPreviewImageOrientationFromRotationDegrees(90)).assertEqual(ImageRotateOrientation.RIGHT);
+      expect(featureRuntimeOverlayPreviewImageOrientationFromRotationDegrees(180)).assertEqual(ImageRotateOrientation.DOWN);
+      expect(featureRuntimeOverlayPreviewImageOrientationFromRotationDegrees(270)).assertEqual(ImageRotateOrientation.LEFT);
+      expect(featureRuntimeOverlayPreviewImageOrientationFromRotationDegrees(45)).assertEqual(ImageRotateOrientation.UP);
+    });
+
     it('aiServiceReturnsExplicitPendingAdapterFailure', 0, async () => {
       const workflow = workflowForRoute(AppRoute.OBJECT_PHOTO.name);
       expect(workflow !== undefined).assertTrue();
@@ -4064,6 +4078,41 @@ export default function localUnitTest() {
       expect(options.desiredSize!.width).assertEqual(imageClassificationResizedSize);
       expect(options.desiredSize!.height).assertEqual(imageClassificationResizedSize);
       expect(options.desiredPixelFormat).assertEqual(image.PixelMapFormat.RGBA_8888);
+    });
+
+    it('mapsExifOrientationToAndroidRotationDegrees', 0, () => {
+      expect(imageRotationDegreesFromOrientationProperty('Right-top')).assertEqual(90);
+      expect(imageRotationDegreesFromOrientationProperty('6')).assertEqual(90);
+      expect(imageRotationDegreesFromOrientationProperty('Bottom-right')).assertEqual(180);
+      expect(imageRotationDegreesFromOrientationProperty('3')).assertEqual(180);
+      expect(imageRotationDegreesFromOrientationProperty('Left-bottom')).assertEqual(270);
+      expect(imageRotationDegreesFromOrientationProperty('8')).assertEqual(270);
+      expect(imageRotationDegreesFromOrientationProperty('Top-left')).assertEqual(0);
+      expect(imageRotationDegreesFromOrientationProperty('Unknown Value 9')).assertEqual(0);
+    });
+
+    it('addsExifRotationToHarmonyDecodeOptions', 0, () => {
+      const options: image.DecodingOptions = decodingOptionsWithImageRotation({
+        desiredSize: {
+          width: 300,
+          height: 300
+        },
+        desiredPixelFormat: image.PixelMapFormat.RGBA_8888
+      }, 90);
+
+      expect(options.rotate).assertEqual(90);
+      expect(options.desiredSize!.width).assertEqual(300);
+      expect(options.desiredPixelFormat).assertEqual(image.PixelMapFormat.RGBA_8888);
+    });
+
+    it('swapsImageSizeForQuarterTurnExifRotation', 0, () => {
+      const rotated = rotatedImageSize(640, 480, 90);
+      const normal = rotatedImageSize(640, 480, 180);
+
+      expect(rotated.width).assertEqual(480);
+      expect(rotated.height).assertEqual(640);
+      expect(normal.width).assertEqual(640);
+      expect(normal.height).assertEqual(480);
     });
 
     it('decodesRawfileAsciiContentForAndroidLabels', 0, () => {

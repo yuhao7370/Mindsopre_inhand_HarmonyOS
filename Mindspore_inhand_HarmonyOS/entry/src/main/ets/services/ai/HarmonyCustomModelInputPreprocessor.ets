@@ -6,6 +6,7 @@ import {
   CustomModelInputPreprocessor,
   rgbUnitInputFromResizedRgba
 } from './CustomModelService';
+import { createPixelMapWithExifOrientation } from './ImageDecodeOrientation';
 
 export class HarmonyCustomModelInputPreprocessor implements CustomModelInputPreprocessor {
   async createInputBuffer(imageUri: string): Promise<ArrayBuffer> {
@@ -15,7 +16,7 @@ export class HarmonyCustomModelInputPreprocessor implements CustomModelInputPrep
     try {
       imageFile = await fileIo.open(imageUri, fileIo.OpenMode.READ_ONLY);
       imageSource = image.createImageSource(imageFile.fd);
-      pixelMap = await imageSource.createPixelMap(customModelDecodeOptions());
+      pixelMap = await createPixelMapWithExifOrientation(imageSource, customModelDecodeOptions());
       const rgbaBuffer = new ArrayBuffer(customModelInputSize * customModelInputSize * 4);
       await pixelMap.readPixelsToBuffer(rgbaBuffer);
       return rgbUnitInputFromResizedRgba(new Uint8Array(rgbaBuffer));

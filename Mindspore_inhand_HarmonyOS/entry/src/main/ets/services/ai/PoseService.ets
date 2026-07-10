@@ -5,6 +5,11 @@ import {
   RawfileContentReader,
   rawfileContentToArrayBuffer
 } from './MindSporeLiteModelRunner';
+import {
+  decodingOptionsWithImageRotation,
+  imageRotationDegreesFromImageSource,
+  rotatedImageSize
+} from './ImageDecodeOrientation';
 
 export interface PosePoint {
   readonly type: number;
@@ -207,7 +212,9 @@ export class HarmonySkeletonDetectionRunner implements PoseRunner {
       imageSource = input.imageSource;
       imageFile = input.imageFile;
       const imageInfo: image.ImageInfo = await imageSource.getImageInfo();
-      pixelMap = await imageSource.createPixelMap();
+      const rotationDegrees = await imageRotationDegreesFromImageSource(imageSource);
+      const displaySize = rotatedImageSize(imageInfo.size.width, imageInfo.size.height, rotationDegrees);
+      pixelMap = await imageSource.createPixelMap(decodingOptionsWithImageRotation({}, rotationDegrees));
       detector = await skeletonDetection.SkeletonDetector.create();
       const request = new visionBase.Request();
       const inputData: visionBase.ImageData = {
@@ -218,8 +225,8 @@ export class HarmonySkeletonDetectionRunner implements PoseRunner {
       return poseResultFromCoreVision(
         response.skeletons,
         Date.now() - startMs,
-        imageInfo.size.width,
-        imageInfo.size.height
+        displaySize.width,
+        displaySize.height
       );
     } finally {
       if (detector !== undefined) {

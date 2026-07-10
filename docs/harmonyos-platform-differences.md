@@ -74,6 +74,48 @@ Current HarmonyOS behavior:
   at the 500ms fast-live cadence used for lightweight classification-style
   demos.
 
+## Text Recognition
+
+Android Text Recognition and Text Translation image flows configure HMS local
+OCR with `MLLocalTextSetting.OCR_DETECT_MODE` and pin the recognition language
+to `zh`.
+
+Current HarmonyOS behavior:
+
+- Text extraction keeps the Android route and image-input flow available.
+- HarmonyOS uses `@kit.CoreVisionKit` OCR with direction detection enabled.
+- The local DevEco SDK text-recognition configuration only exposes
+  `isDirectionDetectionSupported` plus a read-only supported-language query;
+  it does not expose an Android-equivalent language selector.
+- HarmonyOS therefore relies on platform OCR language auto-detection instead
+  of hard-coding Chinese recognition. Text Translation still applies the
+  Android default target-language rule after OCR text is produced.
+
+## Image Orientation
+
+Android album/file image flows call `BitmapUtils.getBitmapDegree()` and rotate
+decoded bitmaps for EXIF orientation values 90, 180, and 270 degrees before
+running local analysis.
+
+Current HarmonyOS behavior:
+
+- File-backed image decoding reads ImageKit `PropertyKey.ORIENTATION` and maps
+  `Right-top`, `Bottom-right`, and `Left-bottom` to Android-compatible
+  90/180/270 degree rotations.
+- Classification, Custom Model, Style Transfer, Object Detection, PoseNet,
+  Portrait Segmentation, Text Recognition, and Text Translation image OCR
+  inputs decode PixelMaps with the EXIF rotation applied.
+- Object Detection, PoseNet, and Portrait Segmentation also report rotated
+  image dimensions so overlays use the same visual coordinate space as the
+  decoded PixelMap.
+- URI-backed overlay previews read the same EXIF orientation and render with
+  ArkUI `UP`, `RIGHT`, `DOWN`, or `LEFT` orientation values so the preview
+  background follows the decoded analysis input without introducing mirrored
+  transforms.
+- Mirrored EXIF orientations stay at the Android app's previous behavior: they
+  are not transformed into mirror operations because `BitmapUtils` only handled
+  the three pure rotation cases.
+
 ## Text Translation
 
 Android source uses HMS ML Kit cloud translation through `MLRemoteTranslator`.

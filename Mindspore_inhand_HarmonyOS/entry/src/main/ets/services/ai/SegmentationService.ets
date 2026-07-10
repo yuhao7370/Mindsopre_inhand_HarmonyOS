@@ -1,6 +1,11 @@
 import { fileIo } from '@kit.CoreFileKit';
 import { image } from '@kit.ImageKit';
 import { subjectSegmentation } from '@kit.CoreVisionKit';
+import {
+  decodingOptionsWithImageRotation,
+  imageRotationDegreesFromImageSource,
+  rotatedImageSize
+} from './ImageDecodeOrientation';
 
 export interface SegmentationRectangle {
   readonly left: number;
@@ -78,7 +83,9 @@ export class HarmonySubjectSegmentationRunner implements SegmentationRunner {
       imageFile = await openSegmentationImageFile(imageUri);
       imageSource = image.createImageSource(imageFile.fd);
       const imageInfo: image.ImageInfo = await imageSource.getImageInfo();
-      pixelMap = await imageSource.createPixelMap();
+      const rotationDegrees = await imageRotationDegreesFromImageSource(imageSource);
+      const displaySize = rotatedImageSize(imageInfo.size.width, imageInfo.size.height, rotationDegrees);
+      pixelMap = await imageSource.createPixelMap(decodingOptionsWithImageRotation({}, rotationDegrees));
       const result = await subjectSegmentation.doSegmentation({
         pixelMap: pixelMap
       }, {
@@ -89,8 +96,8 @@ export class HarmonySubjectSegmentationRunner implements SegmentationRunner {
       const segmentationResult = await segmentationResultFromCoreVision(
         result,
         Date.now() - startMs,
-        imageInfo.size.width,
-        imageInfo.size.height
+        displaySize.width,
+        displaySize.height
       );
       await releaseSegmentationResultImages(result);
       return segmentationResult;
