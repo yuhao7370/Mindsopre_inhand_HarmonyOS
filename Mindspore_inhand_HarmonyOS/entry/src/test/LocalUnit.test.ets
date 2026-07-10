@@ -2880,6 +2880,18 @@ export default function localUnitTest() {
       expect(englishResult.translatedText).assertEqual('\u56FE\u50CF\u5206\u7C7B\n\u76EE\u6807\u68C0\u6D4B');
     });
 
+    it('localTextTranslationRunnerKeepsCommonAiPhoneSentencesNaturalOffline', 0, async () => {
+      const runner = new LocalTextTranslationRunner();
+
+      const chineseResult = await runner.translate('\u673A\u5668\u5B66\u4E60\u53EF\u4EE5\u5728\u624B\u673A\u4E0A\u8FD0\u884C', 'en');
+      expect(chineseResult.ok).assertTrue();
+      expect(chineseResult.translatedText).assertEqual('machine learning can run on phone');
+
+      const englishResult = await runner.translate('MindSpore can run on the phone.', 'zh');
+      expect(englishResult.ok).assertTrue();
+      expect(englishResult.translatedText).assertEqual('\u6607\u601D\u53EF\u4EE5\u5728\u624B\u673A\u4E0A\u8FD0\u884C');
+    });
+
     it('segmentationRequiresImageInputWhenServiceIsProvided', 0, async () => {
       const workflow = workflowForRoute(AppRoute.PORTRAIT_SEGMENTATION.name);
       expect(workflow !== undefined).assertTrue();
