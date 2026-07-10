@@ -194,8 +194,12 @@ import {
   cachedRuntimeAiServiceForWorkflow,
   createHarmonyDefaultAiService,
   createRuntimeAiServiceForWorkflow,
+  imageCategoryLabelRawfilePathForLocale,
+  objectCategoryLabelRawfilePathForLocale,
   rawfileAsciiContentToText,
-  resetHarmonyRuntimeAiServiceCachesForTests
+  rawfileUtf8ContentToText,
+  resetHarmonyRuntimeAiServiceCachesForTests,
+  setHarmonyRuntimeLabelLocaleForTests
 } from '../main/ets/services/ai/ImageClassificationRuntimeFactory';
 import {
   floatScoresFromOutputBuffer,
@@ -4598,6 +4602,40 @@ export default function localUnitTest() {
       expect(result.detailText.indexOf('person') >= 0).assertTrue();
     });
 
+    it('runtimeFactoryInjectsObjectDetectionServiceWithLocalizedChineseLabels', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.OBJECT_PHOTO.name);
+      expect(workflow !== undefined).assertTrue();
+      const labelContent: Uint8Array = new Uint8Array([
+        232, 131, 140, 230, 153, 175, 10,
+        228, 186, 186
+      ]);
+      const resourceManager: FixedRawfileContentReader = new FixedRawfileContentReader(labelContent);
+      const detection: ObjectDetection = {
+        imageId: 1,
+        labelId: 1,
+        label: '',
+        score: 0.8,
+        left: 3,
+        top: 4,
+        right: 103,
+        bottom: 204
+      };
+      const service = await createRuntimeAiServiceForWorkflow(workflow!, {
+        resourceManager: resourceManager,
+        labelLocale: 'zh-CN',
+        objectDetectionRunner: new FixedObjectDetectionRunner([detection])
+      });
+
+      const result: AiRunResult = await service.run(workflow!, {
+        imageUri: 'file://selected/street.jpg'
+      });
+
+      expect(resourceManager.seenPaths[0]).assertEqual('labels/zh_CN/object_category.txt');
+      expect(result.ok).assertTrue();
+      expect(result.code).assertEqual('OBJECT_DETECTION_DONE');
+      expect(aiRunResultRows(result)[1].value.indexOf('人') >= 0).assertTrue();
+    });
+
     it('generatesAndroidSsdDefaultBoxes', 0, () => {
       const boxes: Array<ObjectDetectionNormalBox> = generateObjectDetectionDefaultBoxes();
 
@@ -4800,6 +4838,20 @@ export default function localUnitTest() {
       expect(rawfileAsciiContentToText(content)).assertEqual('tench\r\ngoldfish');
     });
 
+    it('decodesRawfileUtf8ContentForLocalizedAndroidLabels', 0, () => {
+      const content: Uint8Array = new Uint8Array([233, 135, 145, 233, 177, 188]);
+      expect(rawfileUtf8ContentToText(content)).assertEqual('金鱼');
+    });
+
+    it('selectsAndroidLocalizedLabelRawfilesForChineseLocales', 0, () => {
+      expect(imageCategoryLabelRawfilePathForLocale('zh-CN')).assertEqual('labels/zh_CN/image_category_old.txt');
+      expect(imageCategoryLabelRawfilePathForLocale('zh-Hans-CN')).assertEqual('labels/zh_CN/image_category_old.txt');
+      expect(imageCategoryLabelRawfilePathForLocale('en-US')).assertEqual('labels/image_category_old.txt');
+      expect(imageCategoryLabelRawfilePathForLocale('')).assertEqual('labels/image_category_old.txt');
+      expect(objectCategoryLabelRawfilePathForLocale('zh_CN')).assertEqual('labels/zh_CN/object_category.txt');
+      expect(objectCategoryLabelRawfilePathForLocale('en')).assertEqual('labels/object_category.txt');
+    });
+
     it('mapsTopClassificationScoreToLabel', 0, () => {
       const result = topClassificationResult([0.1, 0.9, 0.2], ['tench', 'goldfish', 'great_white_shark']);
       expect(result.ok).assertTrue();
@@ -4945,6 +4997,63 @@ export default function localUnitTest() {
       expect(result.ok).assertTrue();
       expect(result.code).assertEqual('CLASSIFICATION_DONE');
       expect(result.detailText.indexOf('label=goldfish') >= 0).assertTrue();
+    });
+
+    it('createsHarmonyDefaultAiServiceWithLocalizedChineseImageLabels', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.IMAGE_CAMERA.name);
+      expect(workflow !== undefined).assertTrue();
+      const labelContent: Uint8Array = new Uint8Array([
+        231, 187, 191, 233, 179, 141, 233, 177, 188, 10,
+        233, 135, 145, 233, 177, 188
+      ]);
+      const resourceManager: FixedRawfileContentReader = new FixedRawfileContentReader(labelContent);
+      const service = await createHarmonyDefaultAiService({
+        resourceManager: resourceManager,
+        labelLocale: 'zh-CN',
+        inputPreprocessor: new FixedInputPreprocessor(new ArrayBuffer(12)),
+        tensorRunner: new FixedTensorRunner([0.1, 0.9])
+      });
+
+      const result = await service.run(workflow!, {
+        imageUri: 'file://selected/fish.jpg'
+      });
+
+      expect(resourceManager.seenPaths[0]).assertEqual('labels/zh_CN/image_category_old.txt');
+      expect(result.ok).assertTrue();
+      expect(result.code).assertEqual('CLASSIFICATION_DONE');
+      expect(aiRunResultRows(result)[0].value).assertEqual('金鱼');
+    });
+
+    it('cachedRuntimeFactoryReloadsDefaultClassificationServiceWhenLabelLocaleChanges', 0, async () => {
+      resetHarmonyRuntimeAiServiceCachesForTests();
+      try {
+        const workflow = workflowForRoute(AppRoute.IMAGE_CAMERA.name);
+        expect(workflow !== undefined).assertTrue();
+
+        setHarmonyRuntimeLabelLocaleForTests('en-US');
+        const englishLabels: Uint8Array = new Uint8Array([
+          116, 101, 110, 99, 104, 10,
+          103, 111, 108, 100, 102, 105, 115, 104
+        ]);
+        const englishResourceManager: FixedRawfileContentReader = new FixedRawfileContentReader(englishLabels);
+        const firstService = await cachedRuntimeAiServiceForWorkflow(workflow!, englishResourceManager);
+
+        setHarmonyRuntimeLabelLocaleForTests('zh-CN');
+        const chineseLabels: Uint8Array = new Uint8Array([
+          231, 187, 191, 233, 179, 141, 233, 177, 188, 10,
+          233, 135, 145, 233, 177, 188
+        ]);
+        const chineseResourceManager: FixedRawfileContentReader = new FixedRawfileContentReader(chineseLabels);
+        const secondService = await cachedRuntimeAiServiceForWorkflow(workflow!, chineseResourceManager);
+
+        expect(firstService === secondService).assertFalse();
+        expect(englishResourceManager.seenPaths.length).assertEqual(1);
+        expect(englishResourceManager.seenPaths[0]).assertEqual('labels/image_category_old.txt');
+        expect(chineseResourceManager.seenPaths.length).assertEqual(1);
+        expect(chineseResourceManager.seenPaths[0]).assertEqual('labels/zh_CN/image_category_old.txt');
+      } finally {
+        resetHarmonyRuntimeAiServiceCachesForTests();
+      }
     });
 
     it('mapsImageClassificationLabelsToLocalGestureCategories', 0, () => {

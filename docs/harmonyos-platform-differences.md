@@ -69,6 +69,9 @@ Current HarmonyOS behavior:
   hand-adjacent positive; exact gesture labels such as `boxing_glove`,
   `thumb_up`, `fist`, `heart`, and `ok_gesture` are also mapped when provided
   by an injected or future score runner.
+- The gesture fallback intentionally keeps English ImageNet labels internally
+  even on Chinese devices, because its conservative matching depends on stable
+  model label names.
 - This fallback is not equivalent to HMS hand gesture recognition. Non-hand
   images and labels outside the conservative map fail with the localized
   gesture failure status instead of inventing output.
@@ -175,6 +178,18 @@ Current HarmonyOS behavior:
   Inside the live loop, camera refresh continues to use the existing frame guard
   so frame inference does not overlap.
 
+## Image Classification
+
+Android Image Classification displays labels from localized
+`image_category_old` string arrays.
+
+Current HarmonyOS behavior:
+
+- HarmonyOS keeps the bundled MobileNetV2 model and ImageNet class order.
+- Image Classification result labels now load the Android Chinese label table
+  on Chinese locales while keeping the existing English rawfile for other
+  locales.
+
 ## Scene Detection
 
 Android source uses HMS ML Kit scene detection through the `MLSceneDetection`
@@ -255,6 +270,8 @@ Current HarmonyOS behavior:
 - The Object Detection Photo and Real-time routes use the bundled
   `model/ssd.ms` model by default and decode SSD outputs with Android-compatible
   anchors, thresholds, and label mapping.
+- Object labels now load the Android Chinese `object_category` table on
+  Chinese locales while keeping the existing English labels for other locales.
 - `/imageobject/ObjectPhotoActivity` follows the Android page flow: opening the
   route prepares the album image input once, and a selected image immediately
   runs object detection.

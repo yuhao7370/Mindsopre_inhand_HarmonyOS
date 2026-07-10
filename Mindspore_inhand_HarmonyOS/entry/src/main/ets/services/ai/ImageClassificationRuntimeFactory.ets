@@ -1,4 +1,4 @@
-import { resourceManager } from '@kit.LocalizationKit';
+import { i18n, resourceManager } from '@kit.LocalizationKit';
 import { FeatureWorkflow } from '../../features/runtime/FeatureWorkflowCatalog';
 import { DefaultAiService } from './AiService';
 import {
@@ -83,6 +83,7 @@ import {
 
 export interface HarmonyImageClassificationRuntimeOptions {
   readonly resourceManager: RawfileContentReader;
+  readonly labelLocale?: string;
   readonly inputPreprocessor?: ImageClassificationInputPreprocessor;
   readonly tensorRunner?: ImageClassificationTensorRunner;
   readonly customModelPreprocessor?: CustomModelInputPreprocessor;
@@ -102,13 +103,21 @@ export interface HarmonyImageClassificationRuntimeOptions {
 }
 
 let cachedHarmonyDefaultAiService: Promise<DefaultAiService> | undefined = undefined;
+let cachedHarmonyDefaultAiServiceLocale: string = '';
 let cachedHarmonyLocalGestureAiService: Promise<DefaultAiService> | undefined = undefined;
 let cachedHarmonyLocalSceneDetectionAiService: Promise<DefaultAiService> | undefined = undefined;
+let harmonyRuntimeLabelLocaleForTests: string | undefined = undefined;
 
 export function resetHarmonyRuntimeAiServiceCachesForTests(): void {
   cachedHarmonyDefaultAiService = undefined;
+  cachedHarmonyDefaultAiServiceLocale = '';
   cachedHarmonyLocalGestureAiService = undefined;
   cachedHarmonyLocalSceneDetectionAiService = undefined;
+  harmonyRuntimeLabelLocaleForTests = undefined;
+}
+
+export function setHarmonyRuntimeLabelLocaleForTests(locale?: string): void {
+  harmonyRuntimeLabelLocaleForTests = locale;
 }
 
 export class HarmonyRawfileContentReader implements RawfileContentReader {
@@ -126,10 +135,13 @@ export class HarmonyRawfileContentReader implements RawfileContentReader {
 export function cachedHarmonyDefaultAiServiceForResourceManager(
   resourceManager: RawfileContentReader
 ): Promise<DefaultAiService> {
-  if (cachedHarmonyDefaultAiService === undefined) {
+  const labelLocale = currentLabelLocale();
+  if (cachedHarmonyDefaultAiService === undefined || cachedHarmonyDefaultAiServiceLocale !== labelLocale) {
     cachedHarmonyDefaultAiService = createHarmonyDefaultAiService({
-      resourceManager: resourceManager
+      resourceManager: resourceManager,
+      labelLocale: labelLocale
     });
+    cachedHarmonyDefaultAiServiceLocale = labelLocale;
   }
   return cachedHarmonyDefaultAiService;
 }
@@ -324,7 +336,7 @@ export async function createHarmonyDefaultAiService(
 export async function createHarmonyImageClassificationService(
   options: HarmonyImageClassificationRuntimeOptions
 ): Promise<ImageClassificationService> {
-  const labels = await loadImageClassificationLabels(options.resourceManager);
+  const labels = await loadImageClassificationLabels(options.resourceManager, labelLocaleForOptions(options));
   const tensorRunner = options.tensorRunner ?? new MindSporeLiteModelRunner({
     resourceManager: options.resourceManager,
     modelRawfilePath: imageClassificationModelRawfilePath
@@ -358,7 +370,7 @@ export function createHarmonyCustomModelService(
 export async function createHarmonyObjectDetectionService(
   options: HarmonyImageClassificationRuntimeOptions
 ): Promise<ObjectDetectionService> {
-  const labels = await loadObjectDetectionLabels(options.resourceManager);
+  const labels = await loadObjectDetectionLabels(options.resourceManager, labelLocaleForOptions(options));
   const runner = options.objectDetectionRunner ?? createHarmonyObjectDetectionRunner(options);
   return new ObjectDetectionService({
     labels: labels,
@@ -447,7 +459,7 @@ export function createHarmonyGestureService(runner: GestureRunner): GestureServi
 export async function createHarmonyLocalGestureService(
   options: HarmonyImageClassificationRuntimeOptions
 ): Promise<GestureService> {
-  const labels = await loadImageClassificationLabels(options.resourceManager);
+  const labels = await loadImageClassificationLabels(options.resourceManager, '');
   const tensorRunner = options.tensorRunner ?? new MindSporeLiteModelRunner({
     resourceManager: options.resourceManager,
     modelRawfilePath: imageClassificationModelRawfilePath
@@ -494,17 +506,23 @@ export async function createHarmonyLocalSceneDetectionService(
 
 export async function loadSceneDetectionLabels(resourceManager: RawfileContentReader): Promise<Array<string>> {
   const content = await resourceManager.getRawFileContent(sceneDetectionLabelRawfilePath);
-  return parseSceneDetectionLabels(rawfileAsciiContentToText(content));
+  return parseSceneDetectionLabels(rawfileUtf8ContentToText(content));
 }
 
-export async function loadImageClassificationLabels(resourceManager: RawfileContentReader): Promise<Array<string>> {
-  const content = await resourceManager.getRawFileContent(imageCategoryLabelRawfilePath);
-  return parseImageCategoryLabels(rawfileAsciiContentToText(content));
+export async function loadImageClassificationLabels(
+  resourceManager: RawfileContentReader,
+  labelLocale: string = ''
+): Promise<Array<string>> {
+  const content = await resourceManager.getRawFileContent(imageCategoryLabelRawfilePathForLocale(labelLocale));
+  return parseImageCategoryLabels(rawfileUtf8ContentToText(content));
 }
 
-export async function loadObjectDetectionLabels(resourceManager: RawfileContentReader): Promise<Array<string>> {
-  const content = await resourceManager.getRawFileContent(objectCategoryLabelRawfilePath);
-  return parseObjectCategoryLabels(rawfileAsciiContentToText(content));
+export async function loadObjectDetectionLabels(
+  resourceManager: RawfileContentReader,
+  labelLocale: string = ''
+): Promise<Array<string>> {
+  const content = await resourceManager.getRawFileContent(objectCategoryLabelRawfilePathForLocale(labelLocale));
+  return parseObjectCategoryLabels(rawfileUtf8ContentToText(content));
 }
 
 export async function loadTranslationLanguagePairs(
@@ -538,4 +556,78 @@ export function rawfileAsciiContentToText(content: Uint8Array): string {
     chunks.push(chunk);
   }
   return chunks.join('');
+}
+
+export function rawfileUtf8ContentToText(content: Uint8Array): string {
+  const chars: Array<string> = [];
+  let index = 0;
+  while (index < content.length) {
+    const first = content[index];
+    let codePoint = 0;
+    let byteCount = 1;
+    if (first < 0x80) {
+      codePoint = first;
+    } else if ((first & 0xE0) === 0xC0 && index + 1 < content.length) {
+      codePoint = ((first & 0x1F) << 6) | (content[index + 1] & 0x3F);
+      byteCount = 2;
+    } else if ((first & 0xF0) === 0xE0 && index + 2 < content.length) {
+      codePoint = ((first & 0x0F) << 12) | ((content[index + 1] & 0x3F) << 6) | (content[index + 2] & 0x3F);
+      byteCount = 3;
+    } else if ((first & 0xF8) === 0xF0 && index + 3 < content.length) {
+      codePoint = ((first & 0x07) << 18) | ((content[index + 1] & 0x3F) << 12) |
+        ((content[index + 2] & 0x3F) << 6) | (content[index + 3] & 0x3F);
+      byteCount = 4;
+    } else {
+      codePoint = 0xFFFD;
+    }
+
+    if (!(chars.length === 0 && codePoint === 0xFEFF)) {
+      if (codePoint <= 0xFFFF) {
+        chars.push(String.fromCharCode(codePoint));
+      } else {
+        const adjusted = codePoint - 0x10000;
+        chars.push(String.fromCharCode(0xD800 + (adjusted >> 10)));
+        chars.push(String.fromCharCode(0xDC00 + (adjusted & 0x3FF)));
+      }
+    }
+    index += byteCount;
+  }
+  return chars.join('');
+}
+
+export function imageCategoryLabelRawfilePathForLocale(locale: string): string {
+  if (isChineseLabelLocale(locale)) {
+    return 'labels/zh_CN/image_category_old.txt';
+  }
+  return imageCategoryLabelRawfilePath;
+}
+
+export function objectCategoryLabelRawfilePathForLocale(locale: string): string {
+  if (isChineseLabelLocale(locale)) {
+    return 'labels/zh_CN/object_category.txt';
+  }
+  return objectCategoryLabelRawfilePath;
+}
+
+function labelLocaleForOptions(options: HarmonyImageClassificationRuntimeOptions): string {
+  if (options.labelLocale !== undefined) {
+    return options.labelLocale;
+  }
+  return currentLabelLocale();
+}
+
+function currentLabelLocale(): string {
+  if (harmonyRuntimeLabelLocaleForTests !== undefined) {
+    return harmonyRuntimeLabelLocaleForTests;
+  }
+  try {
+    return i18n.System.getAppPreferredLanguage();
+  } catch (_) {
+    return '';
+  }
+}
+
+function isChineseLabelLocale(locale: string): boolean {
+  const normalized = locale.toLowerCase().split('_').join('-');
+  return normalized === 'zh' || normalized.startsWith('zh-');
 }
