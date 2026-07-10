@@ -86,6 +86,9 @@ Current HarmonyOS behavior:
   MobileNetV2 MindSpore model as a local default instead of blocking at missing
   input. The result is still shown as a generic tensor summary, matching the
   Android screen shape rather than turning the page into Image Classification.
+- The Android local Help dialog is preserved as a localized HarmonyOS Help
+  button. The content is updated to describe the optional `.ms` model and the
+  bundled local fallback model.
 
 ## Style Transfer
 

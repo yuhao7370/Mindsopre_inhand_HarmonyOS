@@ -54,6 +54,7 @@ export interface FeatureWorkflow {
   readonly resultKind: FeatureResultKind;
   readonly liveMode: boolean;
   readonly helpUrl?: string;
+  readonly helpContentKey?: AppStringKey;
 }
 
 export interface WorkflowInputReadyAction {
@@ -230,7 +231,8 @@ export const featureWorkflows: Array<FeatureWorkflow> = [
     optionalInputKinds: ['modelFile'],
     requiredPermissions: ['camera', 'media'],
     resultKind: 'tensorSummary',
-    liveMode: false
+    liveMode: false,
+    helpContentKey: 'feature_runtime_custom_model_help'
   }
 ];
 

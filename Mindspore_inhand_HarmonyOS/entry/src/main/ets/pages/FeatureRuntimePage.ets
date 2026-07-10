@@ -159,6 +159,7 @@ struct FeatureRuntimePage {
   @State gestureImageWidth: number = 0;
   @State gestureImageHeight: number = 0;
   @State helpUrl: string = '';
+  @State helpContentKey: AppStringKey | undefined = undefined;
   @State inputKinds: Array<FeatureInputKind> = [];
   @State permissionKinds: Array<FeaturePermissionKind> = [];
   @State liveCameraSurfaceId: string = '';
@@ -177,6 +178,7 @@ struct FeatureRuntimePage {
     this.summaryKey = workflow?.summaryKey ?? this.summaryKey;
     this.aiMethod = workflow?.aiMethod ?? '';
     this.helpUrl = workflow?.helpUrl ?? '';
+    this.helpContentKey = workflow?.helpContentKey;
     this.inputKinds = workflow ? runtimeInputKindsForWorkflow(workflow) : [];
     this.permissionKinds = workflow?.requiredPermissions ?? [];
   }
@@ -730,6 +732,20 @@ struct FeatureRuntimePage {
       params: {
         titleKey: this.titleKey,
         url: this.helpUrl
+      }
+    });
+  }
+
+  private showLocalHelpDialog(): void {
+    if (this.helpContentKey === undefined) {
+      return;
+    }
+    AlertDialog.show({
+      title: appString('feature_runtime_help'),
+      message: appString(this.helpContentKey),
+      primaryButton: {
+        value: appString('confirm'),
+        action: () => {}
       }
     });
   }
@@ -1590,6 +1606,12 @@ struct FeatureRuntimePage {
               .height(32)
               .margin({ top: AppSpacing.md })
               .onClick(() => this.openHelpPage())
+          }
+          if (this.helpContentKey !== undefined) {
+            Button(appString('feature_runtime_help'))
+              .height(32)
+              .margin({ top: AppSpacing.md })
+              .onClick(() => this.showLocalHelpDialog())
           }
         }
         .width('100%')

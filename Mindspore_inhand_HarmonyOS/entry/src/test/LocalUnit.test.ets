@@ -1315,6 +1315,8 @@ export default function localUnitTest() {
       expect(hasAppStringKey('feature_runtime_save_image_missing')).assertTrue();
       expect(hasAppStringKey('feature_runtime_style_recovery')).assertTrue();
       expect(hasAppStringKey('feature_runtime_style_recovered')).assertTrue();
+      expect(hasAppStringKey('feature_runtime_help')).assertTrue();
+      expect(hasAppStringKey('feature_runtime_custom_model_help')).assertTrue();
       expect(hasAppStringKey('qr_code_save_done')).assertTrue();
       expect(hasAppStringKey('qr_code_save_failed')).assertTrue();
       expect(hasAppStringKey('title_share')).assertTrue();
@@ -2102,6 +2104,8 @@ export default function localUnitTest() {
       expect(workflowForRoute(AppRoute.OBJECT_PHOTO.name)?.helpUrl).assertEqual(helpObjectDetectionUrl);
       expect(workflowForRoute(AppRoute.OBJECT_CAMERA.name)?.helpUrl).assertEqual(helpObjectDetectionUrl);
       expect(workflowForRoute(AppRoute.STYLE_TRANSFER.name)?.helpUrl).assertEqual(helpStyleTransferUrl);
+      expect(workflowForRoute(AppRoute.CUSTOM_MODEL.name)?.helpContentKey)
+        .assertEqual('feature_runtime_custom_model_help');
     });
 
     it('showsAndroidStyleTransferRecoveryOnlyAfterStyledResult', 0, () => {
