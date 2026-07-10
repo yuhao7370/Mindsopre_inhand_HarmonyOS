@@ -1379,6 +1379,10 @@ export default function localUnitTest() {
       expect(hasAppStringKey('feature_runtime_style_recovery')).assertTrue();
       expect(hasAppStringKey('feature_runtime_style_recovered')).assertTrue();
       expect(hasAppStringKey('feature_runtime_help')).assertTrue();
+      expect(hasAppStringKey('feature_runtime_help_image_classification')).assertTrue();
+      expect(hasAppStringKey('feature_runtime_help_object_photo')).assertTrue();
+      expect(hasAppStringKey('feature_runtime_help_object_camera')).assertTrue();
+      expect(hasAppStringKey('feature_runtime_help_style_transfer')).assertTrue();
       expect(hasAppStringKey('feature_runtime_custom_model_help')).assertTrue();
       expect(hasAppStringKey('qr_code_save_done')).assertTrue();
       expect(hasAppStringKey('qr_code_save_failed')).assertTrue();
@@ -2193,6 +2197,17 @@ export default function localUnitTest() {
       expect(workflowForRoute(AppRoute.OBJECT_PHOTO.name)?.helpUrl).assertEqual(helpObjectDetectionUrl);
       expect(workflowForRoute(AppRoute.OBJECT_CAMERA.name)?.helpUrl).assertEqual(helpObjectDetectionUrl);
       expect(workflowForRoute(AppRoute.STYLE_TRANSFER.name)?.helpUrl).assertEqual(helpStyleTransferUrl);
+    });
+
+    it('mapsAndroidLocalHelpDialogsToRuntimeWorkflows', 0, () => {
+      expect(workflowForRoute(AppRoute.IMAGE_CAMERA.name)?.helpContentKey)
+        .assertEqual('feature_runtime_help_image_classification');
+      expect(workflowForRoute(AppRoute.OBJECT_PHOTO.name)?.helpContentKey)
+        .assertEqual('feature_runtime_help_object_photo');
+      expect(workflowForRoute(AppRoute.OBJECT_CAMERA.name)?.helpContentKey)
+        .assertEqual('feature_runtime_help_object_camera');
+      expect(workflowForRoute(AppRoute.STYLE_TRANSFER.name)?.helpContentKey)
+        .assertEqual('feature_runtime_help_style_transfer');
       expect(workflowForRoute(AppRoute.CUSTOM_MODEL.name)?.helpContentKey)
         .assertEqual('feature_runtime_custom_model_help');
     });

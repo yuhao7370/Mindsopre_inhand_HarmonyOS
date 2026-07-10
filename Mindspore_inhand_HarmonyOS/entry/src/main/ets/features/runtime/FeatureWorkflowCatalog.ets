@@ -130,7 +130,8 @@ export const featureWorkflows: Array<FeatureWorkflow> = [
     requiredPermissions: ['camera'],
     resultKind: 'classification',
     liveMode: true,
-    helpUrl: helpImageClassificationUrl
+    helpUrl: helpImageClassificationUrl,
+    helpContentKey: 'feature_runtime_help_image_classification'
   },
   {
     routeName: AppRoute.GESTURE_STILL.name,
@@ -204,7 +205,8 @@ export const featureWorkflows: Array<FeatureWorkflow> = [
     requiredPermissions: ['media'],
     resultKind: 'detections',
     liveMode: false,
-    helpUrl: helpObjectDetectionUrl
+    helpUrl: helpObjectDetectionUrl,
+    helpContentKey: 'feature_runtime_help_object_photo'
   },
   {
     routeName: AppRoute.OBJECT_CAMERA.name,
@@ -216,7 +218,8 @@ export const featureWorkflows: Array<FeatureWorkflow> = [
     requiredPermissions: ['camera'],
     resultKind: 'detections',
     liveMode: true,
-    helpUrl: helpObjectDetectionUrl
+    helpUrl: helpObjectDetectionUrl,
+    helpContentKey: 'feature_runtime_help_object_camera'
   },
   {
     routeName: AppRoute.STYLE_TRANSFER.name,
@@ -228,7 +231,8 @@ export const featureWorkflows: Array<FeatureWorkflow> = [
     requiredPermissions: ['camera', 'media'],
     resultKind: 'styledImage',
     liveMode: false,
-    helpUrl: helpStyleTransferUrl
+    helpUrl: helpStyleTransferUrl,
+    helpContentKey: 'feature_runtime_help_style_transfer'
   },
   {
     routeName: AppRoute.CUSTOM_MODEL.name,

@@ -124,6 +124,10 @@ export type AppStringKey =
   'feature_runtime_missing_input' |
   'feature_runtime_run_failed' |
   'feature_runtime_help' |
+  'feature_runtime_help_image_classification' |
+  'feature_runtime_help_object_photo' |
+  'feature_runtime_help_object_camera' |
+  'feature_runtime_help_style_transfer' |
   'feature_runtime_custom_model_help' |
   'feature_runtime_custom_model_done' |
   'feature_runtime_custom_model_failed' |
@@ -354,6 +358,10 @@ const APP_STRING_KEYS: AppStringKey[] = [
   'feature_runtime_missing_input',
   'feature_runtime_run_failed',
   'feature_runtime_help',
+  'feature_runtime_help_image_classification',
+  'feature_runtime_help_object_photo',
+  'feature_runtime_help_object_camera',
+  'feature_runtime_help_style_transfer',
   'feature_runtime_custom_model_help',
   'feature_runtime_custom_model_done',
   'feature_runtime_custom_model_failed',
@@ -713,6 +721,14 @@ export function appString(key: AppStringKey): ResourceStr {
       return $r('app.string.feature_runtime_run_failed');
     case 'feature_runtime_help':
       return $r('app.string.feature_runtime_help');
+    case 'feature_runtime_help_image_classification':
+      return $r('app.string.feature_runtime_help_image_classification');
+    case 'feature_runtime_help_object_photo':
+      return $r('app.string.feature_runtime_help_object_photo');
+    case 'feature_runtime_help_object_camera':
+      return $r('app.string.feature_runtime_help_object_camera');
+    case 'feature_runtime_help_style_transfer':
+      return $r('app.string.feature_runtime_help_style_transfer');
     case 'feature_runtime_custom_model_help':
       return $r('app.string.feature_runtime_custom_model_help');
     case 'feature_runtime_custom_model_done':
