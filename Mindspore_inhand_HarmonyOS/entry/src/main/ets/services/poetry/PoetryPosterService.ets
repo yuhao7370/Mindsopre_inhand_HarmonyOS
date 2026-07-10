@@ -15,10 +15,10 @@ export function poetryPosterTextFromParam(text: string | undefined): string {
   return text ?? '';
 }
 
-export function poetryPosterImageSharePayload(uri: string): ImageSharePayload {
+export function poetryPosterImageSharePayload(uri: string, title: string, description: string): ImageSharePayload {
   return {
-    title: 'Intelligent Poetry',
+    title: title,
     uri: uri,
-    description: 'MindSpore AI'
+    description: description
   };
 }

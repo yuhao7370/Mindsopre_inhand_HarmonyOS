@@ -87,10 +87,7 @@ struct PoetryPosterPage {
           this.statusKey = 'poem_share_failed';
           return;
         }
-        new ShareService(
-          new HarmonySystemShareTextWriter(context),
-          new HarmonySystemShareImageWriter(context)
-        ).shareImage(poetryPosterImageSharePayload(saveResult.uri))
+        this.shareSavedPosterImage(context, saveResult.uri)
           .then((shareResult: ShareImageResult) => {
             this.statusKey = shareResult.messageKey;
           })
@@ -101,6 +98,15 @@ struct PoetryPosterPage {
       .catch(() => {
         this.statusKey = 'poem_share_failed';
       });
+  }
+
+  private async shareSavedPosterImage(context: common.UIAbilityContext, uri: string): Promise<ShareImageResult> {
+    const title = await context.resourceManager.getStringValue($r('app.string.title_intelligent_poetry').id);
+    const description = await context.resourceManager.getStringValue($r('app.string.poem_ai_credit').id);
+    return new ShareService(
+      new HarmonySystemShareTextWriter(context),
+      new HarmonySystemShareImageWriter(context)
+    ).shareImage(poetryPosterImageSharePayload(uri, title, description));
   }
 
   @Builder

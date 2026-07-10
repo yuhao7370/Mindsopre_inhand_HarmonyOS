@@ -347,6 +347,7 @@ import {
 import {
   poetryJavascriptBridgeName,
   poetryJavascriptGenerateMethod,
+  poetryPosterImageSharePayload,
   poetryPosterComponentId,
   poetryPosterPagePath,
   poetryPosterTextFromParam,
@@ -1558,6 +1559,18 @@ export default function localUnitTest() {
       expect(result.sharedUri).assertEqual('file://media/poemshare.jpg');
       expect(writer.payloads[0].title).assertEqual('Intelligent Poetry');
       expect(writer.payloads[0].uri).assertEqual('file://media/poemshare.jpg');
+    });
+
+    it('poetryPosterSharePayloadUsesLocalizedCopyFromCaller', 0, () => {
+      const localizedPayload = poetryPosterImageSharePayload(
+        'file://media/poemshare.jpg',
+        '智能写诗',
+        '由 MindSpore AI 技术生成'
+      );
+
+      expect(localizedPayload.title).assertEqual('智能写诗');
+      expect(localizedPayload.description).assertEqual('由 MindSpore AI 技术生成');
+      expect(localizedPayload.uri).assertEqual('file://media/poemshare.jpg');
     });
 
     it('shareServiceRejectsMissingOrFailedPosterImageShare', 0, async () => {
