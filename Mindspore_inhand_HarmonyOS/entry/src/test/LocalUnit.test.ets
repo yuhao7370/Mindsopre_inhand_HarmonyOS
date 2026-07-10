@@ -49,6 +49,15 @@ import {
   gestureRectanglePercent
 } from '../main/ets/services/ai/GestureService';
 import {
+  DanceFrameData,
+  DanceSkeletonPoints,
+  danceFrameFromPoints,
+  danceNoActScore,
+  danceNoPointScore,
+  danceScoreFromFrames,
+  danceTemplateFrames
+} from '../main/ets/services/ai/DanceScoreService';
+import {
   SceneDetection,
   SceneDetectionResult,
   SceneDetectionRunner,
@@ -1315,6 +1324,80 @@ export default function localUnitTest() {
       expect(workflowForRoute(AppRoute.POETRY.name) === undefined).assertTrue();
       const poetryDestination = webDestinationForUrl(intelligentPoetryUrl, 'me_official_title');
       expect(poetryDestination.titleKey).assertEqual('title_intelligent_poetry');
+    });
+
+    it('portsAndroidDanceTemplateAndPerfectScoreContract', 0, () => {
+      const template = danceTemplateFrames();
+
+      expect(template.length).assertEqual(70);
+      expect(template[0].id).assertEqual(1);
+      expect(template[0].sinRightElbow.toFixed(9)).assertEqual('-0.447213595');
+      expect(template[69].id).assertEqual(70);
+      expect(danceScoreFromFrames(template)).assertEqual(98);
+    });
+
+    it('portsAndroidDanceNoActionAndNoPointScores', 0, () => {
+      const template = danceTemplateFrames();
+      const stillFrames: Array<DanceFrameData> = [];
+      const missingPointFrames: Array<DanceFrameData> = [];
+      const stillFrame = template[0];
+      for (let index = 0; index < template.length; index++) {
+        stillFrames.push({
+          id: index + 1,
+          sinRightElbow: stillFrame.sinRightElbow,
+          sinRightWrist: stillFrame.sinRightWrist,
+          sinLeftElbow: stillFrame.sinLeftElbow,
+          sinLeftWrist: stillFrame.sinLeftWrist,
+          sinLeftKnee: stillFrame.sinLeftKnee,
+          sinLeftAnkle: stillFrame.sinLeftAnkle,
+          rightElbowMissing: false,
+          rightWristMissing: false,
+          leftElbowMissing: false,
+          leftWristMissing: false,
+          leftKneeMissing: false,
+          leftAnkleMissing: false
+        });
+        const frame = template[index];
+        missingPointFrames.push({
+          id: frame.id,
+          sinRightElbow: frame.sinRightElbow,
+          sinRightWrist: frame.sinRightWrist,
+          sinLeftElbow: frame.sinLeftElbow,
+          sinLeftWrist: frame.sinLeftWrist,
+          sinLeftKnee: frame.sinLeftKnee,
+          sinLeftAnkle: frame.sinLeftAnkle,
+          rightElbowMissing: index < 28,
+          rightWristMissing: false,
+          leftElbowMissing: false,
+          leftWristMissing: false,
+          leftKneeMissing: false,
+          leftAnkleMissing: false
+        });
+      }
+
+      expect(danceScoreFromFrames(stillFrames)).assertEqual(danceNoActScore);
+      expect(danceScoreFromFrames(missingPointFrames)).assertEqual(danceNoPointScore);
+    });
+
+    it('createsDanceFrameFromGenericSkeletonPoints', 0, () => {
+      const points: DanceSkeletonPoints = {
+        neck: { x: 10, y: 10 },
+        rightElbow: { x: 10, y: 0 },
+        rightWrist: { x: 0, y: 0 },
+        leftElbow: { x: 0, y: 10 },
+        leftWrist: { x: 20, y: 10 },
+        leftKnee: { x: 10, y: 20 },
+        leftAnkle: { x: 20, y: 20 }
+      };
+
+      const frame = danceFrameFromPoints(7, points);
+
+      expect(frame.id).assertEqual(7);
+      expect(frame.sinRightElbow.toFixed(1)).assertEqual('-1.0');
+      expect(frame.sinLeftElbow.toFixed(1)).assertEqual('0.0');
+      expect(frame.sinLeftKnee.toFixed(1)).assertEqual('1.0');
+      expect(frame.rightWristMissing).assertTrue();
+      expect(frame.rightElbowMissing).assertFalse();
     });
 
     it('definesRuntimeWorkflowForEveryVisibleExperienceFeature', 0, () => {

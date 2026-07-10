@@ -48,3 +48,19 @@ Current HarmonyOS behavior:
   matching the current Android app shell visibility.
 - When no real scene detection runner is injected, the service returns the
   localized `feature_runtime_scene_unsupported` platform status.
+
+## Dance Factory
+
+Android Dance Factory combines CameraX video sampling, HMS skeleton detection,
+and a pure Java scoring algorithm in `ModelDataUtils`.
+
+Current HarmonyOS behavior:
+
+- The route stays hidden from the default Experience grid, matching Android
+  source visibility.
+- The pure 70-frame scoring table, score formula, no-action/no-point error
+  codes, and generic skeleton-point-to-frame conversion are ported to ArkTS in
+  `DanceScoreService`.
+- Camera preview, reference-video playback, album save, and live skeleton
+  sampling remain a platform adapter/UI task before the Dance page can be
+  marked as fully migrated.
