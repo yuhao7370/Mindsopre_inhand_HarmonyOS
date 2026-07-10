@@ -1,4 +1,5 @@
 import { describe, it, expect } from '@ohos/hypium';
+import { common } from '@kit.AbilityKit';
 import { fileIo } from '@kit.CoreFileKit';
 import request from '@ohos.request';
 import { AppRoute, findRouteByName } from '../main/ets/app/AppRoutes';
@@ -89,11 +90,14 @@ import {
   DanceReferenceVideoDownloader,
   DanceReferenceVideoDownloadTask,
   DanceReferenceVideoFileStore,
+  DanceReferenceVideoProgress,
+  DanceReferenceVideoProgressCallback,
   danceReferenceVideoCacheFileName,
   danceReferenceVideoCachePath,
   danceReferenceVideoDownloadStatusPaused,
   danceReferenceVideoDownloadStatusRunning,
   danceReferenceVideoDownloadStatusSuccessful,
+  danceReferenceVideoProgressPercent,
   isCompleteDanceReferenceVideo,
   waitForDanceReferenceVideoDownload
 } from '../main/ets/services/dance/DanceReferenceVideoService';
@@ -1106,15 +1110,29 @@ class RecordingDanceReferenceVideoDownloader implements DanceReferenceVideoDownl
   readonly seenDestinationPaths: Array<string> = [];
   private readonly store: MemoryDanceReferenceVideoFileStore;
   private readonly downloadedSize: number;
+  private readonly progressEvents: Array<DanceReferenceVideoProgress>;
 
-  constructor(store: MemoryDanceReferenceVideoFileStore, downloadedSize: number) {
+  constructor(
+    store: MemoryDanceReferenceVideoFileStore,
+    downloadedSize: number,
+    progressEvents: Array<DanceReferenceVideoProgress> = []
+  ) {
     this.store = store;
     this.downloadedSize = downloadedSize;
+    this.progressEvents = progressEvents;
   }
 
-  async download(url: string, destinationPath: string): Promise<void> {
+  async download(
+    url: string,
+    destinationPath: string,
+    _context?: common.BaseContext,
+    onProgress?: DanceReferenceVideoProgressCallback
+  ): Promise<void> {
     this.seenUrls.push(url);
     this.seenDestinationPaths.push(destinationPath);
+    if (onProgress !== undefined) {
+      this.progressEvents.forEach((progress: DanceReferenceVideoProgress) => onProgress(progress));
+    }
     this.store.setFileSize(destinationPath, this.downloadedSize);
   }
 }
@@ -1191,6 +1209,11 @@ class ManualDanceReferenceVideoDownloadTask implements DanceReferenceVideoDownlo
 
   emitRemove(): void {
     this.removeCallbacks.forEach((callback: () => void) => callback());
+  }
+
+  emitProgress(receivedBytes: number, totalBytes: number): void {
+    this.progressCallbacks.forEach((callback: DanceReferenceVideoProgressListener) =>
+      callback(receivedBytes, totalBytes));
   }
 
   emitComplete(): void {
@@ -2476,6 +2499,31 @@ export default function localUnitTest() {
       expect(fileStore.replacedPaths.join(',')).assertEqual(`${downloader.seenDestinationPaths[0]}->/cache/danceVideo2.mp4`);
     });
 
+    it('reportsDanceReferenceVideoPrepareProgress', 0, async () => {
+      const fileStore = new MemoryDanceReferenceVideoFileStore();
+      const downloader = new RecordingDanceReferenceVideoDownloader(
+        fileStore,
+        danceReferenceVideoLengthBytes,
+        [
+          { receivedBytes: 1024, totalBytes: 4096 },
+          { receivedBytes: 2048, totalBytes: 4096 }
+        ]
+      );
+      const progressEvents: Array<DanceReferenceVideoProgress> = [];
+
+      await new DanceReferenceVideoCacheService(fileStore, downloader).prepare(
+        '/cache',
+        undefined,
+        (progress: DanceReferenceVideoProgress) => {
+          progressEvents.push(progress);
+        }
+      );
+
+      expect(progressEvents.length).assertEqual(2);
+      expect(danceReferenceVideoProgressPercent(progressEvents[0])).assertEqual(25);
+      expect(danceReferenceVideoProgressPercent(progressEvents[1])).assertEqual(50);
+    });
+
     it('rejectsIncompleteDanceReferenceVideoDownload', 0, async () => {
       const fileStore = new MemoryDanceReferenceVideoFileStore();
       const downloader = new RecordingDanceReferenceVideoDownloader(fileStore, danceReferenceVideoLengthBytes - 1);
@@ -2488,6 +2536,34 @@ export default function localUnitTest() {
       expect(result.downloaded).assertFalse();
       expect(fileStore.removedPaths.join(',')).assertEqual(downloader.seenDestinationPaths[0]);
       expect(downloader.seenDestinationPaths[0].startsWith('/cache/danceVideo2.mp4.download.')).assertTrue();
+    });
+
+    it('formatsDanceReferenceVideoDownloadProgressPercent', 0, () => {
+      expect(danceReferenceVideoProgressPercent({ receivedBytes: 0, totalBytes: 200 })).assertEqual(0);
+      expect(danceReferenceVideoProgressPercent({ receivedBytes: 50, totalBytes: 200 })).assertEqual(25);
+      expect(danceReferenceVideoProgressPercent({ receivedBytes: 100, totalBytes: 200 })).assertEqual(50);
+      expect(danceReferenceVideoProgressPercent({ receivedBytes: 250, totalBytes: 200 })).assertEqual(100);
+      expect(danceReferenceVideoProgressPercent({ receivedBytes: -10, totalBytes: 200 })).assertEqual(0);
+      expect(danceReferenceVideoProgressPercent({ receivedBytes: 10, totalBytes: 0 })).assertEqual(0);
+    });
+
+    it('forwardsDanceReferenceVideoDownloadProgressEvents', 0, async () => {
+      const task = new ManualDanceReferenceVideoDownloadTask(danceReferenceVideoDownloadStatusRunning);
+      const progressEvents: Array<DanceReferenceVideoProgress> = [];
+      const promise = waitForDanceReferenceVideoDownload(task, (progress: DanceReferenceVideoProgress) => {
+        progressEvents.push(progress);
+      });
+
+      task.emitProgress(50, 200);
+      task.emitProgress(100, 200);
+      task.emitComplete();
+      await promise;
+
+      expect(progressEvents.length).assertEqual(2);
+      expect(progressEvents[0].receivedBytes).assertEqual(50);
+      expect(progressEvents[0].totalBytes).assertEqual(200);
+      expect(progressEvents[1].receivedBytes).assertEqual(100);
+      expect(progressEvents[1].totalBytes).assertEqual(200);
     });
 
     it('settlesDanceReferenceVideoDownloadWhenTaskAlreadyEnded', 0, async () => {

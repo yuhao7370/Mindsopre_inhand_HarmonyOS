@@ -220,6 +220,14 @@ export function isCompleteDanceReferenceVideo(fileSize: number): boolean {
   return fileSize === danceReferenceVideoLengthBytes;
 }
 
+export function danceReferenceVideoProgressPercent(progress: DanceReferenceVideoProgress): number {
+  if (progress.totalBytes <= 0 || progress.receivedBytes <= 0) {
+    return 0;
+  }
+  const percent = Math.floor(progress.receivedBytes * 100 / progress.totalBytes);
+  return Math.min(100, Math.max(0, percent));
+}
+
 function danceReferenceVideoReadyResult(uri: string, downloaded: boolean): DanceReferenceVideoPrepareResult {
   return {
     ok: true,

@@ -34,6 +34,8 @@ import {
 } from '../services/dance/DancePageService';
 import {
   DanceReferenceVideoCacheService,
+  DanceReferenceVideoProgress,
+  danceReferenceVideoProgressPercent,
   DanceReferenceVideoPrepareResult
 } from '../services/dance/DanceReferenceVideoService';
 import {
@@ -74,6 +76,7 @@ struct DancePage {
   @State referenceVideoReady: boolean = false;
   @State referenceVideoPlayerPrepared: boolean = false;
   @State referenceVideoSrc: string = '';
+  @State referenceVideoProgressPercent: number = 0;
   private referenceVideoController: VideoController = new VideoController();
   private liveCameraController: XComponentController = new XComponentController();
   private liveCameraService: LiveCameraPreviewService | undefined = undefined;
@@ -184,6 +187,7 @@ struct DancePage {
       this.referenceVideoPreparing = false;
       this.referenceVideoPlayerPrepared = false;
       this.referenceVideoSrc = '';
+      this.referenceVideoProgressPercent = 0;
       this.statusKey = 'dance_reference_video_failed';
       return;
     }
@@ -195,8 +199,17 @@ struct DancePage {
     this.referenceVideoFailed = false;
     this.referenceVideoPreparing = true;
     this.referenceVideoPlayerPrepared = false;
+    this.referenceVideoProgressPercent = 0;
     this.statusKey = 'dance_reference_video_downloading';
-    new DanceReferenceVideoCacheService().prepare(context.cacheDir, context)
+    new DanceReferenceVideoCacheService().prepare(
+      context.cacheDir,
+      context,
+      (progress: DanceReferenceVideoProgress) => {
+        if (sessionId === this.referenceVideoPrepareSessionId) {
+          this.referenceVideoProgressPercent = danceReferenceVideoProgressPercent(progress);
+        }
+      }
+    )
       .then((result: DanceReferenceVideoPrepareResult) => {
         if (sessionId !== this.referenceVideoPrepareSessionId) {
           return;
@@ -211,6 +224,7 @@ struct DancePage {
           previousReferenceVideoPlayerPrepared
         );
         this.referenceVideoSrc = result.uri;
+        this.referenceVideoProgressPercent = result.ok ? 100 : 0;
         this.statusKey = result.messageKey;
       })
       .catch(() => {
@@ -222,6 +236,7 @@ struct DancePage {
         this.referenceVideoPreparing = false;
         this.referenceVideoPlayerPrepared = false;
         this.referenceVideoSrc = '';
+        this.referenceVideoProgressPercent = 0;
         this.statusKey = 'dance_reference_video_failed';
       });
   }
@@ -559,6 +574,18 @@ struct DancePage {
           .lineHeight(18)
           .textAlign(TextAlign.Center)
           .margin({ top: AppSpacing.sm })
+        Progress({ value: this.referenceVideoProgressPercent, total: 100, type: ProgressType.Linear })
+          .width('100%')
+          .height(4)
+          .color(AppColor.accent)
+          .backgroundColor(AppColor.divider)
+          .margin({ top: AppSpacing.xs })
+        Text(`${this.referenceVideoProgressPercent}%`)
+          .fontSize(12)
+          .fontColor(AppColor.textSecondary)
+          .lineHeight(18)
+          .textAlign(TextAlign.Center)
+          .margin({ top: AppSpacing.xs })
       }
       if (this.referenceVideoFailed) {
         Text(appString('dance_reference_video_failed'))

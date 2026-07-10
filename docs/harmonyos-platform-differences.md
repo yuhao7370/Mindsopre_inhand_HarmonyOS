@@ -324,6 +324,8 @@ Current HarmonyOS behavior:
   `danceVideo2.mp4` name and 41,282,333-byte length check, but stores it in the
   app cache directory instead of public Downloads to fit HarmonyOS scoped
   storage.
+- Reference-video downloads now surface progress in the Dance page while the
+  cache file is being prepared.
 
 ## Intelligent Poetry
 
