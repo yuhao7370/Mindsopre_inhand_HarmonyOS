@@ -14,6 +14,9 @@ export type AppStringKey =
   'title_share' |
   'title_share_commend' |
   'splash_count_down' |
+  'app_need_permission' |
+  'splash_permission_retry' |
+  'splash_permission_exit' |
   'college_head_title' |
   'college_head_subtitle' |
   'me_head_title' |
@@ -251,6 +254,9 @@ const APP_STRING_KEYS: AppStringKey[] = [
   'title_share',
   'title_share_commend',
   'splash_count_down',
+  'app_need_permission',
+  'splash_permission_retry',
+  'splash_permission_exit',
   'college_head_title',
   'college_head_subtitle',
   'me_head_title',
@@ -507,6 +513,12 @@ export function appString(key: AppStringKey): ResourceStr {
       return $r('app.string.title_share_commend');
     case 'splash_count_down':
       return $r('app.string.splash_count_down');
+    case 'app_need_permission':
+      return $r('app.string.app_need_permission');
+    case 'splash_permission_retry':
+      return $r('app.string.splash_permission_retry');
+    case 'splash_permission_exit':
+      return $r('app.string.splash_permission_exit');
     case 'college_head_title':
       return $r('app.string.college_head_title');
     case 'college_head_subtitle':

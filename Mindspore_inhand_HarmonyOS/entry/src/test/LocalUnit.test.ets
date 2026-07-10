@@ -248,9 +248,22 @@ import {
 import { segmentationBackgroundReplacementComponentId } from '../main/ets/features/runtime/FeatureRuntimeViewIds';
 import {
   declaredPermissionNames,
+  PermissionRequestSummary,
   runtimePermissionNamesForWorkflow,
   startupPermissionNames
 } from '../main/ets/services/permissions/PermissionService';
+import {
+  canFinishSplashForStartupPermissionState,
+  finishSplashActionForStartupPermissionState,
+  SplashFinishAction,
+  splashRetryPermissionAction,
+  SplashRetryPermissionAction,
+  splashStartupTransitionForMissingContext,
+  splashStartupTransitionForRequest,
+  SplashStartupTransition,
+  splashStartupPermissionStateForMissingContext,
+  splashStartupPermissionStateForRequest
+} from '../main/ets/services/splash/SplashStartupService';
 import {
   inputActionForKind,
   modelFileSuffixFilters,
@@ -1387,6 +1400,43 @@ export default function localUnitTest() {
       service.declinePrivacy();
       expect(service.hasAcceptedPrivacy()).assertFalse();
       expect(store.values.get('preferences_privacy')).assertFalse();
+    });
+
+    it('blocksSplashEntryWhenStartupPermissionsAreDeniedLikeAndroid', 0, () => {
+      const denied: PermissionRequestSummary = {
+        ok: false,
+        requested: ['ohos.permission.CAMERA']
+      };
+      const granted: PermissionRequestSummary = {
+        ok: true,
+        requested: ['ohos.permission.CAMERA', 'ohos.permission.READ_IMAGEVIDEO']
+      };
+
+      expect(splashStartupPermissionStateForRequest(denied)).assertEqual('blocked');
+      expect(splashStartupPermissionStateForMissingContext()).assertEqual('blocked');
+      expect(canFinishSplashForStartupPermissionState('blocked')).assertFalse();
+      expect(splashStartupPermissionStateForRequest(granted)).assertEqual('ready');
+      expect(canFinishSplashForStartupPermissionState('ready')).assertTrue();
+
+      const deniedTransition: SplashStartupTransition = splashStartupTransitionForRequest(denied);
+      expect(deniedTransition.showPermissionDialog).assertTrue();
+      expect(deniedTransition.startCountdown).assertFalse();
+      const missingContextTransition: SplashStartupTransition = splashStartupTransitionForMissingContext();
+      expect(missingContextTransition.showPermissionDialog).assertTrue();
+      expect(missingContextTransition.startCountdown).assertFalse();
+      const grantedTransition: SplashStartupTransition = splashStartupTransitionForRequest(granted);
+      expect(grantedTransition.showPermissionDialog).assertFalse();
+      expect(grantedTransition.startCountdown).assertTrue();
+      const blockedFinish: SplashFinishAction = finishSplashActionForStartupPermissionState('blocked');
+      const readyFinish: SplashFinishAction = finishSplashActionForStartupPermissionState('ready');
+      const retryAction: SplashRetryPermissionAction = splashRetryPermissionAction();
+      expect(blockedFinish.finishSplash).assertFalse();
+      expect(readyFinish.finishSplash).assertTrue();
+      expect(retryAction.requestPermissions).assertTrue();
+      expect(retryAction.showPermissionDialog).assertFalse();
+      expect(hasAppStringKey('app_need_permission')).assertTrue();
+      expect(hasAppStringKey('splash_permission_retry')).assertTrue();
+      expect(hasAppStringKey('splash_permission_exit')).assertTrue();
     });
 
     it('formatsAppVersionNameLikeAndroidPackageInfo', 0, () => {

@@ -3,7 +3,17 @@ import router from '@ohos.router';
 import { userPrivacyRulesUrl, webPagePath } from '../common/data/WebDestination';
 import { appString } from '../common/i18n/AppStrings';
 import { AppColor, AppRadius, AppSpacing } from '../common/theme/AppTheme';
-import { PermissionService } from '../services/permissions/PermissionService';
+import { PermissionRequestSummary, PermissionService } from '../services/permissions/PermissionService';
+import {
+  canFinishSplashForStartupPermissionState,
+  finishSplashActionForStartupPermissionState,
+  splashRetryPermissionAction,
+  SplashStartupPermissionState,
+  SplashStartupTransition,
+  SplashRetryPermissionAction,
+  splashStartupTransitionForMissingContext,
+  splashStartupTransitionForRequest
+} from '../services/splash/SplashStartupService';
 import {
   HarmonyPrivacyConsentStore,
   PrivacyConsentService
@@ -16,6 +26,8 @@ export struct SplashPage {
   private countdownTimer: number = -1;
   @State countdownValue: number = 3;
   @State showPrivacyDialog: boolean = false;
+  @State showPermissionDialog: boolean = false;
+  @State startupPermissionState: SplashStartupPermissionState = 'blocked';
 
   aboutToAppear() {
     const service = this.privacyConsentService();
@@ -76,15 +88,34 @@ export struct SplashPage {
   private requestStartupPermissionsThenEnter(): void {
     const context = this.uiAbilityContext();
     if (context === undefined) {
-      this.startCountdown();
+      this.applyStartupTransition(splashStartupTransitionForMissingContext());
       return;
     }
-    new PermissionService().requestStartup(context).then(() => {
-      this.startCountdown();
+    new PermissionService().requestStartup(context).then((permission: PermissionRequestSummary) => {
+      this.handleStartupPermissionRequest(permission);
+    }).catch(() => {
+      this.handleStartupPermissionRequest({ ok: false, requested: [] });
     });
   }
 
+  private handleStartupPermissionRequest(permission: PermissionRequestSummary): void {
+    this.applyStartupTransition(splashStartupTransitionForRequest(permission));
+  }
+
+  private applyStartupTransition(transition: SplashStartupTransition): void {
+    this.startupPermissionState = transition.permissionState;
+    this.showPermissionDialog = transition.showPermissionDialog;
+    if (transition.startCountdown) {
+      this.startCountdown();
+      return;
+    }
+    this.stopCountdown();
+  }
+
   private finishSplash(): void {
+    if (!finishSplashActionForStartupPermissionState(this.startupPermissionState).finishSplash) {
+      return;
+    }
     this.stopCountdown();
     this.onFinished();
   }
@@ -95,6 +126,7 @@ export struct SplashPage {
       service.acceptPrivacy();
     }
     this.showPrivacyDialog = false;
+    this.showPermissionDialog = false;
     this.requestStartupPermissionsThenEnter();
   }
 
@@ -103,6 +135,21 @@ export struct SplashPage {
     if (service !== undefined) {
       service.declinePrivacy();
     }
+    const context = this.uiAbilityContext();
+    if (context !== undefined) {
+      context.terminateSelf();
+    }
+  }
+
+  private retryStartupPermissions(): void {
+    const action: SplashRetryPermissionAction = splashRetryPermissionAction();
+    this.showPermissionDialog = action.showPermissionDialog;
+    if (action.requestPermissions) {
+      this.requestStartupPermissionsThenEnter();
+    }
+  }
+
+  private exitAfterPermissionDenied(): void {
     const context = this.uiAbilityContext();
     if (context !== undefined) {
       context.terminateSelf();
@@ -133,6 +180,8 @@ export struct SplashPage {
     .height(34)
     .padding({ left: AppSpacing.md, right: AppSpacing.md })
     .border({ width: 1, color: AppColor.accent, radius: 17 })
+    .enabled(canFinishSplashForStartupPermissionState(this.startupPermissionState))
+    .opacity(canFinishSplashForStartupPermissionState(this.startupPermissionState) ? 1 : 0.45)
     .onClick(() => this.finishSplash())
   }
 
@@ -186,6 +235,47 @@ export struct SplashPage {
     .backgroundColor('#66000000')
   }
 
+  @Builder
+  permissionDialog() {
+    Column() {
+      Column() {
+        Text(appString('feature_runtime_permissions_title'))
+          .fontSize(18)
+          .fontWeight(FontWeight.Bold)
+          .fontColor(AppColor.textPrimary)
+          .width('100%')
+          .textAlign(TextAlign.Center)
+        Text(appString('app_need_permission'))
+          .fontSize(13)
+          .fontColor(AppColor.textSecondary)
+          .lineHeight(20)
+          .width('100%')
+          .margin({ top: AppSpacing.md })
+        Row() {
+          Button(appString('splash_permission_exit'))
+            .height(38)
+            .layoutWeight(1)
+            .margin({ right: AppSpacing.sm })
+            .onClick(() => this.exitAfterPermissionDenied())
+          Button(appString('splash_permission_retry'))
+            .height(38)
+            .layoutWeight(1)
+            .onClick(() => this.retryStartupPermissions())
+        }
+        .width('100%')
+        .margin({ top: AppSpacing.lg })
+      }
+      .width('86%')
+      .padding(AppSpacing.lg)
+      .backgroundColor(AppColor.cardBackground)
+      .borderRadius(AppRadius.sheet)
+    }
+    .width('100%')
+    .height('100%')
+    .justifyContent(FlexAlign.Center)
+    .backgroundColor('#66000000')
+  }
+
   build() {
     Stack() {
       Column() {
@@ -219,6 +309,9 @@ export struct SplashPage {
       .backgroundColor(AppColor.pageBackground)
       if (this.showPrivacyDialog) {
         this.privacyDialog()
+      }
+      if (this.showPermissionDialog) {
+        this.permissionDialog()
       }
     }
     .width('100%')
