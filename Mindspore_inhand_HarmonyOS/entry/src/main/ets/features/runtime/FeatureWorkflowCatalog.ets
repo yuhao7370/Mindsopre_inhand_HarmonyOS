@@ -259,6 +259,13 @@ export function autoStartInputKindForWorkflow(workflow: FeatureWorkflow): Featur
   return 'camera';
 }
 
+export function initialInputKindForWorkflow(workflow: FeatureWorkflow): FeatureInputKind | undefined {
+  if (workflow.routeName === AppRoute.OBJECT_PHOTO.name) {
+    return 'photo';
+  }
+  return undefined;
+}
+
 export function sampleImageUriForWorkflow(workflow: FeatureWorkflow): string {
   const path = workflow.sampleImageRawfilePath ?? '';
   if (path.length === 0) {
@@ -275,6 +282,9 @@ export function inputKindReplacesPrimaryInput(inputKind: FeatureInputKind): bool
 }
 
 export function shouldAutoRunWorkflowAfterInputReady(workflow: FeatureWorkflow, inputKind: FeatureInputKind): boolean {
+  if (workflow.routeName === AppRoute.OBJECT_PHOTO.name && inputKind === 'photo') {
+    return true;
+  }
   if (workflow.routeName === AppRoute.POSENET.name &&
     (inputKind === 'sampleImage' || inputKind === 'photo' || inputKind === 'camera')) {
     return true;

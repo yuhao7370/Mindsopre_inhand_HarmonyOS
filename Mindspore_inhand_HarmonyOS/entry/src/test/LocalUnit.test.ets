@@ -220,6 +220,7 @@ import {
   autoStartInputKindForWorkflow,
   inputKindReplacesPrimaryInput,
   inputLabelKey,
+  initialInputKindForWorkflow,
   runtimeInputKindsForWorkflow,
   sampleImageUriForWorkflow,
   shouldAutoRunWorkflowAfterInputReady,
@@ -4425,6 +4426,7 @@ export default function localUnitTest() {
     it('autoRunsTextImageInputsAfterAndroidImageInputReadyOnly', 0, () => {
       const textRecognition: FeatureWorkflow = workflowForRoute(AppRoute.TEXT_RECOGNITION.name)!;
       const textTranslation: FeatureWorkflow = workflowForRoute(AppRoute.TEXT_TRANSLATION.name)!;
+      const objectPhoto: FeatureWorkflow = workflowForRoute(AppRoute.OBJECT_PHOTO.name)!;
       const styleTransfer: FeatureWorkflow = workflowForRoute(AppRoute.STYLE_TRANSFER.name)!;
       const customModel: FeatureWorkflow = workflowForRoute(AppRoute.CUSTOM_MODEL.name)!;
 
@@ -4435,6 +4437,9 @@ export default function localUnitTest() {
       expect(shouldAutoRunWorkflowAfterInputReady(textTranslation, 'photo')).assertTrue();
       expect(shouldAutoRunWorkflowAfterInputReady(textTranslation, 'camera')).assertTrue();
       expect(shouldAutoRunWorkflowAfterInputReady(textTranslation, 'text')).assertFalse();
+
+      expect(shouldAutoRunWorkflowAfterInputReady(objectPhoto, 'photo')).assertTrue();
+      expect(shouldAutoRunWorkflowAfterInputReady(objectPhoto, 'modelFile')).assertFalse();
 
       expect(shouldAutoRunWorkflowAfterInputReady(styleTransfer, 'camera')).assertFalse();
       expect(shouldAutoRunWorkflowAfterInputReady(styleTransfer, 'contentImage')).assertFalse();
@@ -4468,6 +4473,7 @@ export default function localUnitTest() {
     it('computesTextImageInputReadyPageActionBeforeAutoRun', 0, () => {
       const textRecognition: FeatureWorkflow = workflowForRoute(AppRoute.TEXT_RECOGNITION.name)!;
       const textTranslation: FeatureWorkflow = workflowForRoute(AppRoute.TEXT_TRANSLATION.name)!;
+      const objectPhoto: FeatureWorkflow = workflowForRoute(AppRoute.OBJECT_PHOTO.name)!;
       const styleTransfer: FeatureWorkflow = workflowForRoute(AppRoute.STYLE_TRANSFER.name)!;
       const customModel: FeatureWorkflow = workflowForRoute(AppRoute.CUSTOM_MODEL.name)!;
 
@@ -4494,6 +4500,12 @@ export default function localUnitTest() {
       expect(imageOcrAction.userText).assertEqual('typed first');
       expect(imageOcrAction.shouldRunWorkflow).assertTrue();
       expect(imageOcrAction.textInputVisible).assertTrue();
+
+      const objectPhotoAction: WorkflowInputReadyAction =
+        workflowInputReadyAction(objectPhoto, 'photo', 'typed first');
+      expect(objectPhotoAction.userText).assertEqual('typed first');
+      expect(objectPhotoAction.shouldRunWorkflow).assertTrue();
+      expect(objectPhotoAction.textInputVisible).assertTrue();
 
       const styleTransferAction: WorkflowInputReadyAction =
         workflowInputReadyAction(styleTransfer, 'photo', 'typed first');
@@ -4532,6 +4544,13 @@ export default function localUnitTest() {
       expect(autoStartInputKindForWorkflow(workflowForRoute(AppRoute.POSENET.name)!)).assertUndefined();
       expect(autoStartInputKindForWorkflow(workflowForRoute(AppRoute.GESTURE_STILL.name)!)).assertUndefined();
       expect(autoStartInputKindForWorkflow(workflowForRoute(AppRoute.TEXT_RECOGNITION.name)!)).assertUndefined();
+    });
+
+    it('autoPreparesObjectPhotoAlbumInputLikeAndroidPhotoActivity', 0, () => {
+      expect(initialInputKindForWorkflow(workflowForRoute(AppRoute.OBJECT_PHOTO.name)!)).assertEqual('photo');
+      expect(initialInputKindForWorkflow(workflowForRoute(AppRoute.OBJECT_CAMERA.name)!)).assertUndefined();
+      expect(initialInputKindForWorkflow(workflowForRoute(AppRoute.POSENET.name)!)).assertUndefined();
+      expect(initialInputKindForWorkflow(workflowForRoute(AppRoute.TEXT_RECOGNITION.name)!)).assertUndefined();
     });
 
     it('liveCameraPreviewServiceRequiresSurfaceIdBeforeStarting', 0, async () => {

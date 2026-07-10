@@ -8,6 +8,7 @@ import {
   autoStartInputKindForWorkflow,
   inputKindReplacesPrimaryInput,
   inputLabelKey,
+  initialInputKindForWorkflow,
   permissionLabelKey,
   runtimeInputKindsForWorkflow,
   sampleImageUriForWorkflow,
@@ -171,6 +172,7 @@ struct FeatureRuntimePage {
   private liveCameraService: LiveCameraPreviewService | undefined = undefined;
   private liveCameraInputSelected: boolean = false;
   private liveRuntimeLoopService: LiveRuntimeLoopService = new LiveRuntimeLoopService();
+  private initialInputPrepared: boolean = false;
 
   aboutToAppear() {
     const params = router.getParams() as FeatureRuntimeParams;
@@ -183,6 +185,7 @@ struct FeatureRuntimePage {
     this.helpContentKey = workflow?.helpContentKey;
     this.inputKinds = workflow ? runtimeInputKindsForWorkflow(workflow) : [];
     this.permissionKinds = workflow?.requiredPermissions ?? [];
+    setTimeout(() => this.prepareInitialInputIfNeeded(), 0);
   }
 
   aboutToDisappear() {
@@ -304,6 +307,21 @@ struct FeatureRuntimePage {
     }
     const inputKind = autoStartInputKindForWorkflow(workflow);
     if (inputKind !== undefined) {
+      this.prepareInput(inputKind);
+    }
+  }
+
+  private prepareInitialInputIfNeeded(): void {
+    if (this.initialInputPrepared) {
+      return;
+    }
+    const workflow = workflowForRoute(this.routeName);
+    if (!workflow) {
+      return;
+    }
+    const inputKind = initialInputKindForWorkflow(workflow);
+    if (inputKind !== undefined) {
+      this.initialInputPrepared = true;
       this.prepareInput(inputKind);
     }
   }

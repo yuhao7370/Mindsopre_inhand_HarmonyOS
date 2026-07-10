@@ -164,6 +164,9 @@ Current HarmonyOS behavior:
 - The Object Detection Photo and Real-time routes use the bundled
   `model/ssd.ms` model by default and decode SSD outputs with Android-compatible
   anchors, thresholds, and label mapping.
+- `/imageobject/ObjectPhotoActivity` follows the Android page flow: opening the
+  route prepares the album image input once, and a selected image immediately
+  runs object detection.
 - User-selected `.ms` files remain optional. When selected, HarmonyOS copies
   the file into the app cache as `object_detection_model.ms` before runtime use,
   so the MindSpore Lite runner receives an app-owned path instead of depending
