@@ -1,5 +1,7 @@
 import router from '@ohos.router';
 import { common } from '@kit.AbilityKit';
+import { image } from '@kit.ImageKit';
+import componentSnapshot from '@ohos.arkui.componentSnapshot';
 import { AppStringKey, appString } from '../common/i18n/AppStrings';
 import { AppColor, AppRadius, AppSpacing } from '../common/theme/AppTheme';
 import {
@@ -19,6 +21,7 @@ import {
 } from '../services/camera/LiveCameraService';
 import {
   DanceSamplingPageState,
+  danceResultComponentId,
   danceSamplingCompletionStatusKey,
   danceSamplingPageState,
   danceResultMessageKey,
@@ -34,6 +37,12 @@ import {
   DancePoseServiceDetector,
   DanceTimedSamplingService
 } from '../services/dance/DanceSamplingService';
+import {
+  HarmonyResultImageAssetWriter,
+  HarmonyResultImagePixelMapEncoder,
+  ResultImageSaveResult,
+  ResultImageSaveService
+} from '../services/media/ResultImageSaveService';
 import { PermissionRequestSummary, PermissionService } from '../services/permissions/PermissionService';
 
 @Entry
@@ -246,6 +255,39 @@ struct DancePage {
     this.samplingSummaryText = state.summaryText;
   }
 
+  private async danceResultPixelMap(): Promise<image.PixelMap | undefined> {
+    if (!this.hasResult) {
+      return undefined;
+    }
+    try {
+      return await componentSnapshot.get(danceResultComponentId, { waitUntilRenderFinished: true });
+    } catch (_) {
+      return undefined;
+    }
+  }
+
+  private async saveDanceResultImage(): Promise<ResultImageSaveResult> {
+    const context = this.uiAbilityContext();
+    if (context === undefined) {
+      return { ok: false, uri: '', messageKey: 'feature_runtime_save_image_failed' };
+    }
+    const resultImage = await this.danceResultPixelMap();
+    return new ResultImageSaveService(
+      new HarmonyResultImagePixelMapEncoder(),
+      new HarmonyResultImageAssetWriter(context)
+    ).save(resultImage);
+  }
+
+  private saveDanceResult(): void {
+    this.saveDanceResultImage()
+      .then((result: ResultImageSaveResult) => {
+        this.statusKey = result.messageKey;
+      })
+      .catch(() => {
+        this.statusKey = 'feature_runtime_save_image_failed';
+      });
+  }
+
   @Builder
   header() {
     Row() {
@@ -354,34 +396,41 @@ struct DancePage {
   @Builder
   resultPanel() {
     Column() {
-      Text(appString('dance_result_title'))
-        .fontSize(16)
-        .fontWeight(FontWeight.Bold)
-        .fontColor(AppColor.textPrimary)
-      Text(this.scoreText)
-        .fontSize(48)
-        .fontWeight(FontWeight.Bold)
-        .fontColor(AppColor.accent)
-        .margin({ top: AppSpacing.sm })
-      Text(appString(this.resultMessageKey))
-        .fontSize(16)
-        .fontColor(AppColor.textPrimary)
-        .textAlign(TextAlign.Center)
-        .lineHeight(24)
-        .margin({ top: AppSpacing.sm })
-      if (this.samplingSummaryText.length > 0) {
-        Row() {
-          Text(appString('dance_sampling_frames'))
-            .fontSize(13)
-            .fontColor(AppColor.textSecondary)
-          Text(this.samplingSummaryText)
-            .fontSize(13)
-            .fontColor(AppColor.textPrimary)
-            .fontWeight(FontWeight.Medium)
-            .margin({ left: AppSpacing.sm })
+      Column() {
+        Text(appString('dance_result_title'))
+          .fontSize(16)
+          .fontWeight(FontWeight.Bold)
+          .fontColor(AppColor.textPrimary)
+        Text(this.scoreText)
+          .fontSize(48)
+          .fontWeight(FontWeight.Bold)
+          .fontColor(AppColor.accent)
+          .margin({ top: AppSpacing.sm })
+        Text(appString(this.resultMessageKey))
+          .fontSize(16)
+          .fontColor(AppColor.textPrimary)
+          .textAlign(TextAlign.Center)
+          .lineHeight(24)
+          .margin({ top: AppSpacing.sm })
+        if (this.samplingSummaryText.length > 0) {
+          Row() {
+            Text(appString('dance_sampling_frames'))
+              .fontSize(13)
+              .fontColor(AppColor.textSecondary)
+            Text(this.samplingSummaryText)
+              .fontSize(13)
+              .fontColor(AppColor.textPrimary)
+              .fontWeight(FontWeight.Medium)
+              .margin({ left: AppSpacing.sm })
+          }
+          .margin({ top: AppSpacing.sm })
         }
-        .margin({ top: AppSpacing.sm })
       }
+      .id(danceResultComponentId)
+      .width('100%')
+      .padding(AppSpacing.xl)
+      .backgroundColor(AppColor.cardBackground)
+      .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
       Button(appString(this.liveSamplingButtonKey()))
         .width('100%')
         .height(40)
@@ -401,11 +450,26 @@ struct DancePage {
         .fontColor(AppColor.accent)
         .border({ width: 1, color: AppColor.accent, radius: AppRadius.button })
         .onClick(() => this.reset())
+      Row() {
+        SaveButton({
+          icon: SaveIconStyle.FULL_FILLED,
+          text: SaveDescription.SAVE_IMAGE,
+          buttonType: ButtonType.Capsule
+        })
+          .width('100%')
+          .height(40)
+          .onClick((_event: ClickEvent, result: SaveButtonOnClickResult) => {
+            if (result === SaveButtonOnClickResult.SUCCESS) {
+              this.saveDanceResult();
+              return;
+            }
+            this.statusKey = 'feature_runtime_save_image_failed';
+          })
+      }
+      .width('100%')
+      .margin({ top: AppSpacing.sm })
     }
     .width('100%')
-    .padding(AppSpacing.xl)
-    .backgroundColor(AppColor.cardBackground)
-    .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
     .margin({ top: AppSpacing.lg })
   }
 

@@ -8,6 +8,7 @@ import {
 import { DanceSamplingResult } from './DanceSamplingService';
 
 export const dancePagePath: string = 'pages/DancePage';
+export const danceResultComponentId: string = 'danceResultPanel';
 
 export interface DanceSamplingPageState {
   readonly scoreText: string;

@@ -67,9 +67,9 @@ Current HarmonyOS behavior:
   joint from the left/right shoulder midpoint.
 - `/dance/DanceMainActivity` now opens a dedicated HarmonyOS Dance page with a
   template scoring demo, live camera preview, 70-frame live skeleton sampling,
-  and Android-style result messages.
-- Reference-video playback and album save remain platform adapter tasks before
-  Dance can be marked as fully migrated end-to-end.
+  Android-style result messages, and album save for the rendered result card.
+- Reference-video playback remains the platform adapter task before Dance can be
+  marked as fully migrated end-to-end.
 
 ## Intelligent Poetry
 

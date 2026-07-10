@@ -59,6 +59,7 @@ import {
 } from '../main/ets/services/ai/DanceScoreService';
 import {
   dancePagePath,
+  danceResultComponentId,
   danceResultMessageKey,
   danceSamplingCompletionStatusKey,
   danceSamplingPageState,
@@ -1921,10 +1922,15 @@ export default function localUnitTest() {
       expect(AppRoute.DANCE.name).assertEqual('/dance/DanceMainActivity');
       expect(AppRoute.DANCE.page).assertEqual(dancePagePath);
       expect(findRouteByName(AppRoute.DANCE.name)?.page).assertEqual(dancePagePath);
+      expect(danceResultComponentId).assertEqual('danceResultPanel');
       expect(hasAppStringKey('dance_prepare_summary')).assertTrue();
       expect(hasAppStringKey('dance_start_demo')).assertTrue();
       expect(hasAppStringKey('dance_result_title')).assertTrue();
       expect(hasAppStringKey('dance_platform_note')).assertTrue();
+      expect(hasAppStringKey('feature_runtime_save_image')).assertTrue();
+      expect(hasAppStringKey('feature_runtime_save_image_done')).assertTrue();
+      expect(hasAppStringKey('feature_runtime_save_image_failed')).assertTrue();
+      expect(hasAppStringKey('feature_runtime_save_image_missing')).assertTrue();
     });
 
     it('mapsDanceScoresToAndroidResultStates', 0, () => {
