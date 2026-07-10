@@ -55,6 +55,8 @@ landmark API.
 Current HarmonyOS behavior:
 
 - `Gesture Recognition` keeps the Android route and entry available.
+- The still gesture route exposes the Android-style Real-time action and
+  auto-runs gesture analysis after album or camera image input is ready.
 - The default HarmonyOS runtime reuses the bundled MobileNetV2 image
   classification model as a conservative local approximation. With the bundled
   ImageNet labels this currently only treats the exact `mitten` class as a
@@ -107,6 +109,8 @@ Current HarmonyOS behavior:
 - Scene detection keeps the Android still and live route names available.
 - The routes are runtime-ready but hidden from the default Experience grid,
   matching the current Android app shell visibility.
+- The still scene route exposes the Android-style Real-time action and
+  auto-runs scene analysis after album or camera image input is ready.
 - The default HarmonyOS runtime now reuses the bundled MobileNetV2 image
   classification model and maps top classification labels into Android-style
   scene labels. This makes the still/live scene workflows runnable offline, but
@@ -182,6 +186,9 @@ built-in plus album backgrounds.
 
 Current HarmonyOS behavior:
 
+- `/hms/ImageSegmentationActivity` remains the still image segmentation route,
+  exposes the Android-style Real-time action, and auto-runs segmentation after
+  album or camera image input is ready.
 - `/hms/PortraitSegmentationActivity` now starts the shared live camera
   preview and refreshes subject segmentation through the existing live runtime
   loop.

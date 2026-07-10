@@ -2135,6 +2135,15 @@ export default function localUnitTest() {
       expect(posenet.linkedLiveRouteName).assertEqual(AppRoute.LIVE_SKELETON.name);
       expect(sampleImageUriForWorkflow(posenet)).assertEqual('rawfile://posenet/skeleton_image.JPG');
 
+      const segmentationStill: FeatureWorkflow = workflowForRoute(AppRoute.SEGMENTATION_STILL.name)!;
+      expect(segmentationStill.linkedLiveRouteName).assertEqual(AppRoute.SEGMENTATION_LIVE.name);
+
+      const gestureStill: FeatureWorkflow = workflowForRoute(AppRoute.GESTURE_STILL.name)!;
+      expect(gestureStill.linkedLiveRouteName).assertEqual(AppRoute.GESTURE_LIVE.name);
+
+      const sceneStill: FeatureWorkflow = workflowForRoute(AppRoute.SCENE_STILL.name)!;
+      expect(sceneStill.linkedLiveRouteName).assertEqual(AppRoute.SCENE_LIVE.name);
+
       const objectPhoto: FeatureWorkflow = workflowForRoute(AppRoute.OBJECT_PHOTO.name)!;
       expect(objectPhoto.inputKinds.indexOf('photo') >= 0).assertTrue();
       expect(objectPhoto.inputKinds.indexOf('modelFile')).assertEqual(-1);
@@ -4427,6 +4436,9 @@ export default function localUnitTest() {
       const textRecognition: FeatureWorkflow = workflowForRoute(AppRoute.TEXT_RECOGNITION.name)!;
       const textTranslation: FeatureWorkflow = workflowForRoute(AppRoute.TEXT_TRANSLATION.name)!;
       const objectPhoto: FeatureWorkflow = workflowForRoute(AppRoute.OBJECT_PHOTO.name)!;
+      const segmentationStill: FeatureWorkflow = workflowForRoute(AppRoute.SEGMENTATION_STILL.name)!;
+      const gestureStill: FeatureWorkflow = workflowForRoute(AppRoute.GESTURE_STILL.name)!;
+      const sceneStill: FeatureWorkflow = workflowForRoute(AppRoute.SCENE_STILL.name)!;
       const styleTransfer: FeatureWorkflow = workflowForRoute(AppRoute.STYLE_TRANSFER.name)!;
       const customModel: FeatureWorkflow = workflowForRoute(AppRoute.CUSTOM_MODEL.name)!;
 
@@ -4440,6 +4452,13 @@ export default function localUnitTest() {
 
       expect(shouldAutoRunWorkflowAfterInputReady(objectPhoto, 'photo')).assertTrue();
       expect(shouldAutoRunWorkflowAfterInputReady(objectPhoto, 'modelFile')).assertFalse();
+
+      expect(shouldAutoRunWorkflowAfterInputReady(segmentationStill, 'photo')).assertTrue();
+      expect(shouldAutoRunWorkflowAfterInputReady(segmentationStill, 'camera')).assertTrue();
+      expect(shouldAutoRunWorkflowAfterInputReady(gestureStill, 'photo')).assertTrue();
+      expect(shouldAutoRunWorkflowAfterInputReady(gestureStill, 'camera')).assertTrue();
+      expect(shouldAutoRunWorkflowAfterInputReady(sceneStill, 'photo')).assertTrue();
+      expect(shouldAutoRunWorkflowAfterInputReady(sceneStill, 'camera')).assertTrue();
 
       expect(shouldAutoRunWorkflowAfterInputReady(styleTransfer, 'camera')).assertFalse();
       expect(shouldAutoRunWorkflowAfterInputReady(styleTransfer, 'contentImage')).assertFalse();
@@ -4474,6 +4493,7 @@ export default function localUnitTest() {
       const textRecognition: FeatureWorkflow = workflowForRoute(AppRoute.TEXT_RECOGNITION.name)!;
       const textTranslation: FeatureWorkflow = workflowForRoute(AppRoute.TEXT_TRANSLATION.name)!;
       const objectPhoto: FeatureWorkflow = workflowForRoute(AppRoute.OBJECT_PHOTO.name)!;
+      const segmentationStill: FeatureWorkflow = workflowForRoute(AppRoute.SEGMENTATION_STILL.name)!;
       const styleTransfer: FeatureWorkflow = workflowForRoute(AppRoute.STYLE_TRANSFER.name)!;
       const customModel: FeatureWorkflow = workflowForRoute(AppRoute.CUSTOM_MODEL.name)!;
 
@@ -4506,6 +4526,12 @@ export default function localUnitTest() {
       expect(objectPhotoAction.userText).assertEqual('typed first');
       expect(objectPhotoAction.shouldRunWorkflow).assertTrue();
       expect(objectPhotoAction.textInputVisible).assertTrue();
+
+      const segmentationStillAction: WorkflowInputReadyAction =
+        workflowInputReadyAction(segmentationStill, 'camera', 'typed first');
+      expect(segmentationStillAction.userText).assertEqual('typed first');
+      expect(segmentationStillAction.shouldRunWorkflow).assertTrue();
+      expect(segmentationStillAction.textInputVisible).assertTrue();
 
       const styleTransferAction: WorkflowInputReadyAction =
         workflowInputReadyAction(styleTransfer, 'photo', 'typed first');

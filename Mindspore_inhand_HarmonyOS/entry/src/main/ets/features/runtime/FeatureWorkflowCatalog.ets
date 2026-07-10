@@ -97,7 +97,8 @@ export const featureWorkflows: Array<FeatureWorkflow> = [
     inputKinds: ['photo', 'camera'],
     requiredPermissions: ['camera', 'media'],
     resultKind: 'segmentationMask',
-    liveMode: false
+    liveMode: false,
+    linkedLiveRouteName: AppRoute.SEGMENTATION_LIVE.name
   },
   {
     routeName: AppRoute.SEGMENTATION_LIVE.name,
@@ -139,7 +140,8 @@ export const featureWorkflows: Array<FeatureWorkflow> = [
     inputKinds: ['photo', 'camera'],
     requiredPermissions: ['camera', 'media'],
     resultKind: 'gestureLabel',
-    liveMode: false
+    liveMode: false,
+    linkedLiveRouteName: AppRoute.GESTURE_LIVE.name
   },
   {
     routeName: AppRoute.GESTURE_LIVE.name,
@@ -159,7 +161,8 @@ export const featureWorkflows: Array<FeatureWorkflow> = [
     inputKinds: ['photo', 'camera'],
     requiredPermissions: ['camera', 'media'],
     resultKind: 'sceneLabels',
-    liveMode: false
+    liveMode: false,
+    linkedLiveRouteName: AppRoute.SCENE_LIVE.name
   },
   {
     routeName: AppRoute.SCENE_LIVE.name,
@@ -283,6 +286,12 @@ export function inputKindReplacesPrimaryInput(inputKind: FeatureInputKind): bool
 
 export function shouldAutoRunWorkflowAfterInputReady(workflow: FeatureWorkflow, inputKind: FeatureInputKind): boolean {
   if (workflow.routeName === AppRoute.OBJECT_PHOTO.name && inputKind === 'photo') {
+    return true;
+  }
+  if ((workflow.routeName === AppRoute.SEGMENTATION_STILL.name ||
+    workflow.routeName === AppRoute.GESTURE_STILL.name ||
+    workflow.routeName === AppRoute.SCENE_STILL.name) &&
+    (inputKind === 'photo' || inputKind === 'camera')) {
     return true;
   }
   if (workflow.routeName === AppRoute.POSENET.name &&
