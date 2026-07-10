@@ -9,6 +9,14 @@ import { DanceSamplingResult } from './DanceSamplingService';
 
 export const dancePagePath: string = 'pages/DancePage';
 export const danceResultComponentId: string = 'danceResultPanel';
+export const danceReferenceVideoUrl: string =
+  'https://download.mindspore.cn/model_zoo/official/lite/apk/danceFactory/dance_factory_demo2.mp4';
+export const danceReferenceVideoLengthBytes: number = 41282333;
+export const danceCountdownStepMs: number = 1000;
+
+export function danceCountdownSequence(): Array<number> {
+  return [3, 2, 1];
+}
 
 export interface DanceSamplingPageState {
   readonly scoreText: string;

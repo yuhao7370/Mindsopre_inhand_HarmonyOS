@@ -21,6 +21,9 @@ import {
 } from '../services/camera/LiveCameraService';
 import {
   DanceSamplingPageState,
+  danceCountdownSequence,
+  danceCountdownStepMs,
+  danceReferenceVideoUrl,
   danceResultComponentId,
   danceSamplingCompletionStatusKey,
   danceSamplingPageState,
@@ -45,6 +48,8 @@ import {
 } from '../services/media/ResultImageSaveService';
 import { PermissionRequestSummary, PermissionService } from '../services/permissions/PermissionService';
 
+type DanceFlowStage = 'prepare' | 'countdown' | 'sampling' | 'result';
+
 @Entry
 @Component
 struct DancePage {
@@ -57,31 +62,43 @@ struct DancePage {
   @State liveCameraSurfaceId: string = '';
   @State liveCameraActive: boolean = false;
   @State liveCameraPosition: LiveCameraPosition = 'front';
+  @State flowStage: DanceFlowStage = 'prepare';
+  @State countdownText: string = '';
+  @State referenceVideoFailed: boolean = false;
+  private referenceVideoController: VideoController = new VideoController();
   private liveCameraController: XComponentController = new XComponentController();
   private liveCameraService: LiveCameraPreviewService | undefined = undefined;
   private samplingSessionId: number = 0;
   private samplingCancellation: DanceSamplingCancellationToken | undefined = undefined;
+  private countdownTimer: number = -1;
 
   aboutToDisappear() {
     this.cancelLiveSampling();
+    this.stopReferenceVideo();
     this.stopLiveCameraPreview();
   }
 
   private runTemplateDemo(): void {
     this.cancelLiveSampling();
+    this.stopReferenceVideo();
     const score = danceTemplateDemoScore();
     this.scoreText = danceScoreText(score);
     this.resultMessageKey = danceResultMessageKey(score);
     this.hasResult = true;
+    this.flowStage = 'result';
     this.statusKey = 'empty';
     this.samplingSummaryText = '';
   }
 
   private reset(): void {
     this.cancelLiveSampling();
+    this.stopReferenceVideo();
     this.scoreText = '--';
     this.resultMessageKey = 'empty';
     this.hasResult = false;
+    this.flowStage = 'prepare';
+    this.countdownText = '';
+    this.referenceVideoFailed = false;
     this.statusKey = 'empty';
     this.samplingSummaryText = '';
   }
@@ -95,10 +112,62 @@ struct DancePage {
   }
 
   private liveSamplingButtonKey(): AppStringKey {
+    if (this.flowStage === 'countdown') {
+      return 'dance_countdown';
+    }
     return this.sampling ? 'dance_sampling' : 'dance_start_live';
   }
 
+  private liveSamplingActionEnabled(): boolean {
+    return !this.sampling && this.flowStage !== 'countdown' && !this.referenceVideoFailed;
+  }
+
+  private clearDanceCountdown(): void {
+    if (this.countdownTimer >= 0) {
+      clearTimeout(this.countdownTimer);
+      this.countdownTimer = -1;
+    }
+    this.countdownText = '';
+  }
+
+  private startReferenceVideoFromBeginning(): void {
+    try {
+      this.referenceVideoController.setCurrentTime(0);
+      this.referenceVideoController.start();
+      this.referenceVideoFailed = false;
+    } catch (_) {
+      this.referenceVideoFailed = true;
+      this.statusKey = 'dance_reference_video_failed';
+    }
+  }
+
+  private stopReferenceVideo(): void {
+    try {
+      this.referenceVideoController.stop();
+    } catch (_) {
+    }
+  }
+
+  private startDanceCountdown(index: number): void {
+    const sequence = danceCountdownSequence();
+    if (index >= sequence.length) {
+      this.countdownTimer = -1;
+      this.countdownText = '';
+      this.flowStage = 'sampling';
+      this.startReferenceVideoFromBeginning();
+      if (!this.referenceVideoFailed) {
+        this.runLiveSamplingAsync();
+      }
+      return;
+    }
+    this.countdownText = `${sequence[index]}`;
+    this.countdownTimer = setTimeout(() => {
+      this.startDanceCountdown(index + 1);
+    }, danceCountdownStepMs);
+  }
+
   private cancelLiveSampling(): void {
+    this.clearDanceCountdown();
     this.samplingSessionId++;
     const cancellation = this.samplingCancellation;
     this.samplingCancellation = undefined;
@@ -173,7 +242,28 @@ struct DancePage {
   }
 
   private runLiveSampling(): void {
-    this.runLiveSamplingAsync();
+    this.runLiveSamplingWithCountdown();
+  }
+
+  private async runLiveSamplingWithCountdown(): Promise<void> {
+    if (!this.liveSamplingActionEnabled()) {
+      if (this.referenceVideoFailed) {
+        this.statusKey = 'dance_reference_video_failed';
+      }
+      return;
+    }
+    const previewReady = this.liveCameraActive ? true : await this.startLiveCameraPreviewAsync();
+    if (!previewReady) {
+      return;
+    }
+    this.stopReferenceVideo();
+    this.hasResult = false;
+    this.scoreText = '--';
+    this.resultMessageKey = 'empty';
+    this.samplingSummaryText = '';
+    this.flowStage = 'countdown';
+    this.statusKey = 'dance_countdown';
+    this.startDanceCountdown(0);
   }
 
   private async runLiveSamplingAsync(): Promise<void> {
@@ -228,15 +318,21 @@ struct DancePage {
       const completionStatusKey = danceSamplingCompletionStatusKey(result);
       if (completionStatusKey === 'feature_runtime_live_frame_failed') {
         this.statusKey = completionStatusKey;
+        this.flowStage = 'prepare';
+        this.stopReferenceVideo();
         return;
       }
       this.applyDanceSamplingPageState(
         danceSamplingPageState(result)
       );
+      this.flowStage = 'result';
+      this.stopReferenceVideo();
       this.statusKey = completionStatusKey;
     } catch (_) {
       if (this.isLiveSamplingSessionCurrent(sessionId, cancellation)) {
         this.statusKey = 'dance_sampling_failed';
+        this.flowStage = 'prepare';
+        this.stopReferenceVideo();
       }
     } finally {
       if (this.samplingSessionId === sessionId) {
@@ -314,19 +410,83 @@ struct DancePage {
   }
 
   @Builder
+  referenceVideoPanel() {
+    Column() {
+      Text(appString('dance_reference_video'))
+        .fontSize(12)
+        .fontColor(AppColor.textSecondary)
+        .width('100%')
+      Stack() {
+        Video({
+          src: danceReferenceVideoUrl,
+          previewUri: $r('app.media.skeleton_template'),
+          controller: this.referenceVideoController
+        })
+          .width('100%')
+          .height(190)
+          .objectFit(ImageFit.Contain)
+          .autoPlay(this.flowStage === 'prepare')
+          .controls(true)
+          .loop(this.flowStage === 'prepare')
+          .backgroundColor('#111827')
+          .onPrepared(() => {
+            this.referenceVideoFailed = false;
+          })
+          .onError(() => {
+            this.referenceVideoFailed = true;
+            this.statusKey = 'dance_reference_video_failed';
+          })
+          .onFinish(() => {
+            if (this.flowStage === 'prepare' && !this.referenceVideoFailed) {
+              this.referenceVideoController.start();
+            }
+          })
+        if (this.flowStage === 'countdown') {
+          Column() {
+            Text(appString('dance_countdown'))
+              .fontSize(15)
+              .fontColor(Color.White)
+              .fontWeight(FontWeight.Medium)
+            Text(this.countdownText)
+              .fontSize(54)
+              .fontColor(Color.White)
+              .fontWeight(FontWeight.Bold)
+              .margin({ top: AppSpacing.xs })
+          }
+          .width('100%')
+          .height('100%')
+          .justifyContent(FlexAlign.Center)
+          .backgroundColor('#111827')
+        }
+      }
+      .width('100%')
+      .height(190)
+      .clip(true)
+      .margin({ top: AppSpacing.xs })
+      .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
+      if (this.referenceVideoFailed) {
+        Text(appString('dance_reference_video_failed'))
+          .fontSize(12)
+          .fontColor(AppColor.danger)
+          .lineHeight(18)
+          .textAlign(TextAlign.Center)
+          .margin({ top: AppSpacing.sm })
+      }
+    }
+    .width('100%')
+  }
+
+  @Builder
   preparePanel() {
     Column() {
-      Image($r('app.media.skeleton_template'))
-        .width(132)
-        .aspectRatio(135 / 169)
-        .objectFit(ImageFit.Contain)
-        .margin({ bottom: AppSpacing.lg })
+      this.referenceVideoPanel()
 
       Text(appString('dance_prepare_summary'))
         .fontSize(15)
         .fontColor(AppColor.textPrimary)
         .textAlign(TextAlign.Center)
         .lineHeight(22)
+        .margin({ top: AppSpacing.lg })
 
       Button(appString('dance_start_demo'))
         .width('100%')
@@ -340,7 +500,7 @@ struct DancePage {
         .width('100%')
         .height(44)
         .margin({ top: AppSpacing.md })
-        .enabled(!this.sampling)
+        .enabled(this.liveSamplingActionEnabled())
         .onClick(() => this.runLiveSampling())
 
       if (this.statusKey !== 'empty') {
@@ -386,7 +546,7 @@ struct DancePage {
       Button(appString('feature_runtime_switch_camera'))
         .height(32)
         .margin({ top: AppSpacing.sm })
-        .enabled(!this.sampling)
+        .enabled(!this.sampling && this.flowStage !== 'countdown')
         .onClick(() => this.switchLiveCamera())
     }
     .width('100%')
@@ -435,7 +595,7 @@ struct DancePage {
         .width('100%')
         .height(40)
         .margin({ top: AppSpacing.lg })
-        .enabled(!this.sampling)
+        .enabled(this.liveSamplingActionEnabled())
         .onClick(() => this.runLiveSampling())
       Button(appString('dance_start_demo'))
         .width('100%')

@@ -67,9 +67,11 @@ Current HarmonyOS behavior:
   joint from the left/right shoulder midpoint.
 - `/dance/DanceMainActivity` now opens a dedicated HarmonyOS Dance page with a
   template scoring demo, live camera preview, 70-frame live skeleton sampling,
+  the original MindSpore reference video stream, 3/2/1 synchronized run start,
   Android-style result messages, and album save for the rendered result card.
-- Reference-video playback remains the platform adapter task before Dance can be
-  marked as fully migrated end-to-end.
+- HarmonyOS streams the original remote reference video URL directly through the
+  platform `Video` component instead of caching the 39MB mp4 into public
+  Downloads like the Android implementation.
 
 ## Intelligent Poetry
 

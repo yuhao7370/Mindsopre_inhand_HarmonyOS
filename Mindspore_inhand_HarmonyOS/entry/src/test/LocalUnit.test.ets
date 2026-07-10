@@ -58,7 +58,11 @@ import {
   danceTemplateFrames
 } from '../main/ets/services/ai/DanceScoreService';
 import {
+  danceCountdownSequence,
+  danceCountdownStepMs,
   dancePagePath,
+  danceReferenceVideoLengthBytes,
+  danceReferenceVideoUrl,
   danceResultComponentId,
   danceResultMessageKey,
   danceSamplingCompletionStatusKey,
@@ -1923,7 +1927,16 @@ export default function localUnitTest() {
       expect(AppRoute.DANCE.page).assertEqual(dancePagePath);
       expect(findRouteByName(AppRoute.DANCE.name)?.page).assertEqual(dancePagePath);
       expect(danceResultComponentId).assertEqual('danceResultPanel');
+      expect(danceReferenceVideoUrl).assertEqual(
+        'https://download.mindspore.cn/model_zoo/official/lite/apk/danceFactory/dance_factory_demo2.mp4'
+      );
+      expect(danceReferenceVideoLengthBytes).assertEqual(41282333);
+      expect(danceCountdownSequence().join(',')).assertEqual('3,2,1');
+      expect(danceCountdownStepMs).assertEqual(1000);
       expect(hasAppStringKey('dance_prepare_summary')).assertTrue();
+      expect(hasAppStringKey('dance_reference_video')).assertTrue();
+      expect(hasAppStringKey('dance_countdown')).assertTrue();
+      expect(hasAppStringKey('dance_reference_video_failed')).assertTrue();
       expect(hasAppStringKey('dance_start_demo')).assertTrue();
       expect(hasAppStringKey('dance_result_title')).assertTrue();
       expect(hasAppStringKey('dance_platform_note')).assertTrue();
