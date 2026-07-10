@@ -40,6 +40,7 @@ import {
 } from './SceneDetectionService';
 import {
   androidDefaultTranslationTargetLanguage,
+  LocalTextTranslationRunner,
   TextRecognitionResult,
   TextRecognitionService,
   TextTranslationResult,
@@ -206,7 +207,9 @@ export class DefaultAiService {
     this.objectDetectionService = options?.objectDetectionService;
     this.styleTransferService = options?.styleTransferService;
     this.textRecognitionService = options?.textRecognitionService;
-    this.textTranslationService = options?.textTranslationService;
+    this.textTranslationService = options?.textTranslationService ?? new TextTranslationService({
+      runner: new LocalTextTranslationRunner()
+    });
     this.segmentationService = options?.segmentationService;
     this.poseService = options?.poseService;
     this.gestureService = options?.gestureService;

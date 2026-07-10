@@ -2584,6 +2584,22 @@ export default function localUnitTest() {
       expect(result.code).assertEqual('MISSING_INPUT');
     });
 
+    it('defaultAiServiceUsesLocalTranslationFallbackForTextInput', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.TEXT_TRANSLATION.name);
+      expect(workflow !== undefined).assertTrue();
+
+      const result = await new DefaultAiService().run(workflow!, {
+        text: 'Hello, MindSpore!'
+      });
+
+      expect(result.ok).assertTrue();
+      expect(result.code).assertEqual('TEXT_TRANSLATION_DONE');
+      expect(result.messageKey).assertEqual('feature_runtime_text_translation_done');
+      expect(result.detailText.indexOf('targetLanguage=zh') >= 0).assertTrue();
+      expect(result.detailText.indexOf('translated=\u4F60\u597D\u6607\u601D') >= 0).assertTrue();
+      expect(copyableTextForAiResult('translateText', aiRunResultRows(result))).assertEqual('\u4F60\u597D\u6607\u601D');
+    });
+
     it('aiServiceUsesAndroidTargetLanguageRuleForTextTranslation', 0, async () => {
       const workflow = workflowForRoute(AppRoute.TEXT_TRANSLATION.name);
       expect(workflow !== undefined).assertTrue();
@@ -2631,7 +2647,7 @@ export default function localUnitTest() {
       expect(translationRunner.seenTargetLanguages[0]).assertEqual('en');
     });
 
-    it('aiServiceRecognizesImageTextBeforeUnsupportedTranslation', 0, async () => {
+    it('aiServiceRecognizesImageTextBeforeDefaultLocalTranslation', 0, async () => {
       const workflow = workflowForRoute(AppRoute.TEXT_TRANSLATION.name);
       expect(workflow !== undefined).assertTrue();
       const recognitionRunner = new FixedTextRecognitionRunner({
@@ -2648,15 +2664,16 @@ export default function localUnitTest() {
         imageUri: 'file://selected/text.jpg'
       });
 
-      expect(result.ok).assertFalse();
-      expect(result.code).assertEqual('PLATFORM_UNSUPPORTED');
-      expect(result.messageKey).assertEqual('feature_runtime_translation_unsupported');
+      expect(result.ok).assertTrue();
+      expect(result.code).assertEqual('TEXT_TRANSLATION_DONE');
+      expect(result.messageKey).assertEqual('feature_runtime_text_translation_done');
       expect(result.detailText.indexOf('targetLanguage=zh') >= 0).assertTrue();
       expect(result.detailText.indexOf('source=MindSpore') >= 0).assertTrue();
+      expect(result.detailText.indexOf('translated=\u6607\u601D') >= 0).assertTrue();
       expect(result.data?.kind).assertEqual('textTranslation');
       expect(aiRunResultRows(result)[1].labelKey).assertEqual('feature_runtime_result_text');
       expect(aiRunResultRows(result)[1].value).assertEqual('MindSpore\n');
-      expect(copyableTextForAiResult('translateText', aiRunResultRows(result))).assertEqual('MindSpore\n');
+      expect(copyableTextForAiResult('translateText', aiRunResultRows(result))).assertEqual('\u6607\u601D');
       expect(recognitionRunner.seenImageUris[0]).assertEqual('file://selected/text.jpg');
     });
 
