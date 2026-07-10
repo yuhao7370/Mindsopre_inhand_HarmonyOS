@@ -136,7 +136,7 @@
     { "name": "feature_runtime_custom_model_help", "value": "Select an image and an optional MindSpore .ms model. If no model is selected, the bundled MobileNetV2 demo model runs locally." },
     { "name": "feature_runtime_custom_model_done", "value": "Custom model execution completed." },
     { "name": "feature_runtime_custom_model_failed", "value": "Custom model execution failed." },
-    { "name": "feature_runtime_classification_pending", "value": "Image classification is wired. Add the MobileNetV2 MindSpore runner to execute it." },
+    { "name": "feature_runtime_classification_runner_unavailable", "value": "Image classification is unavailable in the current runtime. Open it from the app feature page or provide a score runner." },
     { "name": "feature_runtime_classification_done", "value": "Image classification completed." },
     { "name": "feature_runtime_classification_failed", "value": "Image classification did not produce a valid label." },
     { "name": "feature_runtime_object_detection_done", "value": "Object detection completed." },

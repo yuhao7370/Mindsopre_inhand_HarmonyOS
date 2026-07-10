@@ -1498,6 +1498,7 @@ export default function localUnitTest() {
       expect(hasAppStringKey('feature_runtime_copy_done')).assertTrue();
       expect(hasAppStringKey('feature_runtime_model_cache_failed')).assertTrue();
       expect(hasAppStringKey('feature_runtime_model_incompatible')).assertTrue();
+      expect(hasAppStringKey('feature_runtime_classification_runner_unavailable')).assertTrue();
       expect(hasAppStringKey('feature_runtime_save_image')).assertTrue();
       expect(hasAppStringKey('feature_runtime_save_image_done')).assertTrue();
       expect(hasAppStringKey('feature_runtime_save_image_failed')).assertTrue();
@@ -4125,7 +4126,7 @@ export default function localUnitTest() {
       });
       expect(result.ok).assertFalse();
       expect(result.code).assertEqual('CLASSIFICATION_MODEL_PENDING');
-      expect(result.messageKey).assertEqual('feature_runtime_classification_pending');
+      expect(result.messageKey).assertEqual('feature_runtime_classification_runner_unavailable');
     });
 
     it('classificationMapsRunnerScoresToAndroidLabel', 0, async () => {

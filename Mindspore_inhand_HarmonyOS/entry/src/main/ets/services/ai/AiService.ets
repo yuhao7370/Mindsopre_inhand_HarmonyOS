@@ -660,7 +660,7 @@ export class DefaultAiService {
         ok: false,
         code: 'CLASSIFICATION_MODEL_PENDING',
         aiMethod: 'classifyImage',
-        messageKey: 'feature_runtime_classification_pending',
+        messageKey: 'feature_runtime_classification_runner_unavailable',
         detailText: ''
       };
     }
