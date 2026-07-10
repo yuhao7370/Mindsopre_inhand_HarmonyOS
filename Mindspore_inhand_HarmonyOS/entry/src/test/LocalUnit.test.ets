@@ -64,6 +64,15 @@ import {
   danceTemplateDemoScore
 } from '../main/ets/services/dance/DancePageService';
 import {
+  DancePoseFrameSource,
+  DanceSamplingService,
+  danceDefaultSampleFrameCount,
+  danceFrameFromPoseResult,
+  dancePosePointType,
+  danceSampleIntervalMs,
+  danceSkeletonPointsFromPose
+} from '../main/ets/services/dance/DanceSamplingService';
+import {
   SceneDetection,
   SceneDetectionResult,
   SceneDetectionRunner,
@@ -681,6 +690,20 @@ class FixedPoseRunner implements PoseRunner {
 class RejectingPoseRunner implements PoseRunner {
   async detectPose(_imageUri: string): Promise<PoseResult> {
     throw new Error('pose detection failed');
+  }
+}
+
+class FixedDancePoseFrameSource implements DancePoseFrameSource {
+  readonly requestedFrameIds: Array<number> = [];
+  private readonly results: Array<PoseResult>;
+
+  constructor(results: Array<PoseResult>) {
+    this.results = results;
+  }
+
+  async poseFrame(frameId: number): Promise<PoseResult> {
+    this.requestedFrameIds.push(frameId);
+    return this.results[frameId - 1];
   }
 }
 
@@ -1490,6 +1513,93 @@ export default function localUnitTest() {
       expect(frame.sinLeftKnee.toFixed(1)).assertEqual('1.0');
       expect(frame.rightWristMissing).assertTrue();
       expect(frame.rightElbowMissing).assertFalse();
+    });
+
+    it('mapsHarmonyPosePointsToDanceSkeletonWithSyntheticNeck', 0, () => {
+      const points: Array<PosePoint> = [
+        { type: dancePosePointType.LEFT_SHOULDER, score: 0.9, x: 10, y: 20 },
+        { type: dancePosePointType.RIGHT_SHOULDER, score: 0.9, x: 50, y: 20 },
+        { type: dancePosePointType.RIGHT_ELBOW, score: 0.9, x: 30, y: 10 },
+        { type: dancePosePointType.RIGHT_WRIST, score: 0.9, x: 30, y: 40 },
+        { type: dancePosePointType.LEFT_ELBOW, score: 0.9, x: 10, y: 30 },
+        { type: dancePosePointType.LEFT_WRIST, score: 0.9, x: 20, y: 40 },
+        { type: dancePosePointType.LEFT_KNEE, score: 0.9, x: 30, y: 60 },
+        { type: dancePosePointType.LEFT_ANKLE, score: 0.9, x: 30, y: 80 }
+      ];
+
+      const skeletonPoints = danceSkeletonPointsFromPose(points);
+      const missingLeftAnkle = danceSkeletonPointsFromPose([
+        { type: dancePosePointType.LEFT_SHOULDER, score: 0.9, x: 10, y: 20 },
+        { type: dancePosePointType.RIGHT_SHOULDER, score: 0.9, x: 50, y: 20 },
+        { type: dancePosePointType.RIGHT_ELBOW, score: 0.9, x: 30, y: 10 },
+        { type: dancePosePointType.RIGHT_WRIST, score: 0.9, x: 30, y: 40 },
+        { type: dancePosePointType.LEFT_ELBOW, score: 0.9, x: 10, y: 30 },
+        { type: dancePosePointType.LEFT_WRIST, score: 0.9, x: 20, y: 40 },
+        { type: dancePosePointType.LEFT_KNEE, score: 0.9, x: 30, y: 60 }
+      ]);
+      const lowScoreLeftAnkle = danceSkeletonPointsFromPose([
+        { type: dancePosePointType.LEFT_SHOULDER, score: 0.9, x: 10, y: 20 },
+        { type: dancePosePointType.RIGHT_SHOULDER, score: 0.9, x: 50, y: 20 },
+        { type: dancePosePointType.RIGHT_ELBOW, score: 0.9, x: 30, y: 10 },
+        { type: dancePosePointType.RIGHT_WRIST, score: 0.9, x: 30, y: 40 },
+        { type: dancePosePointType.LEFT_ELBOW, score: 0.9, x: 10, y: 30 },
+        { type: dancePosePointType.LEFT_WRIST, score: 0.9, x: 20, y: 40 },
+        { type: dancePosePointType.LEFT_KNEE, score: 0.9, x: 30, y: 60 },
+        { type: dancePosePointType.LEFT_ANKLE, score: 0.1, x: 30, y: 80 }
+      ]);
+
+      expect(skeletonPoints !== undefined).assertTrue();
+      expect(skeletonPoints!.neck.x).assertEqual(30);
+      expect(skeletonPoints!.neck.y).assertEqual(20);
+      expect(skeletonPoints!.rightElbow.y).assertEqual(10);
+      expect(skeletonPoints!.leftAnkle.y).assertEqual(80);
+      expect(missingLeftAnkle === undefined).assertTrue();
+      expect(lowScoreLeftAnkle === undefined).assertTrue();
+    });
+
+    it('createsDanceFramesFromPoseResultsAndSamplesDefaultWindow', 0, async () => {
+      const poseResult: PoseResult = {
+        ok: true,
+        skeletonCount: 1,
+        pointCount: 8,
+        executionMs: 5,
+        points: [
+          { type: dancePosePointType.LEFT_SHOULDER, score: 0.9, x: 10, y: 20 },
+          { type: dancePosePointType.RIGHT_SHOULDER, score: 0.9, x: 50, y: 20 },
+          { type: dancePosePointType.RIGHT_ELBOW, score: 0.9, x: 30, y: 10 },
+          { type: dancePosePointType.RIGHT_WRIST, score: 0.9, x: 30, y: 40 },
+          { type: dancePosePointType.LEFT_ELBOW, score: 0.9, x: 10, y: 30 },
+          { type: dancePosePointType.LEFT_WRIST, score: 0.9, x: 20, y: 40 },
+          { type: dancePosePointType.LEFT_KNEE, score: 0.9, x: 30, y: 60 },
+          { type: dancePosePointType.LEFT_ANKLE, score: 0.9, x: 30, y: 80 }
+        ]
+      };
+      const emptyPoseResult: PoseResult = {
+        ok: false,
+        skeletonCount: 0,
+        pointCount: 0,
+        executionMs: 1,
+        points: []
+      };
+
+      const frame = danceFrameFromPoseResult(3, poseResult);
+      const source = new FixedDancePoseFrameSource([poseResult, emptyPoseResult]);
+      const result = await new DanceSamplingService().sample(source, 2);
+
+      expect(danceDefaultSampleFrameCount).assertEqual(70);
+      expect(danceSampleIntervalMs).assertEqual(500);
+      expect(frame !== undefined).assertTrue();
+      expect(frame!.id).assertEqual(3);
+      expect(frame!.sinRightElbow.toFixed(1)).assertEqual('-1.0');
+      expect(danceFrameFromPoseResult(4, emptyPoseResult) === undefined).assertTrue();
+      expect(source.requestedFrameIds[0]).assertEqual(1);
+      expect(source.requestedFrameIds[1]).assertEqual(2);
+      expect(result.frameCount).assertEqual(2);
+      expect(result.validFrameCount).assertEqual(1);
+      expect(result.frames.length).assertEqual(2);
+      expect(result.frames[0] !== undefined).assertTrue();
+      expect(result.frames[1] === undefined).assertTrue();
+      expect(result.score).assertEqual(danceScoreFromFrames(result.frames));
     });
 
     it('routesDanceToDedicatedHarmonyPage', 0, () => {

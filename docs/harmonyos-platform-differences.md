@@ -61,11 +61,15 @@ Current HarmonyOS behavior:
 - The pure 70-frame scoring table, score formula, no-action/no-point error
   codes, and generic skeleton-point-to-frame conversion are ported to ArkTS in
   `DanceScoreService`.
+- HarmonyOS `PoseResult` data is adapted into dance scoring frames through
+  `DanceSamplingService`; it uses the Android 70-frame and 500ms sampling
+  constants, reuses pose visibility filtering, and synthesizes the Android neck
+  joint from the left/right shoulder midpoint.
 - `/dance/DanceMainActivity` now opens a dedicated HarmonyOS Dance page with a
   template scoring demo and Android-style result messages.
 - Camera preview, reference-video playback, album save, and live skeleton
-  sampling remain a platform adapter task before Dance can be marked as fully
-  migrated.
+  sampling UI orchestration remain platform adapter tasks before Dance can be
+  marked as fully migrated end-to-end.
 
 ## Intelligent Poetry
 
