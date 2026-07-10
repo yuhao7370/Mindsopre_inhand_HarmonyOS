@@ -1,8 +1,10 @@
 import { fileIo } from '@kit.CoreFileKit';
+import { mindSporeLite } from '@kit.MindSporeLiteKit';
 import { AppRoute } from '../../app/AppRoutes';
 import { AppStringKey } from '../../common/i18n/AppStrings';
 import { FeatureInputKind } from '../../features/runtime/FeatureWorkflowCatalog';
 import { FileUriContentReader } from '../ai/FileUriContentReader';
+import { mindSporeLiteCpuContext, rawfileContentToArrayBuffer } from '../ai/MindSporeLiteModelRunner';
 
 export interface ModelFileCacheResult {
   readonly ok: boolean;
@@ -14,16 +16,63 @@ export interface ModelFileCacheWriter {
   writeModelFile(cacheDir: string, fileName: string, content: Uint8Array): Promise<string>;
 }
 
+export interface ModelFileCompatibilityChecker {
+  isCompatible(
+    routeName: string,
+    inputKind: FeatureInputKind,
+    cachedUri: string,
+    content: Uint8Array
+  ): Promise<boolean>;
+}
+
+export interface ModelFileCompatibilityLoader {
+  loadModel(content: Uint8Array): Promise<void>;
+}
+
+export class MindSporeLiteModelCompatibilityLoader implements ModelFileCompatibilityLoader {
+  async loadModel(content: Uint8Array): Promise<void> {
+    if (!modelFileContentLooksUsable(content)) {
+      throw new Error('Empty MindSpore model file.');
+    }
+    await mindSporeLite.loadModelFromBuffer(rawfileContentToArrayBuffer(content), mindSporeLiteCpuContext());
+  }
+}
+
+export class BasicModelFileCompatibilityChecker implements ModelFileCompatibilityChecker {
+  private readonly loader: ModelFileCompatibilityLoader;
+
+  constructor(loader: ModelFileCompatibilityLoader = new MindSporeLiteModelCompatibilityLoader()) {
+    this.loader = loader;
+  }
+
+  async isCompatible(
+    _routeName: string,
+    _inputKind: FeatureInputKind,
+    _cachedUri: string,
+    content: Uint8Array
+  ): Promise<boolean> {
+    try {
+      await this.loader.loadModel(content);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+}
+
 export class RuntimeModelFileCacheService {
   private readonly reader: FileUriContentReader;
   private readonly writer: ModelFileCacheWriter;
+  private readonly compatibilityChecker: ModelFileCompatibilityChecker;
 
   constructor(
     reader: FileUriContentReader = new FileUriContentReader(),
-    writer: ModelFileCacheWriter = new HarmonyModelFileCacheWriter()
+    writer: ModelFileCacheWriter = new HarmonyModelFileCacheWriter(),
+    compatibilityChecker: ModelFileCompatibilityChecker = new BasicModelFileCompatibilityChecker()
   ) {
     this.reader = reader;
     this.writer = writer;
+    this.compatibilityChecker = compatibilityChecker;
   }
 
   async cachePickedModelFile(
@@ -46,6 +95,10 @@ export class RuntimeModelFileCacheService {
       if (uri.length === 0) {
         return modelFileCacheFailedResult();
       }
+      const compatible = await this.isCompatibleModelFile(routeName, inputKind, uri, content);
+      if (!compatible) {
+        return modelFileIncompatibleResult();
+      }
       return {
         ok: true,
         uri: uri,
@@ -53,6 +106,19 @@ export class RuntimeModelFileCacheService {
       };
     } catch (_) {
       return modelFileCacheFailedResult();
+    }
+  }
+
+  private async isCompatibleModelFile(
+    routeName: string,
+    inputKind: FeatureInputKind,
+    uri: string,
+    content: Uint8Array
+  ): Promise<boolean> {
+    try {
+      return await this.compatibilityChecker.isCompatible(routeName, inputKind, uri, content);
+    } catch (_) {
+      return false;
     }
   }
 }
@@ -108,10 +174,22 @@ export function modelFileCachePath(cacheDir: string, fileName: string): string {
   return `${normalizedCacheDir}/${fileName}`;
 }
 
+export function modelFileContentLooksUsable(content: Uint8Array): boolean {
+  return content.byteLength > 0;
+}
+
 function modelFileCacheFailedResult(): ModelFileCacheResult {
   return {
     ok: false,
     uri: '',
     messageKey: 'feature_runtime_model_cache_failed'
+  };
+}
+
+function modelFileIncompatibleResult(): ModelFileCacheResult {
+  return {
+    ok: false,
+    uri: '',
+    messageKey: 'feature_runtime_model_incompatible'
   };
 }

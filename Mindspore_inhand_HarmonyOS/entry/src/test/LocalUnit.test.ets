@@ -221,6 +221,7 @@ import {
   normalizedRgbInputFromResizedRgba
 } from '../main/ets/services/ai/ImageClassificationPreprocess';
 import {
+  FeatureInputKind,
   FeatureWorkflow,
   WorkflowInputReadyAction,
   autoStartInputKindForWorkflow,
@@ -257,7 +258,10 @@ import {
   runtimeInputActionsForWorkflow
 } from '../main/ets/services/picker/PickerService';
 import {
+  BasicModelFileCompatibilityChecker,
   cachedModelFileNameForInputKind,
+  ModelFileCompatibilityChecker,
+  ModelFileCompatibilityLoader,
   modelFileCacheWriteSucceeded,
   ModelFileCacheWriter,
   RuntimeModelFileCacheService,
@@ -528,6 +532,58 @@ class RecordingModelFileCacheWriter implements ModelFileCacheWriter {
 class RejectingModelFileCacheWriter implements ModelFileCacheWriter {
   async writeModelFile(_cacheDir: string, _fileName: string, _content: Uint8Array): Promise<string> {
     throw new Error('model cache write failed');
+  }
+}
+
+class RecordingModelFileCompatibilityChecker implements ModelFileCompatibilityChecker {
+  readonly seenRouteNames: Array<string> = [];
+  readonly seenInputKinds: Array<string> = [];
+  readonly seenUris: Array<string> = [];
+  readonly seenByteLengths: Array<number> = [];
+  private readonly compatible: boolean;
+
+  constructor(compatible: boolean) {
+    this.compatible = compatible;
+  }
+
+  async isCompatible(
+    routeName: string,
+    inputKind: FeatureInputKind,
+    cachedUri: string,
+    content: Uint8Array
+  ): Promise<boolean> {
+    this.seenRouteNames.push(routeName);
+    this.seenInputKinds.push(inputKind);
+    this.seenUris.push(cachedUri);
+    this.seenByteLengths.push(content.byteLength);
+    return this.compatible;
+  }
+}
+
+class ThrowingModelFileCompatibilityChecker implements ModelFileCompatibilityChecker {
+  async isCompatible(
+    _routeName: string,
+    _inputKind: FeatureInputKind,
+    _cachedUri: string,
+    _content: Uint8Array
+  ): Promise<boolean> {
+    throw new Error('selected model cannot be loaded');
+  }
+}
+
+class RecordingModelFileCompatibilityLoader implements ModelFileCompatibilityLoader {
+  readonly seenByteLengths: Array<number> = [];
+  private readonly shouldThrow: boolean;
+
+  constructor(shouldThrow: boolean) {
+    this.shouldThrow = shouldThrow;
+  }
+
+  async loadModel(content: Uint8Array): Promise<void> {
+    this.seenByteLengths.push(content.byteLength);
+    if (this.shouldThrow) {
+      throw new Error('invalid MindSpore model');
+    }
   }
 }
 
@@ -1392,6 +1448,7 @@ export default function localUnitTest() {
       expect(hasAppStringKey('feature_runtime_copy_text')).assertTrue();
       expect(hasAppStringKey('feature_runtime_copy_done')).assertTrue();
       expect(hasAppStringKey('feature_runtime_model_cache_failed')).assertTrue();
+      expect(hasAppStringKey('feature_runtime_model_incompatible')).assertTrue();
       expect(hasAppStringKey('feature_runtime_save_image')).assertTrue();
       expect(hasAppStringKey('feature_runtime_save_image_done')).assertTrue();
       expect(hasAppStringKey('feature_runtime_save_image_failed')).assertTrue();
@@ -4980,6 +5037,68 @@ export default function localUnitTest() {
       expect(writer.seenCacheDirs[0]).assertEqual('/cache');
       expect(writer.seenFileNames[0]).assertEqual('object_detection_model.ms');
       expect(writer.writtenBytes[0]).assertEqual(4);
+    });
+
+    it('preflightsCachedPickedModelFileCompatibilityBeforeMarkingReady', 0, async () => {
+      const reader = new FileUriContentReader(new FixedFileUriContentBackend(new Uint8Array([5, 6, 7, 8])));
+      const writer = new RecordingModelFileCacheWriter('/cache/object_detection_model.ms');
+      const checker = new RecordingModelFileCompatibilityChecker(true);
+      const service = new RuntimeModelFileCacheService(reader, writer, checker);
+
+      const result = await service.cachePickedModelFile('file://selected/ssd.ms', '/cache', AppRoute.OBJECT_CAMERA.name, 'modelFile');
+
+      expect(result.ok).assertTrue();
+      expect(result.messageKey).assertEqual('feature_runtime_model_ready');
+      expect(checker.seenRouteNames[0]).assertEqual(AppRoute.OBJECT_CAMERA.name);
+      expect(checker.seenInputKinds[0]).assertEqual('modelFile');
+      expect(checker.seenUris[0]).assertEqual('/cache/object_detection_model.ms');
+      expect(checker.seenByteLengths[0]).assertEqual(4);
+    });
+
+    it('rejectsIncompatiblePickedModelFilesBeforeRuntimeUse', 0, async () => {
+      const reader = new FileUriContentReader(new FixedFileUriContentBackend(new Uint8Array([5, 6, 7, 8])));
+      const writer = new RecordingModelFileCacheWriter('/cache/custom_transfer.ms');
+      const checker = new RecordingModelFileCompatibilityChecker(false);
+      const service = new RuntimeModelFileCacheService(reader, writer, checker);
+
+      const result = await service.cachePickedModelFile(
+        'file://selected/other.ms',
+        '/cache',
+        AppRoute.STYLE_TRANSFER.name,
+        'styleTransferModelFile'
+      );
+
+      expect(result.ok).assertFalse();
+      expect(result.uri).assertEqual('');
+      expect(result.messageKey).assertEqual('feature_runtime_model_incompatible');
+    });
+
+    it('treatsCompatibilityCheckerExceptionsAsModelIncompatibility', 0, async () => {
+      const reader = new FileUriContentReader(new FixedFileUriContentBackend(new Uint8Array([5, 6, 7, 8])));
+      const writer = new RecordingModelFileCacheWriter('/cache/custom_model.ms');
+      const checker = new ThrowingModelFileCompatibilityChecker();
+      const service = new RuntimeModelFileCacheService(reader, writer, checker);
+
+      const result = await service.cachePickedModelFile('file://selected/bad.ms', '/cache', AppRoute.CUSTOM_MODEL.name, 'modelFile');
+
+      expect(result.ok).assertFalse();
+      expect(result.uri).assertEqual('');
+      expect(result.messageKey).assertEqual('feature_runtime_model_incompatible');
+    });
+
+    it('defaultModelCompatibilityCheckerRejectsMalformedNonEmptyModelContent', 0, async () => {
+      const loader = new RecordingModelFileCompatibilityLoader(true);
+      const checker = new BasicModelFileCompatibilityChecker(loader);
+
+      const compatible = await checker.isCompatible(
+        AppRoute.OBJECT_PHOTO.name,
+        'modelFile',
+        '/cache/object_detection_model.ms',
+        new Uint8Array([1, 2, 3, 4])
+      );
+
+      expect(compatible).assertFalse();
+      expect(loader.seenByteLengths[0]).assertEqual(4);
     });
 
     it('reportsPickedModelFileCacheFailureWithI18nKey', 0, async () => {
