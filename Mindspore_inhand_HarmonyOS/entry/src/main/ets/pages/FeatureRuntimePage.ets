@@ -17,6 +17,7 @@ import {
   shouldShowStyleRecoveryControl,
   shouldUseLongTextInput,
   shouldUseLongTextResultRow,
+  textInputPlaceholderKeyForWorkflow,
   workflowRunActionKey,
   workflowInputReadyAction,
   workflowForRoute
@@ -870,6 +871,10 @@ struct FeatureRuntimePage {
     return this.isPortraitSegmentationWorkflow() &&
       this.segmentationBackgroundImageUri.length > 0 &&
       this.segmentationForegroundPixelMap !== undefined;
+  }
+
+  private textInputPlaceholderKey(): AppStringKey {
+    return textInputPlaceholderKeyForWorkflow(workflowForRoute(this.routeName));
   }
 
   private selectBuiltInStyle(style: BuiltInStyleTransferStyle): void {
@@ -1847,14 +1852,14 @@ struct FeatureRuntimePage {
           }
           if (this.inputKinds.indexOf('text') >= 0 && this.textInputVisible) {
             if (this.longTextInput) {
-              TextArea({ text: this.userText, placeholder: appString('feature_runtime_text_placeholder') })
+              TextArea({ text: this.userText, placeholder: appString(this.textInputPlaceholderKey()) })
                 .width('100%')
                 .height(132)
                 .fontSize(14)
                 .margin({ top: AppSpacing.sm })
                 .onChange((value: string) => this.updateUserText(value))
             } else {
-              TextInput({ text: this.userText, placeholder: appString('feature_runtime_text_placeholder') })
+              TextInput({ text: this.userText, placeholder: appString(this.textInputPlaceholderKey()) })
                 .width('100%')
                 .height(44)
                 .fontSize(14)

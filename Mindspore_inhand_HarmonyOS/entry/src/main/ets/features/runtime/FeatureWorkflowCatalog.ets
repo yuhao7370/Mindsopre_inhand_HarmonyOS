@@ -305,6 +305,13 @@ export function shouldUseLongTextInput(workflow: FeatureWorkflow | undefined): b
   return workflow?.routeName === AppRoute.TEXT_TRANSLATION.name;
 }
 
+export function textInputPlaceholderKeyForWorkflow(workflow: FeatureWorkflow | undefined): AppStringKey {
+  if (workflow?.routeName === AppRoute.TEXT_TRANSLATION.name) {
+    return 'feature_runtime_text_translation_placeholder';
+  }
+  return 'feature_runtime_text_placeholder';
+}
+
 export function shouldUseLongTextResultRow(aiMethod: string, labelKey: AppStringKey): boolean {
   if (aiMethod === 'recognizeText') {
     return labelKey === 'feature_runtime_result_text';

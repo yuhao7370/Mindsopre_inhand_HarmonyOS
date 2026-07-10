@@ -248,6 +248,7 @@ import {
   shouldClearTextInputAfterInputReady,
   shouldUseLongTextInput,
   shouldUseLongTextResultRow,
+  textInputPlaceholderKeyForWorkflow,
   shouldShowStyleRecoveryControl,
   workflowInputReadyAction,
   workflowRunActionKey,
@@ -2360,6 +2361,16 @@ export default function localUnitTest() {
       expect(shouldUseLongTextResultRow(textTranslation.aiMethod, 'feature_runtime_result_translated_text')).assertTrue();
       expect(shouldUseLongTextResultRow(textTranslation.aiMethod, 'feature_runtime_result_target_language')).assertFalse();
       expect(shouldUseLongTextResultRow(styleTransfer.aiMethod, 'feature_runtime_result_output')).assertFalse();
+    });
+
+    it('usesAndroidTextTranslationInputHint', 0, () => {
+      const textTranslation: FeatureWorkflow = workflowForRoute(AppRoute.TEXT_TRANSLATION.name)!;
+      const textRecognition: FeatureWorkflow = workflowForRoute(AppRoute.TEXT_RECOGNITION.name)!;
+
+      expect(textInputPlaceholderKeyForWorkflow(textTranslation))
+        .assertEqual('feature_runtime_text_translation_placeholder');
+      expect(textInputPlaceholderKeyForWorkflow(textRecognition)).assertEqual('feature_runtime_text_placeholder');
+      expect(hasAppStringKey(textInputPlaceholderKeyForWorkflow(textTranslation))).assertTrue();
     });
 
     it('portsAndroidPortraitSegmentationBackgroundPresets', 0, () => {
