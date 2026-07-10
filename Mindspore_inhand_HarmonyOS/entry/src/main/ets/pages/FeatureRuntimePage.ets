@@ -1086,10 +1086,6 @@ struct FeatureRuntimePage {
       this.styleTransferStyleImageSource($r('app.media.style17'))
     } else if (builtInStyleTransferMediaName(style) === 'style18') {
       this.styleTransferStyleImageSource($r('app.media.style18'))
-    } else if (builtInStyleTransferMediaName(style) === 'style19') {
-      this.styleTransferStyleImageSource($r('app.media.style19'))
-    } else if (builtInStyleTransferMediaName(style) === 'style20') {
-      this.styleTransferStyleImageSource($r('app.media.style20'))
     } else {
       this.styleTransferStyleImageSource($r('app.media.style18'))
     }
