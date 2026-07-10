@@ -205,6 +205,11 @@ import {
   workflowForRoute
 } from '../main/ets/features/runtime/FeatureWorkflowCatalog';
 import {
+  portraitSegmentationBackgroundPresets,
+  portraitSegmentationBackgroundUri,
+  portraitSegmentationCustomBackgroundId
+} from '../main/ets/features/runtime/PortraitSegmentationBackgroundCatalog';
+import {
   declaredPermissionNames,
   runtimePermissionNamesForWorkflow,
   startupPermissionNames
@@ -1996,6 +2001,18 @@ export default function localUnitTest() {
       expect(portraitSegmentation.aiMethod).assertEqual('segmentPerson');
       expect(portraitSegmentation.inputKinds.indexOf('photo') >= 0).assertTrue();
       expect((portraitSegmentation.optionalInputKinds ?? []).indexOf('backgroundImage') >= 0).assertTrue();
+    });
+
+    it('portsAndroidPortraitSegmentationBackgroundPresets', 0, () => {
+      expect(portraitSegmentationBackgroundPresets.length).assertEqual(5);
+      expect(portraitSegmentationBackgroundPresets[0].id).assertEqual('portrait1');
+      expect(portraitSegmentationBackgroundPresets[0].mediaName).assertEqual('portrait1');
+      expect(portraitSegmentationBackgroundUri(portraitSegmentationBackgroundPresets[0]))
+        .assertEqual('rawfile://portrait/portrait1.jpg');
+      expect(portraitSegmentationBackgroundPresets[4].id).assertEqual('portrait5');
+      expect(portraitSegmentationCustomBackgroundId).assertEqual('custom');
+      expect(hasAppStringKey('feature_runtime_portrait_background_presets')).assertTrue();
+      expect(hasAppStringKey('feature_runtime_portrait_background_custom')).assertTrue();
     });
 
     it('recordsPlatformNeedsFromOriginalAndroidFlows', 0, () => {

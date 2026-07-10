@@ -157,6 +157,13 @@ export type AppStringKey =
   'feature_runtime_preview_style' |
   'feature_runtime_preview_model' |
   'feature_runtime_style_presets_title' |
+  'feature_runtime_portrait_background_presets' |
+  'feature_runtime_portrait_background_custom' |
+  'feature_runtime_portrait_background_1' |
+  'feature_runtime_portrait_background_2' |
+  'feature_runtime_portrait_background_3' |
+  'feature_runtime_portrait_background_4' |
+  'feature_runtime_portrait_background_5' |
   'feature_runtime_result_label' |
   'feature_runtime_result_score' |
   'feature_runtime_result_count' |
@@ -369,6 +376,13 @@ const APP_STRING_KEYS: AppStringKey[] = [
   'feature_runtime_preview_style',
   'feature_runtime_preview_model',
   'feature_runtime_style_presets_title',
+  'feature_runtime_portrait_background_presets',
+  'feature_runtime_portrait_background_custom',
+  'feature_runtime_portrait_background_1',
+  'feature_runtime_portrait_background_2',
+  'feature_runtime_portrait_background_3',
+  'feature_runtime_portrait_background_4',
+  'feature_runtime_portrait_background_5',
   'feature_runtime_result_label',
   'feature_runtime_result_score',
   'feature_runtime_result_count',
@@ -743,6 +757,20 @@ export function appString(key: AppStringKey): ResourceStr {
       return $r('app.string.feature_runtime_preview_model');
     case 'feature_runtime_style_presets_title':
       return $r('app.string.feature_runtime_style_presets_title');
+    case 'feature_runtime_portrait_background_presets':
+      return $r('app.string.feature_runtime_portrait_background_presets');
+    case 'feature_runtime_portrait_background_custom':
+      return $r('app.string.feature_runtime_portrait_background_custom');
+    case 'feature_runtime_portrait_background_1':
+      return $r('app.string.feature_runtime_portrait_background_1');
+    case 'feature_runtime_portrait_background_2':
+      return $r('app.string.feature_runtime_portrait_background_2');
+    case 'feature_runtime_portrait_background_3':
+      return $r('app.string.feature_runtime_portrait_background_3');
+    case 'feature_runtime_portrait_background_4':
+      return $r('app.string.feature_runtime_portrait_background_4');
+    case 'feature_runtime_portrait_background_5':
+      return $r('app.string.feature_runtime_portrait_background_5');
     case 'feature_runtime_result_label':
       return $r('app.string.feature_runtime_result_label');
     case 'feature_runtime_result_score':

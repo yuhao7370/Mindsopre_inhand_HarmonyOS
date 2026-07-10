@@ -84,6 +84,12 @@ import {
   builtInStyleTransferUri,
   styleTransferPixelMapFromRgbaOutput
 } from '../services/ai/StyleTransferService';
+import {
+  PortraitSegmentationBackgroundPreset,
+  portraitSegmentationBackgroundPresets,
+  portraitSegmentationBackgroundUri,
+  portraitSegmentationCustomBackgroundId
+} from '../features/runtime/PortraitSegmentationBackgroundCatalog';
 import { AppStringKey, appString } from '../common/i18n/AppStrings';
 import { AppColor, AppRadius, AppSpacing } from '../common/theme/AppTheme';
 import { common } from '@kit.AbilityKit';
@@ -122,6 +128,7 @@ struct FeatureRuntimePage {
   @State contentImageUri: string = '';
   @State styleImageUri: string = '';
   @State backgroundImageUri: string = '';
+  @State selectedPortraitBackgroundPresetId: string = '';
   @State stylePredictModelInputUri: string = '';
   @State styleTransferModelInputUri: string = '';
   @State modelInputUri: string = '';
@@ -373,6 +380,7 @@ struct FeatureRuntimePage {
         this.styleImageUri = '';
       } else if (inputKind === 'backgroundImage') {
         this.backgroundImageUri = '';
+        this.selectedPortraitBackgroundPresetId = '';
       } else {
         this.imageInputUri = '';
       }
@@ -392,6 +400,7 @@ struct FeatureRuntimePage {
       this.styleImageUri = result.uri;
     } else if (inputKind === 'backgroundImage') {
       this.backgroundImageUri = result.uri;
+      this.selectedPortraitBackgroundPresetId = portraitSegmentationCustomBackgroundId;
     } else {
       this.imageInputUri = result.uri;
     }
@@ -727,6 +736,13 @@ struct FeatureRuntimePage {
     return this.routeName === AppRoute.PORTRAIT_SEGMENTATION.name;
   }
 
+  private visibleInputKinds(): Array<FeatureInputKind> {
+    if (!this.isPortraitSegmentationWorkflow()) {
+      return this.inputKinds;
+    }
+    return this.inputKinds.filter((inputKind: FeatureInputKind) => inputKind !== 'backgroundImage');
+  }
+
   private shouldShowSegmentationBackgroundPreview(): boolean {
     return this.isPortraitSegmentationWorkflow() &&
       this.segmentationBackgroundImageUri.length > 0 &&
@@ -737,6 +753,16 @@ struct FeatureRuntimePage {
     this.styleImageUri = builtInStyleTransferUri(style);
     this.selectedInputSummary = style.rawfilePath;
     this.statusKey = 'feature_runtime_image_ready';
+  }
+
+  private selectPortraitBackgroundPreset(preset: PortraitSegmentationBackgroundPreset): void {
+    this.backgroundImageUri = portraitSegmentationBackgroundUri(preset);
+    this.selectedPortraitBackgroundPresetId = preset.id;
+    this.selectedInputSummary = preset.rawfilePath;
+    this.statusKey = 'feature_runtime_image_ready';
+    this.resultRows = [];
+    this.resultText = '';
+    this.clearVisualResults();
   }
 
   private lastPathSegment(uri: string): string {
@@ -891,6 +917,88 @@ struct FeatureRuntimePage {
       .width('100%')
       .height('100%')
       .objectFit(ImageFit.Cover)
+  }
+
+  @Builder
+  portraitSegmentationBackgroundGrid() {
+    Column() {
+      Text(appString('feature_runtime_portrait_background_presets'))
+        .fontSize(14)
+        .fontWeight(FontWeight.Medium)
+        .fontColor(AppColor.textPrimary)
+        .width('100%')
+      Grid() {
+        ForEach(portraitSegmentationBackgroundPresets, (preset: PortraitSegmentationBackgroundPreset) => {
+          GridItem() {
+            this.portraitSegmentationBackgroundItem(preset)
+          }
+        }, (preset: PortraitSegmentationBackgroundPreset) => preset.id)
+        GridItem() {
+          this.portraitSegmentationCustomBackgroundItem()
+        }
+      }
+      .columnsTemplate('1fr 1fr 1fr')
+      .columnsGap(AppSpacing.sm)
+      .rowsGap(AppSpacing.sm)
+      .width('100%')
+      .margin({ top: AppSpacing.sm })
+    }
+    .width('100%')
+    .margin({ top: AppSpacing.md })
+  }
+
+  @Builder
+  portraitSegmentationBackgroundItem(preset: PortraitSegmentationBackgroundPreset) {
+    Column() {
+      Image(portraitSegmentationBackgroundUri(preset))
+        .width('100%')
+        .height(70)
+        .objectFit(ImageFit.Cover)
+      Text(appString(preset.titleKey))
+        .fontSize(10)
+        .fontColor(AppColor.textSecondary)
+        .maxLines(1)
+        .margin({ top: 4 })
+    }
+    .width('100%')
+    .height(100)
+    .padding(2)
+    .border({
+      width: this.selectedPortraitBackgroundPresetId === preset.id ? 2 : 1,
+      color: this.selectedPortraitBackgroundPresetId === preset.id ? AppColor.accent : AppColor.divider,
+      radius: AppRadius.card
+    })
+    .clip(true)
+    .onClick(() => this.selectPortraitBackgroundPreset(preset))
+  }
+
+  @Builder
+  portraitSegmentationCustomBackgroundItem() {
+    Column() {
+      Text('+')
+        .fontSize(24)
+        .fontColor(AppColor.accent)
+        .height(64)
+        .textAlign(TextAlign.Center)
+      Text(appString('feature_runtime_portrait_background_custom'))
+        .fontSize(10)
+        .fontColor(AppColor.textSecondary)
+        .maxLines(1)
+    }
+    .width('100%')
+    .height(100)
+    .padding(2)
+    .justifyContent(FlexAlign.Center)
+    .border({
+      width: this.selectedPortraitBackgroundPresetId === portraitSegmentationCustomBackgroundId ? 2 : 1,
+      color: this.selectedPortraitBackgroundPresetId === portraitSegmentationCustomBackgroundId ?
+        AppColor.accent :
+        AppColor.divider,
+      radius: AppRadius.card
+    })
+    .backgroundColor('#F7F8FA')
+    .clip(true)
+    .onClick(() => this.prepareInput('backgroundImage'))
   }
 
   @Builder
@@ -1422,7 +1530,7 @@ struct FeatureRuntimePage {
             .fontColor(AppColor.textPrimary)
             .width('100%')
           Flex({ wrap: FlexWrap.Wrap }) {
-            ForEach(this.inputKinds, (inputKind: FeatureInputKind) => {
+            ForEach(this.visibleInputKinds(), (inputKind: FeatureInputKind) => {
               this.inputChip(inputKind)
             }, (inputKind: FeatureInputKind) => inputKind)
           }
@@ -1430,6 +1538,9 @@ struct FeatureRuntimePage {
           .margin({ top: AppSpacing.md })
           if (this.isStyleTransferWorkflow()) {
             this.styleTransferStyleGrid()
+          }
+          if (this.isPortraitSegmentationWorkflow()) {
+            this.portraitSegmentationBackgroundGrid()
           }
           if (this.hasLiveCameraInput()) {
             this.liveCameraPreview()
