@@ -236,6 +236,7 @@ import {
   inputKindReplacesPrimaryInput,
   inputLabelKey,
   initialInputKindForWorkflow,
+  initialLiveCameraPositionForWorkflow,
   runtimeInputKindsForWorkflow,
   sampleImageUriForWorkflow,
   shouldAutoRunWorkflowAfterInputReady,
@@ -5014,6 +5015,19 @@ export default function localUnitTest() {
       expect(autoStartInputKindForWorkflow(workflowForRoute(AppRoute.POSENET.name)!)).assertUndefined();
       expect(autoStartInputKindForWorkflow(workflowForRoute(AppRoute.GESTURE_STILL.name)!)).assertUndefined();
       expect(autoStartInputKindForWorkflow(workflowForRoute(AppRoute.TEXT_RECOGNITION.name)!)).assertUndefined();
+    });
+
+    it('usesAndroidFrontCameraDefaultsForSelfieLiveWorkflows', 0, () => {
+      expect(initialLiveCameraPositionForWorkflow(workflowForRoute(AppRoute.SEGMENTATION_LIVE.name)!))
+        .assertEqual('front');
+      expect(initialLiveCameraPositionForWorkflow(workflowForRoute(AppRoute.PORTRAIT_SEGMENTATION.name)!))
+        .assertEqual('front');
+      expect(initialLiveCameraPositionForWorkflow(workflowForRoute(AppRoute.SCENE_LIVE.name)!))
+        .assertEqual('front');
+      expect(initialLiveCameraPositionForWorkflow(workflowForRoute(AppRoute.IMAGE_CAMERA.name)!)).assertEqual('back');
+      expect(initialLiveCameraPositionForWorkflow(workflowForRoute(AppRoute.OBJECT_CAMERA.name)!)).assertEqual('back');
+      expect(initialLiveCameraPositionForWorkflow(workflowForRoute(AppRoute.LIVE_SKELETON.name)!)).assertEqual('back');
+      expect(initialLiveCameraPositionForWorkflow(undefined)).assertEqual('back');
     });
 
     it('autoPreparesObjectPhotoAlbumInputLikeAndroidPhotoActivity', 0, () => {

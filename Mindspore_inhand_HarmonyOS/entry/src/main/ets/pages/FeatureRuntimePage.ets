@@ -9,6 +9,7 @@ import {
   inputKindReplacesPrimaryInput,
   inputLabelKey,
   initialInputKindForWorkflow,
+  initialLiveCameraPositionForWorkflow,
   permissionLabelKey,
   runtimeInputKindsForWorkflow,
   sampleImageUriForWorkflow,
@@ -202,6 +203,7 @@ struct FeatureRuntimePage {
     this.helpContentKey = workflow?.helpContentKey;
     this.inputKinds = workflow ? runtimeInputKindsForWorkflow(workflow) : [];
     this.permissionKinds = workflow?.requiredPermissions ?? [];
+    this.liveCameraPosition = initialLiveCameraPositionForWorkflow(workflow);
     setTimeout(() => this.prepareInitialInputIfNeeded(), 0);
   }
 

@@ -275,6 +275,20 @@ export function initialInputKindForWorkflow(workflow: FeatureWorkflow): FeatureI
   return undefined;
 }
 
+export function initialLiveCameraPositionForWorkflow(
+  workflow: FeatureWorkflow | undefined
+): 'back' | 'front' {
+  if (workflow === undefined) {
+    return 'back';
+  }
+  if (workflow.routeName === AppRoute.SEGMENTATION_LIVE.name ||
+    workflow.routeName === AppRoute.PORTRAIT_SEGMENTATION.name ||
+    workflow.routeName === AppRoute.SCENE_LIVE.name) {
+    return 'front';
+  }
+  return 'back';
+}
+
 export function sampleImageUriForWorkflow(workflow: FeatureWorkflow): string {
   const path = workflow.sampleImageRawfilePath ?? '';
   if (path.length === 0) {
