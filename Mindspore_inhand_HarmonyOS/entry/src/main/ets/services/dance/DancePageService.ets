@@ -5,8 +5,16 @@ import {
   danceScoreFromFrames,
   danceTemplateFrames
 } from '../ai/DanceScoreService';
+import { DanceSamplingResult } from './DanceSamplingService';
 
 export const dancePagePath: string = 'pages/DancePage';
+
+export interface DanceSamplingPageState {
+  readonly scoreText: string;
+  readonly resultMessageKey: AppStringKey;
+  readonly hasResult: boolean;
+  readonly summaryText: string;
+}
 
 export function danceTemplateDemoScore(): number {
   return danceScoreFromFrames(danceTemplateFrames());
@@ -48,4 +56,24 @@ export function danceResultMessageKey(score: number): AppStringKey {
     return 'dance_score_level_try_again';
   }
   return 'empty';
+}
+
+export function danceSamplingPageState(result: DanceSamplingResult): DanceSamplingPageState {
+  const state: DanceSamplingPageState = {
+    scoreText: danceScoreText(result.score),
+    resultMessageKey: danceResultMessageKey(result.score),
+    hasResult: true,
+    summaryText: `${result.validFrameCount}/${result.frameCount}`
+  };
+  return state;
+}
+
+export function danceSamplingCompletionStatusKey(result: DanceSamplingResult): AppStringKey {
+  if (result.cancelled) {
+    return 'empty';
+  }
+  if (result.frameCount > 0 && result.failedFrameCount >= result.frameCount) {
+    return 'feature_runtime_live_frame_failed';
+  }
+  return 'dance_sampling_done';
 }

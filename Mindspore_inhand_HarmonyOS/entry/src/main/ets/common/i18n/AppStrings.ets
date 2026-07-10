@@ -75,6 +75,12 @@ export type AppStringKey =
   'poem_ai_credit' |
   'dance_prepare_summary' |
   'dance_start_demo' |
+  'dance_start_live' |
+  'dance_sampling' |
+  'dance_sampling_done' |
+  'dance_sampling_failed' |
+  'dance_live_preview' |
+  'dance_sampling_frames' |
   'dance_reset' |
   'dance_result_title' |
   'dance_score_prefix' |
@@ -278,6 +284,12 @@ const APP_STRING_KEYS: AppStringKey[] = [
   'poem_ai_credit',
   'dance_prepare_summary',
   'dance_start_demo',
+  'dance_start_live',
+  'dance_sampling',
+  'dance_sampling_done',
+  'dance_sampling_failed',
+  'dance_live_preview',
+  'dance_sampling_frames',
   'dance_reset',
   'dance_result_title',
   'dance_score_prefix',
@@ -561,6 +573,18 @@ export function appString(key: AppStringKey): ResourceStr {
       return $r('app.string.dance_prepare_summary');
     case 'dance_start_demo':
       return $r('app.string.dance_start_demo');
+    case 'dance_start_live':
+      return $r('app.string.dance_start_live');
+    case 'dance_sampling':
+      return $r('app.string.dance_sampling');
+    case 'dance_sampling_done':
+      return $r('app.string.dance_sampling_done');
+    case 'dance_sampling_failed':
+      return $r('app.string.dance_sampling_failed');
+    case 'dance_live_preview':
+      return $r('app.string.dance_live_preview');
+    case 'dance_sampling_frames':
+      return $r('app.string.dance_sampling_frames');
     case 'dance_reset':
       return $r('app.string.dance_reset');
     case 'dance_result_title':

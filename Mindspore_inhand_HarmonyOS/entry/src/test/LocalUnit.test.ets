@@ -60,12 +60,21 @@ import {
 import {
   dancePagePath,
   danceResultMessageKey,
+  danceSamplingCompletionStatusKey,
+  danceSamplingPageState,
   danceScoreText,
   danceTemplateDemoScore
 } from '../main/ets/services/dance/DancePageService';
 import {
+  DanceFrameImageCapturer,
+  DanceLivePoseFrameSource,
+  DanceSamplingCancellation,
+  DanceSamplingClock,
   DancePoseFrameSource,
+  DancePoseDetector,
   DanceSamplingService,
+  DanceSamplingDelay,
+  DanceTimedSamplingService,
   danceDefaultSampleFrameCount,
   danceFrameFromPoseResult,
   dancePosePointType,
@@ -213,6 +222,7 @@ import {
   LiveCameraPosition,
   LiveCameraPreviewService,
   LiveFrameImageEncoder,
+  LiveFrameImageResult,
   LiveFrameImageService,
   LiveFrameImageStore,
   LiveRuntimeFrameRunner,
@@ -704,6 +714,120 @@ class FixedDancePoseFrameSource implements DancePoseFrameSource {
   async poseFrame(frameId: number): Promise<PoseResult> {
     this.requestedFrameIds.push(frameId);
     return this.results[frameId - 1];
+  }
+}
+
+class MutableDanceSamplingClock implements DanceSamplingClock {
+  private currentMs: number;
+
+  constructor(initialMs: number) {
+    this.currentMs = initialMs;
+  }
+
+  now(): number {
+    return this.currentMs;
+  }
+
+  advance(deltaMs: number): void {
+    this.currentMs += deltaMs;
+  }
+}
+
+class MutableDanceSamplingCancellation implements DanceSamplingCancellation {
+  private cancelled: boolean = false;
+
+  isCancelled(): boolean {
+    return this.cancelled;
+  }
+
+  cancel(): void {
+    this.cancelled = true;
+  }
+}
+
+class ProcessingDancePoseFrameSource implements DancePoseFrameSource {
+  readonly requestedFrameIds: Array<number> = [];
+  readonly frameStartMs: Array<number> = [];
+  private readonly results: Array<PoseResult>;
+  private readonly clock: MutableDanceSamplingClock;
+  private readonly processingMs: number;
+
+  constructor(results: Array<PoseResult>, clock: MutableDanceSamplingClock, processingMs: number) {
+    this.results = results;
+    this.clock = clock;
+    this.processingMs = processingMs;
+  }
+
+  async poseFrame(frameId: number): Promise<PoseResult> {
+    this.requestedFrameIds.push(frameId);
+    this.frameStartMs.push(this.clock.now());
+    this.clock.advance(this.processingMs);
+    return this.results[frameId - 1];
+  }
+}
+
+class CancellingDancePoseFrameSource implements DancePoseFrameSource {
+  readonly requestedFrameIds: Array<number> = [];
+  private readonly result: PoseResult;
+  private readonly cancellation: MutableDanceSamplingCancellation;
+
+  constructor(result: PoseResult, cancellation: MutableDanceSamplingCancellation) {
+    this.result = result;
+    this.cancellation = cancellation;
+  }
+
+  async poseFrame(frameId: number): Promise<PoseResult> {
+    this.requestedFrameIds.push(frameId);
+    this.cancellation.cancel();
+    return this.result;
+  }
+}
+
+class RecordingDanceFrameImageCapturer implements DanceFrameImageCapturer {
+  readonly seenSurfaceIds: Array<string> = [];
+  readonly seenCacheDirs: Array<string> = [];
+  private readonly results: Array<LiveFrameImageResult>;
+
+  constructor(results: Array<LiveFrameImageResult>) {
+    this.results = results;
+  }
+
+  async captureToCacheImage(surfaceId: string, cacheDir: string): Promise<LiveFrameImageResult> {
+    this.seenSurfaceIds.push(surfaceId);
+    this.seenCacheDirs.push(cacheDir);
+    const index = this.seenSurfaceIds.length - 1;
+    return this.results[index];
+  }
+}
+
+class RecordingDancePoseDetector implements DancePoseDetector {
+  readonly seenImageUris: Array<string> = [];
+  private readonly results: Array<PoseResult>;
+
+  constructor(results: Array<PoseResult>) {
+    this.results = results;
+  }
+
+  async detectPose(imageUri: string): Promise<PoseResult> {
+    this.seenImageUris.push(imageUri);
+    const index = this.seenImageUris.length - 1;
+    return this.results[index];
+  }
+}
+
+class RecordingDanceSamplingDelay implements DanceSamplingDelay {
+  readonly seenIntervals: Array<number> = [];
+  private readonly clock: MutableDanceSamplingClock | undefined;
+
+  constructor(clock?: MutableDanceSamplingClock) {
+    this.clock = clock;
+  }
+
+  async wait(intervalMs: number): Promise<void> {
+    this.seenIntervals.push(intervalMs);
+    if (this.clock !== undefined) {
+      this.clock.advance(intervalMs);
+    }
   }
 }
 
@@ -1600,6 +1724,197 @@ export default function localUnitTest() {
       expect(result.frames[0] !== undefined).assertTrue();
       expect(result.frames[1] === undefined).assertTrue();
       expect(result.score).assertEqual(danceScoreFromFrames(result.frames));
+    });
+
+    it('capturesLiveDanceFrameBeforePoseDetection', 0, async () => {
+      const poseResult: PoseResult = {
+        ok: true,
+        skeletonCount: 1,
+        pointCount: 8,
+        executionMs: 5,
+        points: [
+          { type: dancePosePointType.LEFT_SHOULDER, score: 0.9, x: 10, y: 20 },
+          { type: dancePosePointType.RIGHT_SHOULDER, score: 0.9, x: 50, y: 20 },
+          { type: dancePosePointType.RIGHT_ELBOW, score: 0.9, x: 30, y: 10 },
+          { type: dancePosePointType.RIGHT_WRIST, score: 0.9, x: 30, y: 40 },
+          { type: dancePosePointType.LEFT_ELBOW, score: 0.9, x: 10, y: 30 },
+          { type: dancePosePointType.LEFT_WRIST, score: 0.9, x: 20, y: 40 },
+          { type: dancePosePointType.LEFT_KNEE, score: 0.9, x: 30, y: 60 },
+          { type: dancePosePointType.LEFT_ANKLE, score: 0.9, x: 30, y: 80 }
+        ]
+      };
+      const capturer = new RecordingDanceFrameImageCapturer([{
+        ok: true,
+        uri: '/cache/dance-frame.jpg',
+        messageKey: 'feature_runtime_image_ready'
+      }]);
+      const detector = new RecordingDancePoseDetector([poseResult]);
+      const source = new DanceLivePoseFrameSource('surface-1', '/cache', capturer, detector);
+
+      const result = await source.poseFrame(1);
+
+      expect(result.ok).assertTrue();
+      expect(capturer.seenSurfaceIds[0]).assertEqual('surface-1');
+      expect(capturer.seenCacheDirs[0]).assertEqual('/cache');
+      expect(detector.seenImageUris[0]).assertEqual('/cache/dance-frame.jpg');
+    });
+
+    it('rejectsLiveDanceFrameCaptureFailureBeforePoseDetection', 0, async () => {
+      const capturer = new RecordingDanceFrameImageCapturer([{
+        ok: false,
+        uri: '',
+        messageKey: 'feature_runtime_live_frame_failed'
+      }]);
+      const detector = new RecordingDancePoseDetector([]);
+      const source = new DanceLivePoseFrameSource('surface-1', '/cache', capturer, detector);
+      let failed = false;
+
+      try {
+        await source.poseFrame(1);
+      } catch (_) {
+        failed = true;
+      }
+
+      expect(failed).assertTrue();
+      expect(detector.seenImageUris.length).assertEqual(0);
+    });
+
+    it('samplesDanceFramesWithAndroidIntervalForLiveFlow', 0, async () => {
+      const poseResult: PoseResult = {
+        ok: true,
+        skeletonCount: 1,
+        pointCount: 8,
+        executionMs: 5,
+        points: [
+          { type: dancePosePointType.LEFT_SHOULDER, score: 0.9, x: 10, y: 20 },
+          { type: dancePosePointType.RIGHT_SHOULDER, score: 0.9, x: 50, y: 20 },
+          { type: dancePosePointType.RIGHT_ELBOW, score: 0.9, x: 30, y: 10 },
+          { type: dancePosePointType.RIGHT_WRIST, score: 0.9, x: 30, y: 40 },
+          { type: dancePosePointType.LEFT_ELBOW, score: 0.9, x: 10, y: 30 },
+          { type: dancePosePointType.LEFT_WRIST, score: 0.9, x: 20, y: 40 },
+          { type: dancePosePointType.LEFT_KNEE, score: 0.9, x: 30, y: 60 },
+          { type: dancePosePointType.LEFT_ANKLE, score: 0.9, x: 30, y: 80 }
+        ]
+      };
+      const emptyPoseResult: PoseResult = {
+        ok: false,
+        skeletonCount: 0,
+        pointCount: 0,
+        executionMs: 1,
+        points: []
+      };
+      const source = new FixedDancePoseFrameSource([poseResult, poseResult, emptyPoseResult]);
+      const clock = new MutableDanceSamplingClock(1000);
+      const delay = new RecordingDanceSamplingDelay(clock);
+
+      const result = await new DanceTimedSamplingService(delay, clock).sample(source, 3);
+
+      expect(source.requestedFrameIds[0]).assertEqual(1);
+      expect(source.requestedFrameIds[1]).assertEqual(2);
+      expect(source.requestedFrameIds[2]).assertEqual(3);
+      expect(delay.seenIntervals.length).assertEqual(2);
+      expect(delay.seenIntervals[0]).assertEqual(danceSampleIntervalMs);
+      expect(delay.seenIntervals[1]).assertEqual(danceSampleIntervalMs);
+      expect(result.frameCount).assertEqual(3);
+      expect(result.validFrameCount).assertEqual(2);
+      expect(result.failedFrameCount).assertEqual(0);
+      expect(result.cancelled).assertFalse();
+      expect(result.frames[2] === undefined).assertTrue();
+    });
+
+    it('keepsDanceSamplingOnWallClockCadence', 0, async () => {
+      const poseResult: PoseResult = {
+        ok: true,
+        skeletonCount: 1,
+        pointCount: 8,
+        executionMs: 5,
+        points: [
+          { type: dancePosePointType.LEFT_SHOULDER, score: 0.9, x: 10, y: 20 },
+          { type: dancePosePointType.RIGHT_SHOULDER, score: 0.9, x: 50, y: 20 },
+          { type: dancePosePointType.RIGHT_ELBOW, score: 0.9, x: 30, y: 10 },
+          { type: dancePosePointType.RIGHT_WRIST, score: 0.9, x: 30, y: 40 },
+          { type: dancePosePointType.LEFT_ELBOW, score: 0.9, x: 10, y: 30 },
+          { type: dancePosePointType.LEFT_WRIST, score: 0.9, x: 20, y: 40 },
+          { type: dancePosePointType.LEFT_KNEE, score: 0.9, x: 30, y: 60 },
+          { type: dancePosePointType.LEFT_ANKLE, score: 0.9, x: 30, y: 80 }
+        ]
+      };
+      const clock = new MutableDanceSamplingClock(1000);
+      const delay = new RecordingDanceSamplingDelay(clock);
+      const source = new ProcessingDancePoseFrameSource([poseResult, poseResult, poseResult], clock, 120);
+
+      await new DanceTimedSamplingService(delay, clock).sample(source, 3);
+
+      expect(source.frameStartMs[0]).assertEqual(1000);
+      expect(source.frameStartMs[1]).assertEqual(1500);
+      expect(source.frameStartMs[2]).assertEqual(2000);
+      expect(delay.seenIntervals[0]).assertEqual(380);
+      expect(delay.seenIntervals[1]).assertEqual(380);
+    });
+
+    it('stopsDanceSamplingAfterCancellation', 0, async () => {
+      const poseResult: PoseResult = {
+        ok: true,
+        skeletonCount: 1,
+        pointCount: 8,
+        executionMs: 5,
+        points: [
+          { type: dancePosePointType.LEFT_SHOULDER, score: 0.9, x: 10, y: 20 },
+          { type: dancePosePointType.RIGHT_SHOULDER, score: 0.9, x: 50, y: 20 },
+          { type: dancePosePointType.RIGHT_ELBOW, score: 0.9, x: 30, y: 10 },
+          { type: dancePosePointType.RIGHT_WRIST, score: 0.9, x: 30, y: 40 },
+          { type: dancePosePointType.LEFT_ELBOW, score: 0.9, x: 10, y: 30 },
+          { type: dancePosePointType.LEFT_WRIST, score: 0.9, x: 20, y: 40 },
+          { type: dancePosePointType.LEFT_KNEE, score: 0.9, x: 30, y: 60 },
+          { type: dancePosePointType.LEFT_ANKLE, score: 0.9, x: 30, y: 80 }
+        ]
+      };
+      const clock = new MutableDanceSamplingClock(1000);
+      const delay = new RecordingDanceSamplingDelay(clock);
+      const cancellation = new MutableDanceSamplingCancellation();
+      const source = new CancellingDancePoseFrameSource(poseResult, cancellation);
+
+      const result = await new DanceTimedSamplingService(delay, clock, cancellation).sample(source, 3);
+
+      expect(source.requestedFrameIds.length).assertEqual(1);
+      expect(delay.seenIntervals.length).assertEqual(0);
+      expect(result.cancelled).assertTrue();
+      expect(result.validFrameCount).assertEqual(1);
+    });
+
+    it('reportsDanceSamplingFailureWhenEveryLiveFrameCaptureFails', 0, async () => {
+      const capturer = new RecordingDanceFrameImageCapturer([
+        { ok: false, uri: '', messageKey: 'feature_runtime_live_frame_failed' },
+        { ok: false, uri: '', messageKey: 'feature_runtime_live_frame_failed' }
+      ]);
+      const detector = new RecordingDancePoseDetector([]);
+      const source = new DanceLivePoseFrameSource('surface-1', '/cache', capturer, detector);
+      const clock = new MutableDanceSamplingClock(1000);
+      const delay = new RecordingDanceSamplingDelay(clock);
+
+      const result = await new DanceTimedSamplingService(delay, clock).sample(source, 2);
+
+      expect(result.failedFrameCount).assertEqual(2);
+      expect(result.validFrameCount).assertEqual(0);
+      expect(danceSamplingCompletionStatusKey(result)).assertEqual('feature_runtime_live_frame_failed');
+      expect(detector.seenImageUris.length).assertEqual(0);
+    });
+
+    it('summarizesDanceSamplingResultForPageState', 0, () => {
+      const frames = danceTemplateFrames();
+      const pageState = danceSamplingPageState({
+        frameCount: 70,
+        validFrameCount: frames.length,
+        failedFrameCount: 0,
+        cancelled: false,
+        frames: frames,
+        score: danceScoreFromFrames(frames)
+      });
+
+      expect(pageState.hasResult).assertTrue();
+      expect(pageState.scoreText).assertEqual(danceScoreText(danceScoreFromFrames(frames)));
+      expect(pageState.resultMessageKey).assertEqual(danceResultMessageKey(danceScoreFromFrames(frames)));
+      expect(pageState.summaryText).assertEqual(`${frames.length}/70`);
     });
 
     it('routesDanceToDedicatedHarmonyPage', 0, () => {

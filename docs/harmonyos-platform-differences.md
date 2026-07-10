@@ -66,10 +66,10 @@ Current HarmonyOS behavior:
   constants, reuses pose visibility filtering, and synthesizes the Android neck
   joint from the left/right shoulder midpoint.
 - `/dance/DanceMainActivity` now opens a dedicated HarmonyOS Dance page with a
-  template scoring demo and Android-style result messages.
-- Camera preview, reference-video playback, album save, and live skeleton
-  sampling UI orchestration remain platform adapter tasks before Dance can be
-  marked as fully migrated end-to-end.
+  template scoring demo, live camera preview, 70-frame live skeleton sampling,
+  and Android-style result messages.
+- Reference-video playback and album save remain platform adapter tasks before
+  Dance can be marked as fully migrated end-to-end.
 
 ## Intelligent Poetry
 
