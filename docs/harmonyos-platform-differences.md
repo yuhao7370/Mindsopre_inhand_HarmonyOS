@@ -280,7 +280,8 @@ Current HarmonyOS behavior:
   preview and refreshes subject segmentation through the existing live runtime
   loop.
 - The five Android-style built-in backgrounds and custom background picker are
-  preserved as optional inputs.
+  preserved as optional inputs, and the page starts with the Android `portrait1`
+  background selected by default.
 - HarmonyOS reuses the foreground/background composite preview and save path
   already used for still segmentation results; the live frame is captured
   through the current app-cache JPEG fallback rather than a native analyzer

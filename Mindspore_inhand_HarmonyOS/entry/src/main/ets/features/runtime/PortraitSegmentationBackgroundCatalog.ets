@@ -1,4 +1,5 @@
 import { AppStringKey } from '../../common/i18n/AppStrings';
+import { AppRoute } from '../../app/AppRoutes';
 
 export const portraitSegmentationRawfileUriPrefix: string = 'rawfile://';
 export const portraitSegmentationCustomBackgroundId: string = 'custom';
@@ -8,6 +9,11 @@ export interface PortraitSegmentationBackgroundPreset {
   readonly titleKey: AppStringKey;
   readonly mediaName: string;
   readonly rawfilePath: string;
+}
+
+export interface PortraitSegmentationBackgroundState {
+  readonly backgroundImageUri: string;
+  readonly selectedPresetId: string;
 }
 
 export const portraitSegmentationBackgroundPresets: Array<PortraitSegmentationBackgroundPreset> = [
@@ -43,8 +49,29 @@ export const portraitSegmentationBackgroundPresets: Array<PortraitSegmentationBa
   }
 ];
 
+export const defaultPortraitSegmentationBackgroundPreset: PortraitSegmentationBackgroundPreset =
+  portraitSegmentationBackgroundPresets[0];
+
 export function portraitSegmentationBackgroundUri(preset: PortraitSegmentationBackgroundPreset): string {
   return `${portraitSegmentationRawfileUriPrefix}${preset.rawfilePath}`;
+}
+
+export function defaultPortraitSegmentationBackgroundUri(): string {
+  return portraitSegmentationBackgroundUri(defaultPortraitSegmentationBackgroundPreset);
+}
+
+export function initialPortraitSegmentationBackgroundState(routeName: string, backgroundImageUri: string,
+  selectedPresetId: string): PortraitSegmentationBackgroundState {
+  if (routeName !== AppRoute.PORTRAIT_SEGMENTATION.name || backgroundImageUri.length > 0) {
+    return {
+      backgroundImageUri: backgroundImageUri,
+      selectedPresetId: selectedPresetId
+    };
+  }
+  return {
+    backgroundImageUri: defaultPortraitSegmentationBackgroundUri(),
+    selectedPresetId: defaultPortraitSegmentationBackgroundPreset.id
+  };
 }
 
 export function rawfilePathFromPortraitSegmentationBackgroundUri(uri: string): string {

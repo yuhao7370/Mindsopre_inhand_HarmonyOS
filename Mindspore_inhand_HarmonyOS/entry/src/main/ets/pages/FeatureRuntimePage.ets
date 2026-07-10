@@ -103,7 +103,9 @@ import {
   styleTransferPixelMapFromRgbaOutput
 } from '../services/ai/StyleTransferService';
 import {
+  initialPortraitSegmentationBackgroundState,
   PortraitSegmentationBackgroundPreset,
+  PortraitSegmentationBackgroundState,
   portraitSegmentationBackgroundPresets,
   portraitSegmentationBackgroundUri,
   portraitSegmentationCustomBackgroundId
@@ -208,6 +210,7 @@ struct FeatureRuntimePage {
     this.inputKinds = workflow ? runtimeInputKindsForWorkflow(workflow) : [];
     this.permissionKinds = workflow?.requiredPermissions ?? [];
     this.liveCameraPosition = initialLiveCameraPositionForWorkflow(workflow);
+    this.applyDefaultPortraitBackgroundIfNeeded();
     setTimeout(() => this.prepareInitialInputIfNeeded(), 0);
   }
 
@@ -890,6 +893,16 @@ struct FeatureRuntimePage {
 
   private isPortraitSegmentationWorkflow(): boolean {
     return this.routeName === AppRoute.PORTRAIT_SEGMENTATION.name;
+  }
+
+  private applyDefaultPortraitBackgroundIfNeeded(): void {
+    const backgroundState: PortraitSegmentationBackgroundState = initialPortraitSegmentationBackgroundState(
+      this.routeName,
+      this.backgroundImageUri,
+      this.selectedPortraitBackgroundPresetId
+    );
+    this.backgroundImageUri = backgroundState.backgroundImageUri;
+    this.selectedPortraitBackgroundPresetId = backgroundState.selectedPresetId;
   }
 
   private visibleInputKinds(): Array<FeatureInputKind> {

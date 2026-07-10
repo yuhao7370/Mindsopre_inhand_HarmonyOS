@@ -274,6 +274,10 @@ import {
   workflowForRoute
 } from '../main/ets/features/runtime/FeatureWorkflowCatalog';
 import {
+  defaultPortraitSegmentationBackgroundPreset,
+  defaultPortraitSegmentationBackgroundUri,
+  initialPortraitSegmentationBackgroundState,
+  PortraitSegmentationBackgroundState,
   portraitSegmentationBackgroundPresets,
   portraitSegmentationBackgroundUri,
   portraitSegmentationCustomBackgroundId
@@ -2672,6 +2676,38 @@ export default function localUnitTest() {
       expect(portraitSegmentationCustomBackgroundId).assertEqual('custom');
       expect(hasAppStringKey('feature_runtime_portrait_background_presets')).assertTrue();
       expect(hasAppStringKey('feature_runtime_portrait_background_custom')).assertTrue();
+    });
+
+    it('defaultsPortraitSegmentationToAndroidFirstBackground', 0, () => {
+      expect(defaultPortraitSegmentationBackgroundPreset.id).assertEqual('portrait1');
+      expect(defaultPortraitSegmentationBackgroundPreset.rawfilePath).assertEqual('portrait/portrait1.jpg');
+      expect(defaultPortraitSegmentationBackgroundUri()).assertEqual('rawfile://portrait/portrait1.jpg');
+    });
+
+    it('initializesOnlyPortraitSegmentationWithDefaultBackground', 0, () => {
+      const emptyPortraitState: PortraitSegmentationBackgroundState = initialPortraitSegmentationBackgroundState(
+        AppRoute.PORTRAIT_SEGMENTATION.name,
+        '',
+        ''
+      );
+      expect(emptyPortraitState.backgroundImageUri).assertEqual('rawfile://portrait/portrait1.jpg');
+      expect(emptyPortraitState.selectedPresetId).assertEqual('portrait1');
+
+      const selectedPortraitState: PortraitSegmentationBackgroundState = initialPortraitSegmentationBackgroundState(
+        AppRoute.PORTRAIT_SEGMENTATION.name,
+        'file://album/custom.jpg',
+        portraitSegmentationCustomBackgroundId
+      );
+      expect(selectedPortraitState.backgroundImageUri).assertEqual('file://album/custom.jpg');
+      expect(selectedPortraitState.selectedPresetId).assertEqual(portraitSegmentationCustomBackgroundId);
+
+      const stillSegmentationState: PortraitSegmentationBackgroundState = initialPortraitSegmentationBackgroundState(
+        AppRoute.SEGMENTATION_STILL.name,
+        '',
+        ''
+      );
+      expect(stillSegmentationState.backgroundImageUri).assertEqual('');
+      expect(stillSegmentationState.selectedPresetId).assertEqual('');
     });
 
     it('targetsPortraitBackgroundReplacementPreviewForCompositeSave', 0, () => {
