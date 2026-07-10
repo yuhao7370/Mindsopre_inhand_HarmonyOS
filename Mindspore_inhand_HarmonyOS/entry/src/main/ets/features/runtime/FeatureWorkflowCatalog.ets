@@ -247,6 +247,13 @@ export function runtimeInputKindsForWorkflow(workflow: FeatureWorkflow): Array<F
   return kinds;
 }
 
+export function autoStartInputKindForWorkflow(workflow: FeatureWorkflow): FeatureInputKind | undefined {
+  if (!workflow.liveMode || workflow.inputKinds.length !== 1 || workflow.inputKinds[0] !== 'camera') {
+    return undefined;
+  }
+  return 'camera';
+}
+
 export function inputKindReplacesPrimaryInput(inputKind: FeatureInputKind): boolean {
   return inputKind !== 'modelFile' &&
     inputKind !== 'backgroundImage' &&

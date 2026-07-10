@@ -211,6 +211,7 @@ import {
 import {
   FeatureWorkflow,
   WorkflowInputReadyAction,
+  autoStartInputKindForWorkflow,
   inputKindReplacesPrimaryInput,
   runtimeInputKindsForWorkflow,
   shouldAutoRunWorkflowAfterInputReady,
@@ -4408,6 +4409,19 @@ export default function localUnitTest() {
       expect(runtimeInputActionForWorkflowInput(textRecognition, 'camera')).assertEqual('captureImage');
       expect(gestureLive.liveMode).assertTrue();
       expect(runtimeInputActionForWorkflowInput(gestureLive, 'camera')).assertEqual('startLiveCamera');
+    });
+
+    it('autoStartsOnlyCameraOnlyLiveWorkflowsLikeAndroidLiveActivities', 0, () => {
+      expect(autoStartInputKindForWorkflow(workflowForRoute(AppRoute.IMAGE_CAMERA.name)!)).assertEqual('camera');
+      expect(autoStartInputKindForWorkflow(workflowForRoute(AppRoute.OBJECT_CAMERA.name)!)).assertEqual('camera');
+      expect(autoStartInputKindForWorkflow(workflowForRoute(AppRoute.GESTURE_LIVE.name)!)).assertEqual('camera');
+      expect(autoStartInputKindForWorkflow(workflowForRoute(AppRoute.SCENE_LIVE.name)!)).assertEqual('camera');
+      expect(autoStartInputKindForWorkflow(workflowForRoute(AppRoute.SEGMENTATION_LIVE.name)!)).assertEqual('camera');
+      expect(autoStartInputKindForWorkflow(workflowForRoute(AppRoute.PORTRAIT_SEGMENTATION.name)!)).assertEqual('camera');
+      expect(autoStartInputKindForWorkflow(workflowForRoute(AppRoute.LIVE_SKELETON.name)!)).assertEqual('camera');
+      expect(autoStartInputKindForWorkflow(workflowForRoute(AppRoute.POSENET.name)!)).assertUndefined();
+      expect(autoStartInputKindForWorkflow(workflowForRoute(AppRoute.GESTURE_STILL.name)!)).assertUndefined();
+      expect(autoStartInputKindForWorkflow(workflowForRoute(AppRoute.TEXT_RECOGNITION.name)!)).assertUndefined();
     });
 
     it('liveCameraPreviewServiceRequiresSurfaceIdBeforeStarting', 0, async () => {

@@ -14,6 +14,18 @@ Current HarmonyOS behavior:
 - The main tab shell still uses the same reusable Experience component; no
   duplicate catalog data is introduced.
 
+## Live Camera Startup
+
+Android live camera activities start preview during page startup instead of
+waiting for a separate input click.
+
+Current HarmonyOS behavior:
+
+- Live runtime routes whose only primary input is camera now start the shared
+  camera preview automatically after the HarmonyOS surface is ready.
+- Mixed still/live routes such as the current PoseNet route are intentionally
+  excluded until their still and live Android routes are split.
+
 ## Gesture Recognition
 
 Android source uses HMS ML Kit `MLGestureAnalyzer` for still and live hand

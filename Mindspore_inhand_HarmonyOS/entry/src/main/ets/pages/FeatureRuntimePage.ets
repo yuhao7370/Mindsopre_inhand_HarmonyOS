@@ -5,6 +5,7 @@ import {
   FeatureInputKind,
   FeaturePermissionKind,
   FeatureWorkflow,
+  autoStartInputKindForWorkflow,
   inputKindReplacesPrimaryInput,
   inputLabelKey,
   permissionLabelKey,
@@ -284,6 +285,17 @@ struct FeatureRuntimePage {
     }
     return runtimeInputKindsForWorkflow(workflow).some((inputKind: FeatureInputKind) =>
       runtimeInputActionForWorkflowInput(workflow, inputKind) === 'startLiveCamera');
+  }
+
+  private autoStartLiveCameraIfNeeded(): void {
+    const workflow = workflowForRoute(this.routeName);
+    if (!workflow || this.liveCameraInputSelected || this.liveCameraActive) {
+      return;
+    }
+    const inputKind = autoStartInputKindForWorkflow(workflow);
+    if (inputKind !== undefined) {
+      this.prepareInput(inputKind);
+    }
   }
 
   private startLiveCameraPreview(): void {
@@ -1076,6 +1088,7 @@ struct FeatureRuntimePage {
         .margin({ top: AppSpacing.xs })
         .onLoad(() => {
           this.liveCameraSurfaceId = this.liveCameraController.getXComponentSurfaceId();
+          this.autoStartLiveCameraIfNeeded();
         })
         .onDestroy(() => this.stopLiveCameraPreview())
       Button(appString('feature_runtime_switch_camera'))
