@@ -48,7 +48,6 @@ import {
 
 export type AiRunCode =
   'NATIVE_ADAPTER_PENDING' |
-  'PLATFORM_UNSUPPORTED' |
   'MISSING_INPUT' |
   'CUSTOM_MODEL_DONE' |
   'CUSTOM_MODEL_FAILED' |
@@ -257,7 +256,7 @@ export class DefaultAiService {
 
   private async detectGesture(inputs: AiRunInputs): Promise<AiRunResult> {
     if (this.gestureService === undefined) {
-      return this.platformUnsupportedResult('detectGesture', 'feature_runtime_gesture_unsupported');
+      return this.runnerUnavailableResult('detectGesture', 'feature_runtime_gesture_runner_unavailable');
     }
 
     const imageUri = inputs.imageUri ?? '';
@@ -297,7 +296,7 @@ export class DefaultAiService {
 
   private async detectScene(inputs: AiRunInputs): Promise<AiRunResult> {
     if (this.sceneDetectionService === undefined) {
-      return this.platformUnsupportedResult('detectScene', 'feature_runtime_scene_unsupported');
+      return this.runnerUnavailableResult('detectScene', 'feature_runtime_scene_runner_unavailable');
     }
 
     const imageUri = inputs.imageUri ?? '';
@@ -538,6 +537,16 @@ export class DefaultAiService {
       code: 'NATIVE_ADAPTER_PENDING',
       aiMethod: aiMethod,
       messageKey: 'feature_runtime_pending_adapter',
+      detailText: ''
+    };
+  }
+
+  private runnerUnavailableResult(aiMethod: string, messageKey: AppStringKey): AiRunResult {
+    return {
+      ok: false,
+      code: 'NATIVE_ADAPTER_PENDING',
+      aiMethod: aiMethod,
+      messageKey: messageKey,
       detailText: ''
     };
   }
@@ -931,15 +940,6 @@ export class DefaultAiService {
     return runtimePathSegment(uri);
   }
 
-  private platformUnsupportedResult(aiMethod: string, messageKey: AppStringKey): AiRunResult {
-    return {
-      ok: false,
-      code: 'PLATFORM_UNSUPPORTED',
-      aiMethod: aiMethod,
-      messageKey: messageKey,
-      detailText: ''
-    };
-  }
 }
 
 export function aiRunResultRows(result: AiRunResult): Array<AiRunResultRow> {

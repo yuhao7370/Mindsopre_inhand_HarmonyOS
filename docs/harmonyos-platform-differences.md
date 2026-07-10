@@ -67,8 +67,8 @@ Current HarmonyOS behavior:
   images and labels outside the conservative map fail with the localized
   gesture failure status instead of inventing output.
 - A real gesture runner can still be injected; if no gesture service exists at
-  all, the app keeps the localized `feature_runtime_gesture_unsupported`
-  platform status.
+  all, the app reports the localized
+  `feature_runtime_gesture_runner_unavailable` adapter status.
 - The live gesture route now participates in the shared HarmonyOS live camera
   loop, so the local fallback or injected gesture runner refreshes continuously
   at the 500ms fast-live cadence used for lightweight classification-style
@@ -159,8 +159,8 @@ Current HarmonyOS behavior:
   scene labels. This makes the still/live scene workflows runnable offline,
   but it is a local approximation rather than HMS ML Kit equivalent output.
 - A real scene detection runner can still be injected; if no service exists at
-  all, the app keeps the localized `feature_runtime_scene_unsupported` platform
-  status.
+  all, the app reports the localized
+  `feature_runtime_scene_runner_unavailable` adapter status.
 - The live scene route now participates in the shared HarmonyOS live camera
   loop, so the local scene proxy or injected runner refreshes continuously at
   the 500ms fast-live cadence used for lightweight classification-style demos.

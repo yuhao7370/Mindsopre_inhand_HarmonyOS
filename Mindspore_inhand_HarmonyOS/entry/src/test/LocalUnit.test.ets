@@ -1477,12 +1477,12 @@ export default function localUnitTest() {
       expect(hasAppStringKey(collegeItems[0].titleKey)).assertTrue();
       expect(hasAppStringKey(meItems[0].titleKey)).assertTrue();
       expect(hasAppStringKey('feature_runtime_custom_model_failed')).assertTrue();
-      expect(hasAppStringKey('feature_runtime_gesture_unsupported')).assertTrue();
+      expect(hasAppStringKey('feature_runtime_gesture_runner_unavailable')).assertTrue();
       expect(hasAppStringKey('feature_runtime_gesture_done')).assertTrue();
       expect(hasAppStringKey('feature_runtime_gesture_failed')).assertTrue();
       expect(hasAppStringKey('feature_runtime_result_gesture_overlay')).assertTrue();
       expect(hasAppStringKey('title_scene_detection')).assertTrue();
-      expect(hasAppStringKey('feature_runtime_scene_unsupported')).assertTrue();
+      expect(hasAppStringKey('feature_runtime_scene_runner_unavailable')).assertTrue();
       expect(hasAppStringKey('feature_runtime_scene_done')).assertTrue();
       expect(hasAppStringKey('feature_runtime_scene_failed')).assertTrue();
       expect(hasAppStringKey('workflow_summary_scene')).assertTrue();
@@ -2481,6 +2481,32 @@ export default function localUnitTest() {
       expect(result.ok).assertFalse();
       expect(result.code).assertEqual('NATIVE_ADAPTER_PENDING');
       expect(result.aiMethod).assertEqual('detectObjects');
+    });
+
+    it('aiServiceReportsMissingGestureRunnerAsUnavailableAdapter', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.GESTURE_STILL.name);
+      expect(workflow !== undefined).assertTrue();
+
+      const result = await new DefaultAiService().run(workflow!, {
+        imageUri: 'file://selected/hand.jpg'
+      });
+
+      expect(result.ok).assertFalse();
+      expect(result.code).assertEqual('NATIVE_ADAPTER_PENDING');
+      expect(result.messageKey).assertEqual('feature_runtime_gesture_runner_unavailable');
+    });
+
+    it('aiServiceReportsMissingSceneRunnerAsUnavailableAdapter', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.SCENE_STILL.name);
+      expect(workflow !== undefined).assertTrue();
+
+      const result = await new DefaultAiService().run(workflow!, {
+        imageUri: 'file://selected/scene.jpg'
+      });
+
+      expect(result.ok).assertFalse();
+      expect(result.code).assertEqual('NATIVE_ADAPTER_PENDING');
+      expect(result.messageKey).assertEqual('feature_runtime_scene_runner_unavailable');
     });
 
     it('formatsCoreVisionTextBlocksLikeAndroidLineOutput', 0, () => {

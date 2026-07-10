@@ -118,10 +118,10 @@ export type AppStringKey =
   'feature_runtime_live_camera_surface_missing' |
   'feature_runtime_live_frame_failed' |
   'feature_runtime_pending_adapter' |
-  'feature_runtime_gesture_unsupported' |
+  'feature_runtime_gesture_runner_unavailable' |
   'feature_runtime_gesture_done' |
   'feature_runtime_gesture_failed' |
-  'feature_runtime_scene_unsupported' |
+  'feature_runtime_scene_runner_unavailable' |
   'feature_runtime_scene_done' |
   'feature_runtime_scene_failed' |
   'feature_runtime_unknown_route' |
@@ -357,10 +357,10 @@ const APP_STRING_KEYS: AppStringKey[] = [
   'feature_runtime_live_camera_surface_missing',
   'feature_runtime_live_frame_failed',
   'feature_runtime_pending_adapter',
-  'feature_runtime_gesture_unsupported',
+  'feature_runtime_gesture_runner_unavailable',
   'feature_runtime_gesture_done',
   'feature_runtime_gesture_failed',
-  'feature_runtime_scene_unsupported',
+  'feature_runtime_scene_runner_unavailable',
   'feature_runtime_scene_done',
   'feature_runtime_scene_failed',
   'feature_runtime_unknown_route',
@@ -719,14 +719,14 @@ export function appString(key: AppStringKey): ResourceStr {
       return $r('app.string.feature_runtime_live_frame_failed');
     case 'feature_runtime_pending_adapter':
       return $r('app.string.feature_runtime_pending_adapter');
-    case 'feature_runtime_gesture_unsupported':
-      return $r('app.string.feature_runtime_gesture_unsupported');
+    case 'feature_runtime_gesture_runner_unavailable':
+      return $r('app.string.feature_runtime_gesture_runner_unavailable');
     case 'feature_runtime_gesture_done':
       return $r('app.string.feature_runtime_gesture_done');
     case 'feature_runtime_gesture_failed':
       return $r('app.string.feature_runtime_gesture_failed');
-    case 'feature_runtime_scene_unsupported':
-      return $r('app.string.feature_runtime_scene_unsupported');
+    case 'feature_runtime_scene_runner_unavailable':
+      return $r('app.string.feature_runtime_scene_runner_unavailable');
     case 'feature_runtime_scene_done':
       return $r('app.string.feature_runtime_scene_done');
     case 'feature_runtime_scene_failed':
