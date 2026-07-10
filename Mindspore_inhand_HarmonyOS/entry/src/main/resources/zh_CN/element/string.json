@@ -21,8 +21,6 @@
     { "name": "me_head_subtitle", "value": "个人信息与应用设置" },
     { "name": "mindspore_college_title", "value": "MindSpore 学院" },
     { "name": "account_title", "value": "账号" },
-    { "name": "feature_stub_title", "value": "MindSpore 功能" },
-    { "name": "feature_stub_message", "value": "该功能服务将在后续迁移阶段接入。" },
     { "name": "action_back", "value": "返回" },
     { "name": "confirm", "value": "确定" },
     { "name": "title_button_text_angle", "value": "热门" },

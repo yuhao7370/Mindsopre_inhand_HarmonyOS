@@ -20,8 +20,6 @@ export type AppStringKey =
   'me_head_subtitle' |
   'mindspore_college_title' |
   'account_title' |
-  'feature_stub_title' |
-  'feature_stub_message' |
   'action_back' |
   'confirm' |
   'title_button_text_angle' |
@@ -252,8 +250,6 @@ const APP_STRING_KEYS: AppStringKey[] = [
   'me_head_subtitle',
   'mindspore_college_title',
   'account_title',
-  'feature_stub_title',
-  'feature_stub_message',
   'action_back',
   'confirm',
   'title_button_text_angle',
@@ -509,10 +505,6 @@ export function appString(key: AppStringKey): ResourceStr {
       return $r('app.string.mindspore_college_title');
     case 'account_title':
       return $r('app.string.account_title');
-    case 'feature_stub_title':
-      return $r('app.string.feature_stub_title');
-    case 'feature_stub_message':
-      return $r('app.string.feature_stub_message');
     case 'action_back':
       return $r('app.string.action_back');
     case 'confirm':

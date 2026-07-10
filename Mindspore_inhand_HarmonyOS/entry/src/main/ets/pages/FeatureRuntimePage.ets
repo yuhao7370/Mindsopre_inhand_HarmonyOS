@@ -125,7 +125,7 @@ class PageLiveRuntimeFrameRunner implements LiveRuntimeFrameRunner {
 @Entry
 @Component
 struct FeatureRuntimePage {
-  @State titleKey: AppStringKey = 'feature_stub_title';
+  @State titleKey: AppStringKey = 'EntryAbility_label';
   @State summaryKey: AppStringKey = 'feature_runtime_status_idle';
   @State statusKey: AppStringKey = 'feature_runtime_status_idle';
   @State routeName: string = '';

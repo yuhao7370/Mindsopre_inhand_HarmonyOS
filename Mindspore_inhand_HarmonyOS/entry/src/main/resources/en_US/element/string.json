@@ -21,8 +21,6 @@
     { "name": "me_head_subtitle", "value": "Profile and app information" },
     { "name": "mindspore_college_title", "value": "MindSpore College" },
     { "name": "account_title", "value": "Account" },
-    { "name": "feature_stub_title", "value": "MindSpore Feature" },
-    { "name": "feature_stub_message", "value": "Feature service migration is queued for the next implementation slice." },
     { "name": "action_back", "value": "Back" },
     { "name": "confirm", "value": "OK" },
     { "name": "title_button_text_angle", "value": "HOT" },
