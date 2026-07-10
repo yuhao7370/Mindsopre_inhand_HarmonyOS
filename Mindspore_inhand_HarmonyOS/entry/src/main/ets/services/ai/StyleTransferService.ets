@@ -15,6 +15,7 @@ export const styleTransferModelDownloadUrl: string =
   'https://download.mindspore.cn/model_zoo/official/lite/style_lite/style_transfer_quant.ms';
 export const styleTransferStyleImageSize: number = 256;
 export const styleTransferContentImageSize: number = 384;
+export const styleTransferMaxOutputImageSize: number = 1024;
 export const styleTransferChannels: number = 3;
 export const styleTransferMindSporeCpuThreadNum: number = 4;
 export const styleTransferOutputFloatCount: number =
@@ -65,6 +66,13 @@ export interface StyleTransferResult {
 export interface StyleTransferInput {
   readonly contentInputBuffer: ArrayBuffer;
   readonly styleInputBuffer: ArrayBuffer;
+  readonly contentImageWidth?: number;
+  readonly contentImageHeight?: number;
+}
+
+export interface StyleTransferImageSize {
+  readonly width: number;
+  readonly height: number;
 }
 
 export interface StyleTransferModelUris {
@@ -84,6 +92,16 @@ export interface StyleTransferTensorOutput {
 
 export interface StyleTransferTensorRunner {
   runStyleTransfer(input: StyleTransferInput, modelUris?: StyleTransferModelUris): Promise<StyleTransferTensorOutput>;
+}
+
+export interface StyleTransferOutputImageResizer {
+  resize(
+    rgba: ArrayBuffer,
+    sourceWidth: number,
+    sourceHeight: number,
+    targetWidth: number,
+    targetHeight: number
+  ): Promise<ArrayBuffer>;
 }
 
 export interface StyleTransferRunner {
@@ -112,15 +130,18 @@ export function rawfilePathFromBuiltInStyleTransferUri(uri: string): string {
 export interface StyleTransferMindSporeRunnerOptions {
   readonly preprocessor: StyleTransferInputPreprocessor;
   readonly tensorRunner: StyleTransferTensorRunner;
+  readonly outputImageResizer?: StyleTransferOutputImageResizer;
 }
 
 export class StyleTransferMindSporeRunner implements StyleTransferRunner {
   private readonly preprocessor: StyleTransferInputPreprocessor;
   private readonly tensorRunner: StyleTransferTensorRunner;
+  private readonly outputImageResizer: StyleTransferOutputImageResizer;
 
   constructor(options: StyleTransferMindSporeRunnerOptions) {
     this.preprocessor = options.preprocessor;
     this.tensorRunner = options.tensorRunner;
+    this.outputImageResizer = options.outputImageResizer ?? new ImageKitStyleTransferOutputImageResizer();
   }
 
   async run(
@@ -131,18 +152,30 @@ export class StyleTransferMindSporeRunner implements StyleTransferRunner {
     const startedAt = Date.now();
     const input = await this.preprocessor.createInput(contentImageUri, styleImageUri);
     const output = await this.tensorRunner.runStyleTransfer(input, modelUris);
-    const outputImageRgba = output.output.length >= styleTransferOutputFloatCount ?
+    const modelOutputImageRgba = output.output.length >= styleTransferOutputFloatCount ?
       styleTransferRgbaOutputFromFloatOutput(
         output.output,
         styleTransferContentImageSize,
         styleTransferContentImageSize
       ) : new ArrayBuffer(0);
+    const outputImageSize = styleTransferOutputImageSizeForContent(
+      input.contentImageWidth,
+      input.contentImageHeight
+    );
+    const outputImageRgba = modelOutputImageRgba.byteLength > 0 ?
+      await this.outputImageResizer.resize(
+        modelOutputImageRgba,
+        styleTransferContentImageSize,
+        styleTransferContentImageSize,
+        outputImageSize.width,
+        outputImageSize.height
+      ) : modelOutputImageRgba;
     return {
       ok: outputImageRgba.byteLength > 0,
       outputFloatCount: output.output.length,
       outputImageRgba: outputImageRgba,
-      outputImageWidth: styleTransferContentImageSize,
-      outputImageHeight: styleTransferContentImageSize,
+      outputImageWidth: outputImageSize.width,
+      outputImageHeight: outputImageSize.height,
       predictMs: output.predictMs,
       transferMs: output.transferMs,
       executionMs: Date.now() - startedAt
@@ -355,6 +388,69 @@ export async function styleTransferPixelMapFromRgbaOutput(
   return image.createPixelMap(rgba, styleTransferPixelMapOptions(width, height));
 }
 
+export class ImageKitStyleTransferOutputImageResizer implements StyleTransferOutputImageResizer {
+  async resize(
+    rgba: ArrayBuffer,
+    sourceWidth: number,
+    sourceHeight: number,
+    targetWidth: number,
+    targetHeight: number
+  ): Promise<ArrayBuffer> {
+    if (!validStyleTransferImageSize(sourceWidth) || !validStyleTransferImageSize(sourceHeight) ||
+      !validStyleTransferImageSize(targetWidth) || !validStyleTransferImageSize(targetHeight)) {
+      return new ArrayBuffer(0);
+    }
+    if (sourceWidth === targetWidth && sourceHeight === targetHeight) {
+      return rgba;
+    }
+
+    let pixelMap: image.PixelMap | undefined = undefined;
+    try {
+      pixelMap = await styleTransferPixelMapFromRgbaOutput(rgba, sourceWidth, sourceHeight);
+      await pixelMap.scale(
+        targetWidth / sourceWidth,
+        targetHeight / sourceHeight,
+        image.AntiAliasingLevel.LOW
+      );
+      const scaledRgba = new ArrayBuffer(targetWidth * targetHeight * 4);
+      await pixelMap.readPixelsToBuffer(scaledRgba);
+      return scaledRgba;
+    } finally {
+      if (pixelMap !== undefined) {
+        await pixelMap.release();
+      }
+    }
+  }
+}
+
+export function styleTransferOutputImageSizeForContent(
+  contentWidth?: number,
+  contentHeight?: number
+): StyleTransferImageSize {
+  if (!validStyleTransferImageSize(contentWidth) || !validStyleTransferImageSize(contentHeight)) {
+    return {
+      width: styleTransferContentImageSize,
+      height: styleTransferContentImageSize
+    };
+  }
+
+  const width: number = contentWidth!;
+  const height: number = contentHeight!;
+  const largerSide = Math.max(width, height);
+  if (largerSide <= styleTransferMaxOutputImageSize) {
+    return {
+      width: width,
+      height: height
+    };
+  }
+
+  const scale = styleTransferMaxOutputImageSize / largerSide;
+  return {
+    width: Math.max(1, Math.round(width * scale)),
+    height: Math.max(1, Math.round(height * scale))
+  };
+}
+
 export function styleTransferRgbUnitInputFromRgba(rgba: Uint8Array, size: number): ArrayBuffer {
   const expectedLength = size * size * 4;
   if (rgba.length !== expectedLength) {
@@ -393,6 +489,10 @@ export function styleTransferRgbaOutputFromFloatOutput(
     rgba[targetIndex + 3] = 255;
   }
   return rgba.buffer as ArrayBuffer;
+}
+
+function validStyleTransferImageSize(size: number | undefined): boolean {
+  return size !== undefined && size > 0 && Math.trunc(size) === size;
 }
 
 function styleTransferOutputByte(value: number): number {

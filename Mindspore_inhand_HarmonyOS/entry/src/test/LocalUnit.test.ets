@@ -122,9 +122,12 @@ import {
   StyleTransferResult,
   StyleTransferRunner,
   StyleTransferService,
+  StyleTransferImageSize,
+  StyleTransferOutputImageResizer,
   StyleTransferTensorOutput,
   StyleTransferTensorRunner,
   StyleTransferMindSporeRunner,
+  styleTransferMaxOutputImageSize,
   styleTransferMindSporeCpuThreadNum,
   stylePredictModelDownloadUrl,
   stylePredictModelRawfilePath,
@@ -132,6 +135,7 @@ import {
   styleTransferDecodeOptions,
   styleTransferModelDownloadUrl,
   styleTransferModelRawfilePath,
+  styleTransferOutputImageSizeForContent,
   styleTransferOutputFloatCount,
   styleTransferPixelMapOptions,
   styleTransferRgbaOutputFromFloatOutput,
@@ -718,6 +722,20 @@ class FixedStyleTransferPreprocessor implements StyleTransferInputPreprocessor {
   }
 }
 
+class FixedSizedStyleTransferInput implements StyleTransferInput {
+  readonly contentInputBuffer: ArrayBuffer;
+  readonly styleInputBuffer: ArrayBuffer;
+  readonly contentImageWidth: number;
+  readonly contentImageHeight: number;
+
+  constructor(width: number, height: number) {
+    this.contentInputBuffer = new ArrayBuffer(384 * 384 * 3 * 4);
+    this.styleInputBuffer = new ArrayBuffer(256 * 256 * 3 * 4);
+    this.contentImageWidth = width;
+    this.contentImageHeight = height;
+  }
+}
+
 class FixedStyleTransferTensorRunner implements StyleTransferTensorRunner {
   readonly seenContentBytes: Array<number> = [];
   readonly seenStyleBytes: Array<number> = [];
@@ -738,6 +756,27 @@ class FixedStyleTransferTensorRunner implements StyleTransferTensorRunner {
     this.seenPredictModelUris.push(modelUris?.predictModelUri ?? '');
     this.seenTransferModelUris.push(modelUris?.transferModelUri ?? '');
     return this.output;
+  }
+}
+
+class RecordingStyleTransferOutputImageResizer implements StyleTransferOutputImageResizer {
+  readonly seenSourceWidths: Array<number> = [];
+  readonly seenSourceHeights: Array<number> = [];
+  readonly seenTargetWidths: Array<number> = [];
+  readonly seenTargetHeights: Array<number> = [];
+
+  async resize(
+    _rgba: ArrayBuffer,
+    sourceWidth: number,
+    sourceHeight: number,
+    targetWidth: number,
+    targetHeight: number
+  ): Promise<ArrayBuffer> {
+    this.seenSourceWidths.push(sourceWidth);
+    this.seenSourceHeights.push(sourceHeight);
+    this.seenTargetWidths.push(targetWidth);
+    this.seenTargetHeights.push(targetHeight);
+    return new ArrayBuffer(targetWidth * targetHeight * 4);
   }
 }
 
@@ -3697,6 +3736,23 @@ export default function localUnitTest() {
       expect(styleTransferStyleImageSize).assertEqual(256);
       expect(styleTransferContentImageSize).assertEqual(384);
       expect(styleTransferOutputFloatCount).assertEqual(384 * 384 * 3);
+      expect(styleTransferMaxOutputImageSize).assertEqual(1024);
+    });
+
+    it('restoresStyleTransferOutputToAndroidPreviewSizedContentImage', 0, () => {
+      const small: StyleTransferImageSize = styleTransferOutputImageSizeForContent(800, 600);
+      const large: StyleTransferImageSize = styleTransferOutputImageSizeForContent(4032, 3024);
+      const invalidWidth: StyleTransferImageSize = styleTransferOutputImageSizeForContent(0, 600);
+      const invalidHeight: StyleTransferImageSize = styleTransferOutputImageSizeForContent(800, undefined);
+
+      expect(small.width).assertEqual(800);
+      expect(small.height).assertEqual(600);
+      expect(large.width).assertEqual(1024);
+      expect(large.height).assertEqual(768);
+      expect(invalidWidth.width).assertEqual(styleTransferContentImageSize);
+      expect(invalidWidth.height).assertEqual(styleTransferContentImageSize);
+      expect(invalidHeight.width).assertEqual(styleTransferContentImageSize);
+      expect(invalidHeight.height).assertEqual(styleTransferContentImageSize);
     });
 
     it('normalizesStyleTransferRgbaToRgbUnitInput', 0, () => {
@@ -3772,6 +3828,32 @@ export default function localUnitTest() {
       expect(result.transferMs).assertEqual(9);
       expect(preprocessor.seenContentUris[0]).assertEqual('file://selected/content.jpg');
       expect(tensorRunner.seenStyleBytes[0]).assertEqual(256 * 256 * 3 * 4);
+    });
+
+    it('styleTransferMindSporeRunnerRestoresAndroidContentImageSize', 0, async () => {
+      const input: StyleTransferInput = new FixedSizedStyleTransferInput(800, 600);
+      const preprocessor: FixedStyleTransferPreprocessor = new FixedStyleTransferPreprocessor(input);
+      const tensorRunner: FixedStyleTransferTensorRunner = new FixedStyleTransferTensorRunner({
+        output: new Float32Array(styleTransferOutputFloatCount),
+        predictMs: 1,
+        transferMs: 2
+      });
+      const resizer = new RecordingStyleTransferOutputImageResizer();
+      const runner = new StyleTransferMindSporeRunner({
+        preprocessor: preprocessor,
+        tensorRunner: tensorRunner,
+        outputImageResizer: resizer
+      });
+
+      const result = await runner.run('file://selected/content.jpg', 'file://selected/style.jpg');
+
+      expect(result.outputImageWidth).assertEqual(800);
+      expect(result.outputImageHeight).assertEqual(600);
+      expect(result.outputImageRgba?.byteLength).assertEqual(800 * 600 * 4);
+      expect(resizer.seenSourceWidths[0]).assertEqual(styleTransferContentImageSize);
+      expect(resizer.seenSourceHeights[0]).assertEqual(styleTransferContentImageSize);
+      expect(resizer.seenTargetWidths[0]).assertEqual(800);
+      expect(resizer.seenTargetHeights[0]).assertEqual(600);
     });
 
     it('styleTransferMindSporeRunnerForwardsSelectedModelUris', 0, async () => {

@@ -13,10 +13,20 @@ import {
   styleTransferRgbUnitInputFromRgba,
   styleTransferStyleImageSize
 } from './StyleTransferService';
-import { createPixelMapWithExifOrientation } from './ImageDecodeOrientation';
+import {
+  decodingOptionsWithImageRotation,
+  imageRotationDegreesFromImageSource,
+  rotatedImageSize
+} from './ImageDecodeOrientation';
 
 export interface HarmonyStyleTransferInputPreprocessorOptions {
   readonly resourceManager?: RawfileContentReader;
+}
+
+interface PreparedStyleTransferImageInput {
+  readonly inputBuffer: ArrayBuffer;
+  readonly imageWidth: number;
+  readonly imageHeight: number;
 }
 
 export class HarmonyStyleTransferInputPreprocessor implements StyleTransferInputPreprocessor {
@@ -27,19 +37,21 @@ export class HarmonyStyleTransferInputPreprocessor implements StyleTransferInput
   }
 
   async createInput(contentImageUri: string, styleImageUri: string): Promise<StyleTransferInput> {
-    const contentInputBuffer = await createStyleTransferImageInput(
+    const contentInput = await createStyleTransferImageInput(
       contentImageUri,
       styleTransferContentImageSize,
       this.resourceManager
     );
-    const styleInputBuffer = await createStyleTransferImageInput(
+    const styleInput = await createStyleTransferImageInput(
       styleImageUri,
       styleTransferStyleImageSize,
       this.resourceManager
     );
     return {
-      contentInputBuffer: contentInputBuffer,
-      styleInputBuffer: styleInputBuffer
+      contentInputBuffer: contentInput.inputBuffer,
+      styleInputBuffer: styleInput.inputBuffer,
+      contentImageWidth: contentInput.imageWidth,
+      contentImageHeight: contentInput.imageHeight
     };
   }
 }
@@ -48,7 +60,7 @@ async function createStyleTransferImageInput(
   imageUri: string,
   size: number,
   resourceManager?: RawfileContentReader
-): Promise<ArrayBuffer> {
+): Promise<PreparedStyleTransferImageInput> {
   let imageFile: fileIo.File | undefined = undefined;
   let imageSource: image.ImageSource | undefined = undefined;
   let pixelMap: image.PixelMap | undefined = undefined;
@@ -64,10 +76,20 @@ async function createStyleTransferImageInput(
       imageFile = await openStyleTransferImageFile(imageUri);
       imageSource = image.createImageSource(imageFile.fd);
     }
-    pixelMap = await createPixelMapWithExifOrientation(imageSource, styleTransferDecodeOptions(size));
+    const imageInfo: image.ImageInfo = await imageSource.getImageInfo();
+    const rotationDegrees = await imageRotationDegreesFromImageSource(imageSource);
+    const displaySize = rotatedImageSize(imageInfo.size.width, imageInfo.size.height, rotationDegrees);
+    pixelMap = await imageSource.createPixelMap(decodingOptionsWithImageRotation(
+      styleTransferDecodeOptions(size),
+      rotationDegrees
+    ));
     const rgbaBuffer = new ArrayBuffer(size * size * 4);
     await pixelMap.readPixelsToBuffer(rgbaBuffer);
-    return styleTransferRgbUnitInputFromRgba(new Uint8Array(rgbaBuffer), size);
+    return {
+      inputBuffer: styleTransferRgbUnitInputFromRgba(new Uint8Array(rgbaBuffer), size),
+      imageWidth: displaySize.width,
+      imageHeight: displaySize.height
+    };
   } finally {
     if (pixelMap !== undefined) {
       await pixelMap.release();
