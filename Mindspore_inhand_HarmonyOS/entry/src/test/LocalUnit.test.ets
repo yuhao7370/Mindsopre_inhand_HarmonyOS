@@ -264,6 +264,7 @@ import {
   shouldAutoRunWorkflowAfterInputReady,
   shouldAutoRunStyleTransferAfterStyleReady,
   shouldClearTextInputAfterInputReady,
+  shouldStartWorkflowRun,
   shouldUseLongTextInput,
   shouldUseLongTextResultRow,
   textInputPlaceholderKeyForWorkflow,
@@ -5412,6 +5413,17 @@ export default function localUnitTest() {
       expect(shouldAutoRunStyleTransferAfterStyleReady(styleTransfer, 'contentImage', true)).assertFalse();
       expect(shouldAutoRunStyleTransferAfterStyleReady(styleTransfer, 'camera', true)).assertFalse();
       expect(shouldAutoRunStyleTransferAfterStyleReady(textRecognition, 'styleImage', true)).assertFalse();
+    });
+
+    it('blocksRepeatedStillWorkflowRunsWhileKeepingLiveLoopRunnable', 0, () => {
+      const styleTransfer: FeatureWorkflow = workflowForRoute(AppRoute.STYLE_TRANSFER.name)!;
+      const customModel: FeatureWorkflow = workflowForRoute(AppRoute.CUSTOM_MODEL.name)!;
+      const objectCamera: FeatureWorkflow = workflowForRoute(AppRoute.OBJECT_CAMERA.name)!;
+
+      expect(shouldStartWorkflowRun(styleTransfer, false)).assertTrue();
+      expect(shouldStartWorkflowRun(styleTransfer, true)).assertFalse();
+      expect(shouldStartWorkflowRun(customModel, true)).assertFalse();
+      expect(shouldStartWorkflowRun(objectCamera, true)).assertTrue();
     });
 
     it('clearsTypedTranslationTextWhenAndroidImageTranslationInputIsReady', 0, () => {

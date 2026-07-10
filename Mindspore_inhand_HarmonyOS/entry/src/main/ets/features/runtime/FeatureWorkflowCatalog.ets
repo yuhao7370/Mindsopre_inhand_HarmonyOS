@@ -391,6 +391,10 @@ export function shouldShowStyleRecoveryControl(aiMethod: string, styledImageRead
   return aiMethod === 'runStyleTransfer' && styledImageReady;
 }
 
+export function shouldStartWorkflowRun(workflow: FeatureWorkflow, workflowRunning: boolean): boolean {
+  return workflow.liveMode || !workflowRunning;
+}
+
 export function workflowInputReadyAction(workflow: FeatureWorkflow, inputKind: FeatureInputKind,
   currentUserText: string): WorkflowInputReadyAction {
   const shouldClearTextInput = shouldClearTextInputAfterInputReady(workflow, inputKind);

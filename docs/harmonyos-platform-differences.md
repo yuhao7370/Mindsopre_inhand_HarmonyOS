@@ -160,6 +160,19 @@ Current HarmonyOS behavior:
   any existing cached Object Detection, Custom Model, or Style Transfer model
   file intact.
 
+## Runtime Execution Guard
+
+Android still-image model pages such as Style Transfer and Custom Model keep an
+`isRunningModel` flag so repeated taps do not start overlapping inference.
+
+Current HarmonyOS behavior:
+
+- The shared Feature Runtime page now keeps the same still-workflow guard:
+  while a non-live workflow is running, the Run action is disabled and repeated
+  auto-run/manual triggers are ignored.
+- Live camera workflows keep using the existing live-loop frame guard, so
+  camera refresh continues without overlapping frame inference.
+
 ## Scene Detection
 
 Android source uses HMS ML Kit scene detection through the `MLSceneDetection`

@@ -15,6 +15,7 @@ import {
   runtimeInputKindsForWorkflow,
   sampleImageUriForWorkflow,
   shouldAutoRunStyleTransferAfterStyleReady,
+  shouldStartWorkflowRun,
   shouldShowStyleRecoveryControl,
   shouldUseLongTextInput,
   shouldUseLongTextResultRow,
@@ -139,6 +140,7 @@ struct FeatureRuntimePage {
   @State summaryKey: AppStringKey = 'feature_runtime_status_idle';
   @State statusKey: AppStringKey = 'feature_runtime_status_idle';
   @State runActionKey: AppStringKey = 'feature_runtime_run';
+  @State workflowRunning: boolean = false;
   @State longTextInput: boolean = false;
   @State routeName: string = '';
   @State aiMethod: string = '';
@@ -515,13 +517,26 @@ struct FeatureRuntimePage {
 
   private runWorkflow(): void {
     const workflow = workflowForRoute(this.routeName);
-    if (workflow &&
-      shouldRunLiveRuntimeLoop(workflow.aiMethod, workflow.liveMode, this.liveCameraInputSelected, this.liveCameraActive)) {
+    if (!workflow) {
+      this.statusKey = 'feature_runtime_unknown_route';
+      return;
+    }
+    if (shouldRunLiveRuntimeLoop(workflow.aiMethod, workflow.liveMode, this.liveCameraInputSelected, this.liveCameraActive)) {
       this.startLiveRuntimeLoop(workflow);
       return;
     }
+    if (!shouldStartWorkflowRun(workflow, this.workflowRunning)) {
+      return;
+    }
     this.stopLiveRuntimeLoop();
-    this.runWorkflowAsync();
+    this.workflowRunning = true;
+    this.runWorkflowAsync()
+      .then(() => {
+        this.workflowRunning = false;
+      })
+      .catch(() => {
+        this.workflowRunning = false;
+      });
   }
 
   private startLiveRuntimeLoop(workflow: FeatureWorkflow): void {
@@ -890,6 +905,11 @@ struct FeatureRuntimePage {
 
   private textInputPlaceholderKey(): AppStringKey {
     return textInputPlaceholderKeyForWorkflow(workflowForRoute(this.routeName));
+  }
+
+  private runActionEnabled(): boolean {
+    const workflow = workflowForRoute(this.routeName);
+    return workflow === undefined || shouldStartWorkflowRun(workflow, this.workflowRunning);
   }
 
   private selectBuiltInStyle(style: BuiltInStyleTransferStyle): void {
@@ -1941,6 +1961,7 @@ struct FeatureRuntimePage {
           .width('100%')
           .height(44)
           .margin({ top: AppSpacing.lg })
+          .enabled(this.runActionEnabled())
           .onClick(() => this.runWorkflow())
 
         Column() {
