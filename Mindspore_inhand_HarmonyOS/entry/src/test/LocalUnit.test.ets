@@ -207,6 +207,8 @@ import {
   objectDetectionInputSize,
   ObjectDetectionNormalBox,
   objectDetectionModelOutputFromFloatArrays,
+  objectDetectionOverlayColor,
+  objectDetectionOverlayTextColor,
   normalizedObjectDetectionRgbInputFromRgba,
   parseObjectCategoryLabels
 } from '../main/ets/services/ai/ObjectDetectionService';
@@ -3867,6 +3869,20 @@ export default function localUnitTest() {
       expect(box.top.toFixed(1)).assertEqual('0.0');
       expect(box.width.toFixed(1)).assertEqual('80.0');
       expect(box.height.toFixed(1)).assertEqual('100.0');
+    });
+
+    it('usesAndroidObjectDetectionOverlayPaletteByResultOrder', 0, () => {
+      expect(objectDetectionOverlayColor(0)).assertEqual('#FFFFFF');
+      expect(objectDetectionOverlayColor(1)).assertEqual('#6DA7FF');
+      expect(objectDetectionOverlayColor(2)).assertEqual('#F8E71C');
+      expect(objectDetectionOverlayColor(3)).assertEqual('#FF844D');
+      expect(objectDetectionOverlayColor(4)).assertEqual('#66B50A');
+      expect(objectDetectionOverlayColor(5)).assertEqual('#FFFFFF');
+      expect(objectDetectionOverlayTextColor(0)).assertEqual('#333333');
+      expect(objectDetectionOverlayTextColor(1)).assertEqual('#333333');
+      expect(objectDetectionOverlayTextColor(2)).assertEqual('#333333');
+      expect(objectDetectionOverlayTextColor(3)).assertEqual('#333333');
+      expect(objectDetectionOverlayTextColor(4)).assertEqual('#333333');
     });
 
     it('objectDetectionServiceHandlesRunnerFailureAsInvalidOutput', 0, async () => {

@@ -59,6 +59,14 @@ export interface ObjectDetectionBoxPercent {
   readonly height: number;
 }
 
+export const objectDetectionOverlayPalette: Array<string> = [
+  '#FFFFFF',
+  '#6DA7FF',
+  '#F8E71C',
+  '#FF844D',
+  '#66B50A'
+];
+
 export interface ObjectDetectionNormalBox {
   readonly y: number;
   readonly x: number;
@@ -428,6 +436,15 @@ export function objectDetectionBoxPercent(
 
 function objectDetectionPercent(value: number, sourceLength: number): number {
   return Math.min(100, Math.max(0, value * 100 / sourceLength));
+}
+
+export function objectDetectionOverlayColor(index: number): string {
+  const safeIndex = index < 0 ? 0 : index;
+  return objectDetectionOverlayPalette[safeIndex % objectDetectionOverlayPalette.length];
+}
+
+export function objectDetectionOverlayTextColor(_index: number): string {
+  return '#333333';
 }
 
 interface ObjectDetectionWhBox {

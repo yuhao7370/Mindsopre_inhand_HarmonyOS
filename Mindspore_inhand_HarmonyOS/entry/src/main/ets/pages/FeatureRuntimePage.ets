@@ -64,7 +64,9 @@ import {
 import {
   ObjectDetection,
   ObjectDetectionBoxPercent,
-  objectDetectionBoxPercent
+  objectDetectionBoxPercent,
+  objectDetectionOverlayColor,
+  objectDetectionOverlayTextColor
 } from '../services/ai/ObjectDetectionService';
 import {
   SegmentationRectangle,
@@ -1540,8 +1542,8 @@ struct FeatureRuntimePage {
           .width('100%')
           .height('100%')
           .objectFit(ImageFit.Fill)
-        ForEach(this.objectDetections, (detection: ObjectDetection) => {
-          this.objectDetectionBox(detection)
+        ForEach(this.objectDetections, (detection: ObjectDetection, index: number) => {
+          this.objectDetectionBox(detection, index)
         }, (detection: ObjectDetection) => `${detection.imageId}-${detection.labelId}-${detection.score}`)
       }
       .width('100%')
@@ -1604,18 +1606,18 @@ struct FeatureRuntimePage {
   }
 
   @Builder
-  objectDetectionBox(detection: ObjectDetection) {
+  objectDetectionBox(detection: ObjectDetection, index: number) {
     Column() {
       Text(this.objectDetectionLabel(detection))
         .fontSize(10)
-        .fontColor('#FFFFFF')
-        .backgroundColor(AppColor.accent)
+        .fontColor(objectDetectionOverlayTextColor(index))
+        .backgroundColor(objectDetectionOverlayColor(index))
         .padding({ left: 4, right: 4, top: 2, bottom: 2 })
         .maxLines(1)
     }
     .width(this.percentLength(this.objectDetectionBoxStyle(detection).width))
     .height(this.percentLength(this.objectDetectionBoxStyle(detection).height))
-    .border({ width: 2, color: AppColor.accent, radius: 2 })
+    .border({ width: 2, color: objectDetectionOverlayColor(index), radius: 2 })
     .position({
       x: this.percentLength(this.objectDetectionBoxStyle(detection).left),
       y: this.percentLength(this.objectDetectionBoxStyle(detection).top)
