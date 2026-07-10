@@ -266,7 +266,7 @@ function danceStandardDeviation(realFrames: Array<DanceFrameData | undefined>, f
 
 function isDanceDeviationFrameInvalid(frame: DanceFrameData): boolean {
   return frame.sinRightElbow === 0.5 ||
-    frame.sinRightElbow === 0.5 ||
+    frame.sinRightWrist === 0.5 ||
     frame.sinLeftElbow === 0.5 ||
     frame.sinLeftWrist === 0.5 ||
     frame.sinLeftKnee === 0.5 ||
@@ -275,7 +275,7 @@ function isDanceDeviationFrameInvalid(frame: DanceFrameData): boolean {
 
 function danceDeviationFrameSum(frame: DanceFrameData): number {
   return frame.sinRightElbow +
-    frame.sinRightElbow +
+    frame.sinRightWrist +
     frame.sinLeftElbow +
     frame.sinLeftWrist +
     frame.sinLeftKnee +

@@ -1629,6 +1629,34 @@ export default function localUnitTest() {
       expect(danceScoreFromFrames(missingPointFrames)).assertEqual(danceNoPointScore);
     });
 
+    it('countsRightWristMovementAsDanceAction', 0, () => {
+      const template = danceTemplateFrames();
+      const baseFrame = template[0];
+      const wristOnlyFrames: Array<DanceFrameData> = [];
+      for (let index = 0; index < template.length; index++) {
+        wristOnlyFrames.push({
+          id: index + 1,
+          sinRightElbow: baseFrame.sinRightElbow,
+          sinRightWrist: index % 2 === 0 ? -1 : 1,
+          sinLeftElbow: baseFrame.sinLeftElbow,
+          sinLeftWrist: baseFrame.sinLeftWrist,
+          sinLeftKnee: baseFrame.sinLeftKnee,
+          sinLeftAnkle: baseFrame.sinLeftAnkle,
+          rightElbowMissing: false,
+          rightWristMissing: false,
+          leftElbowMissing: false,
+          leftWristMissing: false,
+          leftKneeMissing: false,
+          leftAnkleMissing: false
+        });
+      }
+
+      const score = danceScoreFromFrames(wristOnlyFrames);
+
+      expect(score === danceNoActScore).assertFalse();
+      expect(score === danceNoPointScore).assertFalse();
+    });
+
     it('createsDanceFrameFromGenericSkeletonPoints', 0, () => {
       const points: DanceSkeletonPoints = {
         neck: { x: 10, y: 10 },
