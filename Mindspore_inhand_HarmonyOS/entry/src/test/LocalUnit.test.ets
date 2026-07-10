@@ -2042,8 +2042,12 @@ export default function localUnitTest() {
 
       const portraitSegmentation: FeatureWorkflow = workflowForRoute(AppRoute.PORTRAIT_SEGMENTATION.name)!;
       expect(portraitSegmentation.aiMethod).assertEqual('segmentPerson');
-      expect(portraitSegmentation.inputKinds.indexOf('photo') >= 0).assertTrue();
+      expect(portraitSegmentation.inputKinds.indexOf('camera') >= 0).assertTrue();
+      expect(portraitSegmentation.inputKinds.indexOf('photo')).assertEqual(-1);
       expect((portraitSegmentation.optionalInputKinds ?? []).indexOf('backgroundImage') >= 0).assertTrue();
+      expect(portraitSegmentation.requiredPermissions.indexOf('camera') >= 0).assertTrue();
+      expect(portraitSegmentation.requiredPermissions.indexOf('media') >= 0).assertTrue();
+      expect(portraitSegmentation.liveMode).assertTrue();
     });
 
     it('portsAndroidPortraitSegmentationBackgroundPresets', 0, () => {
@@ -4276,6 +4280,8 @@ export default function localUnitTest() {
       expect(runtimeInputActionsForWorkflow(objectPhoto).indexOf('pickModelFile')).assertEqual(-1);
       expect(runtimeInputKindsForWorkflow(objectPhoto).indexOf('modelFile') >= 0).assertTrue();
       const portraitSegmentation: FeatureWorkflow = workflowForRoute(AppRoute.PORTRAIT_SEGMENTATION.name)!;
+      expect(runtimeInputActionsForWorkflow(portraitSegmentation).indexOf('startLiveCamera') >= 0).assertTrue();
+      expect(runtimeInputActionsForWorkflow(portraitSegmentation).indexOf('captureImage')).assertEqual(-1);
       expect(runtimeInputKindsForWorkflow(portraitSegmentation).indexOf('backgroundImage') >= 0).assertTrue();
       expect(inputActionForKind('camera')).assertEqual('captureImage');
       expect(inputActionForKind('photo')).assertEqual('pickImage');

@@ -108,11 +108,11 @@ export const featureWorkflows: Array<FeatureWorkflow> = [
     titleKey: 'title_segmentation',
     summaryKey: 'workflow_summary_segmentation',
     aiMethod: 'segmentPerson',
-    inputKinds: ['photo'],
+    inputKinds: ['camera'],
     optionalInputKinds: ['backgroundImage'],
-    requiredPermissions: ['media'],
+    requiredPermissions: ['camera', 'media'],
     resultKind: 'segmentationMask',
-    liveMode: false
+    liveMode: true
   },
   {
     routeName: AppRoute.IMAGE_CAMERA.name,

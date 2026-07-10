@@ -104,6 +104,24 @@ Current HarmonyOS behavior:
 - Android APK update/download-new-version behavior is intentionally not
   migrated.
 
+## Portrait Segmentation
+
+Android Portrait Segmentation is a live camera page that runs body
+segmentation, overlays the foreground on a selectable background, and supports
+built-in plus album backgrounds.
+
+Current HarmonyOS behavior:
+
+- `/hms/PortraitSegmentationActivity` now starts the shared live camera
+  preview and refreshes subject segmentation through the existing live runtime
+  loop.
+- The five Android-style built-in backgrounds and custom background picker are
+  preserved as optional inputs.
+- HarmonyOS reuses the foreground/background composite preview and save path
+  already used for still segmentation results; the live frame is captured
+  through the current app-cache JPEG fallback rather than a native analyzer
+  transactor.
+
 ## Dance Factory
 
 Android Dance Factory combines CameraX video sampling, HMS skeleton detection,
