@@ -96,6 +96,7 @@ import {
   danceSkeletonPointsFromPose
 } from '../main/ets/services/dance/DanceSamplingService';
 import {
+  androidSceneDetectionLabels,
   ImageClassificationSceneDetectionRunner,
   SceneDetection,
   SceneDetectionResult,
@@ -3121,6 +3122,11 @@ export default function localUnitTest() {
     });
 
     it('localSceneDetectionRunnerMapsClassificationLabelsToScenes', 0, async () => {
+      expect(androidSceneDetectionLabels.length).assertEqual(104);
+      for (let index = 0; index < androidSceneDetectionLabels.length; index++) {
+        const label = androidSceneDetectionLabels[index];
+        expect(sceneLabelForImageClassificationLabel(label)).assertEqual(label);
+      }
       expect(sceneLabelForImageClassificationLabel('espresso')).assertEqual('food');
       expect(sceneLabelForImageClassificationLabel('seashore')).assertEqual('beach');
       expect(sceneLabelForImageClassificationLabel('sports_car')).assertEqual('car');

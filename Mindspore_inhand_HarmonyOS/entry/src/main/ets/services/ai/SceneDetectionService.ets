@@ -22,6 +22,22 @@ export interface SceneDetectionServiceOptions {
 }
 
 export const localSceneDetectionMaxSceneCount: number = 3;
+export const androidSceneDetectionLabels: Array<string> = [
+  'stage', 'beach', 'bluesky', 'sunset', 'food', 'flower', 'greenplant', 'snow', 'night', 'Text',
+  'cat', 'dog', 'fireworks', 'overcast', 'fallen', 'panda', 'car', 'oldbuildings', 'bicycle',
+  'waterfall', 'playground', 'corridor', 'cabin', 'washroom', 'kitchen', 'bedroom', 'diningroom',
+  'livingroom', 'skyscraper', 'bridge', 'waterside', 'mountain', 'overlook', 'construction',
+  'islam', 'european', 'footballfield', 'baseballfield', 'tenniscourt', 'carinside',
+  'badmintoncourt', 'pingpangcourt', 'swimmingpool', 'alpaca', 'library', 'supermarket',
+  'restaurant', 'tiger', 'penguin', 'elephant', 'dinosaur', 'watersurface', 'indoorbasketballco',
+  'bowlingalley', 'classroom', 'rabbit', 'rhinoceros', 'camel', 'tortoise', 'leopard', 'giraffe',
+  'peacock', 'kangaroo', 'lion', 'motorcycle', 'aircraft', 'train', 'ship', 'glasses', 'watch',
+  'highwheels', 'washingmachine', 'airconditioner', 'camera', 'map', 'keyboard', 'redenvelope',
+  'fucharacter', 'xicharacter', 'dragondance', 'liondance', 'go', 'teddybear', 'transformer',
+  'thesmurfs', 'littlepony', 'butterfly', 'ladybug', 'dragonfly', 'billiardroom', 'meetingroom',
+  'office', 'bar', 'mallcourtyard', 'deer', 'cathedralhall', 'bee', 'helicopter', 'mahjong',
+  'chess', 'mcDonalds', 'ornamentalfish', 'widebuildings', 'other'
+];
 
 export interface ImageClassificationSceneDetectionRunnerOptions {
   readonly labels: Array<string>;
@@ -178,6 +194,10 @@ export function sceneLabelForImageClassificationLabel(label: string): string {
   if (isDeniedSceneLabel(normalized)) {
     return 'other';
   }
+  const androidSceneLabel = androidSceneLabelForNormalizedLabel(normalized);
+  if (androidSceneLabel.length > 0) {
+    return androidSceneLabel;
+  }
   for (let index = 0; index < localSceneLabelKeywordMaps.length; index++) {
     const entry = localSceneLabelKeywordMaps[index];
     for (let keywordIndex = 0; keywordIndex < entry.keywords.length; keywordIndex++) {
@@ -187,6 +207,16 @@ export function sceneLabelForImageClassificationLabel(label: string): string {
     }
   }
   return 'other';
+}
+
+function androidSceneLabelForNormalizedLabel(normalizedLabel: string): string {
+  for (let index = 0; index < androidSceneDetectionLabels.length; index++) {
+    const label = androidSceneDetectionLabels[index];
+    if (normalizeSceneLabel(label) === normalizedLabel) {
+      return label;
+    }
+  }
+  return '';
 }
 
 function normalizeSceneLabel(label: string): string {
