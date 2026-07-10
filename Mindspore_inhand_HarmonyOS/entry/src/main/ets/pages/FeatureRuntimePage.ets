@@ -521,11 +521,13 @@ struct FeatureRuntimePage {
       this.statusKey = 'feature_runtime_unknown_route';
       return;
     }
-    if (shouldRunLiveRuntimeLoop(workflow.aiMethod, workflow.liveMode, this.liveCameraInputSelected, this.liveCameraActive)) {
+    const liveRuntimeLoopReady = shouldRunLiveRuntimeLoop(workflow.aiMethod, workflow.liveMode,
+      this.liveCameraInputSelected, this.liveCameraActive);
+    if (liveRuntimeLoopReady) {
       this.startLiveRuntimeLoop(workflow);
       return;
     }
-    if (!shouldStartWorkflowRun(workflow, this.workflowRunning)) {
+    if (!shouldStartWorkflowRun(workflow, this.workflowRunning, liveRuntimeLoopReady)) {
       return;
     }
     this.stopLiveRuntimeLoop();
@@ -909,7 +911,12 @@ struct FeatureRuntimePage {
 
   private runActionEnabled(): boolean {
     const workflow = workflowForRoute(this.routeName);
-    return workflow === undefined || shouldStartWorkflowRun(workflow, this.workflowRunning);
+    if (workflow === undefined) {
+      return true;
+    }
+    const liveRuntimeLoopReady = shouldRunLiveRuntimeLoop(workflow.aiMethod, workflow.liveMode,
+      this.liveCameraInputSelected, this.liveCameraActive);
+    return shouldStartWorkflowRun(workflow, this.workflowRunning, liveRuntimeLoopReady);
   }
 
   private selectBuiltInStyle(style: BuiltInStyleTransferStyle): void {

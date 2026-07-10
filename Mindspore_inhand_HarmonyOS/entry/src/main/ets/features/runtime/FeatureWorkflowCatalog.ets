@@ -391,8 +391,9 @@ export function shouldShowStyleRecoveryControl(aiMethod: string, styledImageRead
   return aiMethod === 'runStyleTransfer' && styledImageReady;
 }
 
-export function shouldStartWorkflowRun(workflow: FeatureWorkflow, workflowRunning: boolean): boolean {
-  return workflow.liveMode || !workflowRunning;
+export function shouldStartWorkflowRun(workflow: FeatureWorkflow, workflowRunning: boolean,
+  liveRuntimeLoopReady: boolean): boolean {
+  return (workflow.liveMode && liveRuntimeLoopReady) || !workflowRunning;
 }
 
 export function workflowInputReadyAction(workflow: FeatureWorkflow, inputKind: FeatureInputKind,

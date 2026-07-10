@@ -5415,15 +5415,16 @@ export default function localUnitTest() {
       expect(shouldAutoRunStyleTransferAfterStyleReady(textRecognition, 'styleImage', true)).assertFalse();
     });
 
-    it('blocksRepeatedStillWorkflowRunsWhileKeepingLiveLoopRunnable', 0, () => {
+    it('blocksRepeatedAsyncWorkflowRunsWhileKeepingLiveLoopRunnable', 0, () => {
       const styleTransfer: FeatureWorkflow = workflowForRoute(AppRoute.STYLE_TRANSFER.name)!;
       const customModel: FeatureWorkflow = workflowForRoute(AppRoute.CUSTOM_MODEL.name)!;
       const objectCamera: FeatureWorkflow = workflowForRoute(AppRoute.OBJECT_CAMERA.name)!;
 
-      expect(shouldStartWorkflowRun(styleTransfer, false)).assertTrue();
-      expect(shouldStartWorkflowRun(styleTransfer, true)).assertFalse();
-      expect(shouldStartWorkflowRun(customModel, true)).assertFalse();
-      expect(shouldStartWorkflowRun(objectCamera, true)).assertTrue();
+      expect(shouldStartWorkflowRun(styleTransfer, false, false)).assertTrue();
+      expect(shouldStartWorkflowRun(styleTransfer, true, false)).assertFalse();
+      expect(shouldStartWorkflowRun(customModel, true, false)).assertFalse();
+      expect(shouldStartWorkflowRun(objectCamera, true, false)).assertFalse();
+      expect(shouldStartWorkflowRun(objectCamera, true, true)).assertTrue();
     });
 
     it('clearsTypedTranslationTextWhenAndroidImageTranslationInputIsReady', 0, () => {

@@ -170,8 +170,10 @@ Current HarmonyOS behavior:
 - The shared Feature Runtime page now keeps the same still-workflow guard:
   while a non-live workflow is running, the Run action is disabled and repeated
   auto-run/manual triggers are ignored.
-- Live camera workflows keep using the existing live-loop frame guard, so
-  camera refresh continues without overlapping frame inference.
+- Live camera workflows only bypass the shared guard after the page is actually
+  ready to enter the live runtime loop; fallback async runs are still guarded.
+  Inside the live loop, camera refresh continues to use the existing frame guard
+  so frame inference does not overlap.
 
 ## Scene Detection
 
