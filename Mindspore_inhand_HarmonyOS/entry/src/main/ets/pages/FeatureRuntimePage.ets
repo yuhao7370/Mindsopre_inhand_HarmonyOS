@@ -14,6 +14,8 @@ import {
   sampleImageUriForWorkflow,
   shouldAutoRunStyleTransferAfterStyleReady,
   shouldShowStyleRecoveryControl,
+  shouldUseLongTextInput,
+  shouldUseLongTextResultRow,
   workflowRunActionKey,
   workflowInputReadyAction,
   workflowForRoute
@@ -130,6 +132,7 @@ struct FeatureRuntimePage {
   @State summaryKey: AppStringKey = 'feature_runtime_status_idle';
   @State statusKey: AppStringKey = 'feature_runtime_status_idle';
   @State runActionKey: AppStringKey = 'feature_runtime_run';
+  @State longTextInput: boolean = false;
   @State routeName: string = '';
   @State aiMethod: string = '';
   @State resultText: string = '';
@@ -185,6 +188,7 @@ struct FeatureRuntimePage {
     this.summaryKey = workflow?.summaryKey ?? this.summaryKey;
     this.aiMethod = workflow?.aiMethod ?? '';
     this.runActionKey = workflowRunActionKey(workflow);
+    this.longTextInput = shouldUseLongTextInput(workflow);
     this.helpUrl = workflow?.helpUrl ?? '';
     this.helpContentKey = workflow?.helpContentKey;
     this.inputKinds = workflow ? runtimeInputKindsForWorkflow(workflow) : [];
@@ -897,6 +901,12 @@ struct FeatureRuntimePage {
     new ClipboardService().copyText(this.recognizedTextForCopy()).then((result: CopyTextResult) => {
       this.statusKey = result.ok ? 'feature_runtime_copy_done' : 'feature_runtime_copy_failed';
     });
+  }
+
+  private updateUserText(value: string): void {
+    this.userText = value;
+    this.selectedInputSummary = value;
+    this.statusKey = value.length > 0 ? 'feature_runtime_text_ready' : 'feature_runtime_status_idle';
   }
 
   private saveResultImage(pixelMap: image.PixelMap | undefined): void {
@@ -1638,11 +1648,18 @@ struct FeatureRuntimePage {
         .fontSize(12)
         .fontColor(AppColor.textSecondary)
         .width(108)
-      Text(row.value)
-        .fontSize(13)
-        .fontColor(AppColor.textPrimary)
-        .layoutWeight(1)
-        .maxLines(4)
+      if (shouldUseLongTextResultRow(this.aiMethod, row.labelKey)) {
+        Text(row.value)
+          .fontSize(13)
+          .fontColor(AppColor.textPrimary)
+          .layoutWeight(1)
+      } else {
+        Text(row.value)
+          .fontSize(13)
+          .fontColor(AppColor.textPrimary)
+          .layoutWeight(1)
+          .maxLines(4)
+      }
     }
     .width('100%')
     .margin({ top: AppSpacing.xs })
@@ -1727,16 +1744,21 @@ struct FeatureRuntimePage {
             this.liveCameraPreview()
           }
           if (this.inputKinds.indexOf('text') >= 0 && this.textInputVisible) {
-            TextInput({ text: this.userText, placeholder: appString('feature_runtime_text_placeholder') })
-              .width('100%')
-              .height(44)
-              .fontSize(14)
-              .margin({ top: AppSpacing.sm })
-              .onChange((value: string) => {
-                this.userText = value;
-                this.selectedInputSummary = value;
-                this.statusKey = value.length > 0 ? 'feature_runtime_text_ready' : 'feature_runtime_status_idle';
-              })
+            if (this.longTextInput) {
+              TextArea({ text: this.userText, placeholder: appString('feature_runtime_text_placeholder') })
+                .width('100%')
+                .height(132)
+                .fontSize(14)
+                .margin({ top: AppSpacing.sm })
+                .onChange((value: string) => this.updateUserText(value))
+            } else {
+              TextInput({ text: this.userText, placeholder: appString('feature_runtime_text_placeholder') })
+                .width('100%')
+                .height(44)
+                .fontSize(14)
+                .margin({ top: AppSpacing.sm })
+                .onChange((value: string) => this.updateUserText(value))
+            }
           }
           if (this.hasInputPreview()) {
             Column() {

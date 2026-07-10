@@ -287,6 +287,21 @@ export function workflowRunActionKey(workflow: FeatureWorkflow | undefined): App
   return workflow?.runActionKey ?? 'feature_runtime_run';
 }
 
+export function shouldUseLongTextInput(workflow: FeatureWorkflow | undefined): boolean {
+  return workflow?.routeName === AppRoute.TEXT_TRANSLATION.name;
+}
+
+export function shouldUseLongTextResultRow(aiMethod: string, labelKey: AppStringKey): boolean {
+  if (aiMethod === 'recognizeText') {
+    return labelKey === 'feature_runtime_result_text';
+  }
+  if (aiMethod === 'translateText') {
+    return labelKey === 'feature_runtime_result_text' ||
+      labelKey === 'feature_runtime_result_translated_text';
+  }
+  return false;
+}
+
 export function inputKindReplacesPrimaryInput(inputKind: FeatureInputKind): boolean {
   return inputKind !== 'modelFile' &&
     inputKind !== 'backgroundImage' &&
