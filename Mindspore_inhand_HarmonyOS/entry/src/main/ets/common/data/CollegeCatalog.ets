@@ -29,6 +29,8 @@ export interface CollegeItem {
   readonly quickActions?: CollegeQuickAction[];
 }
 
+export const collegeSummaryDialogTitleKey: AppStringKey = 'college_dialog_title';
+
 export const collegeItems: CollegeItem[] = [
   { id: 'summary', type: 'summary', title: 'MindSpore Summary', titleKey: 'college_summary_title', icon: 'summary' },
   { id: 'cloud', type: 'link', title: 'A One-Hour Trip to MindSpore', titleKey: 'college_cloud_title', icon: 'cloud', url: collegeMainCloudUrl },

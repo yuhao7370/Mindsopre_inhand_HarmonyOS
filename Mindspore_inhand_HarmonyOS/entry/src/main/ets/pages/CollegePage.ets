@@ -6,6 +6,7 @@ import {
   collegeItems,
   CollegeItem,
   CollegeQuickAction,
+  collegeSummaryDialogTitleKey,
   isCollegeItemUrlNavigable
 } from '../common/data/CollegeCatalog';
 import { iconLabel } from '../common/icons/IconSymbols';
@@ -110,7 +111,7 @@ export struct CollegePage {
 
   private showSummary(): void {
     AlertDialog.show({
-      title: appString('college_summary_title'),
+      title: appString(collegeSummaryDialogTitleKey),
       message: appString('college_dialog_content'),
       primaryButton: {
         value: appString('confirm'),

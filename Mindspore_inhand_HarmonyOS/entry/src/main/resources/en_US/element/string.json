@@ -54,6 +54,7 @@
     { "name": "college_faq_title", "value": "FAQ" },
     { "name": "college_ask_title", "value": "Ask on forum" },
     { "name": "college_light_title", "value": "~Illuminate your learning trip~" },
+    { "name": "college_dialog_title", "value": "Summary" },
     { "name": "college_dialog_content", "value": "MindSpore is a full-scenario AI computing framework. This page provides local learning entries and opens external resources in a web page." },
     { "name": "college_checked", "value": "Done" },
     { "name": "me_share_title", "value": "Share" },

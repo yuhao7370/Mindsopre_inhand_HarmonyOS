@@ -316,7 +316,11 @@ import {
   webUrlForRouteName,
   webPagePath
 } from '../main/ets/common/data/WebDestination';
-import { collegeItems, isCollegeItemUrlNavigable } from '../main/ets/common/data/CollegeCatalog';
+import {
+  collegeItems,
+  collegeSummaryDialogTitleKey,
+  isCollegeItemUrlNavigable
+} from '../main/ets/common/data/CollegeCatalog';
 import { MeItem, isMeItemUrlNavigable, meItems, visibleMeItems } from '../main/ets/common/data/MeCatalog';
 import { AppVersionReader, AppVersionService, formattedAppVersionName } from '../main/ets/services/app/AppVersionService';
 import {
@@ -1272,6 +1276,11 @@ export default function localUnitTest() {
       expect(visibleMeItems[0].title).assertEqual('Version');
       expect(meItems.find((item: MeItem) => item.id === 'privacy')?.visibleByDefault).assertFalse();
       expect(meItems.find((item: MeItem) => item.id === 'qr')?.visibleByDefault).assertFalse();
+    });
+
+    it('usesAndroidCollegeSummaryDialogTitleKey', 0, () => {
+      expect(collegeSummaryDialogTitleKey).assertEqual('college_dialog_title');
+      expect(hasAppStringKey(collegeSummaryDialogTitleKey)).assertTrue();
     });
 
     it('usesAndroidPreferenceKeysForCollegeProgress', 0, () => {
