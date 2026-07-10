@@ -275,6 +275,7 @@ import {
   LiveRuntimeLoopScheduler,
   LiveRuntimeLoopService,
   liveImageClassificationIntervalMs,
+  liveRuntimeIntervalForAiMethod,
   liveRuntimeIntervalMs,
   liveCameraXComponentId,
   liveFrameImagePackingOption,
@@ -4846,8 +4847,14 @@ export default function localUnitTest() {
       expect(shouldRunLiveImageClassificationLoop('classifyImage', true, false)).assertFalse();
       expect(shouldRunLiveImageClassificationLoop('detectObjects', true, true)).assertFalse();
       expect(shouldRunLiveImageClassificationLoop('classifyImage', false, true)).assertFalse();
-      expect(liveImageClassificationIntervalMs).assertEqual(1000);
+      expect(liveImageClassificationIntervalMs).assertEqual(500);
       expect(liveRuntimeIntervalMs).assertEqual(1000);
+      expect(liveRuntimeIntervalForAiMethod('classifyImage')).assertEqual(500);
+      expect(liveRuntimeIntervalForAiMethod('detectGesture')).assertEqual(500);
+      expect(liveRuntimeIntervalForAiMethod('detectScene')).assertEqual(500);
+      expect(liveRuntimeIntervalForAiMethod('detectObjects')).assertEqual(1000);
+      expect(liveRuntimeIntervalForAiMethod('segmentPerson')).assertEqual(1000);
+      expect(liveRuntimeIntervalForAiMethod('detectPose')).assertEqual(1000);
     });
 
     it('runsLiveLoopForImplementedLiveCameraAiMethodsOnly', 0, () => {
@@ -4888,7 +4895,7 @@ export default function localUnitTest() {
       scheduler.tick();
       await Promise.resolve();
 
-      expect(scheduler.intervalMsValues[0]).assertEqual(1000);
+      expect(scheduler.intervalMsValues[0]).assertEqual(500);
       expect(runner.runCount).assertEqual(2);
     });
 

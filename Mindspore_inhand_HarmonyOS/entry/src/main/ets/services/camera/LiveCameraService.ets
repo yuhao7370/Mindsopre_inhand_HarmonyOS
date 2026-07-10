@@ -6,7 +6,8 @@ import { AppStringKey } from '../../common/i18n/AppStrings';
 
 export const liveCameraXComponentId = 'liveCameraPreview';
 export const liveRuntimeIntervalMs = 1000;
-export const liveImageClassificationIntervalMs = liveRuntimeIntervalMs;
+export const fastLiveRuntimeIntervalMs = 500;
+export const liveImageClassificationIntervalMs = fastLiveRuntimeIntervalMs;
 export const liveFrameImagePackingOption: image.PackingOption = {
   format: 'image/jpeg',
   quality: 90
@@ -87,6 +88,13 @@ export function shouldRunLiveRuntimeLoop(
     aiMethod === 'detectPose' ||
     aiMethod === 'detectGesture' ||
     aiMethod === 'detectScene';
+}
+
+export function liveRuntimeIntervalForAiMethod(aiMethod: string): number {
+  if (aiMethod === 'classifyImage' || aiMethod === 'detectGesture' || aiMethod === 'detectScene') {
+    return fastLiveRuntimeIntervalMs;
+  }
+  return liveRuntimeIntervalMs;
 }
 
 export function shouldAutoRunLiveRuntimeAfterPreview(

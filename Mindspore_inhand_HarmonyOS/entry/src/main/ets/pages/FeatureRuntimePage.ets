@@ -48,7 +48,7 @@ import {
   LiveFrameImageService,
   LiveRuntimeFrameRunner,
   LiveRuntimeLoopService,
-  liveRuntimeIntervalMs,
+  liveRuntimeIntervalForAiMethod,
   liveCameraXComponentId,
   shouldRunLiveRuntimeLoop,
   shouldAutoRunLiveRuntimeAfterPreview,
@@ -396,8 +396,8 @@ struct FeatureRuntimePage {
       return;
     }
     const workflow = workflowForRoute(this.routeName);
-    if (shouldAutoRunLiveRuntimeAfterPreview(this.aiMethod, workflow?.liveMode ?? false, result.ok)) {
-      this.startLiveRuntimeLoop();
+    if (workflow && shouldAutoRunLiveRuntimeAfterPreview(this.aiMethod, workflow.liveMode, result.ok)) {
+      this.startLiveRuntimeLoop(workflow);
     }
   }
 
@@ -490,18 +490,18 @@ struct FeatureRuntimePage {
     const workflow = workflowForRoute(this.routeName);
     if (workflow &&
       shouldRunLiveRuntimeLoop(workflow.aiMethod, workflow.liveMode, this.liveCameraInputSelected, this.liveCameraActive)) {
-      this.startLiveRuntimeLoop();
+      this.startLiveRuntimeLoop(workflow);
       return;
     }
     this.stopLiveRuntimeLoop();
     this.runWorkflowAsync();
   }
 
-  private startLiveRuntimeLoop(): void {
+  private startLiveRuntimeLoop(workflow: FeatureWorkflow): void {
     const runner = new PageLiveRuntimeFrameRunner(async (): Promise<void> => {
       await this.runWorkflowAsync();
     });
-    this.liveRuntimeLoopService.start(liveRuntimeIntervalMs, runner);
+    this.liveRuntimeLoopService.start(liveRuntimeIntervalForAiMethod(workflow.aiMethod), runner);
   }
 
   private stopLiveRuntimeLoop(): void {
