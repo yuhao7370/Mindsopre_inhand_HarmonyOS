@@ -1,7 +1,7 @@
 import { common } from '@kit.AbilityKit';
 import { uniformTypeDescriptor } from '@kit.ArkData';
 import { systemShare } from '@kit.ShareKit';
-import { meApkUrl } from '../../common/data/WebDestination';
+import { mindSporeBaseUrl } from '../../common/data/WebDestination';
 import { AppStringKey } from '../../common/i18n/AppStrings';
 
 export interface ShareTextPayload {
@@ -118,9 +118,9 @@ export class ShareService {
 export function mindSporeInhandShareText(recommendation: string): string {
   const normalizedRecommendation = recommendation.trim();
   if (normalizedRecommendation.length === 0) {
-    return meApkUrl;
+    return mindSporeBaseUrl;
   }
-  return `${normalizedRecommendation} ${meApkUrl}`;
+  return `${normalizedRecommendation} ${mindSporeBaseUrl}`;
 }
 
 function failedShareTextResult(): ShareTextResult {

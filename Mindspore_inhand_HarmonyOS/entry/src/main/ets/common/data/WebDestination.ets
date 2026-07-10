@@ -23,7 +23,6 @@ export const collegeMainFaqUrl: string = `${mindSporeBaseUrl}/doc/faq/zh-CN/mast
 export const collegeMainAskUrl: string = 'https://bbs.huaweicloud.com/forum/forum-1076-1.html';
 export const intelligentPoetryUrl: string = `${mindSporeBaseUrl}/resources/tech/nlp/poetry`;
 
-export const meApkUrl: string = 'https://download.mindspore.cn/model_zoo/official/lite/apk/mindmain.html';
 export const meHelpUrl: string =
   'https://gitee.com/mindspore/mindspore/issues/new?issue%5Bassignee_id%5D=0&issue%5Bmilestone_id%5D=0';
 export const meCodeUrl: string = 'https://gitee.com/mindspore/models/tree/master/official/lite';

@@ -245,6 +245,19 @@ Current HarmonyOS behavior:
   through the current app-cache JPEG fallback rather than a native analyzer
   transactor.
 
+## Me
+
+Android Me keeps most rows hidden by default and builds the hidden share text by
+appending the Android APK download/update page.
+
+Current HarmonyOS behavior:
+
+- The default visible Me surface still only shows Version, matching Android
+  source visibility.
+- Hidden share remains route/service-ready, but the payload now appends the
+  MindSpore home page instead of the Android APK download URL because APK
+  update/download-new-version behavior is intentionally not migrated.
+
 ## Dance Factory
 
 Android Dance Factory combines CameraX video sampling, HMS skeleton detection,

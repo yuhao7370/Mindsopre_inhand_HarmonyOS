@@ -338,7 +338,6 @@ import {
   helpObjectDetectionUrl,
   helpStyleTransferUrl,
   intelligentPoetryUrl,
-  meApkUrl,
   meCodeUrl,
   meHelpUrl,
   meStarUrl,
@@ -1701,7 +1700,7 @@ export default function localUnitTest() {
       expect(resultImagePackingOption.quality).assertEqual(100);
     });
 
-    it('shareServiceUsesAndroidMindSporeTextPayload', 0, async () => {
+    it('shareServiceSkipsAndroidApkDownloadUrl', 0, async () => {
       const writer = new RecordingShareWriter();
       const shareText = mindSporeInhandShareText('MindSpore inhand:');
       const result = await new ShareService(writer).shareText({
@@ -1709,7 +1708,10 @@ export default function localUnitTest() {
         text: shareText
       });
 
-      expect(shareText).assertEqual(`MindSpore inhand: ${meApkUrl}`);
+      expect(shareText.indexOf('download.mindspore.cn')).assertEqual(-1);
+      expect(shareText.indexOf('/apk/')).assertEqual(-1);
+      expect(shareText).assertEqual(`MindSpore inhand: ${mindSporeBaseUrl}`);
+      expect(mindSporeInhandShareText('')).assertEqual(mindSporeBaseUrl);
       expect(result.ok).assertTrue();
       expect(result.messageKey).assertEqual('me_share_done');
       expect(result.sharedTextLength).assertEqual(shareText.length);
