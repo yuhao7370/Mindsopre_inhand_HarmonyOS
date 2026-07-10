@@ -31,7 +31,8 @@ import {
   GestureDetection,
   GestureResult,
   GestureService,
-  gestureDetectionLabel
+  gestureDetectionLabel,
+  gestureDetectionLabelKey
 } from './GestureService';
 import {
   SceneDetection,
@@ -161,6 +162,7 @@ export interface AiCustomModelData {
 export interface AiRunResultRow {
   readonly labelKey: AppStringKey;
   readonly value: string;
+  readonly valueKey?: AppStringKey;
 }
 
 export interface AiRunResult {
@@ -1038,7 +1040,7 @@ function gestureResultRows(data: AiGestureData): Array<AiRunResultRow> {
   ];
   if (data.result.gestures.length > 0) {
     const top = data.result.gestures[0];
-    rows.unshift(resultRow('feature_runtime_result_label', gestureDetectionLabel(top)));
+    rows.unshift(resultRow('feature_runtime_result_label', gestureDetectionLabel(top), gestureDetectionLabelKey(top)));
     rows.push(resultRow('feature_runtime_result_score', `${(top.score * 100).toFixed(2)}%`));
   }
   rows.push(resultRow('feature_runtime_result_image', runtimePathSegment(data.imageUri)));
@@ -1060,10 +1062,11 @@ function sceneDetectionResultRows(data: AiSceneData): Array<AiRunResultRow> {
   return rows;
 }
 
-function resultRow(labelKey: AppStringKey, value: string): AiRunResultRow {
+function resultRow(labelKey: AppStringKey, value: string, valueKey?: AppStringKey): AiRunResultRow {
   return {
     labelKey: labelKey,
-    value: value
+    value: value,
+    valueKey: valueKey
   };
 }
 

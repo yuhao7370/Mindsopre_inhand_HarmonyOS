@@ -121,6 +121,21 @@ export type AppStringKey =
   'feature_runtime_gesture_runner_unavailable' |
   'feature_runtime_gesture_done' |
   'feature_runtime_gesture_failed' |
+  'gesture_label_one' |
+  'gesture_label_two' |
+  'gesture_label_three' |
+  'gesture_label_four' |
+  'gesture_label_five' |
+  'gesture_label_six' |
+  'gesture_label_seven' |
+  'gesture_label_eight' |
+  'gesture_label_nine' |
+  'gesture_label_dislike' |
+  'gesture_label_fist' |
+  'gesture_label_thumb_up' |
+  'gesture_label_heart' |
+  'gesture_label_ok' |
+  'gesture_label_other' |
   'feature_runtime_scene_runner_unavailable' |
   'feature_runtime_scene_done' |
   'feature_runtime_scene_failed' |
@@ -360,6 +375,21 @@ const APP_STRING_KEYS: AppStringKey[] = [
   'feature_runtime_gesture_runner_unavailable',
   'feature_runtime_gesture_done',
   'feature_runtime_gesture_failed',
+  'gesture_label_one',
+  'gesture_label_two',
+  'gesture_label_three',
+  'gesture_label_four',
+  'gesture_label_five',
+  'gesture_label_six',
+  'gesture_label_seven',
+  'gesture_label_eight',
+  'gesture_label_nine',
+  'gesture_label_dislike',
+  'gesture_label_fist',
+  'gesture_label_thumb_up',
+  'gesture_label_heart',
+  'gesture_label_ok',
+  'gesture_label_other',
   'feature_runtime_scene_runner_unavailable',
   'feature_runtime_scene_done',
   'feature_runtime_scene_failed',
@@ -725,6 +755,36 @@ export function appString(key: AppStringKey): ResourceStr {
       return $r('app.string.feature_runtime_gesture_done');
     case 'feature_runtime_gesture_failed':
       return $r('app.string.feature_runtime_gesture_failed');
+    case 'gesture_label_one':
+      return $r('app.string.gesture_label_one');
+    case 'gesture_label_two':
+      return $r('app.string.gesture_label_two');
+    case 'gesture_label_three':
+      return $r('app.string.gesture_label_three');
+    case 'gesture_label_four':
+      return $r('app.string.gesture_label_four');
+    case 'gesture_label_five':
+      return $r('app.string.gesture_label_five');
+    case 'gesture_label_six':
+      return $r('app.string.gesture_label_six');
+    case 'gesture_label_seven':
+      return $r('app.string.gesture_label_seven');
+    case 'gesture_label_eight':
+      return $r('app.string.gesture_label_eight');
+    case 'gesture_label_nine':
+      return $r('app.string.gesture_label_nine');
+    case 'gesture_label_dislike':
+      return $r('app.string.gesture_label_dislike');
+    case 'gesture_label_fist':
+      return $r('app.string.gesture_label_fist');
+    case 'gesture_label_thumb_up':
+      return $r('app.string.gesture_label_thumb_up');
+    case 'gesture_label_heart':
+      return $r('app.string.gesture_label_heart');
+    case 'gesture_label_ok':
+      return $r('app.string.gesture_label_ok');
+    case 'gesture_label_other':
+      return $r('app.string.gesture_label_other');
     case 'feature_runtime_scene_runner_unavailable':
       return $r('app.string.feature_runtime_scene_runner_unavailable');
     case 'feature_runtime_scene_done':

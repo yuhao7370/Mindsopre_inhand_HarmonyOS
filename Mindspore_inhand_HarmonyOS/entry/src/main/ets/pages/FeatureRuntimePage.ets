@@ -88,6 +88,7 @@ import {
   GestureDetection,
   GestureRectanglePercent,
   gestureDetectionLabel,
+  gestureDetectionLabelKey,
   gestureRectanglePercent
 } from '../services/ai/GestureService';
 import {
@@ -1246,8 +1247,23 @@ struct FeatureRuntimePage {
     return `${label} ${(detection.score * 100).toFixed(1)}%`;
   }
 
-  private gestureLabel(gesture: GestureDetection): string {
-    return `${gestureDetectionLabel(gesture)} ${(gesture.score * 100).toFixed(1)}%`;
+  private gestureLabelResource(gesture: GestureDetection): ResourceStr {
+    const labelKey = gestureDetectionLabelKey(gesture);
+    if (labelKey !== undefined) {
+      return appString(labelKey);
+    }
+    return gestureDetectionLabel(gesture);
+  }
+
+  private gestureScoreLabel(gesture: GestureDetection): string {
+    return ` ${(gesture.score * 100).toFixed(1)}%`;
+  }
+
+  private resultRowValue(row: AiRunResultRow): ResourceStr {
+    if (row.valueKey !== undefined) {
+      return appString(row.valueKey);
+    }
+    return row.value;
   }
 
   private objectDetectionBoxStyle(detection: ObjectDetection): ObjectDetectionBoxPercent {
@@ -1589,12 +1605,20 @@ struct FeatureRuntimePage {
   @Builder
   gestureBox(gesture: GestureDetection) {
     Column() {
-      Text(this.gestureLabel(gesture))
-        .fontSize(10)
-        .fontColor('#FFFFFF')
-        .backgroundColor(AppColor.accent)
-        .padding({ left: 4, right: 4, top: 2, bottom: 2 })
-        .maxLines(1)
+      Row() {
+        Text(this.gestureLabelResource(gesture))
+          .fontSize(10)
+          .fontColor('#FFFFFF')
+          .layoutWeight(1)
+          .maxLines(1)
+        Text(this.gestureScoreLabel(gesture))
+          .fontSize(10)
+          .fontColor('#FFFFFF')
+          .maxLines(1)
+      }
+      .width('100%')
+      .backgroundColor(AppColor.accent)
+      .padding({ left: 4, right: 4, top: 2, bottom: 2 })
     }
     .width(this.percentLength(this.gestureBoxStyle(gesture).width))
     .height(this.percentLength(this.gestureBoxStyle(gesture).height))
@@ -1725,12 +1749,12 @@ struct FeatureRuntimePage {
         .fontColor(AppColor.textSecondary)
         .width(108)
       if (shouldUseLongTextResultRow(this.aiMethod, row.labelKey)) {
-        Text(row.value)
+        Text(this.resultRowValue(row))
           .fontSize(13)
           .fontColor(AppColor.textPrimary)
           .layoutWeight(1)
       } else {
-        Text(row.value)
+        Text(this.resultRowValue(row))
           .fontSize(13)
           .fontColor(AppColor.textPrimary)
           .layoutWeight(1)

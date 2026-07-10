@@ -1,3 +1,4 @@
+import { AppStringKey } from '../../common/i18n/AppStrings';
 import { ImageClassificationScoreRunner, imageCategoryLabelCount } from './ImageClassificationService';
 
 export interface GestureRectangle {
@@ -142,6 +143,49 @@ export function gestureDetectionLabel(gesture: GestureDetection): string {
     return runnerLabel;
   }
   return androidGestureLabel(gesture.category);
+}
+
+export function gestureDetectionLabelKey(gesture: GestureDetection): AppStringKey | undefined {
+  const runnerLabel = gesture.label.trim();
+  if (runnerLabel.length > 0 && runnerLabel !== androidGestureLabel(gesture.category)) {
+    return undefined;
+  }
+  return androidGestureLabelKey(gesture.category);
+}
+
+export function androidGestureLabelKey(category: number): AppStringKey {
+  switch (category) {
+    case 0:
+      return 'gesture_label_one';
+    case 1:
+      return 'gesture_label_two';
+    case 2:
+      return 'gesture_label_three';
+    case 3:
+      return 'gesture_label_four';
+    case 4:
+      return 'gesture_label_five';
+    case 5:
+      return 'gesture_label_six';
+    case 6:
+      return 'gesture_label_seven';
+    case 7:
+      return 'gesture_label_eight';
+    case 8:
+      return 'gesture_label_nine';
+    case 9:
+      return 'gesture_label_dislike';
+    case 10:
+      return 'gesture_label_fist';
+    case 11:
+      return 'gesture_label_thumb_up';
+    case 12:
+      return 'gesture_label_heart';
+    case 13:
+      return 'gesture_label_ok';
+    default:
+      return 'gesture_label_other';
+  }
 }
 
 export function androidGestureLabel(category: number): string {

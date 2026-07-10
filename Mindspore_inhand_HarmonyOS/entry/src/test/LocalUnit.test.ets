@@ -54,6 +54,7 @@ import {
   ImageClassificationGestureRunner,
   GestureRunner,
   GestureService,
+  androidGestureLabelKey,
   gestureCategoryForImageClassificationLabel,
   gestureRectanglePercent
 } from '../main/ets/services/ai/GestureService';
@@ -1483,6 +1484,21 @@ export default function localUnitTest() {
       expect(hasAppStringKey('feature_runtime_gesture_done')).assertTrue();
       expect(hasAppStringKey('feature_runtime_gesture_failed')).assertTrue();
       expect(hasAppStringKey('feature_runtime_result_gesture_overlay')).assertTrue();
+      expect(hasAppStringKey('gesture_label_one')).assertTrue();
+      expect(hasAppStringKey('gesture_label_two')).assertTrue();
+      expect(hasAppStringKey('gesture_label_three')).assertTrue();
+      expect(hasAppStringKey('gesture_label_four')).assertTrue();
+      expect(hasAppStringKey('gesture_label_five')).assertTrue();
+      expect(hasAppStringKey('gesture_label_six')).assertTrue();
+      expect(hasAppStringKey('gesture_label_seven')).assertTrue();
+      expect(hasAppStringKey('gesture_label_eight')).assertTrue();
+      expect(hasAppStringKey('gesture_label_nine')).assertTrue();
+      expect(hasAppStringKey('gesture_label_dislike')).assertTrue();
+      expect(hasAppStringKey('gesture_label_fist')).assertTrue();
+      expect(hasAppStringKey('gesture_label_thumb_up')).assertTrue();
+      expect(hasAppStringKey('gesture_label_heart')).assertTrue();
+      expect(hasAppStringKey('gesture_label_ok')).assertTrue();
+      expect(hasAppStringKey('gesture_label_other')).assertTrue();
       expect(hasAppStringKey('title_scene_detection')).assertTrue();
       expect(hasAppStringKey('feature_runtime_scene_runner_unavailable')).assertTrue();
       expect(hasAppStringKey('feature_runtime_scene_done')).assertTrue();
@@ -3160,6 +3176,7 @@ export default function localUnitTest() {
       expect(result.detailText.indexOf('Thumb up 88.00% [4,8,40,60]') >= 0).assertTrue();
       expect(aiRunResultRows(result)[0].labelKey).assertEqual('feature_runtime_result_label');
       expect(aiRunResultRows(result)[0].value).assertEqual('Thumb up');
+      expect(aiRunResultRows(result)[0].valueKey).assertUndefined();
       expect(runner.seenImageUris[0]).assertEqual('file://selected/hand.jpg');
     });
 
@@ -3185,6 +3202,25 @@ export default function localUnitTest() {
 
       expect(result.detailText.indexOf('Thumb up 88.00%') >= 0).assertTrue();
       expect(aiRunResultRows(result)[0].value).assertEqual('Thumb up');
+      expect(aiRunResultRows(result)[0].valueKey).assertEqual('gesture_label_thumb_up');
+    });
+
+    it('mapsAndroidGestureCategoriesToI18nKeys', 0, () => {
+      expect(androidGestureLabelKey(0)).assertEqual('gesture_label_one');
+      expect(androidGestureLabelKey(1)).assertEqual('gesture_label_two');
+      expect(androidGestureLabelKey(2)).assertEqual('gesture_label_three');
+      expect(androidGestureLabelKey(3)).assertEqual('gesture_label_four');
+      expect(androidGestureLabelKey(4)).assertEqual('gesture_label_five');
+      expect(androidGestureLabelKey(5)).assertEqual('gesture_label_six');
+      expect(androidGestureLabelKey(6)).assertEqual('gesture_label_seven');
+      expect(androidGestureLabelKey(7)).assertEqual('gesture_label_eight');
+      expect(androidGestureLabelKey(8)).assertEqual('gesture_label_nine');
+      expect(androidGestureLabelKey(9)).assertEqual('gesture_label_dislike');
+      expect(androidGestureLabelKey(10)).assertEqual('gesture_label_fist');
+      expect(androidGestureLabelKey(11)).assertEqual('gesture_label_thumb_up');
+      expect(androidGestureLabelKey(12)).assertEqual('gesture_label_heart');
+      expect(androidGestureLabelKey(13)).assertEqual('gesture_label_ok');
+      expect(androidGestureLabelKey(999)).assertEqual('gesture_label_other');
     });
 
     it('mapsGestureRectangleToPercentOverlay', 0, () => {
