@@ -282,6 +282,7 @@ import {
   defaultPortraitSegmentationBackgroundUri,
   initialPortraitSegmentationBackgroundState,
   PortraitSegmentationBackgroundState,
+  portraitSegmentationBackgroundStateAfterCancelledPick,
   portraitSegmentationBackgroundPresets,
   portraitSegmentationBackgroundUri,
   portraitSegmentationCustomBackgroundId
@@ -2784,6 +2785,24 @@ export default function localUnitTest() {
       );
       expect(stillSegmentationState.backgroundImageUri).assertEqual('');
       expect(stillSegmentationState.selectedPresetId).assertEqual('');
+    });
+
+    it('preservesPortraitSegmentationBackgroundWhenCustomPickIsCancelled', 0, () => {
+      const presetState: PortraitSegmentationBackgroundState = portraitSegmentationBackgroundStateAfterCancelledPick(
+        AppRoute.PORTRAIT_SEGMENTATION.name,
+        'rawfile://portrait/portrait1.jpg',
+        'portrait1'
+      );
+      expect(presetState.backgroundImageUri).assertEqual('rawfile://portrait/portrait1.jpg');
+      expect(presetState.selectedPresetId).assertEqual('portrait1');
+
+      const customState: PortraitSegmentationBackgroundState = portraitSegmentationBackgroundStateAfterCancelledPick(
+        AppRoute.PORTRAIT_SEGMENTATION.name,
+        'file://album/custom.jpg',
+        portraitSegmentationCustomBackgroundId
+      );
+      expect(customState.backgroundImageUri).assertEqual('file://album/custom.jpg');
+      expect(customState.selectedPresetId).assertEqual(portraitSegmentationCustomBackgroundId);
     });
 
     it('targetsPortraitBackgroundReplacementPreviewForCompositeSave', 0, () => {

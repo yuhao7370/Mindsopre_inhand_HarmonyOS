@@ -282,6 +282,8 @@ Current HarmonyOS behavior:
 - The five Android-style built-in backgrounds and custom background picker are
   preserved as optional inputs, and the page starts with the Android `portrait1`
   background selected by default.
+- Canceling the album picker keeps the current built-in or custom background,
+  matching Android's `onActivityResult` behavior.
 - HarmonyOS reuses the foreground/background composite preview and save path
   already used for still segmentation results; the live frame is captured
   through the current app-cache JPEG fallback rather than a native analyzer

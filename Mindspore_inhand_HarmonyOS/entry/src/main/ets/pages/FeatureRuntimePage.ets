@@ -106,6 +106,7 @@ import {
   initialPortraitSegmentationBackgroundState,
   PortraitSegmentationBackgroundPreset,
   PortraitSegmentationBackgroundState,
+  portraitSegmentationBackgroundStateAfterCancelledPick,
   portraitSegmentationBackgroundPresets,
   portraitSegmentationBackgroundUri,
   portraitSegmentationCustomBackgroundId
@@ -456,6 +457,17 @@ struct FeatureRuntimePage {
   ): void {
     if (!result.ok) {
       this.statusKey = 'feature_runtime_pick_cancelled';
+      if (inputKind === 'backgroundImage') {
+        const backgroundState: PortraitSegmentationBackgroundState =
+          portraitSegmentationBackgroundStateAfterCancelledPick(
+            this.routeName,
+            this.backgroundImageUri,
+            this.selectedPortraitBackgroundPresetId
+          );
+        this.backgroundImageUri = backgroundState.backgroundImageUri;
+        this.selectedPortraitBackgroundPresetId = backgroundState.selectedPresetId;
+        return;
+      }
       this.selectedInputSummary = '';
       if (inputKind === 'modelFile') {
         this.modelInputUri = '';
@@ -467,9 +479,6 @@ struct FeatureRuntimePage {
         this.contentImageUri = '';
       } else if (inputKind === 'styleImage') {
         this.styleImageUri = '';
-      } else if (inputKind === 'backgroundImage') {
-        this.backgroundImageUri = '';
-        this.selectedPortraitBackgroundPresetId = '';
       } else {
         this.imageInputUri = '';
       }

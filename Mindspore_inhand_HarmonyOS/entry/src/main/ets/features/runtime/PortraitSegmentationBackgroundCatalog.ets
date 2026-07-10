@@ -74,6 +74,20 @@ export function initialPortraitSegmentationBackgroundState(routeName: string, ba
   };
 }
 
+export function portraitSegmentationBackgroundStateAfterCancelledPick(routeName: string, backgroundImageUri: string,
+  selectedPresetId: string): PortraitSegmentationBackgroundState {
+  if (routeName !== AppRoute.PORTRAIT_SEGMENTATION.name) {
+    return {
+      backgroundImageUri: '',
+      selectedPresetId: ''
+    };
+  }
+  return {
+    backgroundImageUri: backgroundImageUri,
+    selectedPresetId: selectedPresetId
+  };
+}
+
 export function rawfilePathFromPortraitSegmentationBackgroundUri(uri: string): string {
   if (!uri.startsWith(portraitSegmentationRawfileUriPrefix)) {
     return uri;
