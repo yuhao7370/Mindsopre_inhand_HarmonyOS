@@ -303,6 +303,16 @@ export function shouldAutoRunWorkflowAfterInputReady(workflow: FeatureWorkflow, 
     (inputKind === 'photo' || inputKind === 'camera');
 }
 
+export function shouldAutoRunStyleTransferAfterStyleReady(
+  workflow: FeatureWorkflow,
+  inputKind: FeatureInputKind,
+  contentInputReady: boolean
+): boolean {
+  return workflow.routeName === AppRoute.STYLE_TRANSFER.name &&
+    inputKind === 'styleImage' &&
+    contentInputReady;
+}
+
 export function shouldClearTextInputAfterInputReady(workflow: FeatureWorkflow, inputKind: FeatureInputKind): boolean {
   return workflow.routeName === AppRoute.TEXT_TRANSLATION.name &&
     (inputKind === 'photo' || inputKind === 'camera');

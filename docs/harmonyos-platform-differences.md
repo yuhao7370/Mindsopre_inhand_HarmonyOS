@@ -152,6 +152,9 @@ Current HarmonyOS behavior:
 
 - The shared runtime keeps the existing content image, style image, built-in
   preset, and optional `.ms` model inputs intact.
+- After the content/original image is ready, selecting a built-in or album
+  style image immediately runs style transfer, matching Android's style-list
+  selection flow.
 - After a styled output is produced, HarmonyOS now shows a localized Recovery
   control that clears only the styled preview and restores the original/content
   preview state.

@@ -224,6 +224,7 @@ import {
   runtimeInputKindsForWorkflow,
   sampleImageUriForWorkflow,
   shouldAutoRunWorkflowAfterInputReady,
+  shouldAutoRunStyleTransferAfterStyleReady,
   shouldClearTextInputAfterInputReady,
   shouldShowStyleRecoveryControl,
   workflowInputReadyAction,
@@ -4477,6 +4478,17 @@ export default function localUnitTest() {
         liveMode: false
       };
       expect(shouldAutoRunWorkflowAfterInputReady(futureOcrWorkflow, 'photo')).assertFalse();
+    });
+
+    it('autoRunsStyleTransferAfterAndroidStyleInputReadyWhenContentExists', 0, () => {
+      const styleTransfer: FeatureWorkflow = workflowForRoute(AppRoute.STYLE_TRANSFER.name)!;
+      const textRecognition: FeatureWorkflow = workflowForRoute(AppRoute.TEXT_RECOGNITION.name)!;
+
+      expect(shouldAutoRunStyleTransferAfterStyleReady(styleTransfer, 'styleImage', true)).assertTrue();
+      expect(shouldAutoRunStyleTransferAfterStyleReady(styleTransfer, 'styleImage', false)).assertFalse();
+      expect(shouldAutoRunStyleTransferAfterStyleReady(styleTransfer, 'contentImage', true)).assertFalse();
+      expect(shouldAutoRunStyleTransferAfterStyleReady(styleTransfer, 'camera', true)).assertFalse();
+      expect(shouldAutoRunStyleTransferAfterStyleReady(textRecognition, 'styleImage', true)).assertFalse();
     });
 
     it('clearsTypedTranslationTextWhenAndroidImageTranslationInputIsReady', 0, () => {

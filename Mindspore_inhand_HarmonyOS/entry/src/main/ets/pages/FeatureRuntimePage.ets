@@ -12,6 +12,7 @@ import {
   permissionLabelKey,
   runtimeInputKindsForWorkflow,
   sampleImageUriForWorkflow,
+  shouldAutoRunStyleTransferAfterStyleReady,
   shouldShowStyleRecoveryControl,
   workflowInputReadyAction,
   workflowForRoute
@@ -458,7 +459,7 @@ struct FeatureRuntimePage {
       const inputReadyAction = workflowInputReadyAction(workflow, inputKind, this.userText);
       this.userText = inputReadyAction.userText;
       this.textInputVisible = inputReadyAction.textInputVisible;
-      if (inputReadyAction.shouldRunWorkflow) {
+      if (inputReadyAction.shouldRunWorkflow || this.shouldRunStyleTransferAfterStyleReady(workflow, inputKind)) {
         this.runWorkflow();
       }
     }
@@ -847,6 +848,18 @@ struct FeatureRuntimePage {
     this.styleImageUri = builtInStyleTransferUri(style);
     this.selectedInputSummary = style.rawfilePath;
     this.statusKey = 'feature_runtime_image_ready';
+    const workflow = workflowForRoute(this.routeName);
+    if (workflow && this.shouldRunStyleTransferAfterStyleReady(workflow, 'styleImage')) {
+      this.runWorkflow();
+    }
+  }
+
+  private shouldRunStyleTransferAfterStyleReady(workflow: FeatureWorkflow, inputKind: FeatureInputKind): boolean {
+    return shouldAutoRunStyleTransferAfterStyleReady(workflow, inputKind, this.styleTransferContentInputReady());
+  }
+
+  private styleTransferContentInputReady(): boolean {
+    return this.contentImageUri.length > 0 || this.imageInputUri.length > 0;
   }
 
   private recoverStyleOriginalPreview(): void {
