@@ -14,6 +14,7 @@ import {
   sampleImageUriForWorkflow,
   shouldAutoRunStyleTransferAfterStyleReady,
   shouldShowStyleRecoveryControl,
+  workflowRunActionKey,
   workflowInputReadyAction,
   workflowForRoute
 } from '../features/runtime/FeatureWorkflowCatalog';
@@ -128,6 +129,7 @@ struct FeatureRuntimePage {
   @State titleKey: AppStringKey = 'EntryAbility_label';
   @State summaryKey: AppStringKey = 'feature_runtime_status_idle';
   @State statusKey: AppStringKey = 'feature_runtime_status_idle';
+  @State runActionKey: AppStringKey = 'feature_runtime_run';
   @State routeName: string = '';
   @State aiMethod: string = '';
   @State resultText: string = '';
@@ -182,6 +184,7 @@ struct FeatureRuntimePage {
     this.titleKey = params?.titleKey ?? workflow?.titleKey ?? this.titleKey;
     this.summaryKey = workflow?.summaryKey ?? this.summaryKey;
     this.aiMethod = workflow?.aiMethod ?? '';
+    this.runActionKey = workflowRunActionKey(workflow);
     this.helpUrl = workflow?.helpUrl ?? '';
     this.helpContentKey = workflow?.helpContentKey;
     this.inputKinds = workflow ? runtimeInputKindsForWorkflow(workflow) : [];
@@ -1794,7 +1797,7 @@ struct FeatureRuntimePage {
         .backgroundColor(AppColor.cardBackground)
         .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
 
-        Button(appString('feature_runtime_run'))
+        Button(appString(this.runActionKey))
           .width('100%')
           .height(44)
           .margin({ top: AppSpacing.lg })

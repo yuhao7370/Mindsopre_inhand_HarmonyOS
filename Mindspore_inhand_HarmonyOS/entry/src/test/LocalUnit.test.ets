@@ -228,6 +228,7 @@ import {
   shouldClearTextInputAfterInputReady,
   shouldShowStyleRecoveryControl,
   workflowInputReadyAction,
+  workflowRunActionKey,
   workflowForRoute
 } from '../main/ets/features/runtime/FeatureWorkflowCatalog';
 import {
@@ -2133,6 +2134,15 @@ export default function localUnitTest() {
       expect(portraitSegmentation.requiredPermissions.indexOf('camera') >= 0).assertTrue();
       expect(portraitSegmentation.requiredPermissions.indexOf('media') >= 0).assertTrue();
       expect(portraitSegmentation.liveMode).assertTrue();
+    });
+
+    it('usesAndroidSpecificPrimaryActionCopyForTextTranslation', 0, () => {
+      const translation: FeatureWorkflow = workflowForRoute(AppRoute.TEXT_TRANSLATION.name)!;
+      const styleTransfer: FeatureWorkflow = workflowForRoute(AppRoute.STYLE_TRANSFER.name)!;
+
+      expect(workflowRunActionKey(translation)).assertEqual('feature_runtime_run_translation');
+      expect(hasAppStringKey(workflowRunActionKey(translation))).assertTrue();
+      expect(workflowRunActionKey(styleTransfer)).assertEqual('feature_runtime_run');
     });
 
     it('portsAndroidPortraitSegmentationBackgroundPresets', 0, () => {

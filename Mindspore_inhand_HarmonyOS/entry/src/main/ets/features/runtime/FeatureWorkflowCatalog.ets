@@ -54,6 +54,7 @@ export interface FeatureWorkflow {
   readonly requiredPermissions: Array<FeaturePermissionKind>;
   readonly resultKind: FeatureResultKind;
   readonly liveMode: boolean;
+  readonly runActionKey?: AppStringKey;
   readonly helpUrl?: string;
   readonly helpContentKey?: AppStringKey;
   readonly sampleImageRawfilePath?: string;
@@ -193,7 +194,8 @@ export const featureWorkflows: Array<FeatureWorkflow> = [
     inputKinds: ['text', 'camera', 'photo'],
     requiredPermissions: ['camera', 'media', 'internet'],
     resultKind: 'translationText',
-    liveMode: false
+    liveMode: false,
+    runActionKey: 'feature_runtime_run_translation'
   },
   {
     routeName: AppRoute.OBJECT_PHOTO.name,
@@ -279,6 +281,10 @@ export function sampleImageUriForWorkflow(workflow: FeatureWorkflow): string {
     return '';
   }
   return `rawfile://${path}`;
+}
+
+export function workflowRunActionKey(workflow: FeatureWorkflow | undefined): AppStringKey {
+  return workflow?.runActionKey ?? 'feature_runtime_run';
 }
 
 export function inputKindReplacesPrimaryInput(inputKind: FeatureInputKind): boolean {
