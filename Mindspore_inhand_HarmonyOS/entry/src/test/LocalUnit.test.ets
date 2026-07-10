@@ -87,10 +87,12 @@ import {
   danceSkeletonPointsFromPose
 } from '../main/ets/services/dance/DanceSamplingService';
 import {
+  ImageClassificationSceneDetectionRunner,
   SceneDetection,
   SceneDetectionResult,
   SceneDetectionRunner,
-  SceneDetectionService
+  SceneDetectionService,
+  sceneLabelForImageClassificationLabel
 } from '../main/ets/services/ai/SceneDetectionService';
 import {
   StyleTransferInput,
@@ -146,6 +148,7 @@ import {
   rgbUnitInputFromResizedRgba
 } from '../main/ets/services/ai/CustomModelService';
 import {
+  cachedRuntimeAiServiceForWorkflow,
   createHarmonyDefaultAiService,
   createRuntimeAiServiceForWorkflow,
   rawfileAsciiContentToText
@@ -2826,6 +2829,32 @@ export default function localUnitTest() {
       expect(result.messageKey).assertEqual('feature_runtime_scene_failed');
     });
 
+    it('localSceneDetectionRunnerMapsClassificationLabelsToScenes', 0, async () => {
+      expect(sceneLabelForImageClassificationLabel('espresso')).assertEqual('food');
+      expect(sceneLabelForImageClassificationLabel('seashore')).assertEqual('beach');
+      expect(sceneLabelForImageClassificationLabel('sports_car')).assertEqual('car');
+      expect(sceneLabelForImageClassificationLabel('tiger_cat')).assertEqual('cat');
+      expect(sceneLabelForImageClassificationLabel('tiger_shark')).assertEqual('ornamentalfish');
+      expect(sceneLabelForImageClassificationLabel('tiger_beetle')).assertEqual('other');
+      expect(sceneLabelForImageClassificationLabel('sea_lion')).assertEqual('other');
+      expect(sceneLabelForImageClassificationLabel('crane')).assertEqual('other');
+      expect(sceneLabelForImageClassificationLabel('accordion')).assertEqual('other');
+      const runner = new ImageClassificationSceneDetectionRunner({
+        labels: ['tench', 'espresso', 'seashore', 'sports_car'],
+        scoreRunner: new FixedScoreRunner([0.05, 0.91, 0.82, 0.33]),
+        maxScenes: 2
+      });
+
+      const result = await runner.detectScenes('file://selected/cafe.jpg');
+
+      expect(result.ok).assertTrue();
+      expect(result.scenes.length).assertEqual(2);
+      expect(result.scenes[0].label).assertEqual('food');
+      expect(result.scenes[0].score).assertEqual(0.91);
+      expect(result.scenes[1].label).assertEqual('beach');
+      expect(result.scenes[1].score).assertEqual(0.82);
+    });
+
     it('customModelRequiresModelAndImageInputs', 0, async () => {
       const workflow = workflowForRoute(AppRoute.CUSTOM_MODEL.name);
       expect(workflow !== undefined).assertTrue();
@@ -3693,20 +3722,46 @@ export default function localUnitTest() {
       expect(result.messageKey).assertEqual('feature_runtime_gesture_unsupported');
     });
 
-    it('reportsSceneDetectionAsPlatformUnsupportedWithoutRunner', 0, async () => {
+    it('runtimeFactoryInjectsLocalSceneDetectionServiceByDefault', 0, async () => {
       const workflow = workflowForRoute(AppRoute.SCENE_STILL.name);
       expect(workflow !== undefined).assertTrue();
+      const labelContent: Uint8Array = new Uint8Array([
+        116, 101, 110, 99, 104, 10,
+        101, 115, 112, 114, 101, 115, 115, 111, 10,
+        115, 101, 97, 115, 104, 111, 114, 101
+      ]);
+      const resourceManager: FixedRawfileContentReader = new FixedRawfileContentReader(labelContent);
       const service = await createRuntimeAiServiceForWorkflow(workflow!, {
-        resourceManager: new ThrowingRawfileContentReader()
+        resourceManager: resourceManager,
+        inputPreprocessor: new FixedInputPreprocessor(new ArrayBuffer(12)),
+        tensorRunner: new FixedTensorRunner([0.1, 0.92, 0.81])
       });
 
       const result = await service.run(workflow!, {
         imageUri: 'file://selected/scene.jpg'
       });
 
-      expect(result.ok).assertFalse();
-      expect(result.code).assertEqual('PLATFORM_UNSUPPORTED');
-      expect(result.messageKey).assertEqual('feature_runtime_scene_unsupported');
+      expect(resourceManager.seenPaths[0]).assertEqual('labels/image_category_old.txt');
+      expect(result.ok).assertTrue();
+      expect(result.code).assertEqual('SCENE_DETECTION_DONE');
+      expect(result.detailText.indexOf('food 92.00%') >= 0).assertTrue();
+    });
+
+    it('cachedRuntimeFactoryReusesLocalSceneDetectionServiceForLiveLoops', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.SCENE_LIVE.name);
+      expect(workflow !== undefined).assertTrue();
+      const labelContent: Uint8Array = new Uint8Array([
+        116, 101, 110, 99, 104, 10,
+        101, 115, 112, 114, 101, 115, 115, 111
+      ]);
+      const resourceManager: FixedRawfileContentReader = new FixedRawfileContentReader(labelContent);
+
+      const firstService = await cachedRuntimeAiServiceForWorkflow(workflow!, resourceManager);
+      const secondService = await cachedRuntimeAiServiceForWorkflow(workflow!, new ThrowingRawfileContentReader());
+
+      expect(firstService === secondService).assertTrue();
+      expect(resourceManager.seenPaths.length).assertEqual(1);
+      expect(resourceManager.seenPaths[0]).assertEqual('labels/image_category_old.txt');
     });
 
     it('runtimeFactoryInjectsCustomModelServiceForCustomModelWorkflow', 0, async () => {

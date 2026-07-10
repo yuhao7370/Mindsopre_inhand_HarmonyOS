@@ -59,6 +59,7 @@ import {
   GestureService
 } from './GestureService';
 import {
+  ImageClassificationSceneDetectionRunner,
   SceneDetectionRunner,
   SceneDetectionService
 } from './SceneDetectionService';
@@ -91,6 +92,7 @@ export interface HarmonyImageClassificationRuntimeOptions {
 }
 
 let cachedHarmonyDefaultAiService: Promise<DefaultAiService> | undefined = undefined;
+let cachedHarmonyLocalSceneDetectionAiService: Promise<DefaultAiService> | undefined = undefined;
 
 export class HarmonyRawfileContentReader implements RawfileContentReader {
   private readonly resourceManager: resourceManager.ResourceManager;
@@ -113,6 +115,25 @@ export function cachedHarmonyDefaultAiServiceForResourceManager(
     });
   }
   return cachedHarmonyDefaultAiService;
+}
+
+export function cachedHarmonyLocalSceneDetectionAiServiceForResourceManager(
+  resourceManager: RawfileContentReader
+): Promise<DefaultAiService> {
+  if (cachedHarmonyLocalSceneDetectionAiService === undefined) {
+    cachedHarmonyLocalSceneDetectionAiService = createHarmonyLocalSceneDetectionAiService(resourceManager);
+  }
+  return cachedHarmonyLocalSceneDetectionAiService;
+}
+
+async function createHarmonyLocalSceneDetectionAiService(
+  resourceManager: RawfileContentReader
+): Promise<DefaultAiService> {
+  return new DefaultAiService({
+    sceneDetectionService: await createHarmonyLocalSceneDetectionService({
+      resourceManager: resourceManager
+    })
+  });
 }
 
 export function cachedRuntimeAiServiceForHarmonyResourceManager(
@@ -172,9 +193,7 @@ export async function cachedRuntimeAiServiceForWorkflow(
     });
   }
   if (workflow.aiMethod === 'detectScene') {
-    return createRuntimeAiServiceForWorkflow(workflow, {
-      resourceManager: resourceManager
-    });
+    return cachedHarmonyLocalSceneDetectionAiServiceForResourceManager(resourceManager);
   }
   return new DefaultAiService();
 }
@@ -242,7 +261,9 @@ export async function createRuntimeAiServiceForWorkflow(
         sceneDetectionService: createHarmonySceneDetectionService(options.sceneDetectionRunner)
       });
     }
-    return new DefaultAiService();
+    return new DefaultAiService({
+      sceneDetectionService: await createHarmonyLocalSceneDetectionService(options)
+    });
   }
   return new DefaultAiService();
 }
@@ -372,6 +393,27 @@ export function createHarmonyGestureService(runner: GestureRunner): GestureServi
 export function createHarmonySceneDetectionService(runner: SceneDetectionRunner): SceneDetectionService {
   return new SceneDetectionService({
     runner: runner
+  });
+}
+
+export async function createHarmonyLocalSceneDetectionService(
+  options: HarmonyImageClassificationRuntimeOptions
+): Promise<SceneDetectionService> {
+  const labels = await loadImageClassificationLabels(options.resourceManager);
+  const tensorRunner = options.tensorRunner ?? new MindSporeLiteModelRunner({
+    resourceManager: options.resourceManager,
+    modelRawfilePath: imageClassificationModelRawfilePath
+  });
+  const preprocessor = options.inputPreprocessor ?? new HarmonyImageClassificationInputPreprocessor();
+  const scoreRunner = new ImageClassificationMindSporeScoreRunner({
+    preprocessor: preprocessor,
+    tensorRunner: tensorRunner
+  });
+  return new SceneDetectionService({
+    runner: new ImageClassificationSceneDetectionRunner({
+      labels: labels,
+      scoreRunner: scoreRunner
+    })
   });
 }
 

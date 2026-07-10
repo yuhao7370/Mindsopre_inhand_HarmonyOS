@@ -39,15 +39,21 @@ Current HarmonyOS behavior:
 
 Android source uses HMS ML Kit scene detection through the `MLSceneDetection`
 flow. The local HarmonyOS SDK does not expose a direct scene detection API
-matching the Android still/live scene analyzer.
+matching the Android still/live scene analyzer, and the Android project does
+not ship a standalone HMS scene model that can be copied into HarmonyOS.
 
 Current HarmonyOS behavior:
 
 - Scene detection keeps the Android still and live route names available.
 - The routes are runtime-ready but hidden from the default Experience grid,
   matching the current Android app shell visibility.
-- When no real scene detection runner is injected, the service returns the
-  localized `feature_runtime_scene_unsupported` platform status.
+- The default HarmonyOS runtime now reuses the bundled MobileNetV2 image
+  classification model and maps top classification labels into Android-style
+  scene labels. This makes the still/live scene workflows runnable offline, but
+  it is a local approximation rather than HMS ML Kit equivalent output.
+- A real scene detection runner can still be injected; if no service exists at
+  all, the app keeps the localized `feature_runtime_scene_unsupported` platform
+  status.
 
 ## Dance Factory
 
