@@ -215,6 +215,7 @@ import {
   runtimeInputKindsForWorkflow,
   shouldAutoRunWorkflowAfterInputReady,
   shouldClearTextInputAfterInputReady,
+  shouldShowStyleRecoveryControl,
   workflowInputReadyAction,
   workflowForRoute
 } from '../main/ets/features/runtime/FeatureWorkflowCatalog';
@@ -1312,6 +1313,8 @@ export default function localUnitTest() {
       expect(hasAppStringKey('feature_runtime_save_image_done')).assertTrue();
       expect(hasAppStringKey('feature_runtime_save_image_failed')).assertTrue();
       expect(hasAppStringKey('feature_runtime_save_image_missing')).assertTrue();
+      expect(hasAppStringKey('feature_runtime_style_recovery')).assertTrue();
+      expect(hasAppStringKey('feature_runtime_style_recovered')).assertTrue();
       expect(hasAppStringKey('qr_code_save_done')).assertTrue();
       expect(hasAppStringKey('qr_code_save_failed')).assertTrue();
       expect(hasAppStringKey('title_share')).assertTrue();
@@ -2099,6 +2102,12 @@ export default function localUnitTest() {
       expect(workflowForRoute(AppRoute.OBJECT_PHOTO.name)?.helpUrl).assertEqual(helpObjectDetectionUrl);
       expect(workflowForRoute(AppRoute.OBJECT_CAMERA.name)?.helpUrl).assertEqual(helpObjectDetectionUrl);
       expect(workflowForRoute(AppRoute.STYLE_TRANSFER.name)?.helpUrl).assertEqual(helpStyleTransferUrl);
+    });
+
+    it('showsAndroidStyleTransferRecoveryOnlyAfterStyledResult', 0, () => {
+      expect(shouldShowStyleRecoveryControl('runStyleTransfer', true)).assertTrue();
+      expect(shouldShowStyleRecoveryControl('runStyleTransfer', false)).assertFalse();
+      expect(shouldShowStyleRecoveryControl('classifyImage', true)).assertFalse();
     });
 
     it('definesRuntimeWorkflowForEveryRuntimeRoute', 0, () => {

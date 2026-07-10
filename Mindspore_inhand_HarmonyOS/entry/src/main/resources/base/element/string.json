@@ -150,6 +150,8 @@
     { "name": "feature_runtime_save_image_done", "value": "Image saved to Gallery." },
     { "name": "feature_runtime_save_image_failed", "value": "Failed to save image." },
     { "name": "feature_runtime_save_image_missing", "value": "No result image to save." },
+    { "name": "feature_runtime_style_recovery", "value": "Recovery" },
+    { "name": "feature_runtime_style_recovered", "value": "Original image restored." },
     { "name": "feature_runtime_preview_title", "value": "Preview" },
     { "name": "feature_runtime_preview_image", "value": "Image" },
     { "name": "feature_runtime_preview_background", "value": "Background" },

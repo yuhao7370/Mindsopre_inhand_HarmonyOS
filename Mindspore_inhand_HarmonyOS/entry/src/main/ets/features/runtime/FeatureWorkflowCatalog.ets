@@ -263,6 +263,10 @@ export function shouldClearTextInputAfterInputReady(workflow: FeatureWorkflow, i
     (inputKind === 'photo' || inputKind === 'camera');
 }
 
+export function shouldShowStyleRecoveryControl(aiMethod: string, styledImageReady: boolean): boolean {
+  return aiMethod === 'runStyleTransfer' && styledImageReady;
+}
+
 export function workflowInputReadyAction(workflow: FeatureWorkflow, inputKind: FeatureInputKind,
   currentUserText: string): WorkflowInputReadyAction {
   const shouldClearTextInput = shouldClearTextInputAfterInputReady(workflow, inputKind);

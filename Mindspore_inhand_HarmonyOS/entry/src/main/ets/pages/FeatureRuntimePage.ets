@@ -9,6 +9,7 @@ import {
   inputLabelKey,
   permissionLabelKey,
   runtimeInputKindsForWorkflow,
+  shouldShowStyleRecoveryControl,
   workflowInputReadyAction,
   workflowForRoute
 } from '../features/runtime/FeatureWorkflowCatalog';
@@ -770,6 +771,11 @@ struct FeatureRuntimePage {
     this.statusKey = 'feature_runtime_image_ready';
   }
 
+  private recoverStyleOriginalPreview(): void {
+    this.styledImagePixelMap = undefined;
+    this.statusKey = 'feature_runtime_style_recovered';
+  }
+
   private selectPortraitBackgroundPreset(preset: PortraitSegmentationBackgroundPreset): void {
     this.backgroundImageUri = portraitSegmentationBackgroundUri(preset);
     this.selectedPortraitBackgroundPresetId = preset.id;
@@ -1479,6 +1485,18 @@ struct FeatureRuntimePage {
   }
 
   @Builder
+  styleRecoveryControl() {
+    Row() {
+      Button(appString('feature_runtime_style_recovery'))
+        .height(36)
+        .onClick(() => this.recoverStyleOriginalPreview())
+    }
+    .width('100%')
+    .justifyContent(FlexAlign.Center)
+    .margin({ top: AppSpacing.sm })
+  }
+
+  @Builder
   resultComponentImageSaveControl(componentId: string) {
     Row() {
       SaveButton({
@@ -1697,6 +1715,9 @@ struct FeatureRuntimePage {
           if (this.styledImagePixelMap !== undefined) {
             this.pixelMapPreview('feature_runtime_result_styled_image', this.styledImagePixelMap)
             this.resultImageSaveControl(this.styledImagePixelMap)
+          }
+          if (shouldShowStyleRecoveryControl(this.aiMethod, this.styledImagePixelMap !== undefined)) {
+            this.styleRecoveryControl()
           }
           if (this.objectDetectionImageUri.length > 0 && this.objectDetections.length > 0) {
             this.objectDetectionPreview('feature_runtime_result_detection_overlay', this.objectDetectionImageUri)

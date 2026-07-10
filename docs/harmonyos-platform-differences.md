@@ -87,6 +87,22 @@ Current HarmonyOS behavior:
   input. The result is still shown as a generic tensor summary, matching the
   Android screen shape rather than turning the page into Image Classification.
 
+## Style Transfer
+
+Android Style Transfer lets users choose content/style images, optional model
+files, and a built-in style preset, then exposes a Recovery action that returns
+the preview to the original content image after a styled result is shown.
+
+Current HarmonyOS behavior:
+
+- The shared runtime keeps the existing content image, style image, built-in
+  preset, and optional `.ms` model inputs intact.
+- After a styled output is produced, HarmonyOS now shows a localized Recovery
+  control that clears only the styled preview and restores the original/content
+  preview state.
+- Android APK update/download-new-version behavior is intentionally not
+  migrated.
+
 ## Object Detection
 
 Android Object Detection ships a default SSD MindSpore model and lets users
