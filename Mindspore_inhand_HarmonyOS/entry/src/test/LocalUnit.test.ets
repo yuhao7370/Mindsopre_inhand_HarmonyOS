@@ -325,6 +325,7 @@ import {
   LiveRuntimeLoopScheduler,
   LiveRuntimeLoopService,
   liveImageClassificationIntervalMs,
+  liveFrameImageCachePath,
   liveRuntimeIntervalForAiMethod,
   liveRuntimeIntervalMs,
   liveCameraXComponentId,
@@ -5588,6 +5589,11 @@ export default function localUnitTest() {
     it('liveFrameImageEncoderUsesAndroidLikeJpegPacking', 0, () => {
       expect(liveFrameImagePackingOption.format).assertEqual('image/jpeg');
       expect(liveFrameImagePackingOption.quality).assertEqual(90);
+    });
+
+    it('normalizesLiveFrameCachePathForStableJpegSlot', 0, () => {
+      expect(liveFrameImageCachePath('/cache')).assertEqual('/cache/mindspore_live_frame.jpg');
+      expect(liveFrameImageCachePath('/cache/')).assertEqual('/cache/mindspore_live_frame.jpg');
     });
 
     it('liveFrameImageServiceReportsCaptureFailureWithoutWritingCache', 0, async () => {

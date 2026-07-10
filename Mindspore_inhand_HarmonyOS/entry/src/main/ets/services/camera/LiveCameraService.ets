@@ -8,6 +8,7 @@ export const liveCameraXComponentId = 'liveCameraPreview';
 export const liveRuntimeIntervalMs = 1000;
 export const fastLiveRuntimeIntervalMs = 500;
 export const liveImageClassificationIntervalMs = fastLiveRuntimeIntervalMs;
+export const liveFrameImageFileName = 'mindspore_live_frame.jpg';
 export const liveFrameImagePackingOption: image.PackingOption = {
   format: 'image/jpeg',
   quality: 90
@@ -49,6 +50,11 @@ export interface LiveRuntimeFrameRunner {
 export interface LiveRuntimeLoopScheduler {
   schedule(intervalMs: number, tick: () => void): number;
   cancel(timerId: number): void;
+}
+
+export function liveFrameImageCachePath(cacheDir: string): string {
+  const normalizedCacheDir = cacheDir.endsWith('/') ? cacheDir.substring(0, cacheDir.length - 1) : cacheDir;
+  return `${normalizedCacheDir}/${liveFrameImageFileName}`;
 }
 
 export function shouldCaptureLiveFrameImage(
@@ -307,7 +313,7 @@ export class HarmonyLiveFrameImageEncoder implements LiveFrameImageEncoder {
 
 export class HarmonyLiveFrameImageStore implements LiveFrameImageStore {
   async writeJpeg(cacheDir: string, bytes: ArrayBuffer): Promise<string> {
-    const path = `${cacheDir}/mindspore_live_frame.jpg`;
+    const path = liveFrameImageCachePath(cacheDir);
     const file = await fileIo.open(path, fileIo.OpenMode.READ_WRITE | fileIo.OpenMode.CREATE | fileIo.OpenMode.TRUNC);
     try {
       await fileIo.write(file.fd, bytes);

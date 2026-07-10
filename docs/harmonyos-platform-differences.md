@@ -25,6 +25,9 @@ Current HarmonyOS behavior:
   camera preview automatically after the HarmonyOS surface is ready.
 - PoseNet follows Android's split: the still route does not auto-start camera
   preview, while the live skeleton route does.
+- Shared live AI routes capture each preview frame into the normalized app
+  cache slot `mindspore_live_frame.jpg` before running the existing image-based
+  local runner.
 
 ## PoseNet
 
