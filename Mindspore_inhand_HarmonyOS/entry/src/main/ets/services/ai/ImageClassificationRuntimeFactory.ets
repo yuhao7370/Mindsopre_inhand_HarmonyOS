@@ -55,6 +55,7 @@ import {
   PoseService
 } from './PoseService';
 import {
+  ImageClassificationGestureRunner,
   GestureRunner,
   GestureService
 } from './GestureService';
@@ -93,7 +94,14 @@ export interface HarmonyImageClassificationRuntimeOptions {
 }
 
 let cachedHarmonyDefaultAiService: Promise<DefaultAiService> | undefined = undefined;
+let cachedHarmonyLocalGestureAiService: Promise<DefaultAiService> | undefined = undefined;
 let cachedHarmonyLocalSceneDetectionAiService: Promise<DefaultAiService> | undefined = undefined;
+
+export function resetHarmonyRuntimeAiServiceCachesForTests(): void {
+  cachedHarmonyDefaultAiService = undefined;
+  cachedHarmonyLocalGestureAiService = undefined;
+  cachedHarmonyLocalSceneDetectionAiService = undefined;
+}
 
 export class HarmonyRawfileContentReader implements RawfileContentReader {
   private readonly resourceManager: resourceManager.ResourceManager;
@@ -125,6 +133,31 @@ export function cachedHarmonyLocalSceneDetectionAiServiceForResourceManager(
     cachedHarmonyLocalSceneDetectionAiService = createHarmonyLocalSceneDetectionAiService(resourceManager);
   }
   return cachedHarmonyLocalSceneDetectionAiService;
+}
+
+export function cachedHarmonyLocalGestureAiServiceForResourceManager(
+  resourceManager: RawfileContentReader
+): Promise<DefaultAiService> {
+  if (cachedHarmonyLocalGestureAiService === undefined) {
+    const servicePromise = createHarmonyLocalGestureAiService(resourceManager);
+    cachedHarmonyLocalGestureAiService = servicePromise;
+    servicePromise.catch(() => {
+      if (cachedHarmonyLocalGestureAiService === servicePromise) {
+        cachedHarmonyLocalGestureAiService = undefined;
+      }
+    });
+  }
+  return cachedHarmonyLocalGestureAiService;
+}
+
+async function createHarmonyLocalGestureAiService(
+  resourceManager: RawfileContentReader
+): Promise<DefaultAiService> {
+  return new DefaultAiService({
+    gestureService: await createHarmonyLocalGestureService({
+      resourceManager: resourceManager
+    })
+  });
 }
 
 async function createHarmonyLocalSceneDetectionAiService(
@@ -189,9 +222,7 @@ export async function cachedRuntimeAiServiceForWorkflow(
     });
   }
   if (workflow.aiMethod === 'detectGesture') {
-    return createRuntimeAiServiceForWorkflow(workflow, {
-      resourceManager: resourceManager
-    });
+    return cachedHarmonyLocalGestureAiServiceForResourceManager(resourceManager);
   }
   if (workflow.aiMethod === 'detectScene') {
     return cachedHarmonyLocalSceneDetectionAiServiceForResourceManager(resourceManager);
@@ -249,7 +280,9 @@ export async function createRuntimeAiServiceForWorkflow(
         gestureService: createHarmonyGestureService(options.gestureRunner)
       });
     }
-    return new DefaultAiService();
+    return new DefaultAiService({
+      gestureService: await createHarmonyLocalGestureService(options)
+    });
   }
   if (workflow.aiMethod === 'detectScene') {
     if (options.sceneDetectionRunner !== undefined) {
@@ -383,6 +416,27 @@ export function createHarmonyPoseService(
 export function createHarmonyGestureService(runner: GestureRunner): GestureService {
   return new GestureService({
     runner: runner
+  });
+}
+
+export async function createHarmonyLocalGestureService(
+  options: HarmonyImageClassificationRuntimeOptions
+): Promise<GestureService> {
+  const labels = await loadImageClassificationLabels(options.resourceManager);
+  const tensorRunner = options.tensorRunner ?? new MindSporeLiteModelRunner({
+    resourceManager: options.resourceManager,
+    modelRawfilePath: imageClassificationModelRawfilePath
+  });
+  const preprocessor = options.inputPreprocessor ?? new HarmonyImageClassificationInputPreprocessor();
+  const scoreRunner = new ImageClassificationMindSporeScoreRunner({
+    preprocessor: preprocessor,
+    tensorRunner: tensorRunner
+  });
+  return new GestureService({
+    runner: new ImageClassificationGestureRunner({
+      labels: labels,
+      scoreRunner: scoreRunner
+    })
   });
 }
 

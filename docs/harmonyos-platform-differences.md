@@ -13,11 +13,18 @@ landmark API.
 Current HarmonyOS behavior:
 
 - `Gesture Recognition` keeps the Android route and entry available.
-- The service returns the localized `feature_runtime_gesture_unsupported`
-  platform status when no real gesture runner is injected.
-- `/hms/LiveHandGestureAnalyseActivity` is treated as a single capture flow
-  instead of starting a live preview loop, so the app does not suggest realtime
-  hand gesture detection that the platform adapter cannot perform.
+- The default HarmonyOS runtime reuses the bundled MobileNetV2 image
+  classification model as a conservative local approximation. With the bundled
+  ImageNet labels this currently only treats the exact `mitten` class as a
+  hand-adjacent positive; exact gesture labels such as `boxing_glove`,
+  `thumb_up`, `fist`, `heart`, and `ok_gesture` are also mapped when provided
+  by an injected or future score runner.
+- This fallback is not equivalent to HMS hand gesture recognition. Non-hand
+  images and labels outside the conservative map fail with the localized
+  gesture failure status instead of inventing output.
+- A real gesture runner can still be injected; if no gesture service exists at
+  all, the app keeps the localized `feature_runtime_gesture_unsupported`
+  platform status.
 
 ## Text Translation
 

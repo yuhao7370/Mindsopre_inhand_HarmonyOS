@@ -45,8 +45,10 @@ import {
   GestureRectangle,
   GestureRectanglePercent,
   GestureResult,
+  ImageClassificationGestureRunner,
   GestureRunner,
   GestureService,
+  gestureCategoryForImageClassificationLabel,
   gestureRectanglePercent
 } from '../main/ets/services/ai/GestureService';
 import {
@@ -152,7 +154,8 @@ import {
   cachedRuntimeAiServiceForWorkflow,
   createHarmonyDefaultAiService,
   createRuntimeAiServiceForWorkflow,
-  rawfileAsciiContentToText
+  rawfileAsciiContentToText,
+  resetHarmonyRuntimeAiServiceCachesForTests
 } from '../main/ets/services/ai/ImageClassificationRuntimeFactory';
 import {
   floatScoresFromOutputBuffer,
@@ -3729,18 +3732,111 @@ export default function localUnitTest() {
       expect(result.detailText.indexOf('label=goldfish') >= 0).assertTrue();
     });
 
-    it('reportsGestureAsPlatformUnsupported', 0, async () => {
-      const workflow = workflowForRoute(AppRoute.GESTURE_STILL.name);
-      expect(workflow !== undefined).assertTrue();
-      const service = await createRuntimeAiServiceForWorkflow(workflow!, {
-        resourceManager: new ThrowingRawfileContentReader()
+    it('mapsImageClassificationLabelsToLocalGestureCategories', 0, () => {
+      expect(gestureCategoryForImageClassificationLabel('mitten')).assertEqual(14);
+      expect(gestureCategoryForImageClassificationLabel('boxing_glove')).assertEqual(10);
+      expect(gestureCategoryForImageClassificationLabel('thumb_up')).assertEqual(11);
+      expect(gestureCategoryForImageClassificationLabel('nail')).assertEqual(-1);
+      expect(gestureCategoryForImageClassificationLabel('hand-held_computer')).assertEqual(-1);
+      expect(gestureCategoryForImageClassificationLabel('three-toed_sloth')).assertEqual(-1);
+      expect(gestureCategoryForImageClassificationLabel('bicycle-built-for-two')).assertEqual(-1);
+      expect(gestureCategoryForImageClassificationLabel('four-poster')).assertEqual(-1);
+      expect(gestureCategoryForImageClassificationLabel('goldfish')).assertEqual(-1);
+    });
+
+    it('imageClassificationGestureRunnerDetectsHandAdjacentLabels', 0, async () => {
+      const runner = new ImageClassificationGestureRunner({
+        labels: ['goldfish', 'mitten', 'nail'],
+        scoreRunner: new FixedScoreRunner([0.1, 0.82, 0.35])
       });
 
-      const result = await service.run(workflow!);
+      const result = await runner.detectGesture('file://selected/hand.jpg');
+
+      expect(result.ok).assertTrue();
+      expect(result.gestures.length).assertEqual(1);
+      expect(result.gestures[0].category).assertEqual(14);
+      expect(result.gestures[0].label).assertEqual('Other gesture');
+      expect(result.gestures[0].score.toFixed(2)).assertEqual('0.82');
+      expect(result.gestures[0].rect?.left).assertEqual(25);
+      expect(result.imageWidth).assertEqual(100);
+      expect(result.imageHeight).assertEqual(100);
+    });
+
+    it('imageClassificationGestureRunnerFailsWhenNoHandAdjacentLabelMatches', 0, async () => {
+      const runner = new ImageClassificationGestureRunner({
+        labels: ['goldfish', 'hand-held_computer'],
+        scoreRunner: new FixedScoreRunner([0.95, 0.93])
+      });
+
+      const result = await runner.detectGesture('file://selected/fish.jpg');
 
       expect(result.ok).assertFalse();
-      expect(result.code).assertEqual('PLATFORM_UNSUPPORTED');
-      expect(result.messageKey).assertEqual('feature_runtime_gesture_unsupported');
+      expect(result.gestures.length).assertEqual(0);
+    });
+
+    it('runtimeFactoryInjectsLocalGestureServiceByDefault', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.GESTURE_STILL.name);
+      expect(workflow !== undefined).assertTrue();
+      const labelContent: Uint8Array = new Uint8Array([
+        103, 111, 108, 100, 102, 105, 115, 104, 10,
+        109, 105, 116, 116, 101, 110
+      ]);
+      const service = await createRuntimeAiServiceForWorkflow(workflow!, {
+        resourceManager: new FixedRawfileContentReader(labelContent),
+        inputPreprocessor: new FixedInputPreprocessor(new ArrayBuffer(12)),
+        tensorRunner: new FixedTensorRunner([0.1, 0.91])
+      });
+
+      const result = await service.run(workflow!, {
+        imageUri: 'file://selected/hand.jpg'
+      });
+
+      expect(result.ok).assertTrue();
+      expect(result.code).assertEqual('GESTURE_DETECTION_DONE');
+      expect(result.messageKey).assertEqual('feature_runtime_gesture_done');
+      expect(result.detailText.indexOf('Other gesture 91.00% [25,10,50,70]') >= 0).assertTrue();
+    });
+
+    it('cachedRuntimeFactoryRetriesLocalGestureServiceAfterLoadFailure', 0, async () => {
+      resetHarmonyRuntimeAiServiceCachesForTests();
+      const workflow = workflowForRoute(AppRoute.GESTURE_LIVE.name);
+      expect(workflow !== undefined).assertTrue();
+      let rejected = false;
+      try {
+        await cachedRuntimeAiServiceForWorkflow(workflow!, new ThrowingRawfileContentReader());
+      } catch (_) {
+        rejected = true;
+      }
+      expect(rejected).assertTrue();
+
+      const labelContent: Uint8Array = new Uint8Array([
+        103, 111, 108, 100, 102, 105, 115, 104, 10,
+        109, 105, 116, 116, 101, 110
+      ]);
+      const resourceManager: FixedRawfileContentReader = new FixedRawfileContentReader(labelContent);
+      const service = await cachedRuntimeAiServiceForWorkflow(workflow!, resourceManager);
+
+      expect(service !== undefined).assertTrue();
+      expect(resourceManager.seenPaths.length).assertEqual(1);
+      expect(resourceManager.seenPaths[0]).assertEqual('labels/image_category_old.txt');
+    });
+
+    it('cachedRuntimeFactoryReusesLocalGestureServiceForLiveLoops', 0, async () => {
+      resetHarmonyRuntimeAiServiceCachesForTests();
+      const workflow = workflowForRoute(AppRoute.GESTURE_LIVE.name);
+      expect(workflow !== undefined).assertTrue();
+      const labelContent: Uint8Array = new Uint8Array([
+        103, 111, 108, 100, 102, 105, 115, 104, 10,
+        109, 105, 116, 116, 101, 110
+      ]);
+      const resourceManager: FixedRawfileContentReader = new FixedRawfileContentReader(labelContent);
+
+      const firstService = await cachedRuntimeAiServiceForWorkflow(workflow!, resourceManager);
+      const secondService = await cachedRuntimeAiServiceForWorkflow(workflow!, new ThrowingRawfileContentReader());
+
+      expect(firstService === secondService).assertTrue();
+      expect(resourceManager.seenPaths.length).assertEqual(1);
+      expect(resourceManager.seenPaths[0]).assertEqual('labels/image_category_old.txt');
     });
 
     it('runtimeFactoryInjectsLocalSceneDetectionServiceByDefault', 0, async () => {
