@@ -82,6 +82,7 @@ import {
 } from '../services/ai/GestureService';
 import {
   BuiltInStyleTransferStyle,
+  builtInStyleTransferMediaName,
   builtInStyleTransferStyles,
   builtInStyleTransferUri,
   styleTransferPixelMapFromRgbaOutput
@@ -880,7 +881,7 @@ struct FeatureRuntimePage {
   @Builder
   styleTransferStyleItem(style: BuiltInStyleTransferStyle) {
     Column() {
-      this.styleTransferStyleImage(style.id)
+      this.styleTransferStyleImage(style)
     }
     .width('100%')
     .aspectRatio(1)
@@ -895,43 +896,49 @@ struct FeatureRuntimePage {
   }
 
   @Builder
-  styleTransferStyleImage(styleId: number) {
-    if (styleId === 0) {
+  styleTransferStyleImage(style: BuiltInStyleTransferStyle) {
+    if (builtInStyleTransferMediaName(style) === 'style0') {
       this.styleTransferStyleImageSource($r('app.media.style0'))
-    } else if (styleId === 1) {
+    } else if (builtInStyleTransferMediaName(style) === 'style1') {
       this.styleTransferStyleImageSource($r('app.media.style1'))
-    } else if (styleId === 2) {
+    } else if (builtInStyleTransferMediaName(style) === 'style2') {
       this.styleTransferStyleImageSource($r('app.media.style2'))
-    } else if (styleId === 3) {
+    } else if (builtInStyleTransferMediaName(style) === 'style3') {
       this.styleTransferStyleImageSource($r('app.media.style3'))
-    } else if (styleId === 4) {
+    } else if (builtInStyleTransferMediaName(style) === 'style4') {
       this.styleTransferStyleImageSource($r('app.media.style4'))
-    } else if (styleId === 5) {
+    } else if (builtInStyleTransferMediaName(style) === 'style5') {
       this.styleTransferStyleImageSource($r('app.media.style5'))
-    } else if (styleId === 6) {
+    } else if (builtInStyleTransferMediaName(style) === 'style6') {
       this.styleTransferStyleImageSource($r('app.media.style6'))
-    } else if (styleId === 7) {
+    } else if (builtInStyleTransferMediaName(style) === 'style7') {
       this.styleTransferStyleImageSource($r('app.media.style7'))
-    } else if (styleId === 8) {
+    } else if (builtInStyleTransferMediaName(style) === 'style8') {
       this.styleTransferStyleImageSource($r('app.media.style8'))
-    } else if (styleId === 9) {
+    } else if (builtInStyleTransferMediaName(style) === 'style9') {
       this.styleTransferStyleImageSource($r('app.media.style9'))
-    } else if (styleId === 10) {
+    } else if (builtInStyleTransferMediaName(style) === 'style10') {
       this.styleTransferStyleImageSource($r('app.media.style10'))
-    } else if (styleId === 11) {
+    } else if (builtInStyleTransferMediaName(style) === 'style11') {
       this.styleTransferStyleImageSource($r('app.media.style11'))
-    } else if (styleId === 12) {
+    } else if (builtInStyleTransferMediaName(style) === 'style12') {
       this.styleTransferStyleImageSource($r('app.media.style12'))
-    } else if (styleId === 13) {
+    } else if (builtInStyleTransferMediaName(style) === 'style13') {
       this.styleTransferStyleImageSource($r('app.media.style13'))
-    } else if (styleId === 14) {
+    } else if (builtInStyleTransferMediaName(style) === 'style14') {
       this.styleTransferStyleImageSource($r('app.media.style14'))
-    } else if (styleId === 15) {
+    } else if (builtInStyleTransferMediaName(style) === 'style15') {
       this.styleTransferStyleImageSource($r('app.media.style15'))
-    } else if (styleId === 16) {
+    } else if (builtInStyleTransferMediaName(style) === 'style16') {
       this.styleTransferStyleImageSource($r('app.media.style16'))
-    } else if (styleId === 17) {
+    } else if (builtInStyleTransferMediaName(style) === 'style17') {
       this.styleTransferStyleImageSource($r('app.media.style17'))
+    } else if (builtInStyleTransferMediaName(style) === 'style18') {
+      this.styleTransferStyleImageSource($r('app.media.style18'))
+    } else if (builtInStyleTransferMediaName(style) === 'style19') {
+      this.styleTransferStyleImageSource($r('app.media.style19'))
+    } else if (builtInStyleTransferMediaName(style) === 'style20') {
+      this.styleTransferStyleImageSource($r('app.media.style20'))
     } else {
       this.styleTransferStyleImageSource($r('app.media.style18'))
     }

@@ -96,6 +96,7 @@ import {
   StyleTransferInput,
   builtInStyleTransferStyleCount,
   builtInStyleTransferStyles,
+  builtInStyleTransferMediaName,
   builtInStyleTransferUri,
   rawfilePathFromBuiltInStyleTransferUri,
   StyleTransferInputPreprocessor,
@@ -3753,14 +3754,21 @@ export default function localUnitTest() {
 
     it('definesAndroidBuiltInStyleTransferStyles', 0, () => {
       expect(builtInStyleTransferStyles.length).assertEqual(builtInStyleTransferStyleCount);
-      expect(builtInStyleTransferStyleCount).assertEqual(19);
+      expect(builtInStyleTransferStyleCount).assertEqual(21);
       expect(builtInStyleTransferStyles[0].rawfilePath).assertEqual('styletransfer/style0.jpg');
-      expect(builtInStyleTransferStyles[18].rawfilePath).assertEqual('styletransfer/style18.jpg');
+      expect(builtInStyleTransferStyles[20].rawfilePath).assertEqual('styletransfer/style20.jpg');
       expect(builtInStyleTransferUri(builtInStyleTransferStyles[0]))
         .assertEqual('rawfile://styletransfer/style0.jpg');
-      expect(rawfilePathFromBuiltInStyleTransferUri('rawfile://styletransfer/style18.jpg'))
-        .assertEqual('styletransfer/style18.jpg');
+      expect(rawfilePathFromBuiltInStyleTransferUri('rawfile://styletransfer/style20.jpg'))
+        .assertEqual('styletransfer/style20.jpg');
       expect(rawfilePathFromBuiltInStyleTransferUri('file://selected/style.jpg')).assertEqual('');
+    });
+
+    it('mapsAndroidBuiltInStyleTransferStylesToDistinctMediaNames', 0, () => {
+      expect(builtInStyleTransferMediaName(builtInStyleTransferStyles[0])).assertEqual('style0');
+      expect(builtInStyleTransferMediaName(builtInStyleTransferStyles[18])).assertEqual('style18');
+      expect(builtInStyleTransferMediaName(builtInStyleTransferStyles[19])).assertEqual('style19');
+      expect(builtInStyleTransferMediaName(builtInStyleTransferStyles[20])).assertEqual('style20');
     });
 
     it('runtimeFactoryInjectsTextRecognitionServiceForOcrWorkflow', 0, async () => {
