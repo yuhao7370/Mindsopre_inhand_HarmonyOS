@@ -73,6 +73,11 @@ import {
   poseSkeletonLines
 } from '../services/ai/PoseService';
 import {
+  GestureDetection,
+  GestureRectanglePercent,
+  gestureRectanglePercent
+} from '../services/ai/GestureService';
+import {
   BuiltInStyleTransferStyle,
   builtInStyleTransferStyles,
   builtInStyleTransferUri,
@@ -135,6 +140,10 @@ struct FeatureRuntimePage {
   @State posePoints: Array<PosePoint> = [];
   @State poseImageWidth: number = 0;
   @State poseImageHeight: number = 0;
+  @State gestureImageUri: string = '';
+  @State gestureDetections: Array<GestureDetection> = [];
+  @State gestureImageWidth: number = 0;
+  @State gestureImageHeight: number = 0;
   @State helpUrl: string = '';
   @State inputKinds: Array<FeatureInputKind> = [];
   @State permissionKinds: Array<FeaturePermissionKind> = [];
@@ -507,6 +516,7 @@ struct FeatureRuntimePage {
     this.updateObjectDetectionPreview(result);
     this.updateSegmentationPreview(result);
     this.updatePosePreview(result);
+    this.updateGesturePreview(result);
     this.updateStyledImagePreview(result);
   }
 
@@ -526,6 +536,10 @@ struct FeatureRuntimePage {
     this.posePoints = [];
     this.poseImageWidth = 0;
     this.poseImageHeight = 0;
+    this.gestureImageUri = '';
+    this.gestureDetections = [];
+    this.gestureImageWidth = 0;
+    this.gestureImageHeight = 0;
   }
 
   private updateObjectDetectionPreview(result: AiRunResult): void {
@@ -579,6 +593,38 @@ struct FeatureRuntimePage {
     this.posePoints = data.result.points;
     this.poseImageWidth = data.result.imageWidth ?? this.poseSourceWidth(data.result.points);
     this.poseImageHeight = data.result.imageHeight ?? this.poseSourceHeight(data.result.points);
+  }
+
+  private updateGesturePreview(result: AiRunResult): void {
+    const data = result.data;
+    if (data === undefined || data.kind !== 'gesture' || data.result.gestures.length === 0) {
+      return;
+    }
+
+    this.gestureImageUri = data.imageUri;
+    this.gestureDetections = data.result.gestures;
+    this.gestureImageWidth = data.result.imageWidth ?? this.gestureSourceWidth(data.result.gestures);
+    this.gestureImageHeight = data.result.imageHeight ?? this.gestureSourceHeight(data.result.gestures);
+  }
+
+  private gestureSourceWidth(gestures: Array<GestureDetection>): number {
+    let width = 0;
+    gestures.forEach((gesture: GestureDetection) => {
+      if (gesture.rect !== undefined) {
+        width = Math.max(width, gesture.rect.left + gesture.rect.width);
+      }
+    });
+    return width;
+  }
+
+  private gestureSourceHeight(gestures: Array<GestureDetection>): number {
+    let height = 0;
+    gestures.forEach((gesture: GestureDetection) => {
+      if (gesture.rect !== undefined) {
+        height = Math.max(height, gesture.rect.top + gesture.rect.height);
+      }
+    });
+    return height;
   }
 
   private poseSourceWidth(points: Array<PosePoint>): number {
@@ -917,9 +963,21 @@ struct FeatureRuntimePage {
     return this.objectDetectionImageWidth / this.objectDetectionImageHeight;
   }
 
+  private gestureAspectRatio(): number {
+    if (this.gestureImageWidth <= 0 || this.gestureImageHeight <= 0) {
+      return 1;
+    }
+    return this.gestureImageWidth / this.gestureImageHeight;
+  }
+
   private objectDetectionLabel(detection: ObjectDetection): string {
     const label = detection.label.length > 0 ? detection.label : `${detection.labelId}`;
     return `${label} ${(detection.score * 100).toFixed(1)}%`;
+  }
+
+  private gestureLabel(gesture: GestureDetection): string {
+    const label = gesture.label.length > 0 ? gesture.label : `${gesture.category}`;
+    return `${label} ${(gesture.score * 100).toFixed(1)}%`;
   }
 
   private objectDetectionBoxStyle(detection: ObjectDetection): ObjectDetectionBoxPercent {
@@ -928,6 +986,26 @@ struct FeatureRuntimePage {
       this.objectDetectionImageWidth,
       this.objectDetectionImageHeight
     );
+  }
+
+  private gestureBoxStyle(gesture: GestureDetection): GestureRectanglePercent {
+    if (gesture.rect === undefined) {
+      return {
+        left: 0,
+        top: 0,
+        width: 0,
+        height: 0
+      };
+    }
+    return gestureRectanglePercent(
+      gesture.rect,
+      this.gestureImageWidth,
+      this.gestureImageHeight
+    );
+  }
+
+  private visibleGestureDetections(): Array<GestureDetection> {
+    return this.gestureDetections.filter((gesture: GestureDetection) => gesture.rect !== undefined);
   }
 
   private posePointStyle(point: PosePoint): PosePointPercent {
@@ -1149,6 +1227,53 @@ struct FeatureRuntimePage {
     }
     .width('100%')
     .margin({ top: AppSpacing.sm })
+  }
+
+  @Builder
+  gesturePreview(labelKey: AppStringKey, uri: string) {
+    Column() {
+      Text(appString(labelKey))
+        .fontSize(12)
+        .fontColor(AppColor.textSecondary)
+        .width('100%')
+      Stack({ alignContent: Alignment.TopStart }) {
+        Image(uri)
+          .width('100%')
+          .height('100%')
+          .objectFit(ImageFit.Fill)
+        ForEach(this.visibleGestureDetections(), (gesture: GestureDetection) => {
+          this.gestureBox(gesture)
+        }, (gesture: GestureDetection) =>
+          `${gesture.category}-${gesture.score}-${gesture.rect?.left}-${gesture.rect?.top}`)
+      }
+      .width('100%')
+      .aspectRatio(this.gestureAspectRatio())
+      .backgroundColor('#F7F8FA')
+      .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
+      .clip(true)
+      .margin({ top: AppSpacing.xs })
+    }
+    .width('100%')
+    .margin({ top: AppSpacing.sm })
+  }
+
+  @Builder
+  gestureBox(gesture: GestureDetection) {
+    Column() {
+      Text(this.gestureLabel(gesture))
+        .fontSize(10)
+        .fontColor('#FFFFFF')
+        .backgroundColor(AppColor.accent)
+        .padding({ left: 4, right: 4, top: 2, bottom: 2 })
+        .maxLines(1)
+    }
+    .width(this.percentLength(this.gestureBoxStyle(gesture).width))
+    .height(this.percentLength(this.gestureBoxStyle(gesture).height))
+    .border({ width: 2, color: AppColor.accent, radius: 2 })
+    .position({
+      x: this.percentLength(this.gestureBoxStyle(gesture).left),
+      y: this.percentLength(this.gestureBoxStyle(gesture).top)
+    })
   }
 
   @Builder
@@ -1408,6 +1533,9 @@ struct FeatureRuntimePage {
           }
           if (this.objectDetectionImageUri.length > 0 && this.objectDetections.length > 0) {
             this.objectDetectionPreview('feature_runtime_result_detection_overlay', this.objectDetectionImageUri)
+          }
+          if (this.gestureImageUri.length > 0 && this.visibleGestureDetections().length > 0) {
+            this.gesturePreview('feature_runtime_result_gesture_overlay', this.gestureImageUri)
           }
           if (this.segmentationForegroundPixelMap !== undefined) {
             this.pixelMapPreview('feature_runtime_result_foreground', this.segmentationForegroundPixelMap)

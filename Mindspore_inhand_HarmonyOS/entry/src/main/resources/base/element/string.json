@@ -145,6 +145,7 @@
     { "name": "feature_runtime_result_style_image", "value": "Style image" },
     { "name": "feature_runtime_result_styled_image", "value": "Styled result" },
     { "name": "feature_runtime_result_detection_overlay", "value": "Detection overlay" },
+    { "name": "feature_runtime_result_gesture_overlay", "value": "Gesture overlay" },
     { "name": "feature_runtime_result_segmentation_overlay", "value": "Segmentation overlay" },
     { "name": "feature_runtime_result_pose_overlay", "value": "Pose overlay" },
     { "name": "feature_runtime_result_pose_template", "value": "Pose template" },

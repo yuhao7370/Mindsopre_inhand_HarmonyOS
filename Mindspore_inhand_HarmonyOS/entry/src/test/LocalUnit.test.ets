@@ -41,9 +41,12 @@ import {
 } from '../main/ets/services/ai/PoseService';
 import {
   GestureDetection,
+  GestureRectangle,
+  GestureRectanglePercent,
   GestureResult,
   GestureRunner,
-  GestureService
+  GestureService,
+  gestureRectanglePercent
 } from '../main/ets/services/ai/GestureService';
 import {
   SceneDetection,
@@ -1070,6 +1073,7 @@ export default function localUnitTest() {
       expect(hasAppStringKey('feature_runtime_gesture_unsupported')).assertTrue();
       expect(hasAppStringKey('feature_runtime_gesture_done')).assertTrue();
       expect(hasAppStringKey('feature_runtime_gesture_failed')).assertTrue();
+      expect(hasAppStringKey('feature_runtime_result_gesture_overlay')).assertTrue();
       expect(hasAppStringKey('title_scene_detection')).assertTrue();
       expect(hasAppStringKey('feature_runtime_scene_unsupported')).assertTrue();
       expect(hasAppStringKey('feature_runtime_scene_done')).assertTrue();
@@ -1978,6 +1982,22 @@ export default function localUnitTest() {
       expect(aiRunResultRows(result)[0].labelKey).assertEqual('feature_runtime_result_label');
       expect(aiRunResultRows(result)[0].value).assertEqual('Thumb up');
       expect(runner.seenImageUris[0]).assertEqual('file://selected/hand.jpg');
+    });
+
+    it('mapsGestureRectangleToPercentOverlay', 0, () => {
+      const rectangle: GestureRectangle = {
+        left: 10,
+        top: -5,
+        width: 60,
+        height: 55
+      };
+
+      const box: GestureRectanglePercent = gestureRectanglePercent(rectangle, 100, 50);
+
+      expect(box.left.toFixed(1)).assertEqual('10.0');
+      expect(box.top.toFixed(1)).assertEqual('0.0');
+      expect(box.width.toFixed(1)).assertEqual('60.0');
+      expect(box.height.toFixed(1)).assertEqual('100.0');
     });
 
     it('aiServiceReportsGestureFailureWithI18nKey', 0, async () => {

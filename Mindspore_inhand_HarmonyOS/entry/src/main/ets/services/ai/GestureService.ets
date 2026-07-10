@@ -5,6 +5,13 @@ export interface GestureRectangle {
   readonly height: number;
 }
 
+export interface GestureRectanglePercent {
+  readonly left: number;
+  readonly top: number;
+  readonly width: number;
+  readonly height: number;
+}
+
 export interface GestureDetection {
   readonly category: number;
   readonly label: string;
@@ -47,4 +54,34 @@ export class GestureService {
       };
     }
   }
+}
+
+export function gestureRectanglePercent(
+  rectangle: GestureRectangle,
+  imageWidth: number,
+  imageHeight: number
+): GestureRectanglePercent {
+  if (imageWidth <= 0 || imageHeight <= 0) {
+    return {
+      left: 0,
+      top: 0,
+      width: 0,
+      height: 0
+    };
+  }
+
+  const left = gesturePercent(rectangle.left, imageWidth);
+  const top = gesturePercent(rectangle.top, imageHeight);
+  const right = gesturePercent(rectangle.left + rectangle.width, imageWidth);
+  const bottom = gesturePercent(rectangle.top + rectangle.height, imageHeight);
+  return {
+    left: left,
+    top: top,
+    width: Math.max(0, right - left),
+    height: Math.max(0, bottom - top)
+  };
+}
+
+function gesturePercent(value: number, sourceLength: number): number {
+  return Math.min(100, Math.max(0, value * 100 / sourceLength));
 }

@@ -32,4 +32,19 @@ Current HarmonyOS behavior:
 - Text translation keeps the Android route and entry available.
 - When no real translation runner is injected, the service returns the
   localized `feature_runtime_translation_unsupported` platform status while
-  preserving recognized source text in the result details.
+  preserving recognized source text in the result details, result rows, and
+  copy action.
+
+## Scene Detection
+
+Android source uses HMS ML Kit scene detection through the `MLSceneDetection`
+flow. The local HarmonyOS SDK does not expose a direct scene detection API
+matching the Android still/live scene analyzer.
+
+Current HarmonyOS behavior:
+
+- Scene detection keeps the Android still and live route names available.
+- The routes are runtime-ready but hidden from the default Experience grid,
+  matching the current Android app shell visibility.
+- When no real scene detection runner is injected, the service returns the
+  localized `feature_runtime_scene_unsupported` platform status.

@@ -144,6 +144,7 @@ export type AppStringKey =
   'feature_runtime_result_style_image' |
   'feature_runtime_result_styled_image' |
   'feature_runtime_result_detection_overlay' |
+  'feature_runtime_result_gesture_overlay' |
   'feature_runtime_result_segmentation_overlay' |
   'feature_runtime_result_pose_overlay' |
   'feature_runtime_result_pose_template' |
@@ -324,6 +325,7 @@ const APP_STRING_KEYS: AppStringKey[] = [
   'feature_runtime_result_style_image',
   'feature_runtime_result_styled_image',
   'feature_runtime_result_detection_overlay',
+  'feature_runtime_result_gesture_overlay',
   'feature_runtime_result_segmentation_overlay',
   'feature_runtime_result_pose_overlay',
   'feature_runtime_result_pose_template',
@@ -653,6 +655,8 @@ export function appString(key: AppStringKey): ResourceStr {
       return $r('app.string.feature_runtime_result_styled_image');
     case 'feature_runtime_result_detection_overlay':
       return $r('app.string.feature_runtime_result_detection_overlay');
+    case 'feature_runtime_result_gesture_overlay':
+      return $r('app.string.feature_runtime_result_gesture_overlay');
     case 'feature_runtime_result_segmentation_overlay':
       return $r('app.string.feature_runtime_result_segmentation_overlay');
     case 'feature_runtime_result_pose_overlay':
