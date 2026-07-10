@@ -5785,6 +5785,7 @@ export default function localUnitTest() {
       expect(result.ok).assertFalse();
       expect(result.uri).assertEqual('');
       expect(result.messageKey).assertEqual('feature_runtime_model_incompatible');
+      expect(writer.writtenBytes.length).assertEqual(0);
     });
 
     it('treatsCompatibilityCheckerExceptionsAsModelIncompatibility', 0, async () => {
@@ -5798,6 +5799,7 @@ export default function localUnitTest() {
       expect(result.ok).assertFalse();
       expect(result.uri).assertEqual('');
       expect(result.messageKey).assertEqual('feature_runtime_model_incompatible');
+      expect(writer.writtenBytes.length).assertEqual(0);
     });
 
     it('defaultModelCompatibilityCheckerRejectsMalformedNonEmptyModelContent', 0, async () => {
@@ -5818,13 +5820,15 @@ export default function localUnitTest() {
     it('reportsPickedModelFileCacheFailureWithI18nKey', 0, async () => {
       const reader = new FileUriContentReader(new FixedFileUriContentBackend(new Uint8Array([1, 2, 3, 4])));
       const writer = new RejectingModelFileCacheWriter();
-      const service = new RuntimeModelFileCacheService(reader, writer);
+      const checker = new RecordingModelFileCompatibilityChecker(true);
+      const service = new RuntimeModelFileCacheService(reader, writer, checker);
 
       const result = await service.cachePickedModelFile('file://selected/custom.ms', '/cache', AppRoute.CUSTOM_MODEL.name, 'modelFile');
 
       expect(result.ok).assertFalse();
       expect(result.uri).assertEqual('');
       expect(result.messageKey).assertEqual('feature_runtime_model_cache_failed');
+      expect(checker.seenRouteNames[0]).assertEqual(AppRoute.CUSTOM_MODEL.name);
     });
 
     it('rejectsShortModelFileCacheWrites', 0, () => {

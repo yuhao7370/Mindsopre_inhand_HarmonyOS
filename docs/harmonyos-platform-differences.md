@@ -146,6 +146,20 @@ Current HarmonyOS behavior:
   OCR-recognized phrases use the bundled local fallback while unknown phrases
   preserve the source text in result details, rows, and copy action.
 
+## Model File Overrides
+
+Android pages that accept `.ms` model overrides try loading the selected model
+before making it active, so a bad pick does not replace the previous working
+model.
+
+Current HarmonyOS behavior:
+
+- Picked `.ms` files are read and compatibility-checked with MindSpore Lite
+  before the app-cache override slot is overwritten.
+- Incompatible picks return the localized model-incompatible status and leave
+  any existing cached Object Detection, Custom Model, or Style Transfer model
+  file intact.
+
 ## Scene Detection
 
 Android source uses HMS ML Kit scene detection through the `MLSceneDetection`

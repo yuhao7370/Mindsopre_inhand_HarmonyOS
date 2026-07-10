@@ -91,13 +91,14 @@ export class RuntimeModelFileCacheService {
       if (fileName.length === 0) {
         return modelFileCacheFailedResult();
       }
+      const targetUri = modelFileCachePath(cacheDir, fileName);
+      const compatible = await this.isCompatibleModelFile(routeName, inputKind, targetUri, content);
+      if (!compatible) {
+        return modelFileIncompatibleResult();
+      }
       const uri = await this.writer.writeModelFile(cacheDir, fileName, content);
       if (uri.length === 0) {
         return modelFileCacheFailedResult();
-      }
-      const compatible = await this.isCompatibleModelFile(routeName, inputKind, uri, content);
-      if (!compatible) {
-        return modelFileIncompatibleResult();
       }
       return {
         ok: true,
