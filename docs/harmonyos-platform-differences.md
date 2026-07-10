@@ -276,11 +276,12 @@ Current HarmonyOS behavior:
   joint from the left/right shoulder midpoint.
 - `/dance/DanceMainActivity` now opens a dedicated HarmonyOS Dance page with a
   template scoring demo, live camera preview, 70-frame live skeleton sampling,
-  the original MindSpore reference video stream, 3/2/1 synchronized run start,
+  the original MindSpore reference video, 3/2/1 synchronized run start,
   Android-style result messages, and album save for the rendered result card.
-- HarmonyOS streams the original remote reference video URL directly through the
-  platform `Video` component instead of caching the 39MB mp4 into public
-  Downloads like the Android implementation.
+- HarmonyOS restores the Android reference-video cache behavior with the same
+  `danceVideo2.mp4` name and 41,282,333-byte length check, but stores it in the
+  app cache directory instead of public Downloads to fit HarmonyOS scoped
+  storage.
 
 ## Intelligent Poetry
 

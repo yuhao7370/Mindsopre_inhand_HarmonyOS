@@ -85,6 +85,8 @@ export type AppStringKey =
   'dance_prepare_summary' |
   'dance_reference_video' |
   'dance_countdown' |
+  'dance_reference_video_downloading' |
+  'dance_reference_video_ready' |
   'dance_reference_video_failed' |
   'dance_start_demo' |
   'dance_start_live' |
@@ -340,6 +342,8 @@ const APP_STRING_KEYS: AppStringKey[] = [
   'dance_prepare_summary',
   'dance_reference_video',
   'dance_countdown',
+  'dance_reference_video_downloading',
+  'dance_reference_video_ready',
   'dance_reference_video_failed',
   'dance_start_demo',
   'dance_start_live',
@@ -685,6 +689,10 @@ export function appString(key: AppStringKey): ResourceStr {
       return $r('app.string.dance_reference_video');
     case 'dance_countdown':
       return $r('app.string.dance_countdown');
+    case 'dance_reference_video_downloading':
+      return $r('app.string.dance_reference_video_downloading');
+    case 'dance_reference_video_ready':
+      return $r('app.string.dance_reference_video_ready');
     case 'dance_reference_video_failed':
       return $r('app.string.dance_reference_video_failed');
     case 'dance_start_demo':

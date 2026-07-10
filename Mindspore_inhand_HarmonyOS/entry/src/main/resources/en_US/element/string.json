@@ -86,6 +86,8 @@
     { "name": "dance_prepare_summary", "value": "Follow the reference movement and check the score." },
     { "name": "dance_reference_video", "value": "Reference video" },
     { "name": "dance_countdown", "value": "Get ready" },
+    { "name": "dance_reference_video_downloading", "value": "Downloading reference video..." },
+    { "name": "dance_reference_video_ready", "value": "Reference video is ready." },
     { "name": "dance_reference_video_failed", "value": "Reference video failed to load." },
     { "name": "dance_start_demo", "value": "Run scoring demo" },
     { "name": "dance_start_live", "value": "Start live scoring" },

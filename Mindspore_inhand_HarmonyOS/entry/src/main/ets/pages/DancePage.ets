@@ -23,7 +23,8 @@ import {
   DanceSamplingPageState,
   danceCountdownSequence,
   danceCountdownStepMs,
-  danceReferenceVideoUrl,
+  danceReferenceVideoCanStartLive,
+  danceReferenceVideoPlayerPreparedAfterCacheResult,
   danceResultComponentId,
   danceSamplingCompletionStatusKey,
   danceSamplingPageState,
@@ -31,6 +32,10 @@ import {
   danceScoreText,
   danceTemplateDemoScore
 } from '../services/dance/DancePageService';
+import {
+  DanceReferenceVideoCacheService,
+  DanceReferenceVideoPrepareResult
+} from '../services/dance/DanceReferenceVideoService';
 import {
   DanceSamplingCancellationToken,
   HarmonyDanceSamplingClock,
@@ -65,14 +70,24 @@ struct DancePage {
   @State flowStage: DanceFlowStage = 'prepare';
   @State countdownText: string = '';
   @State referenceVideoFailed: boolean = false;
+  @State referenceVideoPreparing: boolean = false;
+  @State referenceVideoReady: boolean = false;
+  @State referenceVideoPlayerPrepared: boolean = false;
+  @State referenceVideoSrc: string = '';
   private referenceVideoController: VideoController = new VideoController();
   private liveCameraController: XComponentController = new XComponentController();
   private liveCameraService: LiveCameraPreviewService | undefined = undefined;
   private samplingSessionId: number = 0;
+  private referenceVideoPrepareSessionId: number = 0;
   private samplingCancellation: DanceSamplingCancellationToken | undefined = undefined;
   private countdownTimer: number = -1;
 
+  aboutToAppear() {
+    this.prepareReferenceVideo();
+  }
+
   aboutToDisappear() {
+    this.referenceVideoPrepareSessionId++;
     this.cancelLiveSampling();
     this.stopReferenceVideo();
     this.stopLiveCameraPreview();
@@ -98,9 +113,9 @@ struct DancePage {
     this.hasResult = false;
     this.flowStage = 'prepare';
     this.countdownText = '';
-    this.referenceVideoFailed = false;
     this.statusKey = 'empty';
     this.samplingSummaryText = '';
+    this.prepareReferenceVideo();
   }
 
   private uiAbilityContext(): common.UIAbilityContext | undefined {
@@ -119,7 +134,14 @@ struct DancePage {
   }
 
   private liveSamplingActionEnabled(): boolean {
-    return !this.sampling && this.flowStage !== 'countdown' && !this.referenceVideoFailed;
+    return !this.sampling &&
+      this.flowStage !== 'countdown' &&
+      danceReferenceVideoCanStartLive({
+        cached: this.referenceVideoReady,
+        playerPrepared: this.referenceVideoPlayerPrepared,
+        preparing: this.referenceVideoPreparing,
+        failed: this.referenceVideoFailed
+      });
   }
 
   private clearDanceCountdown(): void {
@@ -130,15 +152,78 @@ struct DancePage {
     this.countdownText = '';
   }
 
-  private startReferenceVideoFromBeginning(): void {
+  private startReferenceVideoFromBeginning(): boolean {
+    if (!danceReferenceVideoCanStartLive({
+      cached: this.referenceVideoReady,
+      playerPrepared: this.referenceVideoPlayerPrepared,
+      preparing: this.referenceVideoPreparing,
+      failed: this.referenceVideoFailed
+    })) {
+      this.statusKey = this.referenceVideoPreparing ?
+        'dance_reference_video_downloading' :
+        'dance_reference_video_failed';
+      return false;
+    }
     try {
       this.referenceVideoController.setCurrentTime(0);
       this.referenceVideoController.start();
       this.referenceVideoFailed = false;
+      return true;
     } catch (_) {
       this.referenceVideoFailed = true;
       this.statusKey = 'dance_reference_video_failed';
+      return false;
     }
+  }
+
+  private prepareReferenceVideo(): void {
+    const context = this.uiAbilityContext();
+    if (context === undefined) {
+      this.referenceVideoReady = false;
+      this.referenceVideoFailed = true;
+      this.referenceVideoPreparing = false;
+      this.referenceVideoPlayerPrepared = false;
+      this.referenceVideoSrc = '';
+      this.statusKey = 'dance_reference_video_failed';
+      return;
+    }
+
+    const sessionId = ++this.referenceVideoPrepareSessionId;
+    const previousReferenceVideoSrc = this.referenceVideoSrc;
+    const previousReferenceVideoPlayerPrepared = this.referenceVideoPlayerPrepared;
+    this.referenceVideoReady = false;
+    this.referenceVideoFailed = false;
+    this.referenceVideoPreparing = true;
+    this.referenceVideoPlayerPrepared = false;
+    this.statusKey = 'dance_reference_video_downloading';
+    new DanceReferenceVideoCacheService().prepare(context.cacheDir, context)
+      .then((result: DanceReferenceVideoPrepareResult) => {
+        if (sessionId !== this.referenceVideoPrepareSessionId) {
+          return;
+        }
+        this.referenceVideoPreparing = false;
+        this.referenceVideoReady = result.ok;
+        this.referenceVideoFailed = !result.ok;
+        this.referenceVideoPlayerPrepared = danceReferenceVideoPlayerPreparedAfterCacheResult(
+          result.ok,
+          result.uri,
+          previousReferenceVideoSrc,
+          previousReferenceVideoPlayerPrepared
+        );
+        this.referenceVideoSrc = result.uri;
+        this.statusKey = result.messageKey;
+      })
+      .catch(() => {
+        if (sessionId !== this.referenceVideoPrepareSessionId) {
+          return;
+        }
+        this.referenceVideoReady = false;
+        this.referenceVideoFailed = true;
+        this.referenceVideoPreparing = false;
+        this.referenceVideoPlayerPrepared = false;
+        this.referenceVideoSrc = '';
+        this.statusKey = 'dance_reference_video_failed';
+      });
   }
 
   private stopReferenceVideo(): void {
@@ -153,10 +238,11 @@ struct DancePage {
     if (index >= sequence.length) {
       this.countdownTimer = -1;
       this.countdownText = '';
-      this.flowStage = 'sampling';
-      this.startReferenceVideoFromBeginning();
-      if (!this.referenceVideoFailed) {
+      if (this.startReferenceVideoFromBeginning()) {
+        this.flowStage = 'sampling';
         this.runLiveSamplingAsync();
+      } else {
+        this.flowStage = 'prepare';
       }
       return;
     }
@@ -418,22 +504,24 @@ struct DancePage {
         .width('100%')
       Stack() {
         Video({
-          src: danceReferenceVideoUrl,
+          src: this.referenceVideoSrc,
           previewUri: $r('app.media.skeleton_template'),
           controller: this.referenceVideoController
         })
           .width('100%')
           .height(190)
           .objectFit(ImageFit.Contain)
-          .autoPlay(this.flowStage === 'prepare')
+          .autoPlay(this.flowStage === 'prepare' && this.referenceVideoReady)
           .controls(true)
-          .loop(this.flowStage === 'prepare')
+          .loop(this.flowStage === 'prepare' && this.referenceVideoReady)
           .backgroundColor('#111827')
           .onPrepared(() => {
             this.referenceVideoFailed = false;
+            this.referenceVideoPlayerPrepared = true;
           })
           .onError(() => {
             this.referenceVideoFailed = true;
+            this.referenceVideoPlayerPrepared = false;
             this.statusKey = 'dance_reference_video_failed';
           })
           .onFinish(() => {
@@ -464,6 +552,14 @@ struct DancePage {
       .clip(true)
       .margin({ top: AppSpacing.xs })
       .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
+      if (this.referenceVideoPreparing) {
+        Text(appString('dance_reference_video_downloading'))
+          .fontSize(12)
+          .fontColor(AppColor.textSecondary)
+          .lineHeight(18)
+          .textAlign(TextAlign.Center)
+          .margin({ top: AppSpacing.sm })
+      }
       if (this.referenceVideoFailed) {
         Text(appString('dance_reference_video_failed'))
           .fontSize(12)

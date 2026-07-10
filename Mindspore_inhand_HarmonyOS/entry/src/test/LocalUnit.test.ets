@@ -1,5 +1,6 @@
 import { describe, it, expect } from '@ohos/hypium';
 import { fileIo } from '@kit.CoreFileKit';
+import request from '@ohos.request';
 import { AppRoute, findRouteByName } from '../main/ets/app/AppRoutes';
 import { MainTab, mainTabs } from '../main/ets/app/AppState';
 import { hasAppStringKey } from '../main/ets/common/i18n/AppStrings';
@@ -74,6 +75,8 @@ import {
   dancePagePath,
   danceReferenceVideoLengthBytes,
   danceReferenceVideoUrl,
+  danceReferenceVideoCanStartLive,
+  danceReferenceVideoPlayerPreparedAfterCacheResult,
   danceResultComponentId,
   danceResultMessageKey,
   danceSamplingCompletionStatusKey,
@@ -81,6 +84,19 @@ import {
   danceScoreText,
   danceTemplateDemoScore
 } from '../main/ets/services/dance/DancePageService';
+import {
+  DanceReferenceVideoCacheService,
+  DanceReferenceVideoDownloader,
+  DanceReferenceVideoDownloadTask,
+  DanceReferenceVideoFileStore,
+  danceReferenceVideoCacheFileName,
+  danceReferenceVideoCachePath,
+  danceReferenceVideoDownloadStatusPaused,
+  danceReferenceVideoDownloadStatusRunning,
+  danceReferenceVideoDownloadStatusSuccessful,
+  isCompleteDanceReferenceVideo,
+  waitForDanceReferenceVideoDownload
+} from '../main/ets/services/dance/DanceReferenceVideoService';
 import {
   DanceFrameImageCapturer,
   DanceLivePoseFrameSource,
@@ -1049,6 +1065,137 @@ class RecordingDanceSamplingDelay implements DanceSamplingDelay {
       this.clock.advance(intervalMs);
     }
   }
+}
+
+class MemoryDanceReferenceVideoFileStore implements DanceReferenceVideoFileStore {
+  readonly removedPaths: Array<string> = [];
+  readonly replacedPaths: Array<string> = [];
+  private readonly sizes: Map<string, number> = new Map<string, number>();
+
+  setFileSize(path: string, size: number): void {
+    this.sizes.set(path, size);
+  }
+
+  async fileSize(path: string): Promise<number> {
+    const size = this.sizes.get(path);
+    return size === undefined ? -1 : size;
+  }
+
+  async remove(path: string): Promise<void> {
+    this.removedPaths.push(path);
+    this.sizes.delete(path);
+  }
+
+  async replace(sourcePath: string, destinationPath: string): Promise<void> {
+    this.replacedPaths.push(`${sourcePath}->${destinationPath}`);
+    const size = await this.fileSize(sourcePath);
+    this.sizes.delete(sourcePath);
+    this.sizes.set(destinationPath, size);
+  }
+}
+
+class RecordingDanceReferenceVideoDownloader implements DanceReferenceVideoDownloader {
+  readonly seenUrls: Array<string> = [];
+  readonly seenDestinationPaths: Array<string> = [];
+  private readonly store: MemoryDanceReferenceVideoFileStore;
+  private readonly downloadedSize: number;
+
+  constructor(store: MemoryDanceReferenceVideoFileStore, downloadedSize: number) {
+    this.store = store;
+    this.downloadedSize = downloadedSize;
+  }
+
+  async download(url: string, destinationPath: string): Promise<void> {
+    this.seenUrls.push(url);
+    this.seenDestinationPaths.push(destinationPath);
+    this.store.setFileSize(destinationPath, this.downloadedSize);
+  }
+}
+
+type DanceReferenceVideoDownloadEvent = 'progress' | 'complete' | 'pause' | 'remove' | 'fail';
+type DanceReferenceVideoProgressListener = (receivedBytes: number, totalBytes: number) => void;
+type DanceReferenceVideoEmptyListener = () => void;
+type DanceReferenceVideoFailureListener = (errorCode: number) => void;
+type DanceReferenceVideoDownloadListener =
+  DanceReferenceVideoProgressListener | DanceReferenceVideoEmptyListener | DanceReferenceVideoFailureListener;
+
+class ManualDanceReferenceVideoDownloadTask implements DanceReferenceVideoDownloadTask {
+  private readonly progressCallbacks: Array<DanceReferenceVideoProgressListener> = [];
+  private readonly completeCallbacks: Array<DanceReferenceVideoEmptyListener> = [];
+  private readonly pauseCallbacks: Array<DanceReferenceVideoEmptyListener> = [];
+  private readonly removeCallbacks: Array<DanceReferenceVideoEmptyListener> = [];
+  private readonly failCallbacks: Array<DanceReferenceVideoFailureListener> = [];
+  private readonly status: number;
+  private readonly failedReason: number;
+  private readonly failTaskInfo: boolean;
+  private readonly completeAfterFailedTaskInfo: boolean;
+
+  constructor(
+    status: number = 1,
+    failedReason: number = 0,
+    failTaskInfo: boolean = false,
+    completeAfterFailedTaskInfo: boolean = false
+  ) {
+    this.status = status;
+    this.failedReason = failedReason;
+    this.failTaskInfo = failTaskInfo;
+    this.completeAfterFailedTaskInfo = completeAfterFailedTaskInfo;
+  }
+
+  on(event: DanceReferenceVideoDownloadEvent, callback: DanceReferenceVideoDownloadListener): void {
+    if (event === 'progress') {
+      this.progressCallbacks.push(callback as DanceReferenceVideoProgressListener);
+      return;
+    }
+    if (event === 'complete') {
+      this.completeCallbacks.push(callback as DanceReferenceVideoEmptyListener);
+      return;
+    }
+    if (event === 'pause') {
+      this.pauseCallbacks.push(callback as DanceReferenceVideoEmptyListener);
+      return;
+    }
+    if (event === 'remove') {
+      this.removeCallbacks.push(callback as DanceReferenceVideoEmptyListener);
+      return;
+    }
+    this.failCallbacks.push(callback as DanceReferenceVideoFailureListener);
+  }
+
+  off(_event: DanceReferenceVideoDownloadEvent, _callback?: DanceReferenceVideoDownloadListener): void {
+  }
+
+  async getTaskInfo(): Promise<request.DownloadInfo> {
+    if (this.failTaskInfo) {
+      if (this.completeAfterFailedTaskInfo) {
+        setTimeout(() => this.emitComplete(), 0);
+      }
+      throw new Error('Task info unavailable.');
+    }
+    return {
+      status: this.status,
+      failedReason: this.failedReason
+    } as request.DownloadInfo;
+  }
+
+  emitPause(): void {
+    this.pauseCallbacks.forEach((callback: () => void) => callback());
+  }
+
+  emitRemove(): void {
+    this.removeCallbacks.forEach((callback: () => void) => callback());
+  }
+
+  emitComplete(): void {
+    this.completeCallbacks.forEach((callback: () => void) => callback());
+  }
+}
+
+async function danceReferenceVideoPromiseRejected(promise: Promise<void>): Promise<boolean> {
+  return promise.then(
+    (): boolean => false,
+    (_error: Error): boolean => true
+  );
 }
 
 class FixedGestureRunner implements GestureRunner {
@@ -2276,6 +2423,8 @@ export default function localUnitTest() {
       expect(hasAppStringKey('dance_prepare_summary')).assertTrue();
       expect(hasAppStringKey('dance_reference_video')).assertTrue();
       expect(hasAppStringKey('dance_countdown')).assertTrue();
+      expect(hasAppStringKey('dance_reference_video_downloading')).assertTrue();
+      expect(hasAppStringKey('dance_reference_video_ready')).assertTrue();
       expect(hasAppStringKey('dance_reference_video_failed')).assertTrue();
       expect(hasAppStringKey('dance_start_demo')).assertTrue();
       expect(hasAppStringKey('dance_result_title')).assertTrue();
@@ -2284,6 +2433,140 @@ export default function localUnitTest() {
       expect(hasAppStringKey('feature_runtime_save_image_done')).assertTrue();
       expect(hasAppStringKey('feature_runtime_save_image_failed')).assertTrue();
       expect(hasAppStringKey('feature_runtime_save_image_missing')).assertTrue();
+    });
+
+    it('reusesCachedDanceReferenceVideoWhenAndroidLengthMatches', 0, async () => {
+      const cacheDir = '/cache/';
+      const expectedPath = '/cache/danceVideo2.mp4';
+      const fileStore = new MemoryDanceReferenceVideoFileStore();
+      fileStore.setFileSize(expectedPath, danceReferenceVideoLengthBytes);
+      const downloader = new RecordingDanceReferenceVideoDownloader(fileStore, danceReferenceVideoLengthBytes);
+
+      const result = await new DanceReferenceVideoCacheService(fileStore, downloader).prepare(cacheDir);
+
+      expect(danceReferenceVideoCacheFileName).assertEqual('danceVideo2.mp4');
+      expect(danceReferenceVideoCachePath(cacheDir)).assertEqual(expectedPath);
+      expect(isCompleteDanceReferenceVideo(danceReferenceVideoLengthBytes)).assertTrue();
+      expect(isCompleteDanceReferenceVideo(danceReferenceVideoLengthBytes - 1)).assertFalse();
+      expect(result.ok).assertTrue();
+      expect(result.uri).assertEqual('file:///cache/danceVideo2.mp4');
+      expect(result.messageKey).assertEqual('dance_reference_video_ready');
+      expect(result.downloaded).assertFalse();
+      expect(downloader.seenUrls.length).assertEqual(0);
+    });
+
+    it('downloadsDanceReferenceVideoWhenCacheIsMissing', 0, async () => {
+      const fileStore = new MemoryDanceReferenceVideoFileStore();
+      const downloader = new RecordingDanceReferenceVideoDownloader(fileStore, danceReferenceVideoLengthBytes);
+
+      const result = await new DanceReferenceVideoCacheService(fileStore, downloader).prepare('/cache');
+
+      expect(result.ok).assertTrue();
+      expect(result.uri).assertEqual('file:///cache/danceVideo2.mp4');
+      expect(result.downloaded).assertTrue();
+      expect(downloader.seenUrls.join(',')).assertEqual(danceReferenceVideoUrl);
+      expect(downloader.seenDestinationPaths[0].startsWith('/cache/danceVideo2.mp4.download.')).assertTrue();
+      expect(fileStore.replacedPaths.join(',')).assertEqual(`${downloader.seenDestinationPaths[0]}->/cache/danceVideo2.mp4`);
+    });
+
+    it('rejectsIncompleteDanceReferenceVideoDownload', 0, async () => {
+      const fileStore = new MemoryDanceReferenceVideoFileStore();
+      const downloader = new RecordingDanceReferenceVideoDownloader(fileStore, danceReferenceVideoLengthBytes - 1);
+
+      const result = await new DanceReferenceVideoCacheService(fileStore, downloader).prepare('/cache');
+
+      expect(result.ok).assertFalse();
+      expect(result.uri).assertEqual('');
+      expect(result.messageKey).assertEqual('dance_reference_video_failed');
+      expect(result.downloaded).assertFalse();
+      expect(fileStore.removedPaths.join(',')).assertEqual(downloader.seenDestinationPaths[0]);
+      expect(downloader.seenDestinationPaths[0].startsWith('/cache/danceVideo2.mp4.download.')).assertTrue();
+    });
+
+    it('settlesDanceReferenceVideoDownloadWhenTaskAlreadyEnded', 0, async () => {
+      await waitForDanceReferenceVideoDownload(
+        new ManualDanceReferenceVideoDownloadTask(danceReferenceVideoDownloadStatusSuccessful)
+      );
+
+      const rejectedPausedTask = await danceReferenceVideoPromiseRejected(
+        waitForDanceReferenceVideoDownload(
+          new ManualDanceReferenceVideoDownloadTask(danceReferenceVideoDownloadStatusPaused)
+        )
+      );
+
+      expect(rejectedPausedTask).assertTrue();
+    });
+
+    it('rejectsDanceReferenceVideoDownloadWhenTaskInfoCannotBeRead', 0, async () => {
+      const rejectedTask = await danceReferenceVideoPromiseRejected(
+        waitForDanceReferenceVideoDownload(
+          new ManualDanceReferenceVideoDownloadTask(
+            danceReferenceVideoDownloadStatusRunning,
+            0,
+            true,
+            true
+          )
+        )
+      );
+
+      expect(rejectedTask).assertTrue();
+    });
+
+    it('rejectsDanceReferenceVideoDownloadOnPauseOrRemoveEvents', 0, async () => {
+      const pausedTask = new ManualDanceReferenceVideoDownloadTask(danceReferenceVideoDownloadStatusRunning);
+      const pausedPromise = waitForDanceReferenceVideoDownload(pausedTask);
+      pausedTask.emitPause();
+      const pauseRejected = await danceReferenceVideoPromiseRejected(pausedPromise);
+
+      const removedTask = new ManualDanceReferenceVideoDownloadTask(danceReferenceVideoDownloadStatusRunning);
+      const removedPromise = waitForDanceReferenceVideoDownload(removedTask);
+      removedTask.emitRemove();
+      const removeRejected = await danceReferenceVideoPromiseRejected(removedPromise);
+
+      expect(pauseRejected).assertTrue();
+      expect(removeRejected).assertTrue();
+    });
+
+    it('startsDanceOnlyAfterReferenceVideoCacheAndPlayerAreReady', 0, () => {
+      expect(danceReferenceVideoCanStartLive({
+        cached: true,
+        playerPrepared: false,
+        preparing: false,
+        failed: false
+      })).assertFalse();
+      expect(danceReferenceVideoCanStartLive({
+        cached: false,
+        playerPrepared: true,
+        preparing: false,
+        failed: false
+      })).assertFalse();
+      expect(danceReferenceVideoCanStartLive({
+        cached: true,
+        playerPrepared: true,
+        preparing: false,
+        failed: false
+      })).assertTrue();
+    });
+
+    it('keepsPreparedDanceReferenceVideoWhenResetReusesSameCachedSource', 0, () => {
+      expect(danceReferenceVideoPlayerPreparedAfterCacheResult(
+        true,
+        'file:///cache/danceVideo2.mp4',
+        'file:///cache/danceVideo2.mp4',
+        true
+      )).assertTrue();
+      expect(danceReferenceVideoPlayerPreparedAfterCacheResult(
+        true,
+        'file:///cache/danceVideo2.mp4',
+        'file:///cache/other.mp4',
+        true
+      )).assertFalse();
+      expect(danceReferenceVideoPlayerPreparedAfterCacheResult(
+        false,
+        'file:///cache/danceVideo2.mp4',
+        'file:///cache/danceVideo2.mp4',
+        true
+      )).assertFalse();
     });
 
     it('mapsDanceScoresToAndroidResultStates', 0, () => {

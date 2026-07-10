@@ -86,6 +86,8 @@
     { "name": "dance_prepare_summary", "value": "跟随参考动作完成舞蹈评分。" },
     { "name": "dance_reference_video", "value": "参考视频" },
     { "name": "dance_countdown", "value": "准备开始" },
+    { "name": "dance_reference_video_downloading", "value": "正在下载参考视频..." },
+    { "name": "dance_reference_video_ready", "value": "参考视频已就绪。" },
     { "name": "dance_reference_video_failed", "value": "参考视频加载失败。" },
     { "name": "dance_start_demo", "value": "运行评分演示" },
     { "name": "dance_start_live", "value": "开始实时评分" },

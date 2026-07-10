@@ -25,6 +25,26 @@ export interface DanceSamplingPageState {
   readonly summaryText: string;
 }
 
+export interface DanceReferenceVideoReadiness {
+  readonly cached: boolean;
+  readonly playerPrepared: boolean;
+  readonly preparing: boolean;
+  readonly failed: boolean;
+}
+
+export function danceReferenceVideoCanStartLive(readiness: DanceReferenceVideoReadiness): boolean {
+  return readiness.cached && readiness.playerPrepared && !readiness.preparing && !readiness.failed;
+}
+
+export function danceReferenceVideoPlayerPreparedAfterCacheResult(
+  cacheReady: boolean,
+  nextUri: string,
+  previousUri: string,
+  previousPlayerPrepared: boolean
+): boolean {
+  return cacheReady && previousPlayerPrepared && nextUri.length > 0 && nextUri === previousUri;
+}
+
 export function danceTemplateDemoScore(): number {
   return danceScoreFromFrames(danceTemplateFrames());
 }
