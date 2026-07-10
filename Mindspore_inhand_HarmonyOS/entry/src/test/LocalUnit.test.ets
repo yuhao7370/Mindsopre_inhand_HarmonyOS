@@ -262,11 +262,21 @@ import {
   isFullResultImageWrite
 } from '../main/ets/services/media/ResultImageSaveService';
 import {
+  ImageSharePayload,
+  ImageShareWriter,
   ShareService,
   ShareTextPayload,
   TextShareWriter,
   mindSporeInhandShareText
 } from '../main/ets/services/share/ShareService';
+import {
+  poetryJavascriptBridgeName,
+  poetryJavascriptGenerateMethod,
+  poetryPosterComponentId,
+  poetryPosterPagePath,
+  poetryPosterTextFromParam,
+  shouldInstallPoetryJavascriptBridge
+} from '../main/ets/services/poetry/PoetryPosterService';
 
 class FixedScoreRunner implements ImageClassificationScoreRunner {
   private readonly scores: Array<number>;
@@ -733,6 +743,20 @@ class RecordingShareWriter implements TextShareWriter {
 class RejectingShareWriter implements TextShareWriter {
   async shareText(_payload: ShareTextPayload): Promise<void> {
     throw new Error('share rejected');
+  }
+}
+
+class RecordingImageShareWriter implements ImageShareWriter {
+  readonly payloads: Array<ImageSharePayload> = [];
+
+  async shareImage(payload: ImageSharePayload): Promise<void> {
+    this.payloads.push(payload);
+  }
+}
+
+class RejectingImageShareWriter implements ImageShareWriter {
+  async shareImage(_payload: ImageSharePayload): Promise<void> {
+    throw new Error('image share rejected');
   }
 }
 
@@ -1267,6 +1291,42 @@ export default function localUnitTest() {
       expect(failedResult.messageKey).assertEqual('me_share_failed');
     });
 
+    it('shareServiceSharesSavedPosterImagesByUri', 0, async () => {
+      const writer = new RecordingImageShareWriter();
+      const payload: ImageSharePayload = {
+        title: 'Intelligent Poetry',
+        uri: 'file://media/poemshare.jpg',
+        description: 'MindSpore AI'
+      };
+      const result = await new ShareService(new RecordingShareWriter(), writer).shareImage(payload);
+
+      expect(result.ok).assertTrue();
+      expect(result.messageKey).assertEqual('poem_share_done');
+      expect(result.sharedUri).assertEqual('file://media/poemshare.jpg');
+      expect(writer.payloads[0].title).assertEqual('Intelligent Poetry');
+      expect(writer.payloads[0].uri).assertEqual('file://media/poemshare.jpg');
+    });
+
+    it('shareServiceRejectsMissingOrFailedPosterImageShare', 0, async () => {
+      const blankPayload: ImageSharePayload = {
+        title: 'Intelligent Poetry',
+        uri: '',
+        description: 'MindSpore AI'
+      };
+      const failedPayload: ImageSharePayload = {
+        title: 'Intelligent Poetry',
+        uri: 'file://media/poemshare.jpg',
+        description: 'MindSpore AI'
+      };
+      const blankResult = await new ShareService(new RecordingShareWriter(), new RecordingImageShareWriter()).shareImage(blankPayload);
+      const failedResult = await new ShareService(new RecordingShareWriter(), new RejectingImageShareWriter()).shareImage(failedPayload);
+
+      expect(blankResult.ok).assertFalse();
+      expect(failedResult.ok).assertFalse();
+      expect(blankResult.messageKey).assertEqual('poem_share_failed');
+      expect(failedResult.messageKey).assertEqual('poem_share_failed');
+    });
+
     it('doesNotNavigateQuickStartParentWithEmptyUrl', 0, () => {
       expect(isCollegeItemUrlNavigable(collegeItems[1])).assertTrue();
       expect(isCollegeItemUrlNavigable(collegeItems[2])).assertFalse();
@@ -1320,10 +1380,36 @@ export default function localUnitTest() {
 
     it('routesIntelligentPoetryToOriginalWebExperience', 0, () => {
       expect(AppRoute.POETRY.page).assertEqual(webPagePath);
+      expect(AppRoute.POETRY_POSTER.page).assertEqual(poetryPosterPagePath);
       expect(webUrlForRouteName(AppRoute.POETRY.name)).assertEqual(intelligentPoetryUrl);
       expect(workflowForRoute(AppRoute.POETRY.name) === undefined).assertTrue();
       const poetryDestination = webDestinationForUrl(intelligentPoetryUrl, 'me_official_title');
       expect(poetryDestination.titleKey).assertEqual('title_intelligent_poetry');
+    });
+
+    it('portsPoetryJavascriptBridgeAndPosterRoute', 0, () => {
+      expect(AppRoute.POETRY_POSTER.name).assertEqual('/app/PoetryPosterActivity');
+      expect(AppRoute.POETRY_POSTER.page).assertEqual(poetryPosterPagePath);
+      expect(poetryJavascriptBridgeName).assertEqual('android');
+      expect(poetryJavascriptGenerateMethod).assertEqual('getGeneratePoetry');
+      expect(poetryPosterComponentId).assertEqual('poetryPosterContent');
+      expect(shouldInstallPoetryJavascriptBridge(AppRoute.POETRY.name, intelligentPoetryUrl)).assertTrue();
+      expect(shouldInstallPoetryJavascriptBridge(AppRoute.WEB.name, intelligentPoetryUrl)).assertTrue();
+      expect(shouldInstallPoetryJavascriptBridge(AppRoute.PRIVACY.name, userPrivacyRulesUrl)).assertFalse();
+    });
+
+    it('preservesGeneratedPoetryTextForPosterLikeAndroid', 0, () => {
+      const poem = '  Spring river tide\nMoon over the sea  ';
+
+      expect(poetryPosterTextFromParam(poem)).assertEqual(poem);
+      expect(poetryPosterTextFromParam(undefined)).assertEqual('');
+      expect(hasAppStringKey('poem_save_poster')).assertTrue();
+      expect(hasAppStringKey('poem_share_poster')).assertTrue();
+      expect(hasAppStringKey('poem_save_success')).assertTrue();
+      expect(hasAppStringKey('poem_save_failed')).assertTrue();
+      expect(hasAppStringKey('poem_share_done')).assertTrue();
+      expect(hasAppStringKey('poem_share_failed')).assertTrue();
+      expect(hasAppStringKey('poem_ai_credit')).assertTrue();
     });
 
     it('portsAndroidDanceTemplateAndPerfectScoreContract', 0, () => {

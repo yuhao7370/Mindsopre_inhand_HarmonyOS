@@ -25,6 +25,7 @@ export interface AppRouteCatalog {
   readonly TEXT_TRANSLATION: AppRouteInfo;
   readonly DANCE: AppRouteInfo;
   readonly POETRY: AppRouteInfo;
+  readonly POETRY_POSTER: AppRouteInfo;
   readonly MY_QR_CODE: AppRouteInfo;
   readonly WEB: AppRouteInfo;
   readonly PRIVACY: AppRouteInfo;
@@ -50,6 +51,7 @@ export const AppRoute: AppRouteCatalog = {
   TEXT_TRANSLATION: { name: '/hms/TextTranslationActivity', page: 'pages/FeatureRuntimePage' } as AppRouteInfo,
   DANCE: { name: '/dance/DanceMainActivity', page: 'pages/FeatureStubPage' } as AppRouteInfo,
   POETRY: { name: '/app/IntelligentPoetryWritingActivity', page: webPagePath } as AppRouteInfo,
+  POETRY_POSTER: { name: '/app/PoetryPosterActivity', page: 'pages/PoetryPosterPage' } as AppRouteInfo,
   MY_QR_CODE: { name: '/app/MyQRCodeActivity', page: 'pages/QrCodePage' } as AppRouteInfo,
   WEB: { name: '/app/WebViewUtilsActivity', page: webPagePath } as AppRouteInfo,
   PRIVACY: { name: '/app/PrivacyPolicyActivity', page: webPagePath } as AppRouteInfo
@@ -75,6 +77,7 @@ export const appRoutes: AppRouteInfo[] = [
   AppRoute.TEXT_TRANSLATION,
   AppRoute.DANCE,
   AppRoute.POETRY,
+  AppRoute.POETRY_POSTER,
   AppRoute.MY_QR_CODE,
   AppRoute.WEB,
   AppRoute.PRIVACY

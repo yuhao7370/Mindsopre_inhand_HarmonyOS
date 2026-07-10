@@ -66,6 +66,13 @@ export type AppStringKey =
   'me_share_failed' |
   'qr_code_save_done' |
   'qr_code_save_failed' |
+  'poem_save_poster' |
+  'poem_share_poster' |
+  'poem_save_success' |
+  'poem_save_failed' |
+  'poem_share_done' |
+  'poem_share_failed' |
+  'poem_ai_credit' |
   'feature_runtime_inputs_title' |
   'feature_runtime_permissions_title' |
   'feature_runtime_result_title' |
@@ -247,6 +254,13 @@ const APP_STRING_KEYS: AppStringKey[] = [
   'me_share_failed',
   'qr_code_save_done',
   'qr_code_save_failed',
+  'poem_save_poster',
+  'poem_share_poster',
+  'poem_save_success',
+  'poem_save_failed',
+  'poem_share_done',
+  'poem_share_failed',
+  'poem_ai_credit',
   'feature_runtime_inputs_title',
   'feature_runtime_permissions_title',
   'feature_runtime_result_title',
@@ -499,6 +513,20 @@ export function appString(key: AppStringKey): ResourceStr {
       return $r('app.string.qr_code_save_done');
     case 'qr_code_save_failed':
       return $r('app.string.qr_code_save_failed');
+    case 'poem_save_poster':
+      return $r('app.string.poem_save_poster');
+    case 'poem_share_poster':
+      return $r('app.string.poem_share_poster');
+    case 'poem_save_success':
+      return $r('app.string.poem_save_success');
+    case 'poem_save_failed':
+      return $r('app.string.poem_save_failed');
+    case 'poem_share_done':
+      return $r('app.string.poem_share_done');
+    case 'poem_share_failed':
+      return $r('app.string.poem_share_failed');
+    case 'poem_ai_credit':
+      return $r('app.string.poem_ai_credit');
     case 'feature_runtime_inputs_title':
       return $r('app.string.feature_runtime_inputs_title');
     case 'feature_runtime_permissions_title':

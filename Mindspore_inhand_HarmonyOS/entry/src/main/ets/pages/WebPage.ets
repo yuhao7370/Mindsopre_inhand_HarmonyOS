@@ -1,5 +1,6 @@
 import router from '@ohos.router';
 import { webview } from '@kit.ArkWeb';
+import { AppRoute } from '../app/AppRoutes';
 import { AppStringKey, appString } from '../common/i18n/AppStrings';
 import { AppColor, AppSpacing } from '../common/theme/AppTheme';
 import {
@@ -9,11 +10,29 @@ import {
   webUrlForRouteName,
   WebDestination
 } from '../common/data/WebDestination';
+import {
+  poetryJavascriptBridgeName,
+  poetryJavascriptGenerateMethod,
+  poetryPosterTextFromParam,
+  shouldInstallPoetryJavascriptBridge
+} from '../services/poetry/PoetryPosterService';
 
 interface WebPageParams {
   titleKey?: AppStringKey;
   url?: string;
   routeName?: string;
+}
+
+class PoetryJavascriptBridge {
+  private readonly onPoetryGenerated: (text: string) => void;
+
+  constructor(onPoetryGenerated: (text: string) => void) {
+    this.onPoetryGenerated = onPoetryGenerated;
+  }
+
+  getGeneratePoetry(text: string): void {
+    this.onPoetryGenerated(text);
+  }
 }
 
 @Entry
@@ -23,17 +42,30 @@ struct WebPage {
   @State progress: number = 0;
 
   private readonly webController: webview.WebviewController = new webview.WebviewController();
+  private readonly poetryBridge: PoetryJavascriptBridge =
+    new PoetryJavascriptBridge((text: string) => this.openPoetryPoster(text));
+  private routeName: string = '';
   private webUrl: string = '';
   private localRawfile: string = '';
 
   aboutToAppear() {
     const params = router.getParams() as WebPageParams;
     const fallbackTitleKey: AppStringKey = params?.titleKey ?? 'me_official_title';
+    this.routeName = params?.routeName ?? '';
     const sourceUrl = params?.url ?? webUrlForRouteName(params?.routeName ?? '') ?? mindSporeBaseUrl;
     const destination: WebDestination = webDestinationForUrl(sourceUrl, fallbackTitleKey);
     this.titleKey = destination.titleKey;
     this.webUrl = destination.url;
     this.localRawfile = destination.localRawfile ?? '';
+  }
+
+  private openPoetryPoster(text: string): void {
+    router.pushUrl({
+      url: AppRoute.POETRY_POSTER.page,
+      params: {
+        poem: poetryPosterTextFromParam(text)
+      }
+    });
   }
 
   @Builder
@@ -43,6 +75,22 @@ struct WebPage {
         .javaScriptAccess(true)
         .domStorageAccess(true)
         .mixedMode(MixedMode.All)
+        .onProgressChange((event: OnProgressChangeEvent) => {
+          this.progress = event.newProgress;
+        })
+        .layoutWeight(1)
+        .width('100%')
+    } else if (shouldInstallPoetryJavascriptBridge(this.routeName, this.webUrl)) {
+      Web({ src: this.webUrl, controller: this.webController })
+        .javaScriptAccess(true)
+        .domStorageAccess(true)
+        .mixedMode(MixedMode.All)
+        .javaScriptProxy({
+          object: this.poetryBridge,
+          name: poetryJavascriptBridgeName,
+          methodList: [poetryJavascriptGenerateMethod],
+          controller: this.webController
+        })
         .onProgressChange((event: OnProgressChangeEvent) => {
           this.progress = event.newProgress;
         })

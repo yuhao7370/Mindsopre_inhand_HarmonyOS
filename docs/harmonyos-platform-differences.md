@@ -64,3 +64,20 @@ Current HarmonyOS behavior:
 - Camera preview, reference-video playback, album save, and live skeleton
   sampling remain a platform adapter/UI task before the Dance page can be
   marked as fully migrated.
+
+## Intelligent Poetry
+
+Android Intelligent Poetry opens the remote MindSpore poetry page in WebView,
+registers a JavaScript interface named `android`, and receives generated poem
+text through `android.getGeneratePoetry(text)` before opening a poster page.
+
+Current HarmonyOS behavior:
+
+- The feature remains hidden from the default Experience grid, matching Android
+  source visibility.
+- The Web route keeps the Android route name and loads the original remote
+  MindSpore poetry URL.
+- ArkWeb installs a JavaScript proxy with the same bridge name and method, then
+  routes generated poem text into the HarmonyOS poster page.
+- The poster page snapshots the rendered poster and uses HarmonyOS save/share
+  services for image export.

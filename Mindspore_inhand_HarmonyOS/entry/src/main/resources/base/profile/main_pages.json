@@ -4,6 +4,7 @@
     "pages/FeatureStubPage",
     "pages/FeatureRuntimePage",
     "pages/WebPage",
+    "pages/PoetryPosterPage",
     "pages/QrCodePage"
   ]
 }

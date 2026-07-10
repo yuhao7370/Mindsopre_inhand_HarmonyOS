@@ -15,8 +15,24 @@ export interface ShareTextResult {
   readonly sharedTextLength: number;
 }
 
+export interface ImageSharePayload {
+  readonly title: string;
+  readonly uri: string;
+  readonly description: string;
+}
+
+export interface ShareImageResult {
+  readonly ok: boolean;
+  readonly messageKey: AppStringKey;
+  readonly sharedUri: string;
+}
+
 export interface TextShareWriter {
   shareText(payload: ShareTextPayload): Promise<void>;
+}
+
+export interface ImageShareWriter {
+  shareImage(payload: ImageSharePayload): Promise<void>;
 }
 
 export class HarmonySystemShareTextWriter implements TextShareWriter {
@@ -38,11 +54,32 @@ export class HarmonySystemShareTextWriter implements TextShareWriter {
   }
 }
 
+export class HarmonySystemShareImageWriter implements ImageShareWriter {
+  private readonly context: common.UIAbilityContext;
+
+  constructor(context: common.UIAbilityContext) {
+    this.context = context;
+  }
+
+  async shareImage(payload: ImageSharePayload): Promise<void> {
+    const record: systemShare.SharedRecord = {
+      utd: uniformTypeDescriptor.UniformDataType.JPEG,
+      title: payload.title,
+      uri: payload.uri,
+      description: payload.description
+    };
+    const data = new systemShare.SharedData(record);
+    await new systemShare.ShareController(data).show(this.context, {});
+  }
+}
+
 export class ShareService {
   private readonly writer: TextShareWriter;
+  private readonly imageWriter?: ImageShareWriter;
 
-  constructor(writer: TextShareWriter) {
+  constructor(writer: TextShareWriter, imageWriter?: ImageShareWriter) {
     this.writer = writer;
+    this.imageWriter = imageWriter;
   }
 
   async shareText(payload: ShareTextPayload): Promise<ShareTextResult> {
@@ -60,6 +97,22 @@ export class ShareService {
       return failedShareTextResult();
     }
   }
+
+  async shareImage(payload: ImageSharePayload): Promise<ShareImageResult> {
+    if (payload.uri.length === 0 || this.imageWriter === undefined) {
+      return failedShareImageResult();
+    }
+    try {
+      await this.imageWriter.shareImage(payload);
+      return {
+        ok: true,
+        messageKey: 'poem_share_done',
+        sharedUri: payload.uri
+      };
+    } catch (_) {
+      return failedShareImageResult();
+    }
+  }
 }
 
 export function mindSporeInhandShareText(recommendation: string): string {
@@ -75,5 +128,13 @@ function failedShareTextResult(): ShareTextResult {
     ok: false,
     messageKey: 'me_share_failed',
     sharedTextLength: 0
+  };
+}
+
+function failedShareImageResult(): ShareImageResult {
+  return {
+    ok: false,
+    messageKey: 'poem_share_failed',
+    sharedUri: ''
   };
 }
