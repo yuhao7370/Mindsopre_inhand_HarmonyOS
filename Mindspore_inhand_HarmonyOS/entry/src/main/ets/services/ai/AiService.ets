@@ -517,7 +517,11 @@ export class DefaultAiService {
         code: 'TEXT_TRANSLATION_FAILED',
         aiMethod: 'translateText',
         messageKey: 'feature_runtime_text_translation_failed',
-        detailText: this.textTranslationSummary(result)
+        detailText: this.textTranslationSummary(result),
+        data: {
+          kind: 'textTranslation',
+          result: result
+        }
       };
     }
     return {

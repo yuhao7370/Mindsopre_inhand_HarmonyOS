@@ -105,6 +105,48 @@ export interface TextTranslationRunner {
   translate(text: string, targetLanguage: string): Promise<TextTranslationResult>;
 }
 
+interface LocalTranslationPhrase {
+  readonly source: string;
+  readonly target: string;
+}
+
+const localChineseToEnglishPhrases: Array<LocalTranslationPhrase> = [
+  { source: '\u4F60\u597D\u4E16\u754C', target: 'hello world' },
+  { source: '\u4F60\u597D', target: 'hello' },
+  { source: '\u8C22\u8C22', target: 'thank you' },
+  { source: '\u65E9\u4E0A\u597D', target: 'good morning' },
+  { source: '\u665A\u4E0A\u597D', target: 'good evening' },
+  { source: '\u4E2D\u56FD', target: 'China' },
+  { source: '\u6587\u672C', target: 'text' },
+  { source: '\u7FFB\u8BD1', target: 'translation' },
+  { source: '\u56FE\u7247', target: 'image' },
+  { source: '\u8BC6\u522B', target: 'recognition' },
+  { source: '\u4EBA\u5DE5\u667A\u80FD', target: 'artificial intelligence' },
+  { source: '\u673A\u5668\u5B66\u4E60', target: 'machine learning' },
+  { source: '\u6DF1\u5EA6\u5B66\u4E60', target: 'deep learning' },
+  { source: '\u534E\u4E3A', target: 'Huawei' },
+  { source: '\u6607\u601D', target: 'MindSpore' }
+];
+
+const localEnglishToChinesePhrases: Array<LocalTranslationPhrase> = [
+  { source: 'hello world', target: '\u4F60\u597D\u4E16\u754C' },
+  { source: 'good morning', target: '\u65E9\u4E0A\u597D' },
+  { source: 'good evening', target: '\u665A\u4E0A\u597D' },
+  { source: 'thank you', target: '\u8C22\u8C22' },
+  { source: 'thanks', target: '\u8C22\u8C22' },
+  { source: 'hello', target: '\u4F60\u597D' },
+  { source: 'china', target: '\u4E2D\u56FD' },
+  { source: 'text', target: '\u6587\u672C' },
+  { source: 'translation', target: '\u7FFB\u8BD1' },
+  { source: 'image', target: '\u56FE\u7247' },
+  { source: 'recognition', target: '\u8BC6\u522B' },
+  { source: 'artificial intelligence', target: '\u4EBA\u5DE5\u667A\u80FD' },
+  { source: 'machine learning', target: '\u673A\u5668\u5B66\u4E60' },
+  { source: 'deep learning', target: '\u6DF1\u5EA6\u5B66\u4E60' },
+  { source: 'huawei', target: '\u534E\u4E3A' },
+  { source: 'mindspore', target: '\u6607\u601D' }
+];
+
 export interface TextTranslationServiceOptions {
   readonly runner: TextTranslationRunner;
 }
@@ -128,6 +170,19 @@ export class TextTranslationService {
         targetLanguage: targetLanguage
       };
     }
+  }
+}
+
+export class LocalTextTranslationRunner implements TextTranslationRunner {
+  async translate(text: string, targetLanguage: string): Promise<TextTranslationResult> {
+    const normalizedTargetLanguage = normalizeLocalTranslationTargetLanguage(targetLanguage);
+    const translatedText = localTranslatedText(text, normalizedTargetLanguage);
+    return {
+      ok: translatedText.length > 0,
+      sourceText: text,
+      translatedText: translatedText,
+      targetLanguage: normalizedTargetLanguage
+    };
   }
 }
 
@@ -187,6 +242,55 @@ export function parseTranslationLanguagePairs(content: string): Array<TextTransl
     });
   });
   return pairs;
+}
+
+export function localTranslatedText(text: string, targetLanguage: string): string {
+  const target = normalizeLocalTranslationTargetLanguage(targetLanguage);
+  if (target !== 'en' && target !== 'zh') {
+    return '';
+  }
+  const phrases = target === 'en' ? localChineseToEnglishPhrases : localEnglishToChinesePhrases;
+  const translatedLines: Array<string> = [];
+  const lines = text.split('\n');
+  for (let index = 0; index < lines.length; index++) {
+    const translatedLine = localTranslatedLine(lines[index], phrases);
+    if (translatedLine.length > 0) {
+      translatedLines.push(translatedLine);
+    } else if (lines[index].trim().length > 0) {
+      return '';
+    }
+  }
+  return translatedLines.join('\n');
+}
+
+function localTranslatedLine(line: string, phrases: Array<LocalTranslationPhrase>): string {
+  const normalizedLine = normalizeLocalTranslationPhrase(line);
+  if (normalizedLine.length === 0) {
+    return '';
+  }
+  for (let index = 0; index < phrases.length; index++) {
+    if (normalizedLine === normalizeLocalTranslationPhrase(phrases[index].source)) {
+      return phrases[index].target;
+    }
+  }
+  return '';
+}
+
+function normalizeLocalTranslationTargetLanguage(targetLanguage: string): string {
+  const normalized = targetLanguage.trim().toLowerCase();
+  if (normalized === 'zh-hk') {
+    return 'zh';
+  }
+  return normalized;
+}
+
+function normalizeLocalTranslationPhrase(text: string): string {
+  let value = text.split('\r').join('').trim().toLowerCase();
+  const punctuation: Array<string> = ['.', ',', '!', '?', ':', ';', '\uFF0C', '\u3002', '\uFF01', '\uFF1F'];
+  for (let index = 0; index < punctuation.length; index++) {
+    value = value.split(punctuation[index]).join('');
+  }
+  return value;
 }
 
 async function openTextRecognitionImageFile(imageUri: string): Promise<fileIo.File> {

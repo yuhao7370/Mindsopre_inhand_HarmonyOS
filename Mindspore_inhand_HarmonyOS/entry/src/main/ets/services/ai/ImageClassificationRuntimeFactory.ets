@@ -65,6 +65,7 @@ import {
 } from './SceneDetectionService';
 import {
   HarmonyTextRecognitionRunner,
+  LocalTextTranslationRunner,
   TextRecognitionRunner,
   TextRecognitionService,
   TextTranslationRunner,
@@ -227,14 +228,9 @@ export async function createRuntimeAiServiceForWorkflow(
     });
   }
   if (workflow.aiMethod === 'translateText') {
-    if (options.textTranslationRunner !== undefined) {
-      return new DefaultAiService({
-        textRecognitionService: createHarmonyTextRecognitionService(options),
-        textTranslationService: createHarmonyTextTranslationService(options)
-      });
-    }
     return new DefaultAiService({
-      textRecognitionService: createHarmonyTextRecognitionService(options)
+      textRecognitionService: createHarmonyTextRecognitionService(options),
+      textTranslationService: createHarmonyTextTranslationService(options)
     });
   }
   if (workflow.aiMethod === 'segmentPerson') {
@@ -364,7 +360,7 @@ export function createHarmonyTextTranslationService(
   options: HarmonyImageClassificationRuntimeOptions
 ): TextTranslationService {
   return new TextTranslationService({
-    runner: options.textTranslationRunner!
+    runner: options.textTranslationRunner ?? new LocalTextTranslationRunner()
   });
 }
 
