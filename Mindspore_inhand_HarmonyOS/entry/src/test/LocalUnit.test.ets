@@ -1984,6 +1984,30 @@ export default function localUnitTest() {
       expect(runner.seenImageUris[0]).assertEqual('file://selected/hand.jpg');
     });
 
+    it('aiServiceFallsBackToAndroidGestureLabelWhenRunnerLabelIsEmpty', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.GESTURE_STILL.name);
+      expect(workflow !== undefined).assertTrue();
+      const runner: FixedGestureRunner = new FixedGestureRunner({
+        ok: true,
+        gestures: [{
+          category: 11,
+          label: '',
+          score: 0.88
+        }],
+        executionMs: 15
+      });
+      const service = new GestureService({
+        runner: runner
+      });
+
+      const result = await new DefaultAiService({ gestureService: service }).run(workflow!, {
+        imageUri: 'file://selected/hand.jpg'
+      });
+
+      expect(result.detailText.indexOf('Thumb up 88.00%') >= 0).assertTrue();
+      expect(aiRunResultRows(result)[0].value).assertEqual('Thumb up');
+    });
+
     it('mapsGestureRectangleToPercentOverlay', 0, () => {
       const rectangle: GestureRectangle = {
         left: 10,

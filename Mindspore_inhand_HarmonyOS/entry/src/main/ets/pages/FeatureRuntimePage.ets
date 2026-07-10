@@ -75,6 +75,7 @@ import {
 import {
   GestureDetection,
   GestureRectanglePercent,
+  gestureDetectionLabel,
   gestureRectanglePercent
 } from '../services/ai/GestureService';
 import {
@@ -976,8 +977,7 @@ struct FeatureRuntimePage {
   }
 
   private gestureLabel(gesture: GestureDetection): string {
-    const label = gesture.label.length > 0 ? gesture.label : `${gesture.category}`;
-    return `${label} ${(gesture.score * 100).toFixed(1)}%`;
+    return `${gestureDetectionLabel(gesture)} ${(gesture.score * 100).toFixed(1)}%`;
   }
 
   private objectDetectionBoxStyle(detection: ObjectDetection): ObjectDetectionBoxPercent {

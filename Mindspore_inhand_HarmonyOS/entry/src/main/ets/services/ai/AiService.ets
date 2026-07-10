@@ -30,7 +30,8 @@ import {
 import {
   GestureDetection,
   GestureResult,
-  GestureService
+  GestureService,
+  gestureDetectionLabel
 } from './GestureService';
 import {
   SceneDetection,
@@ -911,7 +912,7 @@ export class DefaultAiService {
   }
 
   private gestureLine(gesture: GestureDetection): string {
-    const label = gesture.label.length > 0 ? gesture.label : `${gesture.category}`;
+    const label = gestureDetectionLabel(gesture);
     let line = `${label} ${(gesture.score * 100).toFixed(2)}%`;
     if (gesture.rect !== undefined) {
       line += ` [` +
@@ -1057,7 +1058,7 @@ function gestureResultRows(data: AiGestureData): Array<AiRunResultRow> {
   ];
   if (data.result.gestures.length > 0) {
     const top = data.result.gestures[0];
-    rows.unshift(resultRow('feature_runtime_result_label', top.label.length > 0 ? top.label : `${top.category}`));
+    rows.unshift(resultRow('feature_runtime_result_label', gestureDetectionLabel(top)));
     rows.push(resultRow('feature_runtime_result_score', `${(top.score * 100).toFixed(2)}%`));
   }
   rows.push(resultRow('feature_runtime_result_image', runtimePathSegment(data.imageUri)));

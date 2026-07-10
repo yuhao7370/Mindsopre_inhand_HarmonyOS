@@ -56,6 +56,49 @@ export class GestureService {
   }
 }
 
+export function gestureDetectionLabel(gesture: GestureDetection): string {
+  const runnerLabel = gesture.label.trim();
+  if (runnerLabel.length > 0) {
+    return runnerLabel;
+  }
+  return androidGestureLabel(gesture.category);
+}
+
+export function androidGestureLabel(category: number): string {
+  switch (category) {
+    case 0:
+      return 'One';
+    case 1:
+      return 'Two';
+    case 2:
+      return 'Three';
+    case 3:
+      return 'Four';
+    case 4:
+      return 'Five';
+    case 5:
+      return 'Six';
+    case 6:
+      return 'Seven';
+    case 7:
+      return 'Eight';
+    case 8:
+      return 'Nine';
+    case 9:
+      return 'Dislike';
+    case 10:
+      return 'Fist';
+    case 11:
+      return 'Thumb up';
+    case 12:
+      return 'Heart';
+    case 13:
+      return 'OK';
+    default:
+      return 'Other gesture';
+  }
+}
+
 export function gestureRectanglePercent(
   rectangle: GestureRectangle,
   imageWidth: number,
