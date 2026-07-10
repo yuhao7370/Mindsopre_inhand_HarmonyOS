@@ -253,7 +253,7 @@ export function localTranslatedText(text: string, targetLanguage: string): strin
   const translatedLines: Array<string> = [];
   const lines = text.split('\n');
   for (let index = 0; index < lines.length; index++) {
-    const translatedLine = localTranslatedLine(lines[index], phrases);
+    const translatedLine = localTranslatedLine(lines[index], phrases, target);
     if (translatedLine.length > 0) {
       translatedLines.push(translatedLine);
     } else if (lines[index].trim().length > 0) {
@@ -263,7 +263,7 @@ export function localTranslatedText(text: string, targetLanguage: string): strin
   return translatedLines.join('\n');
 }
 
-function localTranslatedLine(line: string, phrases: Array<LocalTranslationPhrase>): string {
+function localTranslatedLine(line: string, phrases: Array<LocalTranslationPhrase>, targetLanguage: string): string {
   const normalizedLine = normalizeLocalTranslationPhrase(line);
   if (normalizedLine.length === 0) {
     return '';
@@ -273,7 +273,97 @@ function localTranslatedLine(line: string, phrases: Array<LocalTranslationPhrase
       return phrases[index].target;
     }
   }
+  if (targetLanguage === 'en') {
+    return localComposedChineseToEnglishLine(normalizedLine, phrases);
+  }
+  if (targetLanguage === 'zh') {
+    return localComposedEnglishToChineseLine(normalizedLine, phrases);
+  }
   return '';
+}
+
+function localComposedChineseToEnglishLine(
+  normalizedLine: string,
+  phrases: Array<LocalTranslationPhrase>
+): string {
+  const source = normalizedLine.split(' ').join('');
+  const translatedParts: Array<string> = [];
+  let cursor = 0;
+  while (cursor < source.length) {
+    const match = longestLocalPhrasePrefix(source, cursor, phrases);
+    if (match === undefined) {
+      return '';
+    }
+    translatedParts.push(match.target);
+    cursor += normalizeLocalTranslationPhrase(match.source).split(' ').join('').length;
+  }
+  return translatedParts.join(' ');
+}
+
+function localComposedEnglishToChineseLine(
+  normalizedLine: string,
+  phrases: Array<LocalTranslationPhrase>
+): string {
+  const tokens = normalizedLine.split(' ').filter((token: string) => token.length > 0);
+  const translatedParts: Array<string> = [];
+  let cursor = 0;
+  while (cursor < tokens.length) {
+    const match = longestLocalPhraseTokenMatch(tokens, cursor, phrases);
+    if (match === undefined) {
+      return '';
+    }
+    translatedParts.push(match.target);
+    cursor += normalizeLocalTranslationPhrase(match.source).split(' ')
+      .filter((token: string) => token.length > 0).length;
+  }
+  return translatedParts.join('');
+}
+
+function longestLocalPhrasePrefix(
+  source: string,
+  cursor: number,
+  phrases: Array<LocalTranslationPhrase>
+): LocalTranslationPhrase | undefined {
+  let best: LocalTranslationPhrase | undefined = undefined;
+  let bestLength = 0;
+  for (let index = 0; index < phrases.length; index++) {
+    const phraseSource = normalizeLocalTranslationPhrase(phrases[index].source).split(' ').join('');
+    if (phraseSource.length > bestLength && source.indexOf(phraseSource, cursor) === cursor) {
+      best = phrases[index];
+      bestLength = phraseSource.length;
+    }
+  }
+  return best;
+}
+
+function longestLocalPhraseTokenMatch(
+  tokens: Array<string>,
+  cursor: number,
+  phrases: Array<LocalTranslationPhrase>
+): LocalTranslationPhrase | undefined {
+  let best: LocalTranslationPhrase | undefined = undefined;
+  let bestLength = 0;
+  for (let index = 0; index < phrases.length; index++) {
+    const phraseTokens = normalizeLocalTranslationPhrase(phrases[index].source).split(' ')
+      .filter((token: string) => token.length > 0);
+    if (phraseTokens.length > bestLength && localPhraseTokensMatch(tokens, cursor, phraseTokens)) {
+      best = phrases[index];
+      bestLength = phraseTokens.length;
+    }
+  }
+  return best;
+}
+
+function localPhraseTokensMatch(tokens: Array<string>, cursor: number, phraseTokens: Array<string>): boolean {
+  if (cursor + phraseTokens.length > tokens.length) {
+    return false;
+  }
+  for (let index = 0; index < phraseTokens.length; index++) {
+    if (tokens[cursor + index] !== phraseTokens[index]) {
+      return false;
+    }
+  }
+  return true;
 }
 
 function normalizeLocalTranslationTargetLanguage(targetLanguage: string): string {

@@ -38,9 +38,10 @@ Current HarmonyOS behavior:
 - Text extraction uses HarmonyOS OCR.
 - Text translation keeps the Android route and entry available.
 - The default HarmonyOS runtime includes a small offline dictionary fallback
-  for common demo phrases in Chinese and English, preserving Android's default
-  target-language rule (`zh` text translates to `en`, other text translates to
-  `zh`).
+  for common demo phrases in Chinese and English. It can compose known adjacent
+  phrases such as `Hello, MindSpore!` or `你好昇思`, and preserves Android's
+  default target-language rule (`zh` text translates to `en`, other text
+  translates to `zh`).
 - This fallback is not equivalent to HMS cloud translation. Unknown phrases
   fail with the localized text-translation failure status instead of inventing
   output.

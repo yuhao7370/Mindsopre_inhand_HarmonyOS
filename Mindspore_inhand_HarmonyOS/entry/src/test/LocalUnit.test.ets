@@ -2364,6 +2364,26 @@ export default function localUnitTest() {
       expect(unknownResult.translatedText).assertEqual('');
     });
 
+    it('localTextTranslationRunnerComposesKnownDemoPhrasesOffline', 0, async () => {
+      const runner = new LocalTextTranslationRunner();
+
+      const chineseResult = await runner.translate('\u4F60\u597D\u6607\u601D', 'en');
+      expect(chineseResult.ok).assertTrue();
+      expect(chineseResult.translatedText).assertEqual('hello MindSpore');
+
+      const englishResult = await runner.translate('Hello, MindSpore!', 'zh');
+      expect(englishResult.ok).assertTrue();
+      expect(englishResult.translatedText).assertEqual('\u4F60\u597D\u6607\u601D');
+
+      const phraseResult = await runner.translate('text translation', 'zh');
+      expect(phraseResult.ok).assertTrue();
+      expect(phraseResult.translatedText).assertEqual('\u6587\u672C\u7FFB\u8BD1');
+
+      const unknownResult = await runner.translate('hello unknown', 'zh');
+      expect(unknownResult.ok).assertFalse();
+      expect(unknownResult.translatedText).assertEqual('');
+    });
+
     it('segmentationRequiresImageInputWhenServiceIsProvided', 0, async () => {
       const workflow = workflowForRoute(AppRoute.PORTRAIT_SEGMENTATION.name);
       expect(workflow !== undefined).assertTrue();
