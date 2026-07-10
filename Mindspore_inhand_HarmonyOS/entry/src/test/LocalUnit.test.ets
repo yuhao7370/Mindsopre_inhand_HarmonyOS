@@ -4503,7 +4503,8 @@ export default function localUnitTest() {
       expect(shouldRunLiveRuntimeLoop('detectObjects', true, true, true)).assertTrue();
       expect(shouldRunLiveRuntimeLoop('segmentPerson', true, true, true)).assertTrue();
       expect(shouldRunLiveRuntimeLoop('detectPose', true, true, true)).assertTrue();
-      expect(shouldRunLiveRuntimeLoop('detectGesture', true, true, true)).assertFalse();
+      expect(shouldRunLiveRuntimeLoop('detectGesture', true, true, true)).assertTrue();
+      expect(shouldRunLiveRuntimeLoop('detectScene', true, true, true)).assertTrue();
       expect(shouldRunLiveRuntimeLoop('runStyleTransfer', true, true, true)).assertFalse();
       expect(shouldRunLiveRuntimeLoop('translateText', true, true, true)).assertFalse();
       expect(shouldRunLiveRuntimeLoop('runCustomModel', true, true, true)).assertFalse();
@@ -4518,6 +4519,8 @@ export default function localUnitTest() {
       expect(shouldAutoRunLiveRuntimeAfterPreview('detectObjects', true, true)).assertTrue();
       expect(shouldAutoRunLiveRuntimeAfterPreview('segmentPerson', true, true)).assertTrue();
       expect(shouldAutoRunLiveRuntimeAfterPreview('detectPose', true, true)).assertTrue();
+      expect(shouldAutoRunLiveRuntimeAfterPreview('detectGesture', true, true)).assertTrue();
+      expect(shouldAutoRunLiveRuntimeAfterPreview('detectScene', true, true)).assertTrue();
       expect(shouldAutoRunLiveRuntimeAfterPreview('detectGesture', false, true)).assertFalse();
       expect(shouldAutoRunLiveRuntimeAfterPreview('runStyleTransfer', false, true)).assertFalse();
       expect(shouldAutoRunLiveRuntimeAfterPreview('detectObjects', true, false)).assertFalse();

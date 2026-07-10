@@ -84,7 +84,9 @@ export function shouldRunLiveRuntimeLoop(
   return aiMethod === 'classifyImage' ||
     aiMethod === 'detectObjects' ||
     aiMethod === 'segmentPerson' ||
-    aiMethod === 'detectPose';
+    aiMethod === 'detectPose' ||
+    aiMethod === 'detectGesture' ||
+    aiMethod === 'detectScene';
 }
 
 export function shouldAutoRunLiveRuntimeAfterPreview(

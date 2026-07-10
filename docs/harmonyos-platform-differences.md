@@ -37,6 +37,9 @@ Current HarmonyOS behavior:
 - A real gesture runner can still be injected; if no gesture service exists at
   all, the app keeps the localized `feature_runtime_gesture_unsupported`
   platform status.
+- The live gesture route now participates in the shared HarmonyOS live camera
+  loop, so the local fallback or injected gesture runner refreshes continuously
+  at the same 1000ms cadence as other live camera demos.
 
 ## Text Translation
 
@@ -81,6 +84,9 @@ Current HarmonyOS behavior:
 - A real scene detection runner can still be injected; if no service exists at
   all, the app keeps the localized `feature_runtime_scene_unsupported` platform
   status.
+- The live scene route now participates in the shared HarmonyOS live camera
+  loop, so the local scene proxy or injected runner refreshes continuously at
+  the same 1000ms cadence as other live camera demos.
 
 ## Custom Model
 
