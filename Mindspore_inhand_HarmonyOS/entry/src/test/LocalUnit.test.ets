@@ -200,8 +200,12 @@ import {
 } from '../main/ets/services/ai/ImageClassificationPreprocess';
 import {
   FeatureWorkflow,
+  WorkflowInputReadyAction,
   inputKindReplacesPrimaryInput,
   runtimeInputKindsForWorkflow,
+  shouldAutoRunWorkflowAfterInputReady,
+  shouldClearTextInputAfterInputReady,
+  workflowInputReadyAction,
   workflowForRoute
 } from '../main/ets/features/runtime/FeatureWorkflowCatalog';
 import {
@@ -3994,6 +3998,75 @@ export default function localUnitTest() {
       expect(inputKindReplacesPrimaryInput('stylePredictModelFile')).assertFalse();
       expect(inputKindReplacesPrimaryInput('backgroundImage')).assertFalse();
       expect(inputKindReplacesPrimaryInput('photo')).assertTrue();
+    });
+
+    it('autoRunsTextImageInputsAfterAndroidImageInputReadyOnly', 0, () => {
+      const textRecognition: FeatureWorkflow = workflowForRoute(AppRoute.TEXT_RECOGNITION.name)!;
+      const textTranslation: FeatureWorkflow = workflowForRoute(AppRoute.TEXT_TRANSLATION.name)!;
+      const styleTransfer: FeatureWorkflow = workflowForRoute(AppRoute.STYLE_TRANSFER.name)!;
+      const customModel: FeatureWorkflow = workflowForRoute(AppRoute.CUSTOM_MODEL.name)!;
+
+      expect(shouldAutoRunWorkflowAfterInputReady(textRecognition, 'photo')).assertTrue();
+      expect(shouldAutoRunWorkflowAfterInputReady(textRecognition, 'camera')).assertTrue();
+      expect(shouldAutoRunWorkflowAfterInputReady(textRecognition, 'text')).assertFalse();
+
+      expect(shouldAutoRunWorkflowAfterInputReady(textTranslation, 'photo')).assertTrue();
+      expect(shouldAutoRunWorkflowAfterInputReady(textTranslation, 'camera')).assertTrue();
+      expect(shouldAutoRunWorkflowAfterInputReady(textTranslation, 'text')).assertFalse();
+
+      expect(shouldAutoRunWorkflowAfterInputReady(styleTransfer, 'camera')).assertFalse();
+      expect(shouldAutoRunWorkflowAfterInputReady(styleTransfer, 'contentImage')).assertFalse();
+      expect(shouldAutoRunWorkflowAfterInputReady(customModel, 'photo')).assertFalse();
+      expect(shouldAutoRunWorkflowAfterInputReady(customModel, 'camera')).assertFalse();
+      expect(shouldAutoRunWorkflowAfterInputReady(customModel, 'modelFile')).assertFalse();
+
+      const futureOcrWorkflow: FeatureWorkflow = {
+        routeName: '/future/OcrActivity',
+        titleKey: 'title_text_extraction',
+        summaryKey: 'workflow_summary_text_recognition',
+        aiMethod: 'recognizeText',
+        inputKinds: ['photo'],
+        requiredPermissions: ['media'],
+        resultKind: 'recognizedText',
+        liveMode: false
+      };
+      expect(shouldAutoRunWorkflowAfterInputReady(futureOcrWorkflow, 'photo')).assertFalse();
+    });
+
+    it('clearsTypedTranslationTextWhenAndroidImageTranslationInputIsReady', 0, () => {
+      const textRecognition: FeatureWorkflow = workflowForRoute(AppRoute.TEXT_RECOGNITION.name)!;
+      const textTranslation: FeatureWorkflow = workflowForRoute(AppRoute.TEXT_TRANSLATION.name)!;
+
+      expect(shouldClearTextInputAfterInputReady(textTranslation, 'photo')).assertTrue();
+      expect(shouldClearTextInputAfterInputReady(textTranslation, 'camera')).assertTrue();
+      expect(shouldClearTextInputAfterInputReady(textTranslation, 'text')).assertFalse();
+      expect(shouldClearTextInputAfterInputReady(textRecognition, 'photo')).assertFalse();
+    });
+
+    it('computesTextImageInputReadyPageActionBeforeAutoRun', 0, () => {
+      const textRecognition: FeatureWorkflow = workflowForRoute(AppRoute.TEXT_RECOGNITION.name)!;
+      const textTranslation: FeatureWorkflow = workflowForRoute(AppRoute.TEXT_TRANSLATION.name)!;
+      const styleTransfer: FeatureWorkflow = workflowForRoute(AppRoute.STYLE_TRANSFER.name)!;
+
+      const imageTranslationAction: WorkflowInputReadyAction =
+        workflowInputReadyAction(textTranslation, 'photo', 'typed first');
+      expect(imageTranslationAction.userText).assertEqual('');
+      expect(imageTranslationAction.shouldRunWorkflow).assertTrue();
+
+      const typedTranslationAction: WorkflowInputReadyAction =
+        workflowInputReadyAction(textTranslation, 'text', 'typed first');
+      expect(typedTranslationAction.userText).assertEqual('typed first');
+      expect(typedTranslationAction.shouldRunWorkflow).assertFalse();
+
+      const imageOcrAction: WorkflowInputReadyAction =
+        workflowInputReadyAction(textRecognition, 'camera', 'typed first');
+      expect(imageOcrAction.userText).assertEqual('typed first');
+      expect(imageOcrAction.shouldRunWorkflow).assertTrue();
+
+      const styleTransferAction: WorkflowInputReadyAction =
+        workflowInputReadyAction(styleTransfer, 'photo', 'typed first');
+      expect(styleTransferAction.userText).assertEqual('typed first');
+      expect(styleTransferAction.shouldRunWorkflow).assertFalse();
     });
 
     it('mapsLiveCameraWorkflowsToLivePreviewAction', 0, () => {

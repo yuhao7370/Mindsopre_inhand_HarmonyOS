@@ -56,6 +56,11 @@ export interface FeatureWorkflow {
   readonly helpUrl?: string;
 }
 
+export interface WorkflowInputReadyAction {
+  readonly userText: string;
+  readonly shouldRunWorkflow: boolean;
+}
+
 export const featureWorkflows: Array<FeatureWorkflow> = [
   {
     routeName: AppRoute.POSENET.name,
@@ -243,6 +248,25 @@ export function inputKindReplacesPrimaryInput(inputKind: FeatureInputKind): bool
     inputKind !== 'backgroundImage' &&
     inputKind !== 'stylePredictModelFile' &&
     inputKind !== 'styleTransferModelFile';
+}
+
+export function shouldAutoRunWorkflowAfterInputReady(workflow: FeatureWorkflow, inputKind: FeatureInputKind): boolean {
+  return (workflow.routeName === AppRoute.TEXT_RECOGNITION.name ||
+    workflow.routeName === AppRoute.TEXT_TRANSLATION.name) &&
+    (inputKind === 'photo' || inputKind === 'camera');
+}
+
+export function shouldClearTextInputAfterInputReady(workflow: FeatureWorkflow, inputKind: FeatureInputKind): boolean {
+  return workflow.routeName === AppRoute.TEXT_TRANSLATION.name &&
+    (inputKind === 'photo' || inputKind === 'camera');
+}
+
+export function workflowInputReadyAction(workflow: FeatureWorkflow, inputKind: FeatureInputKind,
+  currentUserText: string): WorkflowInputReadyAction {
+  return {
+    userText: shouldClearTextInputAfterInputReady(workflow, inputKind) ? '' : currentUserText,
+    shouldRunWorkflow: shouldAutoRunWorkflowAfterInputReady(workflow, inputKind)
+  };
 }
 
 function appendUniqueInputKind(kinds: Array<FeatureInputKind>, kind: FeatureInputKind): void {

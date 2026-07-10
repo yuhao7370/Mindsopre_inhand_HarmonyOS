@@ -9,6 +9,7 @@ import {
   inputLabelKey,
   permissionLabelKey,
   runtimeInputKindsForWorkflow,
+  workflowInputReadyAction,
   workflowForRoute
 } from '../features/runtime/FeatureWorkflowCatalog';
 import {
@@ -405,6 +406,14 @@ struct FeatureRuntimePage {
       this.selectedPortraitBackgroundPresetId = portraitSegmentationCustomBackgroundId;
     } else {
       this.imageInputUri = result.uri;
+    }
+    const workflow = workflowForRoute(this.routeName);
+    if (workflow) {
+      const inputReadyAction = workflowInputReadyAction(workflow, inputKind, this.userText);
+      this.userText = inputReadyAction.userText;
+      if (inputReadyAction.shouldRunWorkflow) {
+        this.runWorkflow();
+      }
     }
   }
 
