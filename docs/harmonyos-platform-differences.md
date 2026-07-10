@@ -2,6 +2,18 @@
 
 Verified on 2026-07-09 with DevEco Studio SDK `6.1.1(24)`.
 
+## Experience Route
+
+Android registers `/app/VisionFragment` for the Experience feature list even
+though the fragment is normally hosted inside `MainActivity`.
+
+Current HarmonyOS behavior:
+
+- `/app/VisionFragment` is preserved as a router alias that opens the existing
+  Experience feature catalog through a thin page wrapper.
+- The main tab shell still uses the same reusable Experience component; no
+  duplicate catalog data is introduced.
+
 ## Gesture Recognition
 
 Android source uses HMS ML Kit `MLGestureAnalyzer` for still and live hand

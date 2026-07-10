@@ -1163,6 +1163,9 @@ export default function localUnitTest() {
       expect(AppRoute.OBJECT_PHOTO.name).assertEqual('/imageobject/ObjectPhotoActivity');
       expect(AppRoute.STYLE_TRANSFER.name).assertEqual('/styletransfer/StyleMainActivity');
       expect(AppRoute.TEXT_TRANSLATION.name).assertEqual('/hms/TextTranslationActivity');
+      expect(AppRoute.VISION_FRAGMENT.name).assertEqual('/app/VisionFragment');
+      expect(findRouteByName(AppRoute.VISION_FRAGMENT.name)?.page).assertEqual('pages/ExperienceRoutePage');
+      expect(workflowForRoute(AppRoute.VISION_FRAGMENT.name) === undefined).assertTrue();
     });
 
     it('keepsAndroidSceneDetectionRoutesHiddenButRuntimeReady', 0, () => {

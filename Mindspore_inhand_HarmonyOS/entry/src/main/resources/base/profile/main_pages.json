@@ -1,6 +1,7 @@
 {
   "src": [
     "pages/Index",
+    "pages/ExperienceRoutePage",
     "pages/FeatureStubPage",
     "pages/FeatureRuntimePage",
     "pages/DancePage",

@@ -8,6 +8,7 @@ export interface AppRouteInfo {
 
 export interface AppRouteCatalog {
   readonly MAIN: AppRouteInfo;
+  readonly VISION_FRAGMENT: AppRouteInfo;
   readonly OBJECT_PHOTO: AppRouteInfo;
   readonly OBJECT_CAMERA: AppRouteInfo;
   readonly IMAGE_CAMERA: AppRouteInfo;
@@ -34,6 +35,7 @@ export interface AppRouteCatalog {
 
 export const AppRoute: AppRouteCatalog = {
   MAIN: { name: '/app/MainActivity', page: 'pages/Index' } as AppRouteInfo,
+  VISION_FRAGMENT: { name: '/app/VisionFragment', page: 'pages/ExperienceRoutePage' } as AppRouteInfo,
   OBJECT_PHOTO: { name: '/imageobject/ObjectPhotoActivity', page: 'pages/FeatureRuntimePage' } as AppRouteInfo,
   OBJECT_CAMERA: { name: '/imageobject/ObjectCameraActivity', page: 'pages/FeatureRuntimePage' } as AppRouteInfo,
   IMAGE_CAMERA: { name: '/imageobject/ImageCameraActivity', page: 'pages/FeatureRuntimePage' } as AppRouteInfo,
@@ -60,6 +62,7 @@ export const AppRoute: AppRouteCatalog = {
 
 export const appRoutes: AppRouteInfo[] = [
   AppRoute.MAIN,
+  AppRoute.VISION_FRAGMENT,
   AppRoute.OBJECT_PHOTO,
   AppRoute.OBJECT_CAMERA,
   AppRoute.IMAGE_CAMERA,
