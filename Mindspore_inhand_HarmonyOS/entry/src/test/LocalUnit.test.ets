@@ -18,6 +18,7 @@ import {
   TextTranslationRunner,
   TextTranslationService,
   textRecognitionOutputFromBlocks,
+  translationLanguagePairSupportsTarget,
   translationLanguagePairsRawfilePath
 } from '../main/ets/services/ai/TextRecognitionService';
 import {
@@ -2617,6 +2618,8 @@ export default function localUnitTest() {
       expect(pairs[0].name).assertEqual('English');
       expect(pairs[0].code).assertEqual('en');
       expect(pairs[2].code).assertEqual('zh-HK');
+      expect(translationLanguagePairSupportsTarget(pairs, 'zh-HK')).assertTrue();
+      expect(translationLanguagePairSupportsTarget(pairs, 'fr')).assertFalse();
     });
 
     it('textRecognitionRequiresImageInputWhenServiceIsProvided', 0, async () => {
@@ -2730,6 +2733,21 @@ export default function localUnitTest() {
       expect(result.detailText.indexOf('translated=hello') >= 0).assertTrue();
       expect(runner.seenTexts[0]).assertEqual('你好');
       expect(runner.seenTargetLanguages[0]).assertEqual('en');
+    });
+
+    it('textTranslationServiceRejectsUnsupportedTargetWhenAndroidLanguagePairsAreLoaded', 0, async () => {
+      const runner: FixedTextTranslationRunner = new FixedTextTranslationRunner('\u4F60\u597D');
+      const service = new TextTranslationService({
+        runner: runner,
+        languagePairs: parseTranslationLanguagePairs('English en\n')
+      });
+
+      const result = await service.translateText('hello');
+
+      expect(result.ok).assertFalse();
+      expect(result.targetLanguage).assertEqual('zh');
+      expect(result.translatedText).assertEqual('');
+      expect(runner.seenTexts.length).assertEqual(0);
     });
 
     it('aiServiceRecognizesImageTextBeforeTextTranslationLikeAndroid', 0, async () => {
@@ -4780,6 +4798,28 @@ export default function localUnitTest() {
       expect(result.ok).assertTrue();
       expect(result.code).assertEqual('TEXT_TRANSLATION_DONE');
       expect(result.detailText.indexOf('translated=\u6607\u601D') >= 0).assertTrue();
+    });
+
+    it('runtimeFactoryLoadsAndroidLanguagePairsForLocalTextTranslation', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.TEXT_TRANSLATION.name);
+      expect(workflow !== undefined).assertTrue();
+      const languagePairContent = new Uint8Array([
+        69, 110, 103, 108, 105, 115, 104, 32, 101, 110, 10,
+        67, 104, 105, 110, 101, 115, 101, 32, 122, 104, 10
+      ]);
+      const reader: FixedRawfileContentReader = new FixedRawfileContentReader(languagePairContent);
+      const service = await createRuntimeAiServiceForWorkflow(workflow!, {
+        resourceManager: reader
+      });
+
+      const result: AiRunResult = await service.run(workflow!, {
+        text: 'MindSpore'
+      });
+
+      expect(result.ok).assertTrue();
+      expect(result.code).assertEqual('TEXT_TRANSLATION_DONE');
+      expect(result.detailText.indexOf('translated=\u6607\u601D') >= 0).assertTrue();
+      expect(reader.seenPaths.indexOf(translationLanguagePairsRawfilePath) >= 0).assertTrue();
     });
 
     it('runtimeFactoryLocalFallbackFailsUnknownTranslationHonestly', 0, async () => {

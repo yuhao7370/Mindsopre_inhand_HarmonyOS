@@ -72,10 +72,13 @@ import {
 import {
   HarmonyTextRecognitionRunner,
   LocalTextTranslationRunner,
+  parseTranslationLanguagePairs,
   TextRecognitionRunner,
   TextRecognitionService,
+  TextTranslationLanguagePair,
   TextTranslationRunner,
-  TextTranslationService
+  TextTranslationService,
+  translationLanguagePairsRawfilePath
 } from './TextRecognitionService';
 
 export interface HarmonyImageClassificationRuntimeOptions {
@@ -270,9 +273,10 @@ export async function createRuntimeAiServiceForWorkflow(
     });
   }
   if (workflow.aiMethod === 'translateText') {
+    const textTranslationService = await createHarmonyTextTranslationService(options);
     return new DefaultAiService({
       textRecognitionService: createHarmonyTextRecognitionService(options),
-      textTranslationService: createHarmonyTextTranslationService(options)
+      textTranslationService: textTranslationService
     });
   }
   if (workflow.aiMethod === 'segmentPerson') {
@@ -406,11 +410,13 @@ export function createHarmonyTextRecognitionService(
   });
 }
 
-export function createHarmonyTextTranslationService(
+export async function createHarmonyTextTranslationService(
   options: HarmonyImageClassificationRuntimeOptions
-): TextTranslationService {
+): Promise<TextTranslationService> {
+  const languagePairs = await loadOptionalTranslationLanguagePairs(options.resourceManager);
   return new TextTranslationService({
-    runner: options.textTranslationRunner ?? new LocalTextTranslationRunner()
+    runner: options.textTranslationRunner ?? new LocalTextTranslationRunner(),
+    languagePairs: languagePairs
   });
 }
 
@@ -499,6 +505,23 @@ export async function loadImageClassificationLabels(resourceManager: RawfileCont
 export async function loadObjectDetectionLabels(resourceManager: RawfileContentReader): Promise<Array<string>> {
   const content = await resourceManager.getRawFileContent(objectCategoryLabelRawfilePath);
   return parseObjectCategoryLabels(rawfileAsciiContentToText(content));
+}
+
+export async function loadTranslationLanguagePairs(
+  resourceManager: RawfileContentReader
+): Promise<Array<TextTranslationLanguagePair>> {
+  const content = await resourceManager.getRawFileContent(translationLanguagePairsRawfilePath);
+  return parseTranslationLanguagePairs(rawfileAsciiContentToText(content));
+}
+
+async function loadOptionalTranslationLanguagePairs(
+  resourceManager: RawfileContentReader
+): Promise<Array<TextTranslationLanguagePair> | undefined> {
+  try {
+    return await loadTranslationLanguagePairs(resourceManager);
+  } catch (_) {
+    return undefined;
+  }
 }
 
 export function rawfileAsciiContentToText(content: Uint8Array): string {

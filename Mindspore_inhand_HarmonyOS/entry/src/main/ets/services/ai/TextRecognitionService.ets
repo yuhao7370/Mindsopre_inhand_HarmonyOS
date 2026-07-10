@@ -193,17 +193,28 @@ const localEnglishToChinesePhrases: Array<LocalTranslationPhrase> = [
 
 export interface TextTranslationServiceOptions {
   readonly runner: TextTranslationRunner;
+  readonly languagePairs?: Array<TextTranslationLanguagePair>;
 }
 
 export class TextTranslationService {
   private readonly runner: TextTranslationRunner;
+  private readonly languagePairs?: Array<TextTranslationLanguagePair>;
 
   constructor(options: TextTranslationServiceOptions) {
     this.runner = options.runner;
+    this.languagePairs = options.languagePairs;
   }
 
   async translateText(text: string): Promise<TextTranslationResult> {
     const targetLanguage = androidDefaultTranslationTargetLanguage(text);
+    if (!translationLanguagePairSupportsTarget(this.languagePairs, targetLanguage)) {
+      return {
+        ok: false,
+        sourceText: text,
+        translatedText: '',
+        targetLanguage: targetLanguage
+      };
+    }
     try {
       return await this.runner.translate(text, targetLanguage);
     } catch (_) {
@@ -286,6 +297,18 @@ export function parseTranslationLanguagePairs(content: string): Array<TextTransl
     });
   });
   return pairs;
+}
+
+export function translationLanguagePairSupportsTarget(
+  languagePairs: Array<TextTranslationLanguagePair> | undefined,
+  targetLanguage: string
+): boolean {
+  if (languagePairs === undefined || languagePairs.length === 0) {
+    return true;
+  }
+  const normalizedTargetLanguage = normalizeLocalTranslationTargetLanguage(targetLanguage);
+  return languagePairs.some((pair: TextTranslationLanguagePair) =>
+    normalizeLocalTranslationTargetLanguage(pair.code) === normalizedTargetLanguage);
 }
 
 export function localTranslatedText(text: string, targetLanguage: string): string {
