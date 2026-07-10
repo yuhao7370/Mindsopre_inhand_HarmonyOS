@@ -58,6 +58,12 @@ import {
   danceTemplateFrames
 } from '../main/ets/services/ai/DanceScoreService';
 import {
+  dancePagePath,
+  danceResultMessageKey,
+  danceScoreText,
+  danceTemplateDemoScore
+} from '../main/ets/services/dance/DancePageService';
+import {
   SceneDetection,
   SceneDetectionResult,
   SceneDetectionRunner,
@@ -1486,6 +1492,30 @@ export default function localUnitTest() {
       expect(frame.rightElbowMissing).assertFalse();
     });
 
+    it('routesDanceToDedicatedHarmonyPage', 0, () => {
+      expect(AppRoute.DANCE.name).assertEqual('/dance/DanceMainActivity');
+      expect(AppRoute.DANCE.page).assertEqual(dancePagePath);
+      expect(findRouteByName(AppRoute.DANCE.name)?.page).assertEqual(dancePagePath);
+      expect(hasAppStringKey('dance_prepare_summary')).assertTrue();
+      expect(hasAppStringKey('dance_start_demo')).assertTrue();
+      expect(hasAppStringKey('dance_result_title')).assertTrue();
+      expect(hasAppStringKey('dance_platform_note')).assertTrue();
+    });
+
+    it('mapsDanceScoresToAndroidResultStates', 0, () => {
+      expect(danceTemplateDemoScore()).assertEqual(98);
+      expect(danceScoreText(98)).assertEqual('98');
+      expect(danceScoreText(danceNoActScore)).assertEqual('--');
+      expect(danceResultMessageKey(danceNoActScore)).assertEqual('dance_score_level_no_action');
+      expect(danceResultMessageKey(danceNoPointScore)).assertEqual('dance_score_level_no_point');
+      expect(danceResultMessageKey(63)).assertEqual('dance_score_level_warmup');
+      expect(danceResultMessageKey(76)).assertEqual('dance_score_level_good');
+      expect(danceResultMessageKey(88)).assertEqual('dance_score_level_great');
+      expect(danceResultMessageKey(93)).assertEqual('dance_score_level_excellent');
+      expect(danceResultMessageKey(98)).assertEqual('dance_score_level_perfect');
+      expect(danceResultMessageKey(100)).assertEqual('dance_score_level_full');
+    });
+
     it('definesRuntimeWorkflowForEveryVisibleExperienceFeature', 0, () => {
       visibleExperienceSections.forEach((section: FeatureSection) => {
         section.items.forEach((item: FeatureItem) => {
@@ -1560,8 +1590,10 @@ export default function localUnitTest() {
       expect(workflowForRoute(AppRoute.SEGMENTATION_STILL.name) !== undefined).assertTrue();
     });
 
-    it('keepsHiddenDanceRouteAsStubUntilDanceWorkflowIsPorted', 0, () => {
-      expect(findRouteByName(AppRoute.DANCE.name)?.page).assertEqual('pages/FeatureStubPage');
+    it('keepsHiddenDanceRouteReadyOnDedicatedPage', 0, () => {
+      const dance = findFeatureByRoute(AppRoute.DANCE.name);
+      expect(dance?.visibleByDefault).assertFalse();
+      expect(findRouteByName(AppRoute.DANCE.name)?.page).assertEqual(dancePagePath);
       expect(workflowForRoute(AppRoute.DANCE.name) === undefined).assertTrue();
     });
 

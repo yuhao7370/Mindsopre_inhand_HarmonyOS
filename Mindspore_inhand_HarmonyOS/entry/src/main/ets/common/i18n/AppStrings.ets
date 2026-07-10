@@ -73,6 +73,21 @@ export type AppStringKey =
   'poem_share_done' |
   'poem_share_failed' |
   'poem_ai_credit' |
+  'dance_prepare_summary' |
+  'dance_start_demo' |
+  'dance_reset' |
+  'dance_result_title' |
+  'dance_score_prefix' |
+  'dance_score_level_no_action' |
+  'dance_score_level_no_point' |
+  'dance_score_level_try_again' |
+  'dance_score_level_warmup' |
+  'dance_score_level_good' |
+  'dance_score_level_great' |
+  'dance_score_level_excellent' |
+  'dance_score_level_perfect' |
+  'dance_score_level_full' |
+  'dance_platform_note' |
   'feature_runtime_inputs_title' |
   'feature_runtime_permissions_title' |
   'feature_runtime_result_title' |
@@ -261,6 +276,21 @@ const APP_STRING_KEYS: AppStringKey[] = [
   'poem_share_done',
   'poem_share_failed',
   'poem_ai_credit',
+  'dance_prepare_summary',
+  'dance_start_demo',
+  'dance_reset',
+  'dance_result_title',
+  'dance_score_prefix',
+  'dance_score_level_no_action',
+  'dance_score_level_no_point',
+  'dance_score_level_try_again',
+  'dance_score_level_warmup',
+  'dance_score_level_good',
+  'dance_score_level_great',
+  'dance_score_level_excellent',
+  'dance_score_level_perfect',
+  'dance_score_level_full',
+  'dance_platform_note',
   'feature_runtime_inputs_title',
   'feature_runtime_permissions_title',
   'feature_runtime_result_title',
@@ -527,6 +557,36 @@ export function appString(key: AppStringKey): ResourceStr {
       return $r('app.string.poem_share_failed');
     case 'poem_ai_credit':
       return $r('app.string.poem_ai_credit');
+    case 'dance_prepare_summary':
+      return $r('app.string.dance_prepare_summary');
+    case 'dance_start_demo':
+      return $r('app.string.dance_start_demo');
+    case 'dance_reset':
+      return $r('app.string.dance_reset');
+    case 'dance_result_title':
+      return $r('app.string.dance_result_title');
+    case 'dance_score_prefix':
+      return $r('app.string.dance_score_prefix');
+    case 'dance_score_level_no_action':
+      return $r('app.string.dance_score_level_no_action');
+    case 'dance_score_level_no_point':
+      return $r('app.string.dance_score_level_no_point');
+    case 'dance_score_level_try_again':
+      return $r('app.string.dance_score_level_try_again');
+    case 'dance_score_level_warmup':
+      return $r('app.string.dance_score_level_warmup');
+    case 'dance_score_level_good':
+      return $r('app.string.dance_score_level_good');
+    case 'dance_score_level_great':
+      return $r('app.string.dance_score_level_great');
+    case 'dance_score_level_excellent':
+      return $r('app.string.dance_score_level_excellent');
+    case 'dance_score_level_perfect':
+      return $r('app.string.dance_score_level_perfect');
+    case 'dance_score_level_full':
+      return $r('app.string.dance_score_level_full');
+    case 'dance_platform_note':
+      return $r('app.string.dance_platform_note');
     case 'feature_runtime_inputs_title':
       return $r('app.string.feature_runtime_inputs_title');
     case 'feature_runtime_permissions_title':

@@ -1,4 +1,5 @@
 import { webPagePath } from '../common/data/WebDestination';
+import { dancePagePath } from '../services/dance/DancePageService';
 
 export interface AppRouteInfo {
   readonly name: string;
@@ -49,7 +50,7 @@ export const AppRoute: AppRouteCatalog = {
   GESTURE_LIVE: { name: '/hms/LiveHandGestureAnalyseActivity', page: 'pages/FeatureRuntimePage' } as AppRouteInfo,
   TEXT_RECOGNITION: { name: '/hms/TextRecognitionActivity', page: 'pages/FeatureRuntimePage' } as AppRouteInfo,
   TEXT_TRANSLATION: { name: '/hms/TextTranslationActivity', page: 'pages/FeatureRuntimePage' } as AppRouteInfo,
-  DANCE: { name: '/dance/DanceMainActivity', page: 'pages/FeatureStubPage' } as AppRouteInfo,
+  DANCE: { name: '/dance/DanceMainActivity', page: dancePagePath } as AppRouteInfo,
   POETRY: { name: '/app/IntelligentPoetryWritingActivity', page: webPagePath } as AppRouteInfo,
   POETRY_POSTER: { name: '/app/PoetryPosterActivity', page: 'pages/PoetryPosterPage' } as AppRouteInfo,
   MY_QR_CODE: { name: '/app/MyQRCodeActivity', page: 'pages/QrCodePage' } as AppRouteInfo,

@@ -3,6 +3,7 @@
     "pages/Index",
     "pages/FeatureStubPage",
     "pages/FeatureRuntimePage",
+    "pages/DancePage",
     "pages/WebPage",
     "pages/PoetryPosterPage",
     "pages/QrCodePage"
