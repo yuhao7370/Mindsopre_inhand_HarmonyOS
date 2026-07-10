@@ -209,6 +209,7 @@ import {
   portraitSegmentationBackgroundUri,
   portraitSegmentationCustomBackgroundId
 } from '../main/ets/features/runtime/PortraitSegmentationBackgroundCatalog';
+import { segmentationBackgroundReplacementComponentId } from '../main/ets/features/runtime/FeatureRuntimeViewIds';
 import {
   declaredPermissionNames,
   runtimePermissionNamesForWorkflow,
@@ -2013,6 +2014,13 @@ export default function localUnitTest() {
       expect(portraitSegmentationCustomBackgroundId).assertEqual('custom');
       expect(hasAppStringKey('feature_runtime_portrait_background_presets')).assertTrue();
       expect(hasAppStringKey('feature_runtime_portrait_background_custom')).assertTrue();
+    });
+
+    it('targetsPortraitBackgroundReplacementPreviewForCompositeSave', 0, () => {
+      expect(segmentationBackgroundReplacementComponentId).assertEqual('segmentationBackgroundReplacementPreview');
+      expect(hasAppStringKey('feature_runtime_result_background_replacement')).assertTrue();
+      expect(hasAppStringKey('feature_runtime_save_image_done')).assertTrue();
+      expect(hasAppStringKey('feature_runtime_save_image_failed')).assertTrue();
     });
 
     it('recordsPlatformNeedsFromOriginalAndroidFlows', 0, () => {

@@ -1,4 +1,5 @@
 import router from '@ohos.router';
+import componentSnapshot from '@ohos.arkui.componentSnapshot';
 import { AppRoute } from '../app/AppRoutes';
 import {
   FeatureInputKind,
@@ -90,6 +91,7 @@ import {
   portraitSegmentationBackgroundUri,
   portraitSegmentationCustomBackgroundId
 } from '../features/runtime/PortraitSegmentationBackgroundCatalog';
+import { segmentationBackgroundReplacementComponentId } from '../features/runtime/FeatureRuntimeViewIds';
 import { AppStringKey, appString } from '../common/i18n/AppStrings';
 import { AppColor, AppRadius, AppSpacing } from '../common/theme/AppTheme';
 import { common } from '@kit.AbilityKit';
@@ -785,6 +787,18 @@ struct FeatureRuntimePage {
   }
 
   private saveResultImage(pixelMap: image.PixelMap | undefined): void {
+    this.saveResultPixelMap(pixelMap);
+  }
+
+  private saveResultComponentImage(componentId: string): void {
+    componentSnapshot.get(componentId, { waitUntilRenderFinished: true })
+      .then((pixelMap: image.PixelMap) => this.saveResultPixelMap(pixelMap))
+      .catch(() => {
+        this.statusKey = 'feature_runtime_save_image_failed';
+      });
+  }
+
+  private saveResultPixelMap(pixelMap: image.PixelMap | undefined): void {
     const context = this.uiAbilityContext();
     if (!context) {
       this.statusKey = 'feature_runtime_save_image_failed';
@@ -1291,6 +1305,7 @@ struct FeatureRuntimePage {
       .backgroundColor('#F7F8FA')
       .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
       .clip(true)
+      .id(segmentationBackgroundReplacementComponentId)
       .margin({ top: AppSpacing.xs })
     }
     .width('100%')
@@ -1434,6 +1449,28 @@ struct FeatureRuntimePage {
         .onClick((_event: ClickEvent, result: SaveButtonOnClickResult) => {
           if (result === SaveButtonOnClickResult.SUCCESS) {
             this.saveResultImage(pixelMap);
+            return;
+          }
+          this.statusKey = 'feature_runtime_save_image_failed';
+        })
+    }
+    .width('100%')
+    .justifyContent(FlexAlign.Center)
+    .margin({ top: AppSpacing.sm })
+  }
+
+  @Builder
+  resultComponentImageSaveControl(componentId: string) {
+    Row() {
+      SaveButton({
+        icon: SaveIconStyle.FULL_FILLED,
+        text: SaveDescription.SAVE_IMAGE,
+        buttonType: ButtonType.Capsule
+      })
+        .height(36)
+        .onClick((_event: ClickEvent, result: SaveButtonOnClickResult) => {
+          if (result === SaveButtonOnClickResult.SUCCESS) {
+            this.saveResultComponentImage(componentId);
             return;
           }
           this.statusKey = 'feature_runtime_save_image_failed';
@@ -1654,6 +1691,7 @@ struct FeatureRuntimePage {
           }
           if (this.shouldShowSegmentationBackgroundPreview() && this.segmentationForegroundPixelMap !== undefined) {
             this.segmentationBackgroundReplacementPreview(this.segmentationForegroundPixelMap)
+            this.resultComponentImageSaveControl(segmentationBackgroundReplacementComponentId)
           }
           if (this.segmentationImageUri.length > 0 && this.segmentationRectangles.length > 0) {
             this.segmentationPreview('feature_runtime_result_segmentation_overlay', this.segmentationImageUri)
