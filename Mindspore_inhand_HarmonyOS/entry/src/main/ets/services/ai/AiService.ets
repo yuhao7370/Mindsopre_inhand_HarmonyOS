@@ -39,7 +39,6 @@ import {
   SceneDetectionService
 } from './SceneDetectionService';
 import {
-  androidDefaultTranslationTargetLanguage,
   LocalTextTranslationRunner,
   TextRecognitionResult,
   TextRecognitionService,
@@ -193,7 +192,7 @@ export class DefaultAiService {
   private readonly objectDetectionService?: ObjectDetectionService;
   private readonly styleTransferService?: StyleTransferService;
   private readonly textRecognitionService?: TextRecognitionService;
-  private readonly textTranslationService?: TextTranslationService;
+  private readonly textTranslationService: TextTranslationService;
   private readonly segmentationService?: SegmentationService;
   private readonly poseService?: PoseService;
   private readonly gestureService?: GestureService;
@@ -481,9 +480,6 @@ export class DefaultAiService {
     const imageUri = inputs.imageUri ?? '';
     if (text.length === 0 && imageUri.length > 0) {
       if (this.textRecognitionService === undefined) {
-        if (this.textTranslationService === undefined) {
-          return this.translationUnsupportedResult('');
-        }
         return this.pendingAdapterResult('translateText');
       }
       const recognitionResult: TextRecognitionResult = await this.textRecognitionService.recognizeText(imageUri);
@@ -507,10 +503,6 @@ export class DefaultAiService {
         messageKey: 'feature_runtime_missing_input',
         detailText: ''
       };
-    }
-
-    if (this.textTranslationService === undefined) {
-      return this.translationUnsupportedResult(text);
     }
 
     const result: TextTranslationResult = await this.textTranslationService.translateText(text);
@@ -537,26 +529,6 @@ export class DefaultAiService {
         kind: 'textTranslation',
         result: result
       }
-    };
-  }
-
-  private translationUnsupportedResult(text: string): AiRunResult {
-    const result: TextTranslationResult = {
-      ok: false,
-      sourceText: text,
-      translatedText: '',
-      targetLanguage: text.length > 0 ? androidDefaultTranslationTargetLanguage(text) : ''
-    };
-    return {
-      ok: false,
-      code: 'PLATFORM_UNSUPPORTED',
-      aiMethod: 'translateText',
-      messageKey: 'feature_runtime_translation_unsupported',
-      detailText: text.length > 0 ? this.textTranslationSummary(result) : '',
-      data: text.length > 0 ? {
-        kind: 'textTranslation',
-        result: result
-      } : undefined
     };
   }
 

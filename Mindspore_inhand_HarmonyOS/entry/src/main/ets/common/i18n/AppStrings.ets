@@ -124,7 +124,6 @@ export type AppStringKey =
   'feature_runtime_scene_unsupported' |
   'feature_runtime_scene_done' |
   'feature_runtime_scene_failed' |
-  'feature_runtime_translation_unsupported' |
   'feature_runtime_unknown_route' |
   'feature_runtime_missing_input' |
   'feature_runtime_run_failed' |
@@ -364,7 +363,6 @@ const APP_STRING_KEYS: AppStringKey[] = [
   'feature_runtime_scene_unsupported',
   'feature_runtime_scene_done',
   'feature_runtime_scene_failed',
-  'feature_runtime_translation_unsupported',
   'feature_runtime_unknown_route',
   'feature_runtime_missing_input',
   'feature_runtime_run_failed',
@@ -733,8 +731,6 @@ export function appString(key: AppStringKey): ResourceStr {
       return $r('app.string.feature_runtime_scene_done');
     case 'feature_runtime_scene_failed':
       return $r('app.string.feature_runtime_scene_failed');
-    case 'feature_runtime_translation_unsupported':
-      return $r('app.string.feature_runtime_translation_unsupported');
     case 'feature_runtime_unknown_route':
       return $r('app.string.feature_runtime_unknown_route');
     case 'feature_runtime_missing_input':

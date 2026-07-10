@@ -1480,7 +1480,6 @@ export default function localUnitTest() {
       expect(hasAppStringKey('feature_runtime_scene_done')).assertTrue();
       expect(hasAppStringKey('feature_runtime_scene_failed')).assertTrue();
       expect(hasAppStringKey('workflow_summary_scene')).assertTrue();
-      expect(hasAppStringKey('feature_runtime_translation_unsupported')).assertTrue();
       expect(hasAppStringKey('feature_runtime_text_recognition_done')).assertTrue();
       expect(hasAppStringKey('feature_runtime_text_translation_failed')).assertTrue();
       expect(hasAppStringKey('feature_runtime_segmentation_done')).assertTrue();

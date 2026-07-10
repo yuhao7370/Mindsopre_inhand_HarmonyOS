@@ -125,7 +125,6 @@
     { "name": "feature_runtime_scene_unsupported", "value": "Scene detection is unavailable in the current HarmonyOS SDK. Add a scene detection runner to enable this Android HMS flow." },
     { "name": "feature_runtime_scene_done", "value": "Scene detection completed." },
     { "name": "feature_runtime_scene_failed", "value": "No scene was detected. Try another image." },
-    { "name": "feature_runtime_translation_unsupported", "value": "Text translation is unavailable in the current HarmonyOS SDK/resources. Add a translation runner or service API to enable it." },
     { "name": "feature_runtime_unknown_route", "value": "This route is not mapped to a feature workflow yet." },
     { "name": "feature_runtime_missing_input", "value": "Select the required inputs before running." },
     { "name": "feature_runtime_run_failed", "value": "Feature run failed. Check the selected inputs and model resources." },
