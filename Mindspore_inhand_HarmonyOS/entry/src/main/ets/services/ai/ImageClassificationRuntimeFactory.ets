@@ -417,7 +417,9 @@ export function createHarmonyPoseService(
   options: HarmonyImageClassificationRuntimeOptions
 ): PoseService {
   return new PoseService({
-    runner: options.poseRunner ?? new HarmonySkeletonDetectionRunner()
+    runner: options.poseRunner ?? new HarmonySkeletonDetectionRunner({
+      resourceManager: options.resourceManager
+    })
   });
 }
 

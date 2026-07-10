@@ -23,8 +23,26 @@ Current HarmonyOS behavior:
 
 - Live runtime routes whose only primary input is camera now start the shared
   camera preview automatically after the HarmonyOS surface is ready.
-- Mixed still/live routes such as the current PoseNet route are intentionally
-  excluded until their still and live Android routes are split.
+- PoseNet follows Android's split: the still route does not auto-start camera
+  preview, while the live skeleton route does.
+
+## PoseNet
+
+Android keeps a still PoseNet page at `/hms/PosenetMainActivitys` and a
+separate live skeleton page at `/posenet/LiveSkeletonAnalyseActivity`.
+
+Current HarmonyOS behavior:
+
+- `/hms/PosenetMainActivitys` is a still-image workflow. It offers the Android
+  sample image, album image, and camera capture inputs and auto-runs pose
+  detection after an image input is ready.
+- The Android sample `skeleton_image.JPG` is bundled as
+  `rawfile://posenet/skeleton_image.JPG`.
+- The still page exposes a localized Real-time action that routes to
+  `/posenet/LiveSkeletonAnalyseActivity`.
+- `/posenet/LiveSkeletonAnalyseActivity` remains the camera-only live route,
+  auto-starts preview when the HarmonyOS surface is ready, and keeps the
+  Android template similarity display.
 
 ## Gesture Recognition
 

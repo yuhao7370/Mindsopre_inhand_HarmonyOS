@@ -1,4 +1,5 @@
 import { describe, it, expect } from '@ohos/hypium';
+import { fileIo } from '@kit.CoreFileKit';
 import { AppRoute, findRouteByName } from '../main/ets/app/AppRoutes';
 import { MainTab, mainTabs } from '../main/ets/app/AppState';
 import { hasAppStringKey } from '../main/ets/common/i18n/AppStrings';
@@ -34,9 +35,14 @@ import {
   PoseRunner,
   PoseService,
   androidLiveSkeletonTemplatePoints,
+  createPoseImageSourceForUri,
   isPosePointVisible,
   poseLinePercent,
   posePointPercent,
+  PoseImageFileOpener,
+  PoseImageSourceInput,
+  PoseImageSourceFactory,
+  rawfilePathFromPoseImageUri,
   poseSimilarityToAndroidTemplate,
   poseSkeletonLines
 } from '../main/ets/services/ai/PoseService';
@@ -213,7 +219,9 @@ import {
   WorkflowInputReadyAction,
   autoStartInputKindForWorkflow,
   inputKindReplacesPrimaryInput,
+  inputLabelKey,
   runtimeInputKindsForWorkflow,
+  sampleImageUriForWorkflow,
   shouldAutoRunWorkflowAfterInputReady,
   shouldClearTextInputAfterInputReady,
   shouldShowStyleRecoveryControl,
@@ -393,6 +401,45 @@ class FixedRawfileContentReader implements RawfileContentReader {
 class ThrowingRawfileContentReader implements RawfileContentReader {
   async getRawFileContent(_path: string): Promise<Uint8Array> {
     throw new Error('unexpected rawfile access');
+  }
+}
+
+class RecordingPoseImageSourceFactory implements PoseImageSourceFactory {
+  readonly rawfileByteLengths: Array<number> = [];
+  readonly fileDescriptors: Array<number> = [];
+
+  createSourceFromRawfileContent(content: Uint8Array): image.ImageSource {
+    this.rawfileByteLengths.push(content.length);
+    return {} as image.ImageSource;
+  }
+
+  createSourceFromFile(imageFile: fileIo.File): image.ImageSource {
+    this.fileDescriptors.push(imageFile.fd);
+    return {} as image.ImageSource;
+  }
+}
+
+class ThrowingPoseImageSourceFactory implements PoseImageSourceFactory {
+  createSourceFromRawfileContent(_content: Uint8Array): image.ImageSource {
+    return {} as image.ImageSource;
+  }
+
+  createSourceFromFile(_imageFile: fileIo.File): image.ImageSource {
+    throw new Error('image source failed');
+  }
+}
+
+class RecordingPoseImageFileOpener implements PoseImageFileOpener {
+  readonly seenUris: Array<string> = [];
+  readonly closedFds: Array<number> = [];
+
+  async open(imageUri: string): Promise<fileIo.File> {
+    this.seenUris.push(imageUri);
+    return { fd: 7 } as fileIo.File;
+  }
+
+  async close(imageFile: fileIo.File): Promise<void> {
+    this.closedFds.push(imageFile.fd);
   }
 }
 
@@ -2080,8 +2127,12 @@ export default function localUnitTest() {
 
     it('recordsPlatformNeedsFromOriginalAndroidFlows', 0, () => {
       const posenet: FeatureWorkflow = workflowForRoute(AppRoute.POSENET.name)!;
+      expect(posenet.liveMode).assertFalse();
+      expect(posenet.inputKinds.indexOf('sampleImage') >= 0).assertTrue();
       expect(posenet.inputKinds.indexOf('camera') >= 0).assertTrue();
       expect(posenet.inputKinds.indexOf('photo') >= 0).assertTrue();
+      expect(posenet.linkedLiveRouteName).assertEqual(AppRoute.LIVE_SKELETON.name);
+      expect(sampleImageUriForWorkflow(posenet)).assertEqual('rawfile://posenet/skeleton_image.JPG');
 
       const objectPhoto: FeatureWorkflow = workflowForRoute(AppRoute.OBJECT_PHOTO.name)!;
       expect(objectPhoto.inputKinds.indexOf('photo') >= 0).assertTrue();
@@ -2121,6 +2172,65 @@ export default function localUnitTest() {
     it('definesRuntimeWorkflowForEveryRuntimeRoute', 0, () => {
       expect(workflowForRoute(AppRoute.LIVE_SKELETON.name) !== undefined).assertTrue();
       expect(workflowForRoute(AppRoute.SEGMENTATION_STILL.name) !== undefined).assertTrue();
+    });
+
+    it('keepsAndroidLiveSkeletonRouteSeparateFromPoseStillRoute', 0, () => {
+      const posenet: FeatureWorkflow = workflowForRoute(AppRoute.POSENET.name)!;
+      const liveSkeleton: FeatureWorkflow = workflowForRoute(AppRoute.LIVE_SKELETON.name)!;
+
+      expect(posenet.liveMode).assertFalse();
+      expect(runtimeInputActionForWorkflowInput(posenet, 'camera')).assertEqual('captureImage');
+      expect(shouldAutoRunWorkflowAfterInputReady(posenet, 'sampleImage')).assertTrue();
+      expect(shouldAutoRunWorkflowAfterInputReady(posenet, 'photo')).assertTrue();
+      expect(shouldAutoRunWorkflowAfterInputReady(posenet, 'camera')).assertTrue();
+      expect(inputLabelKey('sampleImage')).assertEqual('feature_input_sample_image');
+      expect(liveSkeleton.liveMode).assertTrue();
+      expect(liveSkeleton.inputKinds.length).assertEqual(1);
+      expect(liveSkeleton.inputKinds[0]).assertEqual('camera');
+      expect(autoStartInputKindForWorkflow(liveSkeleton)).assertEqual('camera');
+    });
+
+    it('mapsPoseSampleRawfileUriToResourcePathForBundledAndroidSample', 0, () => {
+      expect(rawfilePathFromPoseImageUri('rawfile://posenet/skeleton_image.JPG'))
+        .assertEqual('posenet/skeleton_image.JPG');
+      expect(rawfilePathFromPoseImageUri('file://selected/pose.jpg')).assertEqual('');
+    });
+
+    it('poseRawfileImageSourceUsesResourceManagerWithoutOpeningFileUri', 0, async () => {
+      const reader: FixedRawfileContentReader = new FixedRawfileContentReader(new Uint8Array([1, 2, 3, 4]));
+      const sourceFactory: RecordingPoseImageSourceFactory = new RecordingPoseImageSourceFactory();
+      const fileOpener: RecordingPoseImageFileOpener = new RecordingPoseImageFileOpener();
+
+      const input: PoseImageSourceInput = await createPoseImageSourceForUri('rawfile://posenet/skeleton_image.JPG', {
+        resourceManager: reader,
+        sourceFactory: sourceFactory,
+        fileOpener: fileOpener
+      });
+
+      expect(input.imageSource !== undefined).assertTrue();
+      expect(input.imageFile === undefined).assertTrue();
+      expect(reader.seenPaths[0]).assertEqual('posenet/skeleton_image.JPG');
+      expect(sourceFactory.rawfileByteLengths[0]).assertEqual(4);
+      expect(sourceFactory.fileDescriptors.length).assertEqual(0);
+      expect(fileOpener.seenUris.length).assertEqual(0);
+    });
+
+    it('poseFileImageSourceClosesOpenedFileWhenSourceCreationFails', 0, async () => {
+      const fileOpener: RecordingPoseImageFileOpener = new RecordingPoseImageFileOpener();
+      let rejected = false;
+
+      try {
+        await createPoseImageSourceForUri('file://selected/pose.jpg', {
+          sourceFactory: new ThrowingPoseImageSourceFactory(),
+          fileOpener: fileOpener
+        });
+      } catch (_) {
+        rejected = true;
+      }
+
+      expect(rejected).assertTrue();
+      expect(fileOpener.seenUris[0]).assertEqual('file://selected/pose.jpg');
+      expect(fileOpener.closedFds[0]).assertEqual(7);
     });
 
     it('keepsHiddenDanceRouteReadyOnDedicatedPage', 0, () => {

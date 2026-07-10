@@ -6,6 +6,7 @@ import { FeatureInputKind, FeatureWorkflow } from '../../features/runtime/Featur
 
 export type RuntimeInputAction =
   'startLiveCamera' |
+  'useSampleImage' |
   'captureImage' |
   'pickImage' |
   'pickModelFile' |
@@ -22,6 +23,8 @@ export function inputActionForKind(kind: FeatureInputKind): RuntimeInputAction {
   switch (kind) {
     case 'camera':
       return 'captureImage';
+    case 'sampleImage':
+      return 'useSampleImage';
     case 'photo':
     case 'contentImage':
     case 'styleImage':

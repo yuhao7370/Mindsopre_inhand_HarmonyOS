@@ -153,6 +153,7 @@ export type AppStringKey =
   'feature_runtime_save_image_missing' |
   'feature_runtime_style_recovery' |
   'feature_runtime_style_recovered' |
+  'feature_runtime_go_live' |
   'feature_runtime_preview_title' |
   'feature_runtime_preview_image' |
   'feature_runtime_preview_background' |
@@ -198,6 +199,7 @@ export type AppStringKey =
   'feature_runtime_result_background_replacement' |
   'feature_input_camera' |
   'feature_input_photo' |
+  'feature_input_sample_image' |
   'feature_input_content_image' |
   'feature_input_style_image' |
   'feature_input_style_predict_model_file' |
@@ -376,6 +378,7 @@ const APP_STRING_KEYS: AppStringKey[] = [
   'feature_runtime_save_image_missing',
   'feature_runtime_style_recovery',
   'feature_runtime_style_recovered',
+  'feature_runtime_go_live',
   'feature_runtime_preview_title',
   'feature_runtime_preview_image',
   'feature_runtime_preview_background',
@@ -421,6 +424,7 @@ const APP_STRING_KEYS: AppStringKey[] = [
   'feature_runtime_result_background_replacement',
   'feature_input_camera',
   'feature_input_photo',
+  'feature_input_sample_image',
   'feature_input_content_image',
   'feature_input_style_image',
   'feature_input_style_predict_model_file',
@@ -757,6 +761,8 @@ export function appString(key: AppStringKey): ResourceStr {
       return $r('app.string.feature_runtime_style_recovery');
     case 'feature_runtime_style_recovered':
       return $r('app.string.feature_runtime_style_recovered');
+    case 'feature_runtime_go_live':
+      return $r('app.string.feature_runtime_go_live');
     case 'feature_runtime_preview_title':
       return $r('app.string.feature_runtime_preview_title');
     case 'feature_runtime_preview_image':
@@ -847,6 +853,8 @@ export function appString(key: AppStringKey): ResourceStr {
       return $r('app.string.feature_input_camera');
     case 'feature_input_photo':
       return $r('app.string.feature_input_photo');
+    case 'feature_input_sample_image':
+      return $r('app.string.feature_input_sample_image');
     case 'feature_input_content_image':
       return $r('app.string.feature_input_content_image');
     case 'feature_input_style_image':

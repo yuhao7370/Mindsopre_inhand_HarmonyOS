@@ -9,6 +9,7 @@ import {
 export type FeatureInputKind =
   'camera' |
   'photo' |
+  'sampleImage' |
   'contentImage' |
   'styleImage' |
   'backgroundImage' |
@@ -55,6 +56,8 @@ export interface FeatureWorkflow {
   readonly liveMode: boolean;
   readonly helpUrl?: string;
   readonly helpContentKey?: AppStringKey;
+  readonly sampleImageRawfilePath?: string;
+  readonly linkedLiveRouteName?: string;
 }
 
 export interface WorkflowInputReadyAction {
@@ -69,10 +72,12 @@ export const featureWorkflows: Array<FeatureWorkflow> = [
     titleKey: 'title_pose_net',
     summaryKey: 'workflow_summary_pose',
     aiMethod: 'detectPose',
-    inputKinds: ['photo', 'camera'],
+    inputKinds: ['sampleImage', 'photo', 'camera'],
     requiredPermissions: ['camera', 'media'],
     resultKind: 'poseOverlay',
-    liveMode: true
+    liveMode: false,
+    sampleImageRawfilePath: 'posenet/skeleton_image.JPG',
+    linkedLiveRouteName: AppRoute.LIVE_SKELETON.name
   },
   {
     routeName: AppRoute.LIVE_SKELETON.name,
@@ -254,6 +259,14 @@ export function autoStartInputKindForWorkflow(workflow: FeatureWorkflow): Featur
   return 'camera';
 }
 
+export function sampleImageUriForWorkflow(workflow: FeatureWorkflow): string {
+  const path = workflow.sampleImageRawfilePath ?? '';
+  if (path.length === 0) {
+    return '';
+  }
+  return `rawfile://${path}`;
+}
+
 export function inputKindReplacesPrimaryInput(inputKind: FeatureInputKind): boolean {
   return inputKind !== 'modelFile' &&
     inputKind !== 'backgroundImage' &&
@@ -262,6 +275,10 @@ export function inputKindReplacesPrimaryInput(inputKind: FeatureInputKind): bool
 }
 
 export function shouldAutoRunWorkflowAfterInputReady(workflow: FeatureWorkflow, inputKind: FeatureInputKind): boolean {
+  if (workflow.routeName === AppRoute.POSENET.name &&
+    (inputKind === 'sampleImage' || inputKind === 'photo' || inputKind === 'camera')) {
+    return true;
+  }
   return (workflow.routeName === AppRoute.TEXT_RECOGNITION.name ||
     workflow.routeName === AppRoute.TEXT_TRANSLATION.name) &&
     (inputKind === 'photo' || inputKind === 'camera');
@@ -298,6 +315,8 @@ export function inputLabelKey(inputKind: FeatureInputKind): AppStringKey {
       return 'feature_input_camera';
     case 'photo':
       return 'feature_input_photo';
+    case 'sampleImage':
+      return 'feature_input_sample_image';
     case 'contentImage':
       return 'feature_input_content_image';
     case 'styleImage':

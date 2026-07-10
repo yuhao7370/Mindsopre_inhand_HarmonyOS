@@ -1,6 +1,10 @@
 import { fileIo } from '@kit.CoreFileKit';
 import { image } from '@kit.ImageKit';
 import { skeletonDetection, visionBase } from '@kit.CoreVisionKit';
+import {
+  RawfileContentReader,
+  rawfileContentToArrayBuffer
+} from './MindSporeLiteModelRunner';
 
 export interface PosePoint {
   readonly type: number;
@@ -64,7 +68,33 @@ export interface PoseServiceOptions {
   readonly runner: PoseRunner;
 }
 
+export interface HarmonySkeletonDetectionRunnerOptions {
+  readonly resourceManager?: RawfileContentReader;
+}
+
+export interface PoseImageSourceInput {
+  readonly imageSource: image.ImageSource;
+  readonly imageFile?: fileIo.File;
+}
+
+export interface PoseImageSourceFactory {
+  createSourceFromRawfileContent(content: Uint8Array): image.ImageSource;
+  createSourceFromFile(imageFile: fileIo.File): image.ImageSource;
+}
+
+export interface PoseImageFileOpener {
+  open(imageUri: string): Promise<fileIo.File>;
+  close(imageFile: fileIo.File): Promise<void>;
+}
+
+export interface PoseImageSourceForUriOptions {
+  readonly resourceManager?: RawfileContentReader;
+  readonly sourceFactory?: PoseImageSourceFactory;
+  readonly fileOpener?: PoseImageFileOpener;
+}
+
 export const poseMinPointScore = 0.2;
+export const poseRawfileUriPrefix = 'rawfile://';
 
 export const androidLiveSkeletonTemplatePoints: Array<PosePoint> = [
   { x: 416.6629, y: 312.46442, type: 101, score: 0.8042025 },
@@ -158,6 +188,12 @@ export class PoseService {
 }
 
 export class HarmonySkeletonDetectionRunner implements PoseRunner {
+  private readonly resourceManager?: RawfileContentReader;
+
+  constructor(options?: HarmonySkeletonDetectionRunnerOptions) {
+    this.resourceManager = options?.resourceManager;
+  }
+
   async detectPose(imageUri: string): Promise<PoseResult> {
     let imageFile: fileIo.File | undefined = undefined;
     let imageSource: image.ImageSource | undefined = undefined;
@@ -165,8 +201,11 @@ export class HarmonySkeletonDetectionRunner implements PoseRunner {
     let detector: skeletonDetection.SkeletonDetector | undefined = undefined;
     const startMs = Date.now();
     try {
-      imageFile = await openPoseImageFile(imageUri);
-      imageSource = image.createImageSource(imageFile.fd);
+      const input = await createPoseImageSourceForUri(imageUri, {
+        resourceManager: this.resourceManager
+      });
+      imageSource = input.imageSource;
+      imageFile = input.imageFile;
       const imageInfo: image.ImageInfo = await imageSource.getImageInfo();
       pixelMap = await imageSource.createPixelMap();
       detector = await skeletonDetection.SkeletonDetector.create();
@@ -197,6 +236,62 @@ export class HarmonySkeletonDetectionRunner implements PoseRunner {
       }
     }
   }
+}
+
+export class HarmonyPoseImageSourceFactory implements PoseImageSourceFactory {
+  createSourceFromRawfileContent(content: Uint8Array): image.ImageSource {
+    return image.createImageSource(rawfileContentToArrayBuffer(content));
+  }
+
+  createSourceFromFile(imageFile: fileIo.File): image.ImageSource {
+    return image.createImageSource(imageFile.fd);
+  }
+}
+
+export class HarmonyPoseImageFileOpener implements PoseImageFileOpener {
+  async open(imageUri: string): Promise<fileIo.File> {
+    return openPoseImageFile(imageUri);
+  }
+
+  async close(imageFile: fileIo.File): Promise<void> {
+    await closePoseImageFile(imageFile);
+  }
+}
+
+export async function createPoseImageSourceForUri(
+  imageUri: string,
+  options?: PoseImageSourceForUriOptions
+): Promise<PoseImageSourceInput> {
+  const sourceFactory = options?.sourceFactory ?? new HarmonyPoseImageSourceFactory();
+  const rawfilePath = rawfilePathFromPoseImageUri(imageUri);
+  if (rawfilePath.length > 0) {
+    if (options?.resourceManager === undefined) {
+      throw new Error('Unable to read built-in pose image without rawfile reader.');
+    }
+    const rawfileContent = await options.resourceManager.getRawFileContent(rawfilePath);
+    return {
+      imageSource: sourceFactory.createSourceFromRawfileContent(rawfileContent)
+    };
+  }
+
+  const fileOpener = options?.fileOpener ?? new HarmonyPoseImageFileOpener();
+  const imageFile = await fileOpener.open(imageUri);
+  try {
+    return {
+      imageSource: sourceFactory.createSourceFromFile(imageFile),
+      imageFile: imageFile
+    };
+  } catch (_) {
+    await fileOpener.close(imageFile);
+    throw new Error('Unable to create image source for pose detection.');
+  }
+}
+
+export function rawfilePathFromPoseImageUri(uri: string): string {
+  if (!uri.startsWith(poseRawfileUriPrefix)) {
+    return '';
+  }
+  return uri.substring(poseRawfileUriPrefix.length);
 }
 
 export function poseResultFromCoreVision(

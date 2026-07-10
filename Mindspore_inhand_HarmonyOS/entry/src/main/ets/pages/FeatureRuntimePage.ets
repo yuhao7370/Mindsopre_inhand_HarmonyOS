@@ -1,6 +1,6 @@
 import router from '@ohos.router';
 import componentSnapshot from '@ohos.arkui.componentSnapshot';
-import { AppRoute } from '../app/AppRoutes';
+import { AppRoute, findRouteByName } from '../app/AppRoutes';
 import {
   FeatureInputKind,
   FeaturePermissionKind,
@@ -10,6 +10,7 @@ import {
   inputLabelKey,
   permissionLabelKey,
   runtimeInputKindsForWorkflow,
+  sampleImageUriForWorkflow,
   shouldShowStyleRecoveryControl,
   workflowInputReadyAction,
   workflowForRoute
@@ -216,6 +217,15 @@ struct FeatureRuntimePage {
     }
     if (liveCameraInput) {
       this.startLiveCameraPreview();
+      return;
+    }
+    if (inputKind === 'sampleImage') {
+      const workflow = workflowForRoute(this.routeName);
+      const uri = workflow ? sampleImageUriForWorkflow(workflow) : '';
+      this.applyPickResult({
+        ok: uri.length > 0,
+        uri: uri
+      }, 'feature_runtime_image_ready', inputKind);
       return;
     }
     const context = this.uiAbilityContext();
@@ -758,6 +768,28 @@ struct FeatureRuntimePage {
       primaryButton: {
         value: appString('confirm'),
         action: () => {}
+      }
+    });
+  }
+
+  private hasLinkedLiveRoute(): boolean {
+    const workflow = workflowForRoute(this.routeName);
+    return (workflow?.linkedLiveRouteName ?? '').length > 0;
+  }
+
+  private openLinkedLiveRoute(): void {
+    const workflow = workflowForRoute(this.routeName);
+    const linkedRouteName = workflow?.linkedLiveRouteName ?? '';
+    const route = findRouteByName(linkedRouteName);
+    if (!route) {
+      return;
+    }
+    const linkedWorkflow = workflowForRoute(linkedRouteName);
+    router.pushUrl({
+      url: route.page,
+      params: {
+        routeName: linkedRouteName,
+        titleKey: linkedWorkflow?.titleKey ?? this.titleKey
       }
     });
   }
@@ -1645,6 +1677,12 @@ struct FeatureRuntimePage {
           }
           .width('100%')
           .margin({ top: AppSpacing.md })
+          if (this.hasLinkedLiveRoute()) {
+            Button(appString('feature_runtime_go_live'))
+              .height(34)
+              .margin({ top: AppSpacing.xs })
+              .onClick(() => this.openLinkedLiveRoute())
+          }
           if (this.isStyleTransferWorkflow()) {
             this.styleTransferStyleGrid()
           }
