@@ -4047,26 +4047,43 @@ export default function localUnitTest() {
       const textRecognition: FeatureWorkflow = workflowForRoute(AppRoute.TEXT_RECOGNITION.name)!;
       const textTranslation: FeatureWorkflow = workflowForRoute(AppRoute.TEXT_TRANSLATION.name)!;
       const styleTransfer: FeatureWorkflow = workflowForRoute(AppRoute.STYLE_TRANSFER.name)!;
+      const customModel: FeatureWorkflow = workflowForRoute(AppRoute.CUSTOM_MODEL.name)!;
 
       const imageTranslationAction: WorkflowInputReadyAction =
         workflowInputReadyAction(textTranslation, 'photo', 'typed first');
       expect(imageTranslationAction.userText).assertEqual('');
       expect(imageTranslationAction.shouldRunWorkflow).assertTrue();
+      expect(imageTranslationAction.textInputVisible).assertFalse();
+
+      const cameraTranslationAction: WorkflowInputReadyAction =
+        workflowInputReadyAction(textTranslation, 'camera', 'typed first');
+      expect(cameraTranslationAction.userText).assertEqual('');
+      expect(cameraTranslationAction.shouldRunWorkflow).assertTrue();
+      expect(cameraTranslationAction.textInputVisible).assertFalse();
 
       const typedTranslationAction: WorkflowInputReadyAction =
         workflowInputReadyAction(textTranslation, 'text', 'typed first');
       expect(typedTranslationAction.userText).assertEqual('typed first');
       expect(typedTranslationAction.shouldRunWorkflow).assertFalse();
+      expect(typedTranslationAction.textInputVisible).assertTrue();
 
       const imageOcrAction: WorkflowInputReadyAction =
         workflowInputReadyAction(textRecognition, 'camera', 'typed first');
       expect(imageOcrAction.userText).assertEqual('typed first');
       expect(imageOcrAction.shouldRunWorkflow).assertTrue();
+      expect(imageOcrAction.textInputVisible).assertTrue();
 
       const styleTransferAction: WorkflowInputReadyAction =
         workflowInputReadyAction(styleTransfer, 'photo', 'typed first');
       expect(styleTransferAction.userText).assertEqual('typed first');
       expect(styleTransferAction.shouldRunWorkflow).assertFalse();
+      expect(styleTransferAction.textInputVisible).assertTrue();
+
+      const customModelAction: WorkflowInputReadyAction =
+        workflowInputReadyAction(customModel, 'camera', 'typed first');
+      expect(customModelAction.userText).assertEqual('typed first');
+      expect(customModelAction.shouldRunWorkflow).assertFalse();
+      expect(customModelAction.textInputVisible).assertTrue();
     });
 
     it('mapsLiveCameraWorkflowsToLivePreviewAction', 0, () => {

@@ -136,6 +136,7 @@ struct FeatureRuntimePage {
   @State styleTransferModelInputUri: string = '';
   @State modelInputUri: string = '';
   @State userText: string = '';
+  @State textInputVisible: boolean = true;
   @State styledImagePixelMap: image.PixelMap | undefined = undefined;
   @State objectDetectionImageUri: string = '';
   @State objectDetections: Array<ObjectDetection> = [];
@@ -203,6 +204,7 @@ struct FeatureRuntimePage {
       this.stopLiveRuntimeLoop();
     }
     if (inputKind === 'text') {
+      this.textInputVisible = true;
       this.statusKey = this.userText.length > 0 ? 'feature_runtime_text_ready' : 'feature_runtime_status_idle';
       this.selectedInputSummary = this.userText;
       return;
@@ -411,6 +413,7 @@ struct FeatureRuntimePage {
     if (workflow) {
       const inputReadyAction = workflowInputReadyAction(workflow, inputKind, this.userText);
       this.userText = inputReadyAction.userText;
+      this.textInputVisible = inputReadyAction.textInputVisible;
       if (inputReadyAction.shouldRunWorkflow) {
         this.runWorkflow();
       }
@@ -1591,7 +1594,7 @@ struct FeatureRuntimePage {
           if (this.hasLiveCameraInput()) {
             this.liveCameraPreview()
           }
-          if (this.inputKinds.indexOf('text') >= 0) {
+          if (this.inputKinds.indexOf('text') >= 0 && this.textInputVisible) {
             TextInput({ text: this.userText, placeholder: appString('feature_runtime_text_placeholder') })
               .width('100%')
               .height(44)

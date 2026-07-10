@@ -59,6 +59,7 @@ export interface FeatureWorkflow {
 export interface WorkflowInputReadyAction {
   readonly userText: string;
   readonly shouldRunWorkflow: boolean;
+  readonly textInputVisible: boolean;
 }
 
 export const featureWorkflows: Array<FeatureWorkflow> = [
@@ -263,9 +264,11 @@ export function shouldClearTextInputAfterInputReady(workflow: FeatureWorkflow, i
 
 export function workflowInputReadyAction(workflow: FeatureWorkflow, inputKind: FeatureInputKind,
   currentUserText: string): WorkflowInputReadyAction {
+  const shouldClearTextInput = shouldClearTextInputAfterInputReady(workflow, inputKind);
   return {
-    userText: shouldClearTextInputAfterInputReady(workflow, inputKind) ? '' : currentUserText,
-    shouldRunWorkflow: shouldAutoRunWorkflowAfterInputReady(workflow, inputKind)
+    userText: shouldClearTextInput ? '' : currentUserText,
+    shouldRunWorkflow: shouldAutoRunWorkflowAfterInputReady(workflow, inputKind),
+    textInputVisible: !shouldClearTextInput
   };
 }
 
