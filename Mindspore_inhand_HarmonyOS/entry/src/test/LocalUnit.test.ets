@@ -3791,6 +3791,43 @@ export default function localUnitTest() {
       expect(scenes[0].score.toFixed(2)).assertEqual('0.77');
     });
 
+    it('topLocalSceneDetectionsSkipsOtherWhenUsefulSceneExists', 0, () => {
+      const scenes = topLocalSceneDetections(
+        [0.99, 0.91, 0.82, 0.7],
+        ['accordion', 'beach', 'unknown_scene', 'dining_room'],
+        2
+      );
+
+      expect(scenes.length).assertEqual(2);
+      expect(scenes[0].label).assertEqual('beach');
+      expect(scenes[0].score).assertEqual(0.91);
+      expect(scenes[1].label).assertEqual('diningroom');
+      expect(scenes[1].score).assertEqual(0.7);
+    });
+
+    it('sceneDetectionFailsWhenOnlyOtherCandidatesRemain', 0, async () => {
+      const scenes = topLocalSceneDetections([0.99, 0.88], ['accordion', 'unknown_scene'], 2);
+      expect(scenes.length).assertEqual(0);
+
+      const workflow = workflowForRoute(AppRoute.SCENE_STILL.name);
+      expect(workflow !== undefined).assertTrue();
+      const service = new SceneDetectionService({
+        runner: new ImageClassificationSceneDetectionRunner({
+          labels: ['accordion', 'unknown_scene'],
+          scoreRunner: new FixedScoreRunner([0.99, 0.88]),
+          maxScenes: 2
+        })
+      });
+
+      const result = await new DefaultAiService({ sceneDetectionService: service }).run(workflow!, {
+        imageUri: 'file://selected/unknown.jpg'
+      });
+
+      expect(result.ok).assertFalse();
+      expect(result.code).assertEqual('SCENE_DETECTION_FAILED');
+      expect(result.messageKey).assertEqual('feature_runtime_scene_failed');
+    });
+
     it('customModelRequiresModelAndImageInputs', 0, async () => {
       const workflow = workflowForRoute(AppRoute.CUSTOM_MODEL.name);
       expect(workflow !== undefined).assertTrue();

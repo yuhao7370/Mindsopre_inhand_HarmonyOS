@@ -194,9 +194,10 @@ export function topLocalSceneDetections(
   const scanLimit = Math.min(scores.length, labels.length);
   for (let index = 0; index < scanLimit; index++) {
     const score = scores[index];
-    if (score > 0) {
+    const label = sceneLabelForImageClassificationLabel(labels[index]);
+    if (score > 0 && label !== 'other') {
       candidates.push({
-        label: sceneLabelForImageClassificationLabel(labels[index]),
+        label: label,
         score: score
       });
     }
