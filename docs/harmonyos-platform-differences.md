@@ -70,6 +70,23 @@ Current HarmonyOS behavior:
   all, the app keeps the localized `feature_runtime_scene_unsupported` platform
   status.
 
+## Custom Model
+
+Android Custom Model lets users pick an image and a `.ms` model file, but the
+current Android `CustomModelExecutor` is marked UI-only and returns simulated
+random output after a fake load.
+
+Current HarmonyOS behavior:
+
+- The Custom Model route and input flow are available from the Experience grid.
+- HarmonyOS keeps the user-selected `.ms` model override, caches it in the app
+  cache, and runs it through MindSpore Lite with the Android 224x224 RGB unit
+  input contract.
+- If the user has not selected a model file, HarmonyOS uses the bundled
+  MobileNetV2 MindSpore model as a local default instead of blocking at missing
+  input. The result is still shown as a generic tensor summary, matching the
+  Android screen shape rather than turning the page into Image Classification.
+
 ## Dance Factory
 
 Android Dance Factory combines CameraX video sampling, HMS skeleton detection,

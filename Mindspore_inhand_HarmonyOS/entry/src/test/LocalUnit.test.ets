@@ -141,11 +141,13 @@ import {
 } from '../main/ets/services/ai/ImageClassificationPipeline';
 import { imageClassificationDecodeOptions } from '../main/ets/services/ai/HarmonyImageInputPreprocessor';
 import {
+  CustomModelDefaultOrSelectedRunner,
   CustomModelInputPreprocessor,
   CustomModelMindSporeRunner,
   CustomModelService,
   CustomModelTensorRunner,
   customModelDecodeOptions,
+  customModelDefaultModelUri,
   customModelInputFloatCount,
   customModelInputSize,
   rgbUnitInputFromResizedRgba
@@ -2084,7 +2086,8 @@ export default function localUnitTest() {
       const customModel: FeatureWorkflow = workflowForRoute(AppRoute.CUSTOM_MODEL.name)!;
       expect(customModel.inputKinds.indexOf('camera') >= 0).assertTrue();
       expect(customModel.inputKinds.indexOf('photo') >= 0).assertTrue();
-      expect(customModel.inputKinds.indexOf('modelFile') >= 0).assertTrue();
+      expect(customModel.inputKinds.indexOf('modelFile')).assertEqual(-1);
+      expect((customModel.optionalInputKinds ?? []).indexOf('modelFile') >= 0).assertTrue();
     });
 
     it('mapsAndroidHelpUrlsForRuntimeWorkflows', 0, () => {
@@ -2910,7 +2913,7 @@ export default function localUnitTest() {
         imageUri: 'file://selected/input.png'
       });
       expect(imageOnlyResult.ok).assertFalse();
-      expect(imageOnlyResult.code).assertEqual('MISSING_INPUT');
+      expect(imageOnlyResult.code).assertEqual('NATIVE_ADAPTER_PENDING');
 
       const modelOnlyResult = await new DefaultAiService().run(workflow!, {
         modelUri: 'file://selected/custom_model.ms'
@@ -3006,6 +3009,47 @@ export default function localUnitTest() {
       expect(result.detailText.indexOf('Model execution completed!') >= 0).assertTrue();
       expect(result.detailText.indexOf('Value[0]: 0.100000') >= 0).assertTrue();
       expect(result.detailText.indexOf('... (showing first 10 values)') >= 0).assertTrue();
+    });
+
+    it('aiServiceUsesBundledCustomModelWhenNoModelFileSelected', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.CUSTOM_MODEL.name);
+      expect(workflow !== undefined).assertTrue();
+      const tensorRunner: FixedCustomModelTensorRunner =
+        new FixedCustomModelTensorRunner([0.1, 0.2, 0.3]);
+      const customModelService = new CustomModelService({
+        preprocessor: new FixedCustomModelPreprocessor(new ArrayBuffer(12)),
+        tensorRunner: tensorRunner
+      });
+
+      const result = await new DefaultAiService({ customModelService: customModelService }).run(workflow!, {
+        imageUri: 'file://selected/input.png',
+        modelUri: ''
+      });
+
+      expect(result.ok).assertTrue();
+      expect(result.code).assertEqual('CUSTOM_MODEL_DONE');
+      expect(tensorRunner.seenModelUris[0]).assertEqual(customModelDefaultModelUri);
+      expect(result.data?.kind).assertEqual('customModel');
+      if (result.data?.kind === 'customModel') {
+        expect(result.data.modelUri).assertEqual(customModelDefaultModelUri);
+      }
+    });
+
+    it('customModelDefaultOrSelectedRunnerKeepsPickedModelOverride', 0, async () => {
+      const defaultRunner: FixedCustomModelTensorRunner = new FixedCustomModelTensorRunner([0.1]);
+      const selectedRunner: FixedCustomModelTensorRunner = new FixedCustomModelTensorRunner([0.9]);
+      const runner = new CustomModelDefaultOrSelectedRunner({
+        defaultModelRunner: defaultRunner,
+        selectedModelRunner: selectedRunner
+      });
+
+      const defaultOutput = await runner.predictOutput('', new ArrayBuffer(4));
+      const selectedOutput = await runner.predictOutput('file://selected/custom.ms', new ArrayBuffer(8));
+
+      expect(defaultOutput[0]).assertEqual(0.1);
+      expect(selectedOutput[0]).assertEqual(0.9);
+      expect(defaultRunner.seenModelUris[0]).assertEqual(customModelDefaultModelUri);
+      expect(selectedRunner.seenModelUris[0]).assertEqual('file://selected/custom.ms');
     });
 
     it('aiServiceReportsCustomModelRunnerFailureWithI18nKey', 0, async () => {

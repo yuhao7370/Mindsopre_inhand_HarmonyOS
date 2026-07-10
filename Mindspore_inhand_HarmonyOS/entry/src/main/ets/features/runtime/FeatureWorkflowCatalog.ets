@@ -226,7 +226,8 @@ export const featureWorkflows: Array<FeatureWorkflow> = [
     titleKey: 'title_custom_model',
     summaryKey: 'workflow_summary_custom_model',
     aiMethod: 'runCustomModel',
-    inputKinds: ['camera', 'photo', 'modelFile'],
+    inputKinds: ['camera', 'photo'],
+    optionalInputKinds: ['modelFile'],
     requiredPermissions: ['camera', 'media'],
     resultKind: 'tensorSummary',
     liveMode: false

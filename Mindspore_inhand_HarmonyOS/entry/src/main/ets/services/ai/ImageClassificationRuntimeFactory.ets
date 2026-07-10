@@ -2,7 +2,9 @@ import { resourceManager } from '@kit.LocalizationKit';
 import { FeatureWorkflow } from '../../features/runtime/FeatureWorkflowCatalog';
 import { DefaultAiService } from './AiService';
 import {
+  CustomModelDefaultOrSelectedRunner,
   CustomModelInputPreprocessor,
+  CustomModelRawfileRunner,
   CustomModelSelectedFileRunner,
   CustomModelService,
   CustomModelTensorRunner
@@ -330,7 +332,13 @@ export function createHarmonyCustomModelService(
 ): CustomModelService {
   return new CustomModelService({
     preprocessor: options.customModelPreprocessor ?? new HarmonyCustomModelInputPreprocessor(),
-    tensorRunner: options.customModelTensorRunner ?? new CustomModelSelectedFileRunner()
+    tensorRunner: options.customModelTensorRunner ?? new CustomModelDefaultOrSelectedRunner({
+      defaultModelRunner: new CustomModelRawfileRunner({
+        resourceManager: options.resourceManager,
+        modelRawfilePath: imageClassificationModelRawfilePath
+      }),
+      selectedModelRunner: new CustomModelSelectedFileRunner()
+    })
   });
 }
 

@@ -3,7 +3,9 @@ import { image } from '@kit.ImageKit';
 import { FileUriContentReader } from './FileUriContentReader';
 import {
   floatScoresFromOutputBuffer,
+  MindSporeLiteModelRunner,
   mindSporeLiteCpuContext,
+  RawfileContentReader,
   rawfileContentToArrayBuffer
 } from './MindSporeLiteModelRunner';
 
@@ -11,6 +13,7 @@ export const customModelInputSize: number = 224;
 export const customModelInputChannels: number = 3;
 export const customModelInputFloatCount: number =
   customModelInputSize * customModelInputSize * customModelInputChannels;
+export const customModelDefaultModelUri: string = 'rawfile://model/mobilenetv2.ms';
 
 export interface CustomModelRunResult {
   readonly ok: boolean;
@@ -28,6 +31,17 @@ export interface CustomModelTensorRunner {
 
 export interface CustomModelSelectedFileRunnerOptions {
   readonly modelContentReader?: FileUriContentReader;
+}
+
+export interface CustomModelRawfileRunnerOptions {
+  readonly resourceManager: RawfileContentReader;
+  readonly modelRawfilePath: string;
+}
+
+export interface CustomModelDefaultOrSelectedRunnerOptions {
+  readonly defaultModelRunner: CustomModelTensorRunner;
+  readonly selectedModelRunner?: CustomModelTensorRunner;
+  readonly defaultModelUri?: string;
 }
 
 export interface CustomModelServiceOptions {
@@ -103,6 +117,40 @@ export class CustomModelSelectedFileRunner implements CustomModelTensorRunner {
     const model = await mindSporeLite.loadModelFromBuffer(modelBuffer, mindSporeLiteCpuContext());
     this.cachedModels.set(modelUri, model);
     return model;
+  }
+}
+
+export class CustomModelRawfileRunner implements CustomModelTensorRunner {
+  private readonly runner: MindSporeLiteModelRunner;
+
+  constructor(options: CustomModelRawfileRunnerOptions) {
+    this.runner = new MindSporeLiteModelRunner({
+      resourceManager: options.resourceManager,
+      modelRawfilePath: options.modelRawfilePath
+    });
+  }
+
+  async predictOutput(_modelUri: string, inputBuffer: ArrayBuffer): Promise<Array<number>> {
+    return this.runner.predictScoresFromInput(inputBuffer);
+  }
+}
+
+export class CustomModelDefaultOrSelectedRunner implements CustomModelTensorRunner {
+  private readonly defaultModelRunner: CustomModelTensorRunner;
+  private readonly selectedModelRunner: CustomModelTensorRunner;
+  private readonly defaultModelUri: string;
+
+  constructor(options: CustomModelDefaultOrSelectedRunnerOptions) {
+    this.defaultModelRunner = options.defaultModelRunner;
+    this.selectedModelRunner = options.selectedModelRunner ?? new CustomModelSelectedFileRunner();
+    this.defaultModelUri = options.defaultModelUri ?? customModelDefaultModelUri;
+  }
+
+  async predictOutput(modelUri: string, inputBuffer: ArrayBuffer): Promise<Array<number>> {
+    if (modelUri.length === 0 || modelUri === this.defaultModelUri) {
+      return this.defaultModelRunner.predictOutput(this.defaultModelUri, inputBuffer);
+    }
+    return this.selectedModelRunner.predictOutput(modelUri, inputBuffer);
   }
 }
 
