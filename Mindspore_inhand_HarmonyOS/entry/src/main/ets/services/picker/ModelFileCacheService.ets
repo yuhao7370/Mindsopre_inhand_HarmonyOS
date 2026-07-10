@@ -86,6 +86,10 @@ export function cachedModelFileNameForInputKind(routeName: string, inputKind: Fe
   if (routeName === AppRoute.CUSTOM_MODEL.name && inputKind === 'modelFile') {
     return 'custom_model.ms';
   }
+  if ((routeName === AppRoute.OBJECT_PHOTO.name || routeName === AppRoute.OBJECT_CAMERA.name) &&
+    inputKind === 'modelFile') {
+    return 'object_detection_model.ms';
+  }
   return '';
 }
 

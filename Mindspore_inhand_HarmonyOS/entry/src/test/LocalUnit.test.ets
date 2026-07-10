@@ -4551,10 +4551,11 @@ export default function localUnitTest() {
       expect(cachedModelFileNameForInputKind(AppRoute.STYLE_TRANSFER.name, 'styleTransferModelFile')).assertEqual('custom_transfer.ms');
     });
 
-    it('keepsObjectDetectionPickedModelUriInsteadOfCustomModelCacheSlot', 0, () => {
-      expect(shouldCachePickedModelFileForRoute(AppRoute.OBJECT_PHOTO.name, 'modelFile')).assertFalse();
-      expect(shouldCachePickedModelFileForRoute(AppRoute.OBJECT_CAMERA.name, 'modelFile')).assertFalse();
-      expect(cachedModelFileNameForInputKind(AppRoute.OBJECT_PHOTO.name, 'modelFile')).assertEqual('');
+    it('cachesObjectDetectionPickedModelsInDedicatedCacheSlot', 0, () => {
+      expect(shouldCachePickedModelFileForRoute(AppRoute.OBJECT_PHOTO.name, 'modelFile')).assertTrue();
+      expect(shouldCachePickedModelFileForRoute(AppRoute.OBJECT_CAMERA.name, 'modelFile')).assertTrue();
+      expect(cachedModelFileNameForInputKind(AppRoute.OBJECT_PHOTO.name, 'modelFile')).assertEqual('object_detection_model.ms');
+      expect(cachedModelFileNameForInputKind(AppRoute.OBJECT_CAMERA.name, 'modelFile')).assertEqual('object_detection_model.ms');
       expect(cachedModelFileNameForInputKind(AppRoute.CUSTOM_MODEL.name, 'modelFile')).assertEqual('custom_model.ms');
     });
 
@@ -4570,6 +4571,21 @@ export default function localUnitTest() {
       expect(result.messageKey).assertEqual('feature_runtime_model_ready');
       expect(writer.seenCacheDirs[0]).assertEqual('/cache');
       expect(writer.seenFileNames[0]).assertEqual('custom_model.ms');
+      expect(writer.writtenBytes[0]).assertEqual(4);
+    });
+
+    it('cachesPickedObjectDetectionModelFileContentBeforeRuntimeUse', 0, async () => {
+      const reader = new FileUriContentReader(new FixedFileUriContentBackend(new Uint8Array([5, 6, 7, 8])));
+      const writer = new RecordingModelFileCacheWriter('/cache/object_detection_model.ms');
+      const service = new RuntimeModelFileCacheService(reader, writer);
+
+      const result = await service.cachePickedModelFile('file://selected/ssd.ms', '/cache', AppRoute.OBJECT_PHOTO.name, 'modelFile');
+
+      expect(result.ok).assertTrue();
+      expect(result.uri).assertEqual('/cache/object_detection_model.ms');
+      expect(result.messageKey).assertEqual('feature_runtime_model_ready');
+      expect(writer.seenCacheDirs[0]).assertEqual('/cache');
+      expect(writer.seenFileNames[0]).assertEqual('object_detection_model.ms');
       expect(writer.writtenBytes[0]).assertEqual(4);
     });
 

@@ -87,6 +87,23 @@ Current HarmonyOS behavior:
   input. The result is still shown as a generic tensor summary, matching the
   Android screen shape rather than turning the page into Image Classification.
 
+## Object Detection
+
+Android Object Detection ships a default SSD MindSpore model and lets users
+replace it with a selected `.ms` model in both photo and live-camera flows.
+
+Current HarmonyOS behavior:
+
+- The Object Detection Photo and Real-time routes use the bundled
+  `model/ssd.ms` model by default and decode SSD outputs with Android-compatible
+  anchors, thresholds, and label mapping.
+- User-selected `.ms` files remain optional. When selected, HarmonyOS copies
+  the file into the app cache as `object_detection_model.ms` before runtime use,
+  so the MindSpore Lite runner receives an app-owned path instead of depending
+  on the picker URI lifetime.
+- Android APK update/download-new-version behavior is intentionally not
+  migrated.
+
 ## Dance Factory
 
 Android Dance Factory combines CameraX video sampling, HMS skeleton detection,
