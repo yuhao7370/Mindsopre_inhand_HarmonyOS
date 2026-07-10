@@ -2552,6 +2552,30 @@ export default function localUnitTest() {
       expect(unknownResult.translatedText).assertEqual('');
     });
 
+    it('localTextTranslationRunnerTranslatesCommonMindSporeSentencesOffline', 0, async () => {
+      const runner = new LocalTextTranslationRunner();
+
+      const englishResult = await runner.translate('This is a MindSpore model.', 'zh');
+      expect(englishResult.ok).assertTrue();
+      expect(englishResult.translatedText).assertEqual('\u8FD9\u662F\u4E00\u4E2A\u6607\u601D\u6A21\u578B');
+
+      const chineseResult = await runner.translate('\u8FD9\u662F\u4E00\u4E2A\u6607\u601D\u6A21\u578B\u3002', 'en');
+      expect(chineseResult.ok).assertTrue();
+      expect(chineseResult.translatedText).assertEqual('this is a MindSpore model');
+    });
+
+    it('localTextTranslationRunnerTranslatesCommonVisionWorkflowLinesOffline', 0, async () => {
+      const runner = new LocalTextTranslationRunner();
+
+      const chineseResult = await runner.translate('\u56FE\u50CF\u5206\u7C7B\n\u76EE\u6807\u68C0\u6D4B', 'en');
+      expect(chineseResult.ok).assertTrue();
+      expect(chineseResult.translatedText).assertEqual('image classification\nobject detection');
+
+      const englishResult = await runner.translate('image classification\nobject detection', 'zh');
+      expect(englishResult.ok).assertTrue();
+      expect(englishResult.translatedText).assertEqual('\u56FE\u50CF\u5206\u7C7B\n\u76EE\u6807\u68C0\u6D4B');
+    });
+
     it('segmentationRequiresImageInputWhenServiceIsProvided', 0, async () => {
       const workflow = workflowForRoute(AppRoute.PORTRAIT_SEGMENTATION.name);
       expect(workflow !== undefined).assertTrue();

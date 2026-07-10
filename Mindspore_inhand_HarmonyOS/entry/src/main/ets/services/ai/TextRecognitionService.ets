@@ -111,6 +111,7 @@ interface LocalTranslationPhrase {
 }
 
 const localChineseToEnglishPhrases: Array<LocalTranslationPhrase> = [
+  { source: '\u8FD9\u662F\u4E00\u4E2A', target: 'this is a' },
   { source: '\u4F60\u597D\u4E16\u754C', target: 'hello world' },
   { source: '\u4F60\u597D', target: 'hello' },
   { source: '\u8C22\u8C22', target: 'thank you' },
@@ -125,10 +126,27 @@ const localChineseToEnglishPhrases: Array<LocalTranslationPhrase> = [
   { source: '\u673A\u5668\u5B66\u4E60', target: 'machine learning' },
   { source: '\u6DF1\u5EA6\u5B66\u4E60', target: 'deep learning' },
   { source: '\u534E\u4E3A', target: 'Huawei' },
-  { source: '\u6607\u601D', target: 'MindSpore' }
+  { source: '\u6607\u601D', target: 'MindSpore' },
+  { source: '\u6A21\u578B', target: 'model' },
+  { source: '\u56FE\u50CF\u5206\u7C7B', target: 'image classification' },
+  { source: '\u76EE\u6807\u68C0\u6D4B', target: 'object detection' },
+  { source: '\u4EBA\u50CF\u5206\u5272', target: 'portrait segmentation' },
+  { source: '\u59FF\u6001\u4F30\u8BA1', target: 'pose estimation' },
+  { source: '\u624B\u52BF\u8BC6\u522B', target: 'gesture recognition' },
+  { source: '\u573A\u666F\u68C0\u6D4B', target: 'scene detection' },
+  { source: '\u6587\u672C\u63D0\u53D6', target: 'text extraction' },
+  { source: '\u98CE\u683C\u8FC1\u79FB', target: 'style transfer' },
+  { source: '\u81EA\u5B9A\u4E49\u6A21\u578B', target: 'custom model' },
+  { source: '\u53EF\u4EE5', target: 'can' },
+  { source: '\u8FD0\u884C', target: 'run' },
+  { source: '\u5728\u624B\u673A\u4E0A', target: 'on phone' },
+  { source: '\u76F8\u673A', target: 'camera' },
+  { source: '\u7167\u7247', target: 'photo' }
 ];
 
 const localEnglishToChinesePhrases: Array<LocalTranslationPhrase> = [
+  { source: 'this is a', target: '\u8FD9\u662F\u4E00\u4E2A' },
+  { source: 'this is an', target: '\u8FD9\u662F\u4E00\u4E2A' },
   { source: 'hello world', target: '\u4F60\u597D\u4E16\u754C' },
   { source: 'good morning', target: '\u65E9\u4E0A\u597D' },
   { source: 'good evening', target: '\u665A\u4E0A\u597D' },
@@ -144,7 +162,24 @@ const localEnglishToChinesePhrases: Array<LocalTranslationPhrase> = [
   { source: 'machine learning', target: '\u673A\u5668\u5B66\u4E60' },
   { source: 'deep learning', target: '\u6DF1\u5EA6\u5B66\u4E60' },
   { source: 'huawei', target: '\u534E\u4E3A' },
-  { source: 'mindspore', target: '\u6607\u601D' }
+  { source: 'mindspore', target: '\u6607\u601D' },
+  { source: 'model', target: '\u6A21\u578B' },
+  { source: 'image classification', target: '\u56FE\u50CF\u5206\u7C7B' },
+  { source: 'object detection', target: '\u76EE\u6807\u68C0\u6D4B' },
+  { source: 'portrait segmentation', target: '\u4EBA\u50CF\u5206\u5272' },
+  { source: 'pose estimation', target: '\u59FF\u6001\u4F30\u8BA1' },
+  { source: 'gesture recognition', target: '\u624B\u52BF\u8BC6\u522B' },
+  { source: 'scene detection', target: '\u573A\u666F\u68C0\u6D4B' },
+  { source: 'text extraction', target: '\u6587\u672C\u63D0\u53D6' },
+  { source: 'style transfer', target: '\u98CE\u683C\u8FC1\u79FB' },
+  { source: 'custom model', target: '\u81EA\u5B9A\u4E49\u6A21\u578B' },
+  { source: 'can', target: '\u53EF\u4EE5' },
+  { source: 'run', target: '\u8FD0\u884C' },
+  { source: 'runs', target: '\u8FD0\u884C' },
+  { source: 'on the phone', target: '\u5728\u624B\u673A\u4E0A' },
+  { source: 'on phone', target: '\u5728\u624B\u673A\u4E0A' },
+  { source: 'camera', target: '\u76F8\u673A' },
+  { source: 'photo', target: '\u7167\u7247' }
 ];
 
 export interface TextTranslationServiceOptions {
