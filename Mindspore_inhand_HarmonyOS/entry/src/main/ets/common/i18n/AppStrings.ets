@@ -38,6 +38,13 @@ export type AppStringKey =
   'title_object_camera' |
   'title_style_transfer' |
   'title_custom_model' |
+  'title_college_faq' |
+  'title_college_one_hour' |
+  'title_college_forum' |
+  'title_college_training' |
+  'title_college_perform' |
+  'title_college_broken_side' |
+  'title_college_video' |
   'college_summary_title' |
   'college_cloud_title' |
   'college_quick_title' |
@@ -263,6 +270,13 @@ const APP_STRING_KEYS: AppStringKey[] = [
   'title_object_camera',
   'title_style_transfer',
   'title_custom_model',
+  'title_college_faq',
+  'title_college_one_hour',
+  'title_college_forum',
+  'title_college_training',
+  'title_college_perform',
+  'title_college_broken_side',
+  'title_college_video',
   'college_summary_title',
   'college_cloud_title',
   'college_quick_title',
@@ -531,6 +545,20 @@ export function appString(key: AppStringKey): ResourceStr {
       return $r('app.string.title_style_transfer');
     case 'title_custom_model':
       return $r('app.string.title_custom_model');
+    case 'title_college_faq':
+      return $r('app.string.title_college_faq');
+    case 'title_college_one_hour':
+      return $r('app.string.title_college_one_hour');
+    case 'title_college_forum':
+      return $r('app.string.title_college_forum');
+    case 'title_college_training':
+      return $r('app.string.title_college_training');
+    case 'title_college_perform':
+      return $r('app.string.title_college_perform');
+    case 'title_college_broken_side':
+      return $r('app.string.title_college_broken_side');
+    case 'title_college_video':
+      return $r('app.string.title_college_video');
     case 'college_summary_title':
       return $r('app.string.college_summary_title');
     case 'college_cloud_title':

@@ -284,13 +284,23 @@ import {
   visibleExperienceSections
 } from '../main/ets/common/data/FeatureCatalog';
 import {
+  collegeMainAskUrl,
   collegeMainCloudUrl,
+  collegeMainFaqUrl,
+  collegeQuickAppUrl,
+  collegeQuickExecuteUrl,
+  collegeQuickTrainUrl,
+  collegeQuickVideoUrl,
   harmonyPrivacyRawfile,
   helpImageClassificationUrl,
   helpObjectDetectionUrl,
   helpStyleTransferUrl,
   intelligentPoetryUrl,
   meApkUrl,
+  meCodeUrl,
+  meHelpUrl,
+  meStarUrl,
+  mindSporeBaseUrl,
   userPrivacyRulesUrl,
   webDestinationForUrl,
   webUrlForRouteName,
@@ -1577,8 +1587,21 @@ export default function localUnitTest() {
       expect(privacyDestination.localRawfile).assertEqual(harmonyPrivacyRawfile);
 
       const collegeDestination = webDestinationForUrl(collegeMainCloudUrl, 'me_official_title');
-      expect(collegeDestination.titleKey).assertEqual('college_cloud_title');
+      expect(collegeDestination.titleKey).assertEqual('title_college_one_hour');
       expect(collegeDestination.url).assertEqual(collegeMainCloudUrl);
+    });
+
+    it('mapsAndroidWebViewToolbarTitlesForCollegeAndMeUrls', 0, () => {
+      expect(webDestinationForUrl(collegeMainFaqUrl, 'me_official_title').titleKey).assertEqual('title_college_faq');
+      expect(webDestinationForUrl(collegeMainAskUrl, 'me_official_title').titleKey).assertEqual('title_college_forum');
+      expect(webDestinationForUrl(collegeQuickTrainUrl, 'me_official_title').titleKey).assertEqual('title_college_training');
+      expect(webDestinationForUrl(collegeQuickExecuteUrl, 'me_official_title').titleKey).assertEqual('title_college_perform');
+      expect(webDestinationForUrl(collegeQuickAppUrl, 'me_official_title').titleKey).assertEqual('title_college_broken_side');
+      expect(webDestinationForUrl(collegeQuickVideoUrl, 'me_official_title').titleKey).assertEqual('title_college_video');
+      expect(webDestinationForUrl(meStarUrl, 'me_official_title').titleKey).assertEqual('me_up_title');
+      expect(webDestinationForUrl(mindSporeBaseUrl, 'me_qa_title').titleKey).assertEqual('me_official_title');
+      expect(webDestinationForUrl(meCodeUrl, 'me_official_title').titleKey).assertEqual('me_official_code_title');
+      expect(webDestinationForUrl(meHelpUrl, 'me_official_title').titleKey).assertEqual('me_qa_title');
     });
 
     it('retainsHiddenNavigableMeWebEntries', 0, () => {
