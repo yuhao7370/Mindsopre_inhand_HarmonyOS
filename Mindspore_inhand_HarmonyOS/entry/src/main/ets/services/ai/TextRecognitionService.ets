@@ -112,6 +112,18 @@ interface LocalTranslationPhrase {
 }
 
 const localChineseToEnglishPhrases: Array<LocalTranslationPhrase> = [
+  {
+    source: 'AI \u7231\u597D\u8005\u7684\u4E00\u7AD9\u5F0F\u534F\u540C\u5B66\u4E60\u3001\u6F14\u793A\u3001\u4F53\u9A8C\u5E73\u53F0',
+    target: 'a one-stop platform of collaborative learning, demonstrating, and experiencing for AI users'
+  },
+  {
+    source: 'MindSpore \u662F\u5168\u573A\u666F AI \u8BA1\u7B97\u6846\u67B6',
+    target: 'MindSpore is a full-scenario AI computing framework'
+  },
+  {
+    source: '\u672C\u9875\u63D0\u4F9B\u672C\u5730\u5B66\u4E60\u5165\u53E3\uFF0C\u5E76\u901A\u8FC7\u7F51\u9875\u6253\u5F00\u5916\u90E8\u8D44\u6E90',
+    target: 'this page provides local learning entries and opens external resources in a web page'
+  },
   { source: '\u8FD9\u662F\u4E00\u4E2A', target: 'this is a' },
   { source: '\u4F60\u597D\u4E16\u754C', target: 'hello world' },
   { source: '\u4F60\u597D', target: 'hello' },
@@ -148,6 +160,18 @@ const localChineseToEnglishPhrases: Array<LocalTranslationPhrase> = [
 ];
 
 const localEnglishToChinesePhrases: Array<LocalTranslationPhrase> = [
+  {
+    source: 'a one-stop platform of collaborative learning, demonstrating, and experiencing for AI users',
+    target: 'AI \u7231\u597D\u8005\u7684\u4E00\u7AD9\u5F0F\u534F\u540C\u5B66\u4E60\u3001\u6F14\u793A\u3001\u4F53\u9A8C\u5E73\u53F0'
+  },
+  {
+    source: 'mindspore is a full-scenario ai computing framework',
+    target: 'MindSpore \u662F\u5168\u573A\u666F AI \u8BA1\u7B97\u6846\u67B6'
+  },
+  {
+    source: 'this page provides local learning entries and opens external resources in a web page',
+    target: '\u672C\u9875\u63D0\u4F9B\u672C\u5730\u5B66\u4E60\u5165\u53E3\uFF0C\u5E76\u901A\u8FC7\u7F51\u9875\u6253\u5F00\u5916\u90E8\u8D44\u6E90'
+  },
   { source: 'this is a', target: '\u8FD9\u662F\u4E00\u4E2A' },
   { source: 'this is an', target: '\u8FD9\u662F\u4E00\u4E2A' },
   { source: 'hello world', target: '\u4F60\u597D\u4E16\u754C' },

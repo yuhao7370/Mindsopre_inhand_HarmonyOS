@@ -3196,6 +3196,28 @@ export default function localUnitTest() {
       expect(englishResult.translatedText).assertEqual('\u6607\u601D\u53EF\u4EE5\u5728\u624B\u673A\u4E0A\u8FD0\u884C');
     });
 
+    it('localTextTranslationRunnerCoversCommonAppIntroCopyOffline', 0, async () => {
+      const runner = new LocalTextTranslationRunner();
+
+      const introResult = await runner.translate(
+        'A one-stop platform of collaborative learning, demonstrating, and experiencing for AI users.',
+        'zh'
+      );
+      expect(introResult.ok).assertTrue();
+      expect(introResult.translatedText)
+        .assertEqual('AI \u7231\u597D\u8005\u7684\u4E00\u7AD9\u5F0F\u534F\u540C\u5B66\u4E60\u3001\u6F14\u793A\u3001\u4F53\u9A8C\u5E73\u53F0');
+
+      const collegeResult = await runner.translate(
+        'MindSpore is a full-scenario AI computing framework.\n' +
+          'This page provides local learning entries and opens external resources in a web page.',
+        'zh'
+      );
+      expect(collegeResult.ok).assertTrue();
+      expect(collegeResult.translatedText)
+        .assertEqual('MindSpore \u662F\u5168\u573A\u666F AI \u8BA1\u7B97\u6846\u67B6\n' +
+          '\u672C\u9875\u63D0\u4F9B\u672C\u5730\u5B66\u4E60\u5165\u53E3\uFF0C\u5E76\u901A\u8FC7\u7F51\u9875\u6253\u5F00\u5916\u90E8\u8D44\u6E90');
+    });
+
     it('segmentationRequiresImageInputWhenServiceIsProvided', 0, async () => {
       const workflow = workflowForRoute(AppRoute.PORTRAIT_SEGMENTATION.name);
       expect(workflow !== undefined).assertTrue();
