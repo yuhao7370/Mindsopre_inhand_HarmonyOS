@@ -1611,6 +1611,9 @@ export default function localUnitTest() {
       expect(visibleMeItems[0].title).assertEqual('Version');
       expect(meItems.find((item: MeItem) => item.id === 'privacy')?.visibleByDefault).assertFalse();
       expect(meItems.find((item: MeItem) => item.id === 'qr')?.visibleByDefault).assertFalse();
+      expect(meItems.find((item: MeItem) => item.id === 'star')?.title).assertEqual('Like');
+      expect(meItems.find((item: MeItem) => item.id === 'code')?.title).assertEqual('Official Code');
+      expect(meItems.find((item: MeItem) => item.id === 'feedback')?.title).assertEqual('Feedback');
     });
 
     it('usesAndroidCollegeSummaryDialogTitleKey', 0, () => {
