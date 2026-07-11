@@ -367,6 +367,10 @@ export function shouldShowResultSaveAction(
     workflow?.routeName === AppRoute.SEGMENTATION_STILL.name;
 }
 
+export function shouldShowLiveGestureCameraOverlay(workflow: FeatureWorkflow | undefined): boolean {
+  return workflow?.aiMethod === 'detectGesture' && workflow.liveMode;
+}
+
 export function shouldMirrorSegmentationForeground(
   workflow: FeatureWorkflow | undefined,
   liveCameraPosition: LiveCameraPosition

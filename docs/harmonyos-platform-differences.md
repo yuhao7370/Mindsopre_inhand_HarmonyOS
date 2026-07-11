@@ -106,6 +106,9 @@ Current HarmonyOS behavior:
   loop, so the local fallback or injected gesture runner refreshes continuously
   at the 500ms fast-live cadence used for lightweight classification-style
   demos.
+- Live gesture detections with bounding rectangles are drawn directly over the
+  HarmonyOS camera preview, reusing the still-image gesture overlay renderer to
+  mirror Android's `HandGestureGraphic` behavior.
 
 ## Text Recognition
 

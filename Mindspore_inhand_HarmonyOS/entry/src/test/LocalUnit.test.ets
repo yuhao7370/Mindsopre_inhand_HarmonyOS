@@ -294,6 +294,7 @@ import {
   shouldHideTextInputWhenPreparingInput,
   shouldShowCopyTextAction,
   shouldShowResultSaveAction,
+  shouldShowLiveGestureCameraOverlay,
   shouldMirrorSegmentationForeground,
   shouldUseLongTextInput,
   shouldUseLongTextResultRow,
@@ -6545,6 +6546,17 @@ export default function localUnitTest() {
       expect(runtimeInputActionForWorkflowInput(textRecognition, 'camera')).assertEqual('captureImage');
       expect(gestureLive.liveMode).assertTrue();
       expect(runtimeInputActionForWorkflowInput(gestureLive, 'camera')).assertEqual('startLiveCamera');
+    });
+
+    it('showsGestureBoxesOnOnlyTheAndroidStyleLiveGesturePreview', 0, () => {
+      expect(shouldShowLiveGestureCameraOverlay(workflowForRoute(AppRoute.GESTURE_LIVE.name)))
+        .assertTrue();
+      expect(shouldShowLiveGestureCameraOverlay(workflowForRoute(AppRoute.GESTURE_STILL.name)))
+        .assertFalse();
+      expect(shouldShowLiveGestureCameraOverlay(workflowForRoute(AppRoute.SCENE_LIVE.name)))
+        .assertFalse();
+      expect(shouldShowLiveGestureCameraOverlay(undefined))
+        .assertFalse();
     });
 
     it('autoStartsOnlyCameraOnlyLiveWorkflowsLikeAndroidLiveActivities', 0, () => {

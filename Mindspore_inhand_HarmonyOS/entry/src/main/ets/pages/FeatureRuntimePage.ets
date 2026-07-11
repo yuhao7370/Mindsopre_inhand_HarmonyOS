@@ -21,6 +21,7 @@ import {
   shouldHideTextInputWhenPreparingInput,
   shouldMirrorSegmentationForeground,
   shouldShowCopyTextAction,
+  shouldShowLiveGestureCameraOverlay,
   shouldShowResultSaveAction,
   shouldShowStyleRecoveryControl,
   shouldUseLongTextInput,
@@ -1416,6 +1417,13 @@ struct FeatureRuntimePage {
           .onDestroy(() => this.stopLiveCameraPreview())
         if (this.sceneOverlayRows.length > 0 && this.shouldShowLiveSceneOverlay()) {
           this.liveSceneOverlay()
+        }
+        if (this.visibleGestureDetections().length > 0 &&
+          shouldShowLiveGestureCameraOverlay(workflowForRoute(this.routeName))) {
+          ForEach(this.visibleGestureDetections(), (gesture: GestureDetection) => {
+            this.gestureBox(gesture)
+          }, (gesture: GestureDetection) =>
+            `${gesture.category}-${gesture.score}-${gesture.rect?.left}-${gesture.rect?.top}`)
         }
       }
         .width('100%')
