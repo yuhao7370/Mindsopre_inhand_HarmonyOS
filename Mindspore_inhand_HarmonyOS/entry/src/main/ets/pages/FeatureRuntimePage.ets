@@ -26,6 +26,7 @@ import {
   shouldShowLiveGestureCameraOverlay,
   shouldShowLiveObjectDetectionCameraOverlay,
   shouldShowLivePoseCameraOverlay,
+  shouldShowLivePoseTemplateOverlay,
   shouldShowLiveSegmentationCameraOverlay,
   shouldShowResultSaveAction,
   shouldShowStyleRecoveryControl,
@@ -1454,6 +1455,16 @@ struct FeatureRuntimePage {
           }, (gesture: GestureDetection) =>
             `${gesture.category}-${gesture.score}-${gesture.rect?.left}-${gesture.rect?.top}`)
         }
+        if (shouldShowLivePoseTemplateOverlay(workflowForRoute(this.routeName))) {
+          Column() {
+            this.livePoseTemplateOverlay()
+          }
+          .width('100%')
+          .height('100%')
+          .justifyContent(FlexAlign.End)
+          .alignItems(HorizontalAlign.End)
+          .padding({ right: 10, bottom: 10 })
+        }
         if (this.resultRows.length > 0 &&
           shouldShowLiveClassificationCameraOverlay(workflowForRoute(this.routeName))) {
           this.liveClassificationOverlay(this.resultRows[0])
@@ -1526,6 +1537,31 @@ struct FeatureRuntimePage {
   }
 
   @Builder
+  livePoseTemplateOverlay() {
+    Column() {
+      Row() {
+        Text(appString('feature_runtime_result_similarity'))
+          .fontSize(12)
+          .fontColor(Color.White)
+          .fontWeight(FontWeight.Medium)
+        Text(`: ${this.livePoseSimilarityPercent()}`)
+          .fontSize(12)
+          .fontColor(Color.White)
+          .fontWeight(FontWeight.Medium)
+      }
+      .padding({ left: 6, right: 6, top: 3, bottom: 3 })
+      .backgroundColor('#66000000')
+      .borderRadius(4)
+      Image($r('app.media.skeleton_template'))
+        .width(92)
+        .aspectRatio(135 / 169)
+        .objectFit(ImageFit.Contain)
+        .margin({ top: 4 })
+    }
+    .alignItems(HorizontalAlign.Start)
+  }
+
+  @Builder
   imagePreview(labelKey: AppStringKey, uri: string) {
     Column() {
       Text(appString(labelKey))
@@ -1595,6 +1631,12 @@ struct FeatureRuntimePage {
     return row.value;
   }
 
+  private livePoseSimilarityPercent(): string {
+    const similarityRow = this.resultRows.find((row: AiRunResultRow) =>
+      row.labelKey === 'feature_runtime_result_similarity');
+    return similarityRow?.value ?? '0%';
+  }
+
   private objectDetectionBoxStyle(detection: ObjectDetection): ObjectDetectionBoxPercent {
     return objectDetectionBoxPercent(
       detection,
@@ -1640,7 +1682,7 @@ struct FeatureRuntimePage {
   }
 
   private shouldShowPoseTemplate(): boolean {
-    return this.routeName === AppRoute.LIVE_SKELETON.name;
+    return shouldShowLivePoseTemplateOverlay(workflowForRoute(this.routeName));
   }
 
   private poseLineStyle(line: PoseLine): PoseLinePercent {

@@ -390,6 +390,10 @@ export function shouldShowLivePoseCameraOverlay(workflow: FeatureWorkflow | unde
   return workflow?.aiMethod === 'detectPose' && workflow.liveMode;
 }
 
+export function shouldShowLivePoseTemplateOverlay(workflow: FeatureWorkflow | undefined): boolean {
+  return workflow?.routeName === AppRoute.LIVE_SKELETON.name;
+}
+
 export function shouldShowLiveSegmentationCameraOverlay(workflow: FeatureWorkflow | undefined): boolean {
   return workflow?.aiMethod === 'segmentPerson' && workflow.liveMode;
 }

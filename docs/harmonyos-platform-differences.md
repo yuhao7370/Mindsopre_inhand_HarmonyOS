@@ -77,6 +77,9 @@ Current HarmonyOS behavior:
 - Live Skeleton detections draw the same skeleton lines and points directly on
   the HarmonyOS camera preview, matching Android `SkeletonGraphic` overlay
   behavior while still reusing the shared captured-frame result state.
+- The live camera preview also keeps Android's skeleton template and localized
+  similarity readout in the preview layer, defaulting to `0%` until pose results
+  arrive.
 
 ## Gesture Recognition
 

@@ -300,6 +300,7 @@ import {
   shouldShowLiveGestureCameraOverlay,
   shouldShowLiveObjectDetectionCameraOverlay,
   shouldShowLivePoseCameraOverlay,
+  shouldShowLivePoseTemplateOverlay,
   shouldShowLiveSegmentationCameraOverlay,
   shouldMirrorSegmentationForeground,
   shouldUseLongTextInput,
@@ -413,7 +414,10 @@ import {
   customModelMoreUrl,
   harmonyPrivacyRawfile,
   helpImageClassificationUrl,
+  helpImageSegmentationUrl,
   helpObjectDetectionUrl,
+  helpPoseNetUrl,
+  helpSceneDetectionUrl,
   helpStyleTransferUrl,
   intelligentPoetryUrl,
   meCodeUrl,
@@ -1905,6 +1909,9 @@ export default function localUnitTest() {
       expect(hasAppStringKey('feature_runtime_help_image_classification')).assertTrue();
       expect(hasAppStringKey('feature_runtime_help_object_photo')).assertTrue();
       expect(hasAppStringKey('feature_runtime_help_object_camera')).assertTrue();
+      expect(hasAppStringKey('feature_runtime_help_pose_net')).assertTrue();
+      expect(hasAppStringKey('feature_runtime_help_image_segmentation')).assertTrue();
+      expect(hasAppStringKey('feature_runtime_help_scene_detection')).assertTrue();
       expect(hasAppStringKey('feature_runtime_help_style_transfer')).assertTrue();
       expect(hasAppStringKey('feature_runtime_custom_model_help')).assertTrue();
       expect(hasAppStringKey('qr_code_save_done')).assertTrue();
@@ -3148,6 +3155,13 @@ export default function localUnitTest() {
       expect(workflowForRoute(AppRoute.IMAGE_CAMERA.name)?.helpUrl).assertEqual(helpImageClassificationUrl);
       expect(workflowForRoute(AppRoute.OBJECT_PHOTO.name)?.helpUrl).assertEqual(helpObjectDetectionUrl);
       expect(workflowForRoute(AppRoute.OBJECT_CAMERA.name)?.helpUrl).assertEqual(helpObjectDetectionUrl);
+      expect(workflowForRoute(AppRoute.POSENET.name)?.helpUrl).assertEqual(helpPoseNetUrl);
+      expect(workflowForRoute(AppRoute.LIVE_SKELETON.name)?.helpUrl).assertEqual(helpPoseNetUrl);
+      expect(workflowForRoute(AppRoute.SEGMENTATION_STILL.name)?.helpUrl).assertEqual(helpImageSegmentationUrl);
+      expect(workflowForRoute(AppRoute.SEGMENTATION_LIVE.name)?.helpUrl).assertEqual(helpImageSegmentationUrl);
+      expect(workflowForRoute(AppRoute.PORTRAIT_SEGMENTATION.name)?.helpUrl).assertEqual(helpImageSegmentationUrl);
+      expect(workflowForRoute(AppRoute.SCENE_STILL.name)?.helpUrl).assertEqual(helpSceneDetectionUrl);
+      expect(workflowForRoute(AppRoute.SCENE_LIVE.name)?.helpUrl).assertEqual(helpSceneDetectionUrl);
       expect(workflowForRoute(AppRoute.STYLE_TRANSFER.name)?.helpUrl).assertEqual(helpStyleTransferUrl);
       expect(workflowForRoute(AppRoute.CUSTOM_MODEL.name)?.helpUrl).assertEqual(customModelMoreUrl);
     });
@@ -3198,6 +3212,20 @@ export default function localUnitTest() {
         .assertEqual('feature_runtime_help_object_photo');
       expect(workflowForRoute(AppRoute.OBJECT_CAMERA.name)?.helpContentKey)
         .assertEqual('feature_runtime_help_object_camera');
+      expect(workflowForRoute(AppRoute.POSENET.name)?.helpContentKey)
+        .assertEqual('feature_runtime_help_pose_net');
+      expect(workflowForRoute(AppRoute.LIVE_SKELETON.name)?.helpContentKey)
+        .assertEqual('feature_runtime_help_pose_net');
+      expect(workflowForRoute(AppRoute.SEGMENTATION_STILL.name)?.helpContentKey)
+        .assertEqual('feature_runtime_help_image_segmentation');
+      expect(workflowForRoute(AppRoute.SEGMENTATION_LIVE.name)?.helpContentKey)
+        .assertEqual('feature_runtime_help_image_segmentation');
+      expect(workflowForRoute(AppRoute.PORTRAIT_SEGMENTATION.name)?.helpContentKey)
+        .assertEqual('feature_runtime_help_image_segmentation');
+      expect(workflowForRoute(AppRoute.SCENE_STILL.name)?.helpContentKey)
+        .assertEqual('feature_runtime_help_scene_detection');
+      expect(workflowForRoute(AppRoute.SCENE_LIVE.name)?.helpContentKey)
+        .assertEqual('feature_runtime_help_scene_detection');
       expect(workflowForRoute(AppRoute.STYLE_TRANSFER.name)?.helpContentKey)
         .assertEqual('feature_runtime_help_style_transfer');
       expect(workflowForRoute(AppRoute.CUSTOM_MODEL.name)?.helpContentKey)
@@ -6702,6 +6730,17 @@ export default function localUnitTest() {
       expect(shouldShowLivePoseCameraOverlay(workflowForRoute(AppRoute.OBJECT_CAMERA.name)))
         .assertFalse();
       expect(shouldShowLivePoseCameraOverlay(undefined))
+        .assertFalse();
+    });
+
+    it('showsPoseTemplateOnOnlyTheAndroidStyleLiveSkeletonPreview', 0, () => {
+      expect(shouldShowLivePoseTemplateOverlay(workflowForRoute(AppRoute.LIVE_SKELETON.name)))
+        .assertTrue();
+      expect(shouldShowLivePoseTemplateOverlay(workflowForRoute(AppRoute.POSENET.name)))
+        .assertFalse();
+      expect(shouldShowLivePoseTemplateOverlay(workflowForRoute(AppRoute.OBJECT_CAMERA.name)))
+        .assertFalse();
+      expect(shouldShowLivePoseTemplateOverlay(undefined))
         .assertFalse();
     });
 
