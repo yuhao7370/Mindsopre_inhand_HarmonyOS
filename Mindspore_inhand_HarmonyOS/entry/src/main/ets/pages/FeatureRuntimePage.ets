@@ -77,8 +77,10 @@ import {
 import { ClipboardService, CopyTextResult } from '../services/clipboard/ClipboardService';
 import { PickerService, PickResult, runtimeInputActionForWorkflowInput } from '../services/picker/PickerService';
 import {
+  CachedModelFileInputState,
   ModelFileCacheResult,
   RuntimeModelFileCacheService,
+  cachedModelFileInputStateForRoute,
   shouldCachePickedModelFileForRoute
 } from '../services/picker/ModelFileCacheService';
 import {
@@ -295,6 +297,7 @@ struct FeatureRuntimePage {
     this.liveCameraPosition = rememberedLiveCameraPositionForWorkflow(workflow);
     this.refreshLiveCameraSwitchAvailability();
     this.applyDefaultPortraitBackgroundIfNeeded();
+    this.restoreCachedModelFileInputsIfNeeded();
     setTimeout(() => this.prepareInitialInputIfNeeded(), 0);
   }
 
@@ -673,6 +676,33 @@ struct FeatureRuntimePage {
     this.modelInputUri = state.modelInputUri;
     this.stylePredictModelInputUri = state.stylePredictModelInputUri;
     this.styleTransferModelInputUri = state.styleTransferModelInputUri;
+  }
+
+  private restoreCachedModelFileInputsIfNeeded(): void {
+    const context = this.uiAbilityContext();
+    if (context === undefined) {
+      return;
+    }
+    const routeName = this.routeName;
+    cachedModelFileInputStateForRoute(routeName, context.cacheDir)
+      .then((state: CachedModelFileInputState) => {
+        if (this.routeName !== routeName) {
+          return;
+        }
+        this.applyCachedModelFileInputState(state);
+      });
+  }
+
+  private applyCachedModelFileInputState(state: CachedModelFileInputState): void {
+    if (this.modelInputUri.length === 0) {
+      this.modelInputUri = state.modelInputUri;
+    }
+    if (this.stylePredictModelInputUri.length === 0) {
+      this.stylePredictModelInputUri = state.stylePredictModelInputUri;
+    }
+    if (this.styleTransferModelInputUri.length === 0) {
+      this.styleTransferModelInputUri = state.styleTransferModelInputUri;
+    }
   }
 
   private runWorkflow(): void {

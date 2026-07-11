@@ -12,6 +12,16 @@ export interface ModelFileCacheResult {
   readonly messageKey: AppStringKey;
 }
 
+export interface CachedModelFileInputState {
+  readonly modelInputUri: string;
+  readonly stylePredictModelInputUri: string;
+  readonly styleTransferModelInputUri: string;
+}
+
+export interface CachedModelFileExistenceChecker {
+  modelFileExists(path: string): Promise<boolean>;
+}
+
 export interface ModelFileCacheWriter {
   writeModelFile(cacheDir: string, fileName: string, content: Uint8Array): Promise<string>;
 }
@@ -143,6 +153,39 @@ export class HarmonyModelFileCacheWriter implements ModelFileCacheWriter {
   }
 }
 
+export class HarmonyCachedModelFileExistenceChecker implements CachedModelFileExistenceChecker {
+  async modelFileExists(path: string): Promise<boolean> {
+    try {
+      const stat = await fileIo.stat(path);
+      return stat.size > 0;
+    } catch (_) {
+      return false;
+    }
+  }
+}
+
+export async function cachedModelFileInputStateForRoute(
+  routeName: string,
+  cacheDir: string,
+  existenceChecker: CachedModelFileExistenceChecker = new HarmonyCachedModelFileExistenceChecker()
+): Promise<CachedModelFileInputState> {
+  return {
+    modelInputUri: await cachedModelFileUriForInputKind(routeName, 'modelFile', cacheDir, existenceChecker),
+    stylePredictModelInputUri: await cachedModelFileUriForInputKind(
+      routeName,
+      'stylePredictModelFile',
+      cacheDir,
+      existenceChecker
+    ),
+    styleTransferModelInputUri: await cachedModelFileUriForInputKind(
+      routeName,
+      'styleTransferModelFile',
+      cacheDir,
+      existenceChecker
+    )
+  };
+}
+
 export function cachedModelFileNameForInputKind(routeName: string, inputKind: FeatureInputKind): string {
   if (inputKind === 'stylePredictModelFile') {
     return 'custom_predict.ms';
@@ -177,6 +220,20 @@ export function modelFileCachePath(cacheDir: string, fileName: string): string {
 
 export function modelFileContentLooksUsable(content: Uint8Array): boolean {
   return content.byteLength > 0;
+}
+
+async function cachedModelFileUriForInputKind(
+  routeName: string,
+  inputKind: FeatureInputKind,
+  cacheDir: string,
+  existenceChecker: CachedModelFileExistenceChecker
+): Promise<string> {
+  const fileName = cachedModelFileNameForInputKind(routeName, inputKind);
+  if (cacheDir.length === 0 || fileName.length === 0) {
+    return '';
+  }
+  const uri = modelFileCachePath(cacheDir, fileName);
+  return await existenceChecker.modelFileExists(uri) ? uri : '';
 }
 
 function modelFileCacheFailedResult(): ModelFileCacheResult {

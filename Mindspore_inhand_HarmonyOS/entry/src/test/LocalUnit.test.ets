@@ -408,6 +408,8 @@ import {
 } from '../main/ets/services/picker/PickerService';
 import {
   BasicModelFileCompatibilityChecker,
+  CachedModelFileExistenceChecker,
+  cachedModelFileInputStateForRoute,
   cachedModelFileNameForInputKind,
   ModelFileCompatibilityChecker,
   ModelFileCompatibilityLoader,
@@ -740,6 +742,18 @@ class RecordingModelFileCacheWriter implements ModelFileCacheWriter {
 class RejectingModelFileCacheWriter implements ModelFileCacheWriter {
   async writeModelFile(_cacheDir: string, _fileName: string, _content: Uint8Array): Promise<string> {
     throw new Error('model cache write failed');
+  }
+}
+
+class FixedCachedModelFileExistenceChecker implements CachedModelFileExistenceChecker {
+  private readonly existingPaths: Array<string>;
+
+  constructor(existingPaths: Array<string>) {
+    this.existingPaths = existingPaths;
+  }
+
+  async modelFileExists(path: string): Promise<boolean> {
+    return this.existingPaths.indexOf(path) >= 0;
   }
 }
 
@@ -7919,6 +7933,19 @@ export default function localUnitTest() {
       expect(cachedModelFileNameForInputKind(AppRoute.CUSTOM_MODEL.name, 'modelFile')).assertEqual('custom_model.ms');
       expect(cachedModelFileNameForInputKind(AppRoute.STYLE_TRANSFER.name, 'stylePredictModelFile')).assertEqual('custom_predict.ms');
       expect(cachedModelFileNameForInputKind(AppRoute.STYLE_TRANSFER.name, 'styleTransferModelFile')).assertEqual('custom_transfer.ms');
+    });
+
+    it('restoresCachedStyleTransferModelOverridesAcrossRuntimeRecreation', 0, async () => {
+      const checker = new FixedCachedModelFileExistenceChecker([
+        '/cache/custom_predict.ms',
+        '/cache/custom_transfer.ms'
+      ]);
+
+      const state = await cachedModelFileInputStateForRoute(AppRoute.STYLE_TRANSFER.name, '/cache', checker);
+
+      expect(state.modelInputUri).assertEqual('');
+      expect(state.stylePredictModelInputUri).assertEqual('/cache/custom_predict.ms');
+      expect(state.styleTransferModelInputUri).assertEqual('/cache/custom_transfer.ms');
     });
 
     it('cachesObjectDetectionPickedModelsInDedicatedCacheSlot', 0, () => {

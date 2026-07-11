@@ -384,6 +384,9 @@ Current HarmonyOS behavior:
   Style Transfer input picks or preset taps so the highlighted input continues
   to match the result being produced, mirroring Android's synchronous locked
   execution path.
+- Cached custom predict/transfer `.ms` model files are restored from the app
+  cache when the runtime page is recreated, matching Android's static
+  custom-model path behavior after `recreate()`.
 - After a styled output is produced, HarmonyOS now shows a localized Recovery
   control that clears only the styled preview and restores the original/content
   preview state.
