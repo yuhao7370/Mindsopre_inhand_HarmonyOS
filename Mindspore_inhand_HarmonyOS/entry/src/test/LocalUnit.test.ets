@@ -296,6 +296,7 @@ import {
   shouldShowResultSaveAction,
   shouldShowLiveGestureCameraOverlay,
   shouldShowLiveObjectDetectionCameraOverlay,
+  shouldShowLivePoseCameraOverlay,
   shouldMirrorSegmentationForeground,
   shouldUseLongTextInput,
   shouldUseLongTextResultRow,
@@ -6568,6 +6569,17 @@ export default function localUnitTest() {
       expect(shouldShowLiveObjectDetectionCameraOverlay(workflowForRoute(AppRoute.GESTURE_LIVE.name)))
         .assertFalse();
       expect(shouldShowLiveObjectDetectionCameraOverlay(undefined))
+        .assertFalse();
+    });
+
+    it('showsPoseSkeletonOnOnlyTheAndroidStyleLiveSkeletonPreview', 0, () => {
+      expect(shouldShowLivePoseCameraOverlay(workflowForRoute(AppRoute.LIVE_SKELETON.name)))
+        .assertTrue();
+      expect(shouldShowLivePoseCameraOverlay(workflowForRoute(AppRoute.POSENET.name)))
+        .assertFalse();
+      expect(shouldShowLivePoseCameraOverlay(workflowForRoute(AppRoute.OBJECT_CAMERA.name)))
+        .assertFalse();
+      expect(shouldShowLivePoseCameraOverlay(undefined))
         .assertFalse();
     });
 

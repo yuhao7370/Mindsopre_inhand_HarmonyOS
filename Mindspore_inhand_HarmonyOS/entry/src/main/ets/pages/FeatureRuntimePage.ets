@@ -23,6 +23,7 @@ import {
   shouldShowCopyTextAction,
   shouldShowLiveGestureCameraOverlay,
   shouldShowLiveObjectDetectionCameraOverlay,
+  shouldShowLivePoseCameraOverlay,
   shouldShowResultSaveAction,
   shouldShowStyleRecoveryControl,
   shouldUseLongTextInput,
@@ -1424,6 +1425,14 @@ struct FeatureRuntimePage {
           ForEach(this.objectDetections, (detection: ObjectDetection, index: number) => {
             this.objectDetectionBox(detection, index)
           }, (detection: ObjectDetection) => `${detection.imageId}-${detection.labelId}-${detection.score}`)
+        }
+        if (this.posePoints.length > 0 && shouldShowLivePoseCameraOverlay(workflowForRoute(this.routeName))) {
+          ForEach(this.poseLines(), (line: PoseLine) => {
+            this.poseLine(line)
+          }, (line: PoseLine) => `${line.start.type}-${line.end.type}-${line.start.x}-${line.start.y}`)
+          ForEach(this.visiblePosePoints(), (point: PosePoint) => {
+            this.posePoint(point)
+          }, (point: PosePoint) => `${point.type}-${point.x}-${point.y}-${point.score}`)
         }
         if (this.visibleGestureDetections().length > 0 &&
           shouldShowLiveGestureCameraOverlay(workflowForRoute(this.routeName))) {

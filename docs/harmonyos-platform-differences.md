@@ -69,6 +69,9 @@ Current HarmonyOS behavior:
 - `/posenet/LiveSkeletonAnalyseActivity` remains the camera-only live route,
   auto-starts preview when the HarmonyOS surface is ready, and keeps the
   Android template similarity display.
+- Live Skeleton detections draw the same skeleton lines and points directly on
+  the HarmonyOS camera preview, matching Android `SkeletonGraphic` overlay
+  behavior while still reusing the shared captured-frame result state.
 
 ## Gesture Recognition
 
