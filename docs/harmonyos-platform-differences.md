@@ -163,6 +163,20 @@ Current HarmonyOS behavior:
   any existing cached Object Detection, Custom Model, or Style Transfer model
   file intact.
 
+## Picker Cancellation
+
+Android image/model selection flows leave the previous preview and result on
+screen when the user opens a picker and cancels it.
+
+Current HarmonyOS behavior:
+
+- Shared image, camera-capture, style-image, and `.ms` model pickers defer
+  clearing runtime results until a new input is actually selected.
+- Canceling those pickers now keeps the previous input URI, result rows, and
+  visual overlay/preview state while showing the localized canceled status.
+- Invalid selected model files still clear stale results and preserve the last
+  compatible cached model, matching the model-override guard above.
+
 ## Runtime Execution Guard
 
 Android still-image model pages such as Style Transfer and Custom Model keep an

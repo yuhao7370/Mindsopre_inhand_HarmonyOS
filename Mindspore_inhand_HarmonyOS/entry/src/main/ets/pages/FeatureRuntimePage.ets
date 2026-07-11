@@ -15,6 +15,7 @@ import {
   runtimeInputKindsForWorkflow,
   sampleImageUriForWorkflow,
   shouldAutoRunStyleTransferAfterStyleReady,
+  shouldDeferRuntimeResultClearUntilPickResult,
   shouldStartWorkflowRun,
   shouldShowStyleRecoveryControl,
   shouldUseLongTextInput,
@@ -24,6 +25,11 @@ import {
   workflowInputReadyAction,
   workflowForRoute
 } from '../features/runtime/FeatureWorkflowCatalog';
+import {
+  FeatureRuntimePickedInputState,
+  runtimePickedInputStateAfterModelCacheFailure,
+  runtimePickedInputStateAfterCancelledPick
+} from '../features/runtime/FeatureRuntimeInputState';
 import {
   AiRunInputs,
   AiRunResult,
@@ -106,7 +112,6 @@ import {
   initialPortraitSegmentationBackgroundState,
   PortraitSegmentationBackgroundPreset,
   PortraitSegmentationBackgroundState,
-  portraitSegmentationBackgroundStateAfterCancelledPick,
   portraitSegmentationBackgroundPresets,
   portraitSegmentationBackgroundUri,
   portraitSegmentationCustomBackgroundId
@@ -229,9 +234,10 @@ struct FeatureRuntimePage {
 
   private prepareInput(inputKind: FeatureInputKind): void {
     this.statusKey = 'feature_runtime_status_preparing';
-    this.resultRows = [];
-    this.resultText = '';
-    this.clearVisualResults();
+    const workflow = workflowForRoute(this.routeName);
+    if (!workflow || !shouldDeferRuntimeResultClearUntilPickResult(workflow, inputKind)) {
+      this.clearRuntimeResultState();
+    }
     const liveCameraInput = this.isLiveCameraInput(inputKind);
     if (liveCameraInput) {
       this.liveCameraInputSelected = true;
@@ -250,7 +256,6 @@ struct FeatureRuntimePage {
       return;
     }
     if (inputKind === 'sampleImage') {
-      const workflow = workflowForRoute(this.routeName);
       const uri = workflow ? sampleImageUriForWorkflow(workflow) : '';
       this.applyPickResult({
         ok: uri.length > 0,
@@ -293,15 +298,9 @@ struct FeatureRuntimePage {
 
   private applyModelFileCacheResult(result: ModelFileCacheResult, inputKind: FeatureInputKind): void {
     if (!result.ok) {
+      this.clearRuntimeResultState();
       this.statusKey = result.messageKey;
-      this.selectedInputSummary = '';
-      if (inputKind === 'modelFile') {
-        this.modelInputUri = '';
-      } else if (inputKind === 'stylePredictModelFile') {
-        this.stylePredictModelInputUri = '';
-      } else if (inputKind === 'styleTransferModelFile') {
-        this.styleTransferModelInputUri = '';
-      }
+      this.applyPickedInputState(runtimePickedInputStateAfterModelCacheFailure(inputKind, this.pickedInputState()));
       return;
     }
     this.applyPickResult({
@@ -457,33 +456,14 @@ struct FeatureRuntimePage {
   ): void {
     if (!result.ok) {
       this.statusKey = 'feature_runtime_pick_cancelled';
-      if (inputKind === 'backgroundImage') {
-        const backgroundState: PortraitSegmentationBackgroundState =
-          portraitSegmentationBackgroundStateAfterCancelledPick(
-            this.routeName,
-            this.backgroundImageUri,
-            this.selectedPortraitBackgroundPresetId
-          );
-        this.backgroundImageUri = backgroundState.backgroundImageUri;
-        this.selectedPortraitBackgroundPresetId = backgroundState.selectedPresetId;
-        return;
-      }
-      this.selectedInputSummary = '';
-      if (inputKind === 'modelFile') {
-        this.modelInputUri = '';
-      } else if (inputKind === 'stylePredictModelFile') {
-        this.stylePredictModelInputUri = '';
-      } else if (inputKind === 'styleTransferModelFile') {
-        this.styleTransferModelInputUri = '';
-      } else if (inputKind === 'contentImage') {
-        this.contentImageUri = '';
-      } else if (inputKind === 'styleImage') {
-        this.styleImageUri = '';
-      } else {
-        this.imageInputUri = '';
-      }
+      this.applyPickedInputState(runtimePickedInputStateAfterCancelledPick(
+        this.routeName,
+        inputKind,
+        this.pickedInputState()
+      ));
       return;
     }
+    this.clearRuntimeResultState();
     this.statusKey = readyKey;
     this.selectedInputSummary = result.uri;
     if (inputKind === 'modelFile') {
@@ -525,6 +505,32 @@ struct FeatureRuntimePage {
       modelUri: this.modelInputUri,
       text: this.userText
     };
+  }
+
+  private pickedInputState(): FeatureRuntimePickedInputState {
+    return {
+      selectedInputSummary: this.selectedInputSummary,
+      imageInputUri: this.imageInputUri,
+      contentImageUri: this.contentImageUri,
+      styleImageUri: this.styleImageUri,
+      backgroundImageUri: this.backgroundImageUri,
+      selectedPortraitBackgroundPresetId: this.selectedPortraitBackgroundPresetId,
+      modelInputUri: this.modelInputUri,
+      stylePredictModelInputUri: this.stylePredictModelInputUri,
+      styleTransferModelInputUri: this.styleTransferModelInputUri
+    };
+  }
+
+  private applyPickedInputState(state: FeatureRuntimePickedInputState): void {
+    this.selectedInputSummary = state.selectedInputSummary;
+    this.imageInputUri = state.imageInputUri;
+    this.contentImageUri = state.contentImageUri;
+    this.styleImageUri = state.styleImageUri;
+    this.backgroundImageUri = state.backgroundImageUri;
+    this.selectedPortraitBackgroundPresetId = state.selectedPortraitBackgroundPresetId;
+    this.modelInputUri = state.modelInputUri;
+    this.stylePredictModelInputUri = state.stylePredictModelInputUri;
+    this.styleTransferModelInputUri = state.styleTransferModelInputUri;
   }
 
   private runWorkflow(): void {
@@ -650,6 +656,12 @@ struct FeatureRuntimePage {
     this.updatePosePreview(result);
     this.updateGesturePreview(result);
     this.updateStyledImagePreview(result);
+  }
+
+  private clearRuntimeResultState(): void {
+    this.resultRows = [];
+    this.resultText = '';
+    this.clearVisualResults();
   }
 
   private clearVisualResults(): void {

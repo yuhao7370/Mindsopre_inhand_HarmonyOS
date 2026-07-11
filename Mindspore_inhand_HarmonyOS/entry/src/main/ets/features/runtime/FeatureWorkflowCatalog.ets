@@ -353,6 +353,16 @@ export function inputKindReplacesPrimaryInput(inputKind: FeatureInputKind): bool
     inputKind !== 'styleTransferModelFile';
 }
 
+export function shouldDeferRuntimeResultClearUntilPickResult(
+  workflow: FeatureWorkflow,
+  inputKind: FeatureInputKind
+): boolean {
+  if (inputKind === 'text' || inputKind === 'sampleImage') {
+    return false;
+  }
+  return inputKind !== 'camera' || !workflow.liveMode;
+}
+
 export function shouldAutoRunWorkflowAfterInputReady(workflow: FeatureWorkflow, inputKind: FeatureInputKind): boolean {
   if (workflow.routeName === AppRoute.OBJECT_PHOTO.name && inputKind === 'photo') {
     return true;

@@ -262,6 +262,7 @@ import {
 import {
   FeatureInputKind,
   FeatureWorkflow,
+  shouldDeferRuntimeResultClearUntilPickResult,
   WorkflowInputReadyAction,
   autoStartInputKindForWorkflow,
   inputKindReplacesPrimaryInput,
@@ -283,6 +284,11 @@ import {
   workflowRunActionKey,
   workflowForRoute
 } from '../main/ets/features/runtime/FeatureWorkflowCatalog';
+import {
+  FeatureRuntimePickedInputState,
+  runtimePickedInputStateAfterModelCacheFailure,
+  runtimePickedInputStateAfterCancelledPick
+} from '../main/ets/features/runtime/FeatureRuntimeInputState';
 import {
   defaultPortraitSegmentationBackgroundPreset,
   defaultPortraitSegmentationBackgroundUri,
@@ -2809,6 +2815,84 @@ export default function localUnitTest() {
       );
       expect(customState.backgroundImageUri).assertEqual('file://album/custom.jpg');
       expect(customState.selectedPresetId).assertEqual(portraitSegmentationCustomBackgroundId);
+    });
+
+    it('defersRuntimeResultClearingUntilCancellablePickerInputsSucceed', 0, () => {
+      const objectPhoto: FeatureWorkflow = workflowForRoute(AppRoute.OBJECT_PHOTO.name)!;
+      expect(shouldDeferRuntimeResultClearUntilPickResult(objectPhoto, 'photo')).assertTrue();
+      expect(shouldDeferRuntimeResultClearUntilPickResult(objectPhoto, 'modelFile')).assertTrue();
+
+      const styleTransfer: FeatureWorkflow = workflowForRoute(AppRoute.STYLE_TRANSFER.name)!;
+      expect(shouldDeferRuntimeResultClearUntilPickResult(styleTransfer, 'contentImage')).assertTrue();
+      expect(shouldDeferRuntimeResultClearUntilPickResult(styleTransfer, 'styleImage')).assertTrue();
+      expect(shouldDeferRuntimeResultClearUntilPickResult(styleTransfer, 'camera')).assertTrue();
+
+      const liveObject: FeatureWorkflow = workflowForRoute(AppRoute.OBJECT_CAMERA.name)!;
+      expect(shouldDeferRuntimeResultClearUntilPickResult(liveObject, 'camera')).assertFalse();
+
+      const textTranslation: FeatureWorkflow = workflowForRoute(AppRoute.TEXT_TRANSLATION.name)!;
+      expect(shouldDeferRuntimeResultClearUntilPickResult(textTranslation, 'text')).assertFalse();
+    });
+
+    it('preservesPickedInputStateWhenNonBackgroundPickIsCancelled', 0, () => {
+      const state: FeatureRuntimePickedInputState = {
+        selectedInputSummary: 'file://album/old-content.jpg',
+        imageInputUri: 'file://album/old-image.jpg',
+        contentImageUri: 'file://album/old-content.jpg',
+        styleImageUri: 'file://album/old-style.jpg',
+        backgroundImageUri: 'file://album/old-background.jpg',
+        selectedPortraitBackgroundPresetId: portraitSegmentationCustomBackgroundId,
+        modelInputUri: 'file://model/custom.ms',
+        stylePredictModelInputUri: 'file://model/predict.ms',
+        styleTransferModelInputUri: 'file://model/transfer.ms'
+      };
+
+      const contentState: FeatureRuntimePickedInputState = runtimePickedInputStateAfterCancelledPick(
+        AppRoute.STYLE_TRANSFER.name,
+        'contentImage',
+        state
+      );
+      expect(contentState.selectedInputSummary).assertEqual('file://album/old-content.jpg');
+      expect(contentState.contentImageUri).assertEqual('file://album/old-content.jpg');
+      expect(contentState.styleImageUri).assertEqual('file://album/old-style.jpg');
+
+      const modelState: FeatureRuntimePickedInputState = runtimePickedInputStateAfterCancelledPick(
+        AppRoute.CUSTOM_MODEL.name,
+        'modelFile',
+        state
+      );
+      expect(modelState.modelInputUri).assertEqual('file://model/custom.ms');
+      expect(modelState.imageInputUri).assertEqual('file://album/old-image.jpg');
+    });
+
+    it('preservesPreviousModelOverrideWhenPickedModelCacheFails', 0, () => {
+      const state: FeatureRuntimePickedInputState = {
+        selectedInputSummary: 'file://model/old-selected.ms',
+        imageInputUri: 'file://album/old-image.jpg',
+        contentImageUri: 'file://album/old-content.jpg',
+        styleImageUri: 'file://album/old-style.jpg',
+        backgroundImageUri: '',
+        selectedPortraitBackgroundPresetId: '',
+        modelInputUri: 'file://cache/object_detection_model.ms',
+        stylePredictModelInputUri: 'file://cache/style_predict_quant.ms',
+        styleTransferModelInputUri: 'file://cache/style_transfer_quant.ms'
+      };
+
+      const objectState: FeatureRuntimePickedInputState = runtimePickedInputStateAfterModelCacheFailure(
+        'modelFile',
+        state
+      );
+      expect(objectState.modelInputUri).assertEqual('file://cache/object_detection_model.ms');
+      expect(objectState.imageInputUri).assertEqual('file://album/old-image.jpg');
+      expect(objectState.selectedInputSummary).assertEqual('');
+
+      const stylePredictState: FeatureRuntimePickedInputState = runtimePickedInputStateAfterModelCacheFailure(
+        'stylePredictModelFile',
+        state
+      );
+      expect(stylePredictState.stylePredictModelInputUri).assertEqual('file://cache/style_predict_quant.ms');
+      expect(stylePredictState.styleTransferModelInputUri).assertEqual('file://cache/style_transfer_quant.ms');
+      expect(stylePredictState.selectedInputSummary).assertEqual('');
     });
 
     it('targetsPortraitBackgroundReplacementPreviewForCompositeSave', 0, () => {
