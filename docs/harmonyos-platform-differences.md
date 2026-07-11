@@ -419,6 +419,9 @@ Current HarmonyOS behavior:
   background selected by default.
 - Canceling the album picker keeps the current built-in or custom background,
   matching Android's `onActivityResult` behavior.
+- Switching to another built-in or custom portrait background preserves the
+  current foreground/result and updates the composite preview background, like
+  Android's separate foreground/background image layers.
 - Segmentation results without a foreground image are treated as failure,
   matching Android's still-image `getForeground() == null` guard instead of
   reporting success with only rectangle metadata.

@@ -10,8 +10,10 @@ import {
   AiRunResult,
   AiRunResultRow,
   DefaultAiService,
+  SegmentationBackgroundMetadata,
   aiRunResultRows,
   copyableTextForAiResult,
+  segmentationMetadataWithBackground,
   sceneDetectionOverlayRows
 } from '../main/ets/services/ai/AiService';
 import { ClipboardService, TextClipboardWriter } from '../main/ets/services/clipboard/ClipboardService';
@@ -296,6 +298,9 @@ import {
   shouldClearTextInputAfterInputReady,
   shouldLeaveRuntimeAfterCancelledInitialPick,
   shouldStartWorkflowRun,
+  shouldPreserveRuntimeResultAfterInputReady,
+  shouldPreserveRuntimeVisualResultOnAiResult,
+  runtimeSegmentationBackgroundImageUri,
   shouldHideTextInputWhenPreparingInput,
   shouldClearRuntimeResultAtWorkflowStart,
   shouldShowCopyTextAction,
@@ -3058,6 +3063,43 @@ export default function localUnitTest() {
       expect(shouldDeferRuntimeResultClearUntilPickResult(textTranslation, 'text')).assertFalse();
     });
 
+    it('preservesPortraitSegmentationResultsWhenOnlyBackgroundInputChanges', 0, () => {
+      const portraitSegmentation: FeatureWorkflow = workflowForRoute(AppRoute.PORTRAIT_SEGMENTATION.name)!;
+      const stillSegmentation: FeatureWorkflow = workflowForRoute(AppRoute.SEGMENTATION_STILL.name)!;
+      const styleTransfer: FeatureWorkflow = workflowForRoute(AppRoute.STYLE_TRANSFER.name)!;
+
+      expect(shouldPreserveRuntimeResultAfterInputReady(portraitSegmentation, 'backgroundImage')).assertTrue();
+      expect(shouldPreserveRuntimeResultAfterInputReady(portraitSegmentation, 'camera')).assertFalse();
+      expect(shouldPreserveRuntimeResultAfterInputReady(stillSegmentation, 'backgroundImage')).assertFalse();
+      expect(shouldPreserveRuntimeResultAfterInputReady(styleTransfer, 'styleImage')).assertFalse();
+
+      expect(shouldPreserveRuntimeVisualResultOnAiResult(portraitSegmentation, true, 'segmentation')).assertTrue();
+      expect(shouldPreserveRuntimeVisualResultOnAiResult(portraitSegmentation, false, 'segmentation')).assertFalse();
+      expect(shouldPreserveRuntimeVisualResultOnAiResult(portraitSegmentation, true, '')).assertFalse();
+      expect(shouldPreserveRuntimeVisualResultOnAiResult(stillSegmentation, true, 'segmentation')).assertFalse();
+    });
+
+    it('usesCurrentPortraitBackgroundWhenApplyingStaleSegmentationResult', 0, () => {
+      const portraitSegmentation: FeatureWorkflow = workflowForRoute(AppRoute.PORTRAIT_SEGMENTATION.name)!;
+      const stillSegmentation: FeatureWorkflow = workflowForRoute(AppRoute.SEGMENTATION_STILL.name)!;
+
+      expect(runtimeSegmentationBackgroundImageUri(
+        portraitSegmentation,
+        'file://album/new-background.jpg',
+        'rawfile://portrait/portrait1.jpg'
+      )).assertEqual('file://album/new-background.jpg');
+      expect(runtimeSegmentationBackgroundImageUri(
+        portraitSegmentation,
+        '',
+        'rawfile://portrait/portrait1.jpg'
+      )).assertEqual('rawfile://portrait/portrait1.jpg');
+      expect(runtimeSegmentationBackgroundImageUri(
+        stillSegmentation,
+        'file://album/new-background.jpg',
+        'rawfile://portrait/portrait1.jpg'
+      )).assertEqual('rawfile://portrait/portrait1.jpg');
+    });
+
     it('preservesPickedInputStateWhenNonBackgroundPickIsCancelled', 0, () => {
       const state: FeatureRuntimePickedInputState = {
         selectedInputSummary: 'file://album/old-content.jpg',
@@ -3873,6 +3915,60 @@ export default function localUnitTest() {
         expect(result.data.result.foregroundImageRgba?.byteLength).assertEqual(4);
       }
       expect(runner.seenImageUris[0]).assertEqual('file://selected/person.jpg');
+    });
+
+    it('updatesPreservedSegmentationBackgroundMetadataWhenPortraitBackgroundChanges', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.PORTRAIT_SEGMENTATION.name);
+      expect(workflow !== undefined).assertTrue();
+      const runner: FixedSegmentationRunner = new FixedSegmentationRunner({
+        ok: true,
+        subjectCount: 1,
+        detailCount: 0,
+        foregroundAvailable: true,
+        foregroundImageRgba: new Uint8Array([255, 0, 0, 255]).buffer as ArrayBuffer,
+        foregroundImageWidth: 1,
+        foregroundImageHeight: 1,
+        rectangles: [{
+          left: 1,
+          top: 2,
+          width: 3,
+          height: 4
+        }],
+        executionMs: 9
+      });
+      const service = new SegmentationService({
+        runner: runner
+      });
+
+      const result: AiRunResult = await new DefaultAiService({ segmentationService: service }).run(workflow!, {
+        imageUri: 'file://selected/person.jpg',
+        backgroundImageUri: 'rawfile://portrait/portrait1.jpg'
+      });
+      const metadata: SegmentationBackgroundMetadata = segmentationMetadataWithBackground(
+        aiRunResultRows(result),
+        result.detailText,
+        'file://album/custom-background.jpg'
+      );
+
+      expect(metadata.rows.filter((row: AiRunResultRow) =>
+        row.labelKey === 'feature_runtime_result_background')[0].value).assertEqual('custom-background.jpg');
+      expect(metadata.rows.filter((row: AiRunResultRow) =>
+        row.value === 'portrait1.jpg').length).assertEqual(0);
+      expect(metadata.detailText.indexOf('background=custom-background.jpg') >= 0).assertTrue();
+      expect(metadata.detailText.indexOf('background=portrait1.jpg')).assertEqual(-1);
+      expect(metadata.detailText.indexOf('[1,2,3,4]') >= 0).assertTrue();
+    });
+
+    it('doesNotUpdateBackgroundMetadataWithoutSuccessfulSegmentationRows', 0, () => {
+      const metadata: SegmentationBackgroundMetadata = segmentationMetadataWithBackground(
+        [],
+        'image=person.jpg\nsubjectCount=1\nforegroundAvailable=false\nbackground=portrait1.jpg',
+        'file://album/custom-background.jpg'
+      );
+
+      expect(metadata.rows.length).assertEqual(0);
+      expect(metadata.detailText.indexOf('background=portrait1.jpg') >= 0).assertTrue();
+      expect(metadata.detailText.indexOf('background=custom-background.jpg')).assertEqual(-1);
     });
 
     it('segmentationServiceTreatsMissingForegroundAsAndroidFailure', 0, async () => {
@@ -6992,6 +7088,8 @@ export default function localUnitTest() {
 
     it('keepsPreviousLiveClassificationLabelUntilNextResultLikeAndroid', 0, () => {
       expect(shouldClearRuntimeResultAtWorkflowStart(workflowForRoute(AppRoute.IMAGE_CAMERA.name)))
+        .assertFalse();
+      expect(shouldClearRuntimeResultAtWorkflowStart(workflowForRoute(AppRoute.PORTRAIT_SEGMENTATION.name)))
         .assertFalse();
       expect(shouldClearRuntimeResultAtWorkflowStart(workflowForRoute(AppRoute.OBJECT_CAMERA.name)))
         .assertTrue();

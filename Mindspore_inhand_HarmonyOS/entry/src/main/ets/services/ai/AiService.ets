@@ -165,6 +165,11 @@ export interface AiRunResultRow {
   readonly valueKey?: AppStringKey;
 }
 
+export interface SegmentationBackgroundMetadata {
+  readonly rows: Array<AiRunResultRow>;
+  readonly detailText: string;
+}
+
 export interface SceneDetectionOverlayRow {
   readonly id: string;
   readonly labelKey: AppStringKey;
@@ -1130,6 +1135,76 @@ export function copyableTextForAiResult(aiMethod: string, rows: Array<AiRunResul
   return '';
 }
 
+export function segmentationMetadataWithBackground(
+  rows: Array<AiRunResultRow>,
+  detailText: string,
+  backgroundImageUri: string
+): SegmentationBackgroundMetadata {
+  if (!hasSegmentationResultRows(rows)) {
+    return {
+      rows: rows,
+      detailText: detailText
+    };
+  }
+  return {
+    rows: segmentationResultRowsWithBackground(rows, backgroundImageUri),
+    detailText: segmentationDetailTextWithBackground(detailText, backgroundImageUri)
+  };
+}
+
+function segmentationResultRowsWithBackground(
+  rows: Array<AiRunResultRow>,
+  backgroundImageUri: string
+): Array<AiRunResultRow> {
+  if (!hasSegmentationResultRows(rows)) {
+    return rows;
+  }
+
+  const backgroundLabelKey: AppStringKey = 'feature_runtime_result_background';
+  const backgroundValue = backgroundImageUri.length > 0 ? runtimePathSegment(backgroundImageUri) : '';
+  const nextRows: Array<AiRunResultRow> = [];
+  let replacedBackground = false;
+  rows.forEach((row: AiRunResultRow) => {
+    if (row.labelKey !== backgroundLabelKey) {
+      nextRows.push(row);
+      return;
+    }
+    replacedBackground = true;
+    if (backgroundValue.length > 0) {
+      nextRows.push(resultRow(backgroundLabelKey, backgroundValue));
+    }
+  });
+  if (!replacedBackground && backgroundValue.length > 0) {
+    nextRows.push(resultRow(backgroundLabelKey, backgroundValue));
+  }
+  return nextRows;
+}
+
+function segmentationDetailTextWithBackground(detailText: string, backgroundImageUri: string): string {
+  if (detailText.indexOf('subjectCount=') < 0) {
+    return detailText;
+  }
+
+  const backgroundLine = backgroundImageUri.length > 0 ? `background=${runtimePathSegment(backgroundImageUri)}` : '';
+  const lines = detailText.split('\n');
+  const nextLines: Array<string> = [];
+  let replacedBackground = false;
+  lines.forEach((line: string) => {
+    if (!line.startsWith('background=')) {
+      nextLines.push(line);
+      return;
+    }
+    replacedBackground = true;
+    if (backgroundLine.length > 0) {
+      nextLines.push(backgroundLine);
+    }
+  });
+  if (!replacedBackground && backgroundLine.length > 0) {
+    nextLines.push(backgroundLine);
+  }
+  return nextLines.join('\n');
+}
+
 function resultRowValue(rows: Array<AiRunResultRow>, labelKey: AppStringKey): string {
   for (let index = 0; index < rows.length; index++) {
     const row = rows[index];
@@ -1138,6 +1213,15 @@ function resultRowValue(rows: Array<AiRunResultRow>, labelKey: AppStringKey): st
     }
   }
   return '';
+}
+
+function hasSegmentationResultRows(rows: Array<AiRunResultRow>): boolean {
+  for (let index = 0; index < rows.length; index++) {
+    if (rows[index].labelKey === 'feature_runtime_result_subjects') {
+      return true;
+    }
+  }
+  return false;
 }
 
 function runtimePathSegment(uri: string): string {

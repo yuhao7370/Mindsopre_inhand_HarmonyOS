@@ -420,7 +420,8 @@ export function shouldShowLiveClassificationCameraOverlay(workflow: FeatureWorkf
 }
 
 export function shouldClearRuntimeResultAtWorkflowStart(workflow: FeatureWorkflow | undefined): boolean {
-  return !shouldShowLiveClassificationCameraOverlay(workflow);
+  return !shouldShowLiveClassificationCameraOverlay(workflow) &&
+    workflow?.routeName !== AppRoute.PORTRAIT_SEGMENTATION.name;
 }
 
 export function shouldMirrorSegmentationForeground(
@@ -446,6 +447,35 @@ export function shouldDeferRuntimeResultClearUntilPickResult(
     return false;
   }
   return inputKind !== 'camera' || !workflow.liveMode;
+}
+
+export function shouldPreserveRuntimeResultAfterInputReady(
+  workflow: FeatureWorkflow | undefined,
+  inputKind: FeatureInputKind
+): boolean {
+  return workflow?.routeName === AppRoute.PORTRAIT_SEGMENTATION.name &&
+    inputKind === 'backgroundImage';
+}
+
+export function shouldPreserveRuntimeVisualResultOnAiResult(
+  workflow: FeatureWorkflow | undefined,
+  resultOk: boolean,
+  dataKind: string
+): boolean {
+  return workflow?.routeName === AppRoute.PORTRAIT_SEGMENTATION.name &&
+    resultOk &&
+    dataKind === 'segmentation';
+}
+
+export function runtimeSegmentationBackgroundImageUri(
+  workflow: FeatureWorkflow | undefined,
+  currentBackgroundImageUri: string,
+  resultBackgroundImageUri: string
+): string {
+  if (workflow?.routeName === AppRoute.PORTRAIT_SEGMENTATION.name && currentBackgroundImageUri.length > 0) {
+    return currentBackgroundImageUri;
+  }
+  return resultBackgroundImageUri;
 }
 
 export function shouldLeaveRuntimeAfterCancelledInitialPick(

@@ -17,6 +17,9 @@ import {
   shouldAutoRunStyleTransferAfterStyleReady,
   shouldDeferRuntimeResultClearUntilPickResult,
   shouldLeaveRuntimeAfterCancelledInitialPick,
+  shouldPreserveRuntimeResultAfterInputReady,
+  shouldPreserveRuntimeVisualResultOnAiResult,
+  runtimeSegmentationBackgroundImageUri,
   shouldStartWorkflowRun,
   shouldHideTextInputWhenPreparingInput,
   shouldClearRuntimeResultAtWorkflowStart,
@@ -49,8 +52,10 @@ import {
   AiRunResultRow,
   DefaultAiService,
   SceneDetectionOverlayRow,
+  SegmentationBackgroundMetadata,
   aiRunResultRows,
   copyableTextForAiResult,
+  segmentationMetadataWithBackground,
   sceneDetectionOverlayRows
 } from '../services/ai/AiService';
 import { cachedRuntimeAiServiceForHarmonyResourceManager } from '../services/ai/ImageClassificationRuntimeFactory';
@@ -556,8 +561,10 @@ struct FeatureRuntimePage {
       }
       return;
     }
-    this.clearRuntimeResultState();
     const workflow = workflowForRoute(this.routeName);
+    if (!shouldPreserveRuntimeResultAfterInputReady(workflow, inputKind)) {
+      this.clearRuntimeResultState();
+    }
     this.statusKey = workflow ?
       styleTransferStyleReadyStatusKey(workflow, inputKind, this.styleTransferContentInputReady(), readyKey) :
       readyKey;
@@ -573,8 +580,7 @@ struct FeatureRuntimePage {
     } else if (inputKind === 'styleImage') {
       this.styleImageUri = result.uri;
     } else if (inputKind === 'backgroundImage') {
-      this.backgroundImageUri = result.uri;
-      this.selectedPortraitBackgroundPresetId = portraitSegmentationCustomBackgroundId;
+      this.applyPortraitBackgroundUri(result.uri, portraitSegmentationCustomBackgroundId);
     } else {
       this.imageInputUri = result.uri;
     }
@@ -677,8 +683,8 @@ struct FeatureRuntimePage {
       return;
     }
     this.statusKey = 'feature_runtime_status_preparing';
-    this.resultText = '';
     if (shouldClearRuntimeResultAtWorkflowStart(workflow)) {
+      this.resultText = '';
       this.resultRows = [];
       this.clearVisualResults();
     }
@@ -747,7 +753,9 @@ struct FeatureRuntimePage {
     this.statusKey = result.messageKey;
     this.resultText = result.detailText;
     this.resultRows = aiRunResultRows(result);
-    this.clearVisualResults();
+    if (!this.shouldPreserveVisualResultsOnAiResult(result)) {
+      this.clearVisualResults();
+    }
     this.updateObjectDetectionPreview(result);
     this.updateSegmentationPreview(result);
     this.updatePosePreview(result);
@@ -760,6 +768,11 @@ struct FeatureRuntimePage {
     this.resultRows = [];
     this.resultText = '';
     this.clearVisualResults();
+  }
+
+  private shouldPreserveVisualResultsOnAiResult(result: AiRunResult): boolean {
+    const dataKind = result.data?.kind ?? '';
+    return shouldPreserveRuntimeVisualResultOnAiResult(workflowForRoute(this.routeName), result.ok, dataKind);
   }
 
   private clearVisualResults(): void {
@@ -811,8 +824,17 @@ struct FeatureRuntimePage {
 
     this.segmentationImageUri = data.imageUri;
     this.updateSegmentationImageOrientation(data.imageUri);
-    this.segmentationBackgroundImageUri = data.backgroundImageUri;
-    this.updateSegmentationBackgroundImageOrientation(data.backgroundImageUri);
+    const backgroundImageUri = runtimeSegmentationBackgroundImageUri(
+      workflowForRoute(this.routeName),
+      this.backgroundImageUri,
+      data.backgroundImageUri
+    );
+    this.segmentationBackgroundImageUri = backgroundImageUri;
+    this.updateSegmentationBackgroundImageOrientation(backgroundImageUri);
+    const metadata: SegmentationBackgroundMetadata =
+      segmentationMetadataWithBackground(this.resultRows, this.resultText, backgroundImageUri);
+    this.resultRows = metadata.rows;
+    this.resultText = metadata.detailText;
     this.segmentationRectangles = data.result.rectangles;
     this.segmentationImageWidth = data.result.imageWidth ?? this.segmentationSourceWidth(data.result.rectangles);
     this.segmentationImageHeight = data.result.imageHeight ?? this.segmentationSourceHeight(data.result.rectangles);
@@ -1138,13 +1160,20 @@ struct FeatureRuntimePage {
   }
 
   private selectPortraitBackgroundPreset(preset: PortraitSegmentationBackgroundPreset): void {
-    this.backgroundImageUri = portraitSegmentationBackgroundUri(preset);
-    this.selectedPortraitBackgroundPresetId = preset.id;
+    this.applyPortraitBackgroundUri(portraitSegmentationBackgroundUri(preset), preset.id);
     this.selectedInputSummary = preset.rawfilePath;
     this.statusKey = 'feature_runtime_image_ready';
-    this.resultRows = [];
-    this.resultText = '';
-    this.clearVisualResults();
+  }
+
+  private applyPortraitBackgroundUri(uri: string, presetId: string): void {
+    this.backgroundImageUri = uri;
+    this.selectedPortraitBackgroundPresetId = presetId;
+    this.segmentationBackgroundImageUri = uri;
+    this.updateSegmentationBackgroundImageOrientation(uri);
+    const metadata: SegmentationBackgroundMetadata =
+      segmentationMetadataWithBackground(this.resultRows, this.resultText, uri);
+    this.resultRows = metadata.rows;
+    this.resultText = metadata.detailText;
   }
 
   private lastPathSegment(uri: string): string {
