@@ -37,6 +37,23 @@ export interface GestureRunner {
   detectGesture(imageUri: string): Promise<GestureResult>;
 }
 
+export interface AndroidGestureModelDetection {
+  readonly category: number;
+  readonly score: number;
+  readonly rect?: GestureRectangle;
+}
+
+export interface AndroidGestureModelResult {
+  readonly gestures: Array<AndroidGestureModelDetection>;
+  readonly imageWidth?: number;
+  readonly imageHeight?: number;
+  readonly executionMs?: number;
+}
+
+export interface AndroidGestureModelDetector {
+  detectAndroidGestures(imageUri: string): Promise<AndroidGestureModelResult>;
+}
+
 export interface GestureRegionEstimate {
   readonly rect: GestureRectangle;
   readonly imageWidth: number;
@@ -168,6 +185,35 @@ export class ImageClassificationGestureRunner implements GestureRunner {
       return await this.regionEstimator.estimateRegion(imageUri);
     } catch (_) {
       return undefined;
+    }
+  }
+}
+
+export class AndroidGestureModelRunner implements GestureRunner {
+  private readonly detector: AndroidGestureModelDetector;
+
+  constructor(detector: AndroidGestureModelDetector) {
+    this.detector = detector;
+  }
+
+  async detectGesture(imageUri: string): Promise<GestureResult> {
+    const startMs = Date.now();
+    try {
+      const modelResult = await this.detector.detectAndroidGestures(imageUri);
+      const gestures = androidGestureModelDetections(modelResult.gestures);
+      return {
+        ok: gestures.length > 0,
+        gestures: gestures,
+        imageWidth: modelResult.imageWidth,
+        imageHeight: modelResult.imageHeight,
+        executionMs: modelResult.executionMs ?? Date.now() - startMs
+      };
+    } catch (_) {
+      return {
+        ok: false,
+        gestures: [],
+        executionMs: Date.now() - startMs
+      };
     }
   }
 }
@@ -334,6 +380,30 @@ export function topLocalGestureDetections(
     }
   }
   return gestures;
+}
+
+function androidGestureModelDetections(
+  detections: Array<AndroidGestureModelDetection>
+): Array<GestureDetection> {
+  const gestures: Array<GestureDetection> = [];
+  for (let index = 0; index < detections.length; index++) {
+    const detection = detections[index];
+    const category = androidGestureModelCategory(detection.category);
+    gestures.push({
+      category: category,
+      label: androidGestureLabel(category),
+      score: detection.score,
+      rect: detection.rect
+    });
+  }
+  return gestures;
+}
+
+function androidGestureModelCategory(category: number): number {
+  if (category >= 0 && category <= 13) {
+    return category;
+  }
+  return localOtherGestureCategory;
 }
 
 export function gestureRectangleFromRgbaForeground(

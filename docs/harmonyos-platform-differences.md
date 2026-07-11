@@ -121,6 +121,10 @@ Current HarmonyOS behavior:
   Android gesture categories per run, preserving the score threshold and
   category de-duplication while moving closer to Android's multi-gesture
   overlay behavior.
+- A dedicated `AndroidGestureModelRunner` adapter now defines the future local
+  model contract for Android `MLGesture`-style category, score, and optional
+  rectangle output. This keeps the service/UI boundary ready for a real
+  HarmonyOS gesture model without changing the current fallback behavior.
 - The gesture fallback intentionally keeps English ImageNet labels internally
   even on Chinese devices, because its conservative matching depends on stable
   model label names.

@@ -62,6 +62,10 @@ import {
 } from '../main/ets/services/ai/PoseService';
 import {
   GestureDetection,
+  AndroidGestureModelDetection,
+  AndroidGestureModelDetector,
+  AndroidGestureModelRunner,
+  AndroidGestureModelResult,
   GestureRectangle,
   GestureRectanglePercent,
   GestureResult,
@@ -1447,6 +1451,26 @@ class FixedGestureRunner implements GestureRunner {
 class RejectingGestureRunner implements GestureRunner {
   async detectGesture(_imageUri: string): Promise<GestureResult> {
     throw new Error('gesture detection failed');
+  }
+}
+
+class FixedAndroidGestureModelDetector implements AndroidGestureModelDetector {
+  readonly seenImageUris: Array<string> = [];
+  private readonly result: AndroidGestureModelResult;
+
+  constructor(result: AndroidGestureModelResult) {
+    this.result = result;
+  }
+
+  async detectAndroidGestures(imageUri: string): Promise<AndroidGestureModelResult> {
+    this.seenImageUris.push(imageUri);
+    return this.result;
+  }
+}
+
+class RejectingAndroidGestureModelDetector implements AndroidGestureModelDetector {
+  async detectAndroidGestures(_imageUri: string): Promise<AndroidGestureModelResult> {
+    throw new Error('android gesture model failed');
   }
 }
 
@@ -4808,6 +4832,53 @@ export default function localUnitTest() {
       expect(gestureDetectionLabelKey(custom) === undefined).assertTrue();
       expect(gestureDetectionLabel(mismatchedAlias)).assertEqual('Closed_Fist');
       expect(gestureDetectionLabelKey(mismatchedAlias) === undefined).assertTrue();
+    });
+
+    it('androidGestureModelRunnerNormalizesRawModelOutputToAndroidGestureDetections', 0, async () => {
+      const thumbUp: AndroidGestureModelDetection = {
+        category: 11,
+        score: 0.91,
+        rect: {
+          left: 3,
+          top: 5,
+          width: 31,
+          height: 37
+        }
+      };
+      const unknown: AndroidGestureModelDetection = {
+        category: 99,
+        score: 0.5
+      };
+      const detector = new FixedAndroidGestureModelDetector({
+        gestures: [thumbUp, unknown],
+        imageWidth: 120,
+        imageHeight: 90,
+        executionMs: 17
+      });
+
+      const result = await new AndroidGestureModelRunner(detector).detectGesture('file://selected/hand.jpg');
+
+      expect(result.ok).assertTrue();
+      expect(result.imageWidth).assertEqual(120);
+      expect(result.imageHeight).assertEqual(90);
+      expect(result.executionMs).assertEqual(17);
+      expect(result.gestures.length).assertEqual(2);
+      expect(result.gestures[0].category).assertEqual(11);
+      expect(result.gestures[0].label).assertEqual('Thumb up');
+      expect(result.gestures[0].score.toFixed(2)).assertEqual('0.91');
+      expect(result.gestures[0].rect?.left).assertEqual(3);
+      expect(result.gestures[1].category).assertEqual(14);
+      expect(result.gestures[1].label).assertEqual('Other gesture');
+      expect(detector.seenImageUris[0]).assertEqual('file://selected/hand.jpg');
+    });
+
+    it('androidGestureModelRunnerFailsSafelyWhenDetectorThrows', 0, async () => {
+      const result = await new AndroidGestureModelRunner(
+        new RejectingAndroidGestureModelDetector()
+      ).detectGesture('file://selected/hand.jpg');
+
+      expect(result.ok).assertFalse();
+      expect(result.gestures.length).assertEqual(0);
     });
 
     it('mapsGestureRectangleToPercentOverlay', 0, () => {
