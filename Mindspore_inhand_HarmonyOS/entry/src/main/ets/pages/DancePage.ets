@@ -27,8 +27,14 @@ import {
   danceCountdownStepMs,
   danceReferenceVideoCanStartLive,
   danceReferenceVideoPlayerPreparedAfterCacheResult,
+  danceResultActionButtonHeightPx,
+  danceResultActionButtonWidthPx,
+  danceResultBackButtonHeightPx,
+  danceResultBackButtonWidthPx,
   danceResultComponentId,
+  danceResultPlayAgainLabelKey,
   danceResultScoreLabelKey,
+  danceResultBackgroundHeightPx,
   danceSamplingCompletionStatusKey,
   danceSamplingPageState,
   danceResultMessageKey,
@@ -706,110 +712,104 @@ struct DancePage {
 
   @Builder
   resultPanel() {
-    Column() {
+    Stack({ alignContent: Alignment.TopStart }) {
       Column() {
-        Text(appString('dance_result_title'))
-          .fontSize(16)
-          .fontWeight(FontWeight.Bold)
-          .fontColor(AppColor.textPrimary)
-        if (this.scoreText.length > 0) {
-          Row() {
+        Column() {
+          if (this.scoreText.length > 0) {
+            Row() {
+              Text(appString(this.scoreLabelKey))
+                .fontSize(24)
+                .fontWeight(FontWeight.Bold)
+                .fontColor('#FF40ADFF')
+                .textAlign(TextAlign.End)
+                .lineHeight(32)
+                .maxLines(2)
+                .layoutWeight(1)
+              Text(this.scoreText)
+                .fontSize(24)
+                .fontWeight(FontWeight.Bold)
+                .fontColor('#FF40ADFF')
+                .lineHeight(32)
+                .flexShrink(0)
+            }
+            .width('100%')
+            .alignItems(VerticalAlign.Center)
+          } else {
             Text(appString(this.scoreLabelKey))
               .fontSize(24)
               .fontWeight(FontWeight.Bold)
-              .fontColor(AppColor.accent)
-              .textAlign(TextAlign.End)
+              .fontColor('#FF40ADFF')
+              .textAlign(TextAlign.Center)
               .lineHeight(32)
+              .width('100%')
               .maxLines(2)
-              .layoutWeight(1)
-            Text(this.scoreText)
-              .fontSize(24)
-              .fontWeight(FontWeight.Bold)
-              .fontColor(AppColor.accent)
-              .lineHeight(32)
-              .flexShrink(0)
           }
-          .width('100%')
-          .alignItems(VerticalAlign.Center)
-          .margin({ top: AppSpacing.sm })
-        } else {
-          Text(appString(this.scoreLabelKey))
-            .fontSize(24)
-            .fontWeight(FontWeight.Bold)
-            .fontColor(AppColor.accent)
-            .textAlign(TextAlign.Center)
-            .lineHeight(32)
-            .width('100%')
-            .maxLines(2)
-            .margin({ top: AppSpacing.sm })
-        }
-        if (this.resultMessageKey !== 'empty') {
-          Text(appString(this.resultMessageKey))
-            .fontSize(16)
-            .fontColor(AppColor.textPrimary)
-            .textAlign(TextAlign.Center)
-            .lineHeight(24)
-            .margin({ top: AppSpacing.sm })
-        }
-        if (this.samplingSummaryText.length > 0) {
-          Row() {
-            Text(appString('dance_sampling_frames'))
-              .fontSize(13)
-              .fontColor(AppColor.textSecondary)
-            Text(this.samplingSummaryText)
-              .fontSize(13)
-              .fontColor(AppColor.textPrimary)
-              .fontWeight(FontWeight.Medium)
-              .margin({ left: AppSpacing.sm })
+          if (this.resultMessageKey !== 'empty') {
+            Text(appString(this.resultMessageKey))
+              .fontSize(20)
+              .fontColor('#FF40ADFF')
+              .textAlign(TextAlign.Center)
+              .lineHeight(28)
+              .margin({ top: AppSpacing.md })
           }
-          .margin({ top: AppSpacing.sm })
         }
-      }
-      .id(danceResultComponentId)
-      .width('100%')
-      .padding(AppSpacing.xl)
-      .backgroundColor(AppColor.cardBackground)
-      .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
-      Button(appString(this.liveSamplingButtonKey()))
         .width('100%')
-        .height(40)
-        .margin({ top: AppSpacing.lg })
-        .enabled(this.liveSamplingActionEnabled())
-        .onClick(() => this.runLiveSampling())
-      Button(appString('dance_start_demo'))
-        .width('100%')
-        .height(40)
-        .margin({ top: AppSpacing.sm })
-        .onClick(() => this.runTemplateDemo())
-      Button(appString('dance_reset'))
-        .width('100%')
-        .height(40)
-        .margin({ top: AppSpacing.sm })
-        .backgroundColor(AppColor.cardBackground)
-        .fontColor(AppColor.accent)
-        .border({ width: 1, color: AppColor.accent, radius: AppRadius.button })
-        .onClick(() => this.reset())
-      Row() {
-        SaveButton({
-          icon: SaveIconStyle.FULL_FILLED,
-          text: SaveDescription.SAVE_IMAGE,
-          buttonType: ButtonType.Capsule
-        })
-          .width('100%')
-          .height(40)
-          .onClick((_event: ClickEvent, result: SaveButtonOnClickResult) => {
-            if (result === SaveButtonOnClickResult.SUCCESS) {
-              this.saveDanceResult();
-              return;
-            }
-            this.statusKey = 'feature_runtime_save_image_failed';
-          })
+        .padding({ left: AppSpacing.xl, right: AppSpacing.xl })
+        .margin({ top: 138 })
+        Blank()
+          .layoutWeight(1)
+        this.danceResultSaveButton()
+        this.danceResultPlayAgainButton()
       }
       .width('100%')
-      .margin({ top: AppSpacing.sm })
+      .height('100%')
+      .alignItems(HorizontalAlign.Center)
+      .padding({ bottom: AppSpacing.xl })
+      Image($r('app.media.dance_result_back'))
+        .width(danceResultBackButtonWidthPx / 2)
+        .height(danceResultBackButtonHeightPx / 2)
+        .objectFit(ImageFit.Fill)
+        .margin({ left: AppSpacing.md, top: AppSpacing.md })
+        .onClick(() => router.back())
     }
+    .id(danceResultComponentId)
     .width('100%')
+    .height(danceResultBackgroundHeightPx / 2)
+    .backgroundImage($r('app.media.dance_result_bk'))
+    .backgroundImageSize(ImageSize.Cover)
+    .clip(true)
     .margin({ top: AppSpacing.lg })
+  }
+
+  @Builder
+  danceResultSaveButton() {
+    SaveButton({
+      icon: SaveIconStyle.FULL_FILLED,
+      text: SaveDescription.SAVE_IMAGE,
+      buttonType: ButtonType.Capsule
+    })
+      .width(danceResultActionButtonWidthPx / 2)
+      .height(danceResultActionButtonHeightPx / 2)
+      .onClick((_event: ClickEvent, result: SaveButtonOnClickResult) => {
+        if (result === SaveButtonOnClickResult.SUCCESS) {
+          this.saveDanceResult();
+          return;
+        }
+        this.statusKey = 'feature_runtime_save_image_failed';
+      })
+  }
+
+  @Builder
+  danceResultPlayAgainButton() {
+    Button(appString(danceResultPlayAgainLabelKey), { type: ButtonType.Capsule })
+      .width(danceResultActionButtonWidthPx / 2)
+      .height(danceResultActionButtonHeightPx / 2)
+      .margin({ top: AppSpacing.lg })
+      .backgroundColor('#FFF8C04A')
+      .fontColor('#FF7A3E00')
+      .fontSize(20)
+      .fontWeight(FontWeight.Bold)
+      .onClick(() => this.reset())
   }
 
   build() {
