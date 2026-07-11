@@ -50,6 +50,46 @@ foreach ($englishKey in @('main_tab_title_one', 'title_image', 'feature_runtime_
   }
 }
 
+function Decode-Utf8Base64([string] $encoded) {
+  return [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($encoded))
+}
+
+$visibleAndroidZhStringExpectations = @{
+  experience_head_title = (Decode-Utf8Base64 '5L2T6aqM5Lit5b+D')
+  experience_head_subtitle = (Decode-Utf8Base64 '5paw5LiA5Luj5YWo5Zy65pmvQUnorqHnrpfmoYbmnrbvvIzpgoDmgqjpqazkuIrkvZPpqow=')
+  title_pose_net = (Decode-Utf8Base64 '6aqo6aq85qOA5rWL')
+  college_cloud_title = (Decode-Utf8Base64 'MeWwj+aXtuS9k+mqjOerr+S6keWNj+WQjOWFqOa1geeoi+W8gOWPkQ==')
+  college_train_title = (Decode-Utf8Base64 '6K6t57uD5qih5Z6L')
+  college_execute_title = (Decode-Utf8Base64 '5omn6KGM5o6o55CG')
+  college_app_title = (Decode-Utf8Base64 '56uv5L6n5bqU55So')
+  college_video_title = (Decode-Utf8Base64 '5Y+C6ICD6KeG6aKR')
+}
+
+$visibleAndroidStringExpectations = @{
+  base = $visibleAndroidZhStringExpectations
+  zh_CN = $visibleAndroidZhStringExpectations
+  en_US = @{
+    experience_head_title = 'Experience Center'
+    experience_head_subtitle = 'Invite you to explore a new generation of ALL-Scenario AI Computing Framework'
+    title_pose_net = 'PoseNet'
+    college_cloud_title = 'A One-Hour Trip to MindSpore'
+    college_train_title = 'Train'
+    college_execute_title = 'Inference'
+    college_app_title = 'Applications'
+    college_video_title = 'Video'
+  }
+}
+
+foreach ($locale in $visibleAndroidStringExpectations.Keys) {
+  $localeValues = $valueTables[$locale]
+  foreach ($key in $visibleAndroidStringExpectations[$locale].Keys) {
+    $expectedValue = $visibleAndroidStringExpectations[$locale][$key]
+    if ($localeValues[$key] -ne $expectedValue) {
+      throw "Visible Android string parity mismatch for ${locale}:$key. Expected '$expectedValue', got '$($localeValues[$key])'"
+    }
+  }
+}
+
 $appStringsPath = Join-Path $root 'entry/src/main/ets/common/i18n/AppStrings.ets'
 $appStringsSource = Get-Content -Raw -Encoding UTF8 -LiteralPath $appStringsPath
 
