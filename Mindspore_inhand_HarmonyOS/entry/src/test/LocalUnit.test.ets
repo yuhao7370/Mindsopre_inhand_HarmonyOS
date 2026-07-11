@@ -6793,6 +6793,34 @@ export default function localUnitTest() {
       expect(segmentationFailure.translatedText).assertEqual('Image segmentation failed, try another image');
     });
 
+    it('localTextTranslationCoversAndroidHmsShortActionCopy', 0, async () => {
+      const runner = new LocalTextTranslationRunner();
+
+      const detect = await runner.translate('\u68C0\u6D4B', 'en');
+      expect(detect.ok).assertTrue();
+      expect(detect.translatedText).assertEqual('detect');
+
+      const video = await runner.translate('video', 'zh');
+      expect(video.ok).assertTrue();
+      expect(video.translatedText).assertEqual('\u89C6\u9891');
+
+      const copy = await runner.translate('\u590D\u5236', 'en');
+      expect(copy.ok).assertTrue();
+      expect(copy.translatedText).assertEqual('copy');
+
+      const save = await runner.translate('SAVE', 'zh');
+      expect(save.ok).assertTrue();
+      expect(save.translatedText).assertEqual('\u4FDD\u5B58');
+
+      const copied = await runner.translate('Copied successfully', 'zh');
+      expect(copied.ok).assertTrue();
+      expect(copied.translatedText).assertEqual('\u590D\u5236\u6210\u529F');
+
+      const saved = await runner.translate('\u4FDD\u5B58\u6210\u529F', 'en');
+      expect(saved.ok).assertTrue();
+      expect(saved.translatedText).assertEqual('Save success');
+    });
+
     it('runtimeFactoryLocalFallbackFailsUnknownTranslationHonestly', 0, async () => {
       const workflow = workflowForRoute(AppRoute.TEXT_TRANSLATION.name);
       expect(workflow !== undefined).assertTrue();
