@@ -3699,6 +3699,26 @@ export default function localUnitTest() {
           '\u672C\u9875\u63D0\u4F9B\u672C\u5730\u5B66\u4E60\u5165\u53E3\uFF0C\u5E76\u901A\u8FC7\u7F51\u9875\u6253\u5F00\u5916\u90E8\u8D44\u6E90');
     });
 
+    it('localTextTranslationRunnerCoversMainShellAndSectionCopyOffline', 0, async () => {
+      const runner = new LocalTextTranslationRunner();
+
+      const englishResult = await runner.translate(
+        'Experience\nComputer Vision\nSpeech Semantic Technology\nCollege\nMe',
+        'zh'
+      );
+      expect(englishResult.ok).assertTrue();
+      expect(englishResult.translatedText)
+        .assertEqual('\u4F53\u9A8C\n\u89C6\u89C9\u56FE\u50CF\u6280\u672F\n\u8BED\u97F3\u8BED\u4E49\u6280\u672F\n\u5B66\u9662\n\u6211\u7684');
+
+      const chineseResult = await runner.translate(
+        '\u4F53\u9A8C\n\u89C6\u89C9\u56FE\u50CF\u6280\u672F\n\u8BED\u97F3\u8BED\u4E49\u6280\u672F\n\u5B66\u9662\n\u6211\u7684',
+        'en'
+      );
+      expect(chineseResult.ok).assertTrue();
+      expect(chineseResult.translatedText)
+        .assertEqual('experience\ncomputer vision\nspeech semantic technology\ncollege\nme');
+    });
+
     it('segmentationRequiresImageInputWhenServiceIsProvided', 0, async () => {
       const workflow = workflowForRoute(AppRoute.PORTRAIT_SEGMENTATION.name);
       expect(workflow !== undefined).assertTrue();

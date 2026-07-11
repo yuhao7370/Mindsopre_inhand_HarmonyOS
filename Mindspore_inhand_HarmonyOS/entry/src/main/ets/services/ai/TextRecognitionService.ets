@@ -113,6 +113,11 @@ interface LocalTranslationPhrase {
 
 const localChineseToEnglishPhrases: Array<LocalTranslationPhrase> = [
   { source: 'MindSpore \u638C\u4E2D\u5B9D', target: 'MindSpore Inhand' },
+  { source: '\u4F53\u9A8C', target: 'experience' },
+  { source: '\u89C6\u89C9\u56FE\u50CF\u6280\u672F', target: 'computer vision' },
+  { source: '\u8BED\u97F3\u8BED\u4E49\u6280\u672F', target: 'speech semantic technology' },
+  { source: '\u5B66\u9662', target: 'college' },
+  { source: '\u6211\u7684', target: 'me' },
   {
     source: 'HarmonyOS \u7248 AI \u793A\u4F8B\u5DF2\u5C31\u7EEA',
     target: 'AI demos ready for the HarmonyOS shell'
@@ -166,6 +171,11 @@ const localChineseToEnglishPhrases: Array<LocalTranslationPhrase> = [
 
 const localEnglishToChinesePhrases: Array<LocalTranslationPhrase> = [
   { source: 'mindspore inhand', target: 'MindSpore \u638C\u4E2D\u5B9D' },
+  { source: 'experience', target: '\u4F53\u9A8C' },
+  { source: 'computer vision', target: '\u89C6\u89C9\u56FE\u50CF\u6280\u672F' },
+  { source: 'speech semantic technology', target: '\u8BED\u97F3\u8BED\u4E49\u6280\u672F' },
+  { source: 'college', target: '\u5B66\u9662' },
+  { source: 'me', target: '\u6211\u7684' },
   {
     source: 'ai demos ready for the harmonyos shell',
     target: 'HarmonyOS \u7248 AI \u793A\u4F8B\u5DF2\u5C31\u7EEA'
