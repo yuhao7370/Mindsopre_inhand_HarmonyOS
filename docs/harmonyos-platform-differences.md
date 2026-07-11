@@ -322,7 +322,8 @@ Current HarmonyOS behavior:
   `snowfield`/`ski_slope`/`mountain_snowy`, and
   `market`/`bazaar`/`flea_market`. It also covers direct Places365 scene
   aliases such as `heliport`, `boat_deck`, `lighthouse`, `glacier`/`iceberg`,
-  `canyon`, and `lobby`.
+  `canyon`, `lobby`, `parking_lot`/`parking_garage`, `farm`/`field`/`lawn`,
+  and `house`/`cottage`/`mansion`.
 - Scene result display labels now use a recovered/readable Android-equivalent
   Chinese scene label table on Chinese locales while keeping the internal
   English/Places365 labels stable for mapping.

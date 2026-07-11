@@ -88,6 +88,7 @@ const places365SceneLabelAliasMaps: Array<SceneLabelAliasMap> = [
   { sceneLabel: 'bowlingalley', aliases: ['bowling_alley'] },
   { sceneLabel: 'bar', aliases: ['beer_garden', 'beer_hall', 'pub', 'wet_bar'] },
   { sceneLabel: 'bridge', aliases: ['aqueduct', 'rope_bridge'] },
+  { sceneLabel: 'car', aliases: ['garage', 'parking_garage', 'parking_lot'] },
   { sceneLabel: 'carinside', aliases: ['car_interior'] },
   { sceneLabel: 'cathedralhall', aliases: ['church'] },
   { sceneLabel: 'classroom', aliases: ['art_school', 'kindergarden_classroom', 'lecture_room', 'schoolhouse'] },
@@ -98,7 +99,7 @@ const places365SceneLabelAliasMaps: Array<SceneLabelAliasMap> = [
   { sceneLabel: 'flower', aliases: ['florist_shop'] },
   { sceneLabel: 'footballfield', aliases: ['football_field', 'soccer_field'] },
   { sceneLabel: 'food', aliases: ['bakery', 'ice_cream_parlor'] },
-  { sceneLabel: 'greenplant', aliases: ['bamboo_forest', 'botanical_garden', 'corn_field', 'forest', 'forest_path', 'forest_road', 'formal_garden', 'greenhouse', 'hayfield', 'japanese_garden', 'orchard', 'rainforest', 'roof_garden', 'topiary_garden', 'tree_farm', 'vegetable_garden', 'vineyard', 'zen_garden'] },
+  { sceneLabel: 'greenplant', aliases: ['bamboo_forest', 'botanical_garden', 'corn_field', 'farm', 'field', 'forest', 'forest_path', 'forest_road', 'formal_garden', 'greenhouse', 'hayfield', 'japanese_garden', 'lawn', 'orchard', 'rainforest', 'roof_garden', 'topiary_garden', 'tree_farm', 'vegetable_garden', 'vineyard', 'zen_garden'] },
   { sceneLabel: 'helicopter', aliases: ['heliport'] },
   { sceneLabel: 'islam', aliases: ['mosque'] },
   { sceneLabel: 'library', aliases: ['archive', 'bookstore'] },
@@ -117,7 +118,7 @@ const places365SceneLabelAliasMaps: Array<SceneLabelAliasMap> = [
   { sceneLabel: 'train', aliases: ['railroad_track', 'subway_station', 'train_interior', 'train_station'] },
   { sceneLabel: 'waterside', aliases: ['beach_house', 'boardwalk', 'harbor', 'lighthouse', 'pier'] },
   { sceneLabel: 'watersurface', aliases: ['canal', 'creek', 'lagoon', 'ocean', 'pond', 'river', 'swamp', 'underwater', 'wave'] },
-  { sceneLabel: 'widebuildings', aliases: ['apartment_building', 'building_facade', 'downtown', 'hotel', 'residential_neighborhood', 'shopfront', 'street'] }
+  { sceneLabel: 'widebuildings', aliases: ['apartment_building', 'building_facade', 'cottage', 'downtown', 'hotel', 'house', 'mansion', 'residential_neighborhood', 'shopfront', 'street'] }
 ];
 
 const localSceneLabelKeywordMaps: Array<SceneLabelKeywordMap> = [

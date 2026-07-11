@@ -4965,6 +4965,15 @@ export default function localUnitTest() {
       expect(sceneLabelForImageClassificationLabel('iceberg')).assertEqual('snow');
       expect(sceneLabelForImageClassificationLabel('canyon')).assertEqual('mountain');
       expect(sceneLabelForImageClassificationLabel('lobby')).assertEqual('corridor');
+      expect(sceneLabelForImageClassificationLabel('parking_lot')).assertEqual('car');
+      expect(sceneLabelForImageClassificationLabel('parking_garage')).assertEqual('car');
+      expect(sceneLabelForImageClassificationLabel('garage')).assertEqual('car');
+      expect(sceneLabelForImageClassificationLabel('field')).assertEqual('greenplant');
+      expect(sceneLabelForImageClassificationLabel('farm')).assertEqual('greenplant');
+      expect(sceneLabelForImageClassificationLabel('lawn')).assertEqual('greenplant');
+      expect(sceneLabelForImageClassificationLabel('house')).assertEqual('widebuildings');
+      expect(sceneLabelForImageClassificationLabel('cottage')).assertEqual('widebuildings');
+      expect(sceneLabelForImageClassificationLabel('mansion')).assertEqual('widebuildings');
       expect(sceneLabelForImageClassificationLabel('tiger_beetle')).assertEqual('other');
       expect(sceneLabelForImageClassificationLabel('sea_lion')).assertEqual('other');
       expect(sceneLabelForImageClassificationLabel('crane')).assertEqual('other');
@@ -4983,6 +4992,19 @@ export default function localUnitTest() {
       expect(result.scenes[0].score).assertEqual(0.91);
       expect(result.scenes[1].label).assertEqual('beach');
       expect(result.scenes[1].score).assertEqual(0.82);
+    });
+
+    it('localSceneDetectionRunnerKeepsCommonPlaces365Aliases', 0, () => {
+      const scenes = topLocalSceneDetections(
+        [0.95, 0.88, 0.81, 0.7],
+        ['parking_lot', 'field', 'house', 'accordion'],
+        3
+      );
+
+      expect(scenes.length).assertEqual(3);
+      expect(scenes[0].label).assertEqual('car');
+      expect(scenes[1].label).assertEqual('greenplant');
+      expect(scenes[2].label).assertEqual('widebuildings');
     });
 
     it('localSceneDetectionRunnerKeepsMoreAndroidSceneCandidatesByDefault', 0, async () => {
