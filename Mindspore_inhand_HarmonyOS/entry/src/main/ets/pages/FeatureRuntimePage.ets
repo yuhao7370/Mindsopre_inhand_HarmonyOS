@@ -622,7 +622,7 @@ struct FeatureRuntimePage {
 
   private applyRuntimeFailure(): void {
     this.statusKey = 'feature_runtime_run_failed';
-    this.resultText = this.aiMethod;
+    this.resultText = '';
     this.resultRows = [];
     this.clearVisualResults();
   }
@@ -661,7 +661,7 @@ struct FeatureRuntimePage {
 
   private applyAiResult(result: AiRunResult): void {
     this.statusKey = result.messageKey;
-    this.resultText = result.detailText.length > 0 ? result.detailText : `${result.aiMethod}: ${result.code}`;
+    this.resultText = result.detailText;
     this.resultRows = aiRunResultRows(result);
     this.clearVisualResults();
     this.updateObjectDetectionPreview(result);
@@ -1885,10 +1885,6 @@ struct FeatureRuntimePage {
             .fontSize(15)
             .fontColor(AppColor.textPrimary)
             .lineHeight(22)
-          Text(this.aiMethod)
-            .fontSize(12)
-            .fontColor(AppColor.textMuted)
-            .margin({ top: AppSpacing.sm })
           if (this.helpUrl.length > 0) {
             Button(appString('title_source'))
               .height(32)
@@ -2076,14 +2072,6 @@ struct FeatureRuntimePage {
               .fontColor(AppColor.textMuted)
               .margin({ top: AppSpacing.sm })
               .width('100%')
-          }
-          if (this.selectedInputSummary.length > 0) {
-            Text(this.selectedInputSummary)
-              .fontSize(12)
-              .fontColor(AppColor.textMuted)
-              .margin({ top: AppSpacing.sm })
-              .width('100%')
-              .maxLines(2)
           }
         }
         .width('100%')

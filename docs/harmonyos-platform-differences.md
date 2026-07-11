@@ -177,6 +177,21 @@ Current HarmonyOS behavior:
 - Invalid selected model files still clear stale results and preserve the last
   compatible cached model, matching the model-override guard above.
 
+## Runtime UI Polish
+
+Android demo pages show user-facing titles, previews, and results rather than
+internal runtime method names or raw picker URI summaries.
+
+Current HarmonyOS behavior:
+
+- The shared runtime page keeps internal `aiMethod` and selected-input summary
+  state for workflow routing, copying, cancellation, and live-loop decisions,
+  but no longer renders those fields directly in normal UI.
+- Selected images and models remain visible through preview rows that show
+  user-facing labels and file names, instead of raw picker paths or surface ids.
+- The HAP build helper now runs a static guard to catch accidental re-exposure
+  of those debug fields in `FeatureRuntimePage`.
+
 ## Runtime Execution Guard
 
 Android still-image model pages such as Style Transfer and Custom Model keep an
