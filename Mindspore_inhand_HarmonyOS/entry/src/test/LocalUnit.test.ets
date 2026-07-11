@@ -73,7 +73,8 @@ import {
   gestureDetectionLabelKey,
   gestureCategoryForImageClassificationLabel,
   gestureRectangleFromRgbaForeground,
-  gestureRectanglePercent
+  gestureRectanglePercent,
+  localGestureDetectionMaxGestureCount
 } from '../main/ets/services/ai/GestureService';
 import {
   DanceFrameData,
@@ -5817,6 +5818,22 @@ export default function localUnitTest() {
       expect(result.gestures[0].label).assertEqual('Two');
       expect(result.gestures[1].category).assertEqual(11);
       expect(result.gestures[1].label).assertEqual('Thumb up');
+    });
+
+    it('imageClassificationGestureRunnerKeepsMultipleAndroidGestureResultsByDefault', 0, async () => {
+      const runner = new ImageClassificationGestureRunner({
+        labels: ['thumb_up', 'boxing_glove', 'heart_gesture', 'ok_sign'],
+        scoreRunner: new FixedScoreRunner([0.86, 0.92, 0.79, 0.95])
+      });
+
+      const result = await runner.detectGesture('file://selected/multiple-hands.jpg');
+
+      expect(localGestureDetectionMaxGestureCount).assertEqual(3);
+      expect(result.gestures.length).assertEqual(3);
+      expect(result.gestures[0].category).assertEqual(13);
+      expect(result.gestures[0].score.toFixed(2)).assertEqual('0.95');
+      expect(result.gestures[1].category).assertEqual(10);
+      expect(result.gestures[2].category).assertEqual(11);
     });
 
     it('imageClassificationGestureRunnerUsesEstimatedForegroundRegion', 0, async () => {

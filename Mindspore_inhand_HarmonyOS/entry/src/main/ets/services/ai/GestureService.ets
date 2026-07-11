@@ -65,7 +65,7 @@ interface LocalGestureCategoryMap {
 }
 
 export const localOtherGestureCategory: number = 14;
-export const localGestureDetectionMaxGestureCount: number = 1;
+export const localGestureDetectionMaxGestureCount: number = 3;
 export const localGestureDetectionScoreThreshold: number = 0.45;
 export const localGestureDetectionImageWidth: number = 100;
 export const localGestureDetectionImageHeight: number = 100;

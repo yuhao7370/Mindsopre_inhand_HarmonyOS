@@ -110,6 +110,10 @@ Current HarmonyOS behavior:
   Android `MLGesture` category set. Injected or future gesture runners that
   return those aliases are canonicalized to the Android labels so result rows
   and live overlays use the same localized strings as the Android app.
+- The local image-classification fallback keeps up to three distinct mapped
+  Android gesture categories per run, preserving the score threshold and
+  category de-duplication while moving closer to Android's multi-gesture
+  overlay behavior.
 - The gesture fallback intentionally keeps English ImageNet labels internally
   even on Chinese devices, because its conservative matching depends on stable
   model label names.
