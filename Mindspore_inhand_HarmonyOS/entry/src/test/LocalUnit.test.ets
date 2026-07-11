@@ -133,6 +133,11 @@ import {
   waitForDanceReferenceVideoDownload
 } from '../main/ets/services/dance/DanceReferenceVideoService';
 import {
+  DanceKeepScreenOnService,
+  DanceKeepScreenOnWindow,
+  DanceKeepScreenOnWindowProvider
+} from '../main/ets/services/dance/DanceKeepScreenOnService';
+import {
   DanceFrameImageCapturer,
   DanceLivePoseFrameSource,
   DanceSamplingCancellation,
@@ -1244,6 +1249,32 @@ class RecordingDanceSamplingDelay implements DanceSamplingDelay {
     if (this.clock !== undefined) {
       this.clock.advance(intervalMs);
     }
+  }
+}
+
+class RecordingDanceKeepScreenOnWindow implements DanceKeepScreenOnWindow {
+  readonly seenValues: Array<boolean> = [];
+
+  async setWindowKeepScreenOn(isKeepScreenOn: boolean): Promise<void> {
+    this.seenValues.push(isKeepScreenOn);
+  }
+}
+
+class RejectingDanceKeepScreenOnWindow implements DanceKeepScreenOnWindow {
+  async setWindowKeepScreenOn(_isKeepScreenOn: boolean): Promise<void> {
+    throw new Error('keep screen on failed');
+  }
+}
+
+class FixedDanceKeepScreenOnWindowProvider implements DanceKeepScreenOnWindowProvider {
+  private readonly mainWindowValue: DanceKeepScreenOnWindow | undefined;
+
+  constructor(mainWindowValue?: DanceKeepScreenOnWindow) {
+    this.mainWindowValue = mainWindowValue;
+  }
+
+  async mainWindow(): Promise<DanceKeepScreenOnWindow | undefined> {
+    return this.mainWindowValue;
   }
 }
 
@@ -2849,6 +2880,30 @@ export default function localUnitTest() {
         frames: frames,
         score: danceScoreFromFrames(frames)
       })).assertFalse();
+    });
+
+    it('danceKeepScreenOnServiceTogglesMainWindowLikeAndroid', 0, async () => {
+      const mainWindow = new RecordingDanceKeepScreenOnWindow();
+      const service = new DanceKeepScreenOnService(
+        new FixedDanceKeepScreenOnWindowProvider(mainWindow)
+      );
+
+      expect(await service.setKeepScreenOn(true)).assertTrue();
+      expect(await service.setKeepScreenOn(false)).assertTrue();
+
+      expect(mainWindow.seenValues.join(',')).assertEqual('true,false');
+    });
+
+    it('danceKeepScreenOnServiceFailsSafelyWithoutWindow', 0, async () => {
+      const missingWindowResult = await new DanceKeepScreenOnService(
+        new FixedDanceKeepScreenOnWindowProvider()
+      ).setKeepScreenOn(true);
+      const rejectingWindowResult = await new DanceKeepScreenOnService(
+        new FixedDanceKeepScreenOnWindowProvider(new RejectingDanceKeepScreenOnWindow())
+      ).setKeepScreenOn(true);
+
+      expect(missingWindowResult).assertFalse();
+      expect(rejectingWindowResult).assertFalse();
     });
 
     it('routesDanceToDedicatedHarmonyPage', 0, () => {

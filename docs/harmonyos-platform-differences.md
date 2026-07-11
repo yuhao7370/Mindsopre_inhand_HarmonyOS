@@ -498,6 +498,9 @@ Current HarmonyOS behavior:
   template scoring demo, live camera preview, 70-frame live skeleton sampling,
   the original MindSpore reference video, 3/2/1 synchronized run start,
   Android-style result messages, and album save for the rendered result card.
+- The Dance page keeps the HarmonyOS window awake while it is visible, matching
+  Android's `FLAG_KEEP_SCREEN_ON` behavior without changing the app-wide screen
+  policy.
 - The result screen reuses Android's `result_bk`, `dance_back`, `save`, and
   `play_again` bitmap assets, with the background rendered using cover scaling
   so the 1920x1080 image is not stretched on narrow HarmonyOS screens.

@@ -49,6 +49,10 @@ import {
   DanceReferenceVideoPrepareResult
 } from '../services/dance/DanceReferenceVideoService';
 import {
+  DanceKeepScreenOnService,
+  HarmonyDanceKeepScreenOnWindowProvider
+} from '../services/dance/DanceKeepScreenOnService';
+import {
   DanceSamplingCancellationToken,
   HarmonyDanceSamplingClock,
   HarmonyDanceSamplingDelay,
@@ -98,11 +102,13 @@ struct DancePage {
   private countdownTimer: number = -1;
 
   aboutToAppear() {
+    this.setDanceKeepScreenOn(true);
     this.refreshLiveCameraSwitchAvailability();
     this.prepareReferenceVideo();
   }
 
   aboutToDisappear() {
+    this.setDanceKeepScreenOn(false);
     this.referenceVideoPrepareSessionId++;
     this.cancelLiveSampling();
     this.stopReferenceVideo();
@@ -142,6 +148,16 @@ struct DancePage {
       return undefined;
     }
     return context as common.UIAbilityContext;
+  }
+
+  private setDanceKeepScreenOn(isKeepScreenOn: boolean): void {
+    const context = this.uiAbilityContext();
+    if (context === undefined) {
+      return;
+    }
+    new DanceKeepScreenOnService(
+      new HarmonyDanceKeepScreenOnWindowProvider(context)
+    ).setKeepScreenOn(isKeepScreenOn);
   }
 
   private liveSamplingButtonKey(): AppStringKey {
