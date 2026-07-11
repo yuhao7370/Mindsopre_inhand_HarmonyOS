@@ -6,9 +6,12 @@ import {
   collegeItems,
   CollegeItem,
   CollegeQuickAction,
-  collegeSummaryDialogTitleKey,
   isCollegeItemUrlNavigable
 } from '../common/data/CollegeCatalog';
+import {
+  androidCollegeSummaryDialogSpec,
+  CollegeSummaryDialogSpec
+} from '../common/data/CollegeSummaryDialog';
 import { iconLabel } from '../common/icons/IconSymbols';
 import { AppStringKey, appString } from '../common/i18n/AppStrings';
 import { AppColor, AppRadius, AppSpacing } from '../common/theme/AppTheme';
@@ -18,9 +21,63 @@ import {
   HarmonyCollegeProgressStore
 } from '../services/storage/CollegeProgressService';
 
+@CustomDialog
+struct CollegeSummaryNoticeDialog {
+  controller?: CustomDialogController;
+  private spec: CollegeSummaryDialogSpec = androidCollegeSummaryDialogSpec();
+
+  build() {
+    Column() {
+      Text(appString(this.spec.titleKey))
+        .fontSize(16)
+        .fontWeight(FontWeight.Medium)
+        .fontColor(AppColor.textPrimary)
+        .textAlign(TextAlign.Center)
+        .width('100%')
+        .margin({ top: 17 })
+      Text(appString(this.spec.contentKey))
+        .fontSize(12)
+        .fontColor(AppColor.textSecondary)
+        .textAlign(TextAlign.Start)
+        .lineHeight(20)
+        .width('100%')
+        .margin({ top: 22, left: 22, right: 22 })
+      if (this.spec.showBottomLogo) {
+        Image($r('app.media.logo_with_title'))
+          .width(95)
+          .height(80)
+          .objectFit(ImageFit.Contain)
+          .margin({ top: 18 })
+      }
+      Divider()
+        .strokeWidth(1)
+        .color(AppColor.divider)
+        .margin({ top: this.spec.showBottomLogo ? 22 : 50, left: 22, right: 22 })
+      Button(appString(this.spec.confirmKey))
+        .width('100%')
+        .height(40)
+        .fontSize(13)
+        .fontColor(AppColor.textPrimary)
+        .backgroundColor(Color.Transparent)
+        .onClick(() => {
+          this.controller?.close();
+        })
+    }
+    .width('86%')
+    .backgroundColor(Color.White)
+    .borderRadius(AppRadius.card)
+    .clip(true)
+  }
+}
+
 @Component
 export struct CollegePage {
   private progressService: CollegeProgressService | undefined = undefined;
+  private summaryDialogController: CustomDialogController = new CustomDialogController({
+    builder: CollegeSummaryNoticeDialog(),
+    autoCancel: false,
+    customStyle: true
+  });
   @State checkedCollegeItemIds: Array<string> = [];
   @State checkedQuickActionIds: Array<string> = [];
 
@@ -110,14 +167,7 @@ export struct CollegePage {
   }
 
   private showSummary(): void {
-    AlertDialog.show({
-      title: appString(collegeSummaryDialogTitleKey),
-      message: appString('college_dialog_content'),
-      primaryButton: {
-        value: appString('confirm'),
-        action: () => {}
-      }
-    });
+    this.summaryDialogController.open();
   }
 
   @Builder

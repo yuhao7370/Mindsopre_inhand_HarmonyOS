@@ -450,6 +450,11 @@ import {
   collegeSummaryDialogTitleKey,
   isCollegeItemUrlNavigable
 } from '../main/ets/common/data/CollegeCatalog';
+import {
+  androidCollegeSummaryDialogSpec,
+  CollegeSummaryDialogSpec,
+  collegeSummaryDialogLogoMedia
+} from '../main/ets/common/data/CollegeSummaryDialog';
 import { MeItem, isMeItemUrlNavigable, meItems, visibleMeItems } from '../main/ets/common/data/MeCatalog';
 import { AppVersionReader, AppVersionService, formattedAppVersionName } from '../main/ets/services/app/AppVersionService';
 import {
@@ -1933,6 +1938,19 @@ export default function localUnitTest() {
       expect(hasAppStringKey('permission_camera_reason')).assertTrue();
       expect(hasAppStringKey('permission_media_reason')).assertTrue();
       expect(hasAppStringKey('permission_save_image_reason')).assertTrue();
+    });
+
+    it('usesAndroidNoticeDialogTreatmentForCollegeSummary', 0, () => {
+      const dialog: CollegeSummaryDialogSpec = androidCollegeSummaryDialogSpec();
+
+      expect(dialog.titleKey).assertEqual(collegeSummaryDialogTitleKey);
+      expect(dialog.contentKey).assertEqual('college_dialog_content');
+      expect(dialog.confirmKey).assertEqual('dialog_btn_confirm');
+      expect(hasAppStringKey('dialog_btn_confirm')).assertTrue();
+      expect(dialog.contentAlignment).assertEqual('start');
+      expect(dialog.showBottomLogo).assertTrue();
+      expect(dialog.logoMedia).assertEqual(collegeSummaryDialogLogoMedia);
+      expect(dialog.logoMedia).assertEqual('app.media.logo_with_title');
     });
 
     it('clipboardServiceCopiesRecognizedText', 0, async () => {

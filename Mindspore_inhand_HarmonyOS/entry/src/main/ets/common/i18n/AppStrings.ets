@@ -26,6 +26,7 @@ export type AppStringKey =
   'action_back' |
   'app_cancel' |
   'confirm' |
+  'dialog_btn_confirm' |
   'title_button_text_angle' |
   'title_pose_net' |
   'title_segmentation' |
@@ -295,6 +296,7 @@ const APP_STRING_KEYS: AppStringKey[] = [
   'action_back',
   'app_cancel',
   'confirm',
+  'dialog_btn_confirm',
   'title_button_text_angle',
   'title_pose_net',
   'title_segmentation',
@@ -595,6 +597,8 @@ export function appString(key: AppStringKey): ResourceStr {
       return $r('app.string.app_cancel');
     case 'confirm':
       return $r('app.string.confirm');
+    case 'dialog_btn_confirm':
+      return $r('app.string.dialog_btn_confirm');
     case 'title_button_text_angle':
       return $r('app.string.title_button_text_angle');
     case 'title_pose_net':
