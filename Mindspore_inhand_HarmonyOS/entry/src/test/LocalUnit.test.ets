@@ -400,6 +400,13 @@ import {
   webPagePath
 } from '../main/ets/common/data/WebDestination';
 import {
+  ExternalHelpLinkContext,
+  ExternalHelpLinkOpenOptions,
+  ExternalHelpNavigator,
+  RuntimeHelpRouteOptions,
+  openRuntimeHelpSource
+} from '../main/ets/services/web/RuntimeHelpLinkService';
+import {
   collegeItems,
   collegeSummaryDialogTitleKey,
   isCollegeItemUrlNavigable
@@ -1334,6 +1341,30 @@ class RecordingImageShareWriter implements ImageShareWriter {
 class RejectingImageShareWriter implements ImageShareWriter {
   async shareImage(_payload: ImageSharePayload): Promise<void> {
     throw new Error('image share rejected');
+  }
+}
+
+class RecordingExternalHelpLinkContext implements ExternalHelpLinkContext {
+  readonly openedLinks: Array<string> = [];
+  readonly hiddenFailureDialogs: Array<boolean> = [];
+
+  async openLink(link: string, options?: ExternalHelpLinkOpenOptions): Promise<void> {
+    this.openedLinks.push(link);
+    this.hiddenFailureDialogs.push(options?.hideFailureTipDialog === true);
+  }
+}
+
+class RejectingExternalHelpLinkContext implements ExternalHelpLinkContext {
+  async openLink(_link: string, _options?: ExternalHelpLinkOpenOptions): Promise<void> {
+    throw new Error('no external browser');
+  }
+}
+
+class RecordingExternalHelpNavigator implements ExternalHelpNavigator {
+  readonly routes: Array<RuntimeHelpRouteOptions> = [];
+
+  pushUrl(options: RuntimeHelpRouteOptions): void {
+    this.routes.push(options);
   }
 }
 
@@ -3015,6 +3046,45 @@ export default function localUnitTest() {
       expect(workflowForRoute(AppRoute.OBJECT_PHOTO.name)?.helpUrl).assertEqual(helpObjectDetectionUrl);
       expect(workflowForRoute(AppRoute.OBJECT_CAMERA.name)?.helpUrl).assertEqual(helpObjectDetectionUrl);
       expect(workflowForRoute(AppRoute.STYLE_TRANSFER.name)?.helpUrl).assertEqual(helpStyleTransferUrl);
+    });
+
+    it('opensRuntimeHelpSourceExternallyLikeAndroid', 0, async () => {
+      const context = new RecordingExternalHelpLinkContext();
+      const navigator = new RecordingExternalHelpNavigator();
+
+      const result = await openRuntimeHelpSource(context, helpImageClassificationUrl, 'title_image', navigator);
+
+      expect(result).assertEqual('external');
+      expect(context.openedLinks[0]).assertEqual(helpImageClassificationUrl);
+      expect(context.hiddenFailureDialogs[0]).assertTrue();
+      expect(navigator.routes.length).assertEqual(0);
+    });
+
+    it('fallsBackToHarmonyWebPageWhenRuntimeHelpSourceCannotOpenExternally', 0, async () => {
+      const navigator = new RecordingExternalHelpNavigator();
+
+      const result = await openRuntimeHelpSource(
+        new RejectingExternalHelpLinkContext(),
+        helpImageClassificationUrl,
+        'title_image',
+        navigator
+      );
+
+      expect(result).assertEqual('fallback');
+      expect(navigator.routes[0].url).assertEqual(webPagePath);
+      expect(navigator.routes[0].params.titleKey).assertEqual('title_image');
+      expect(navigator.routes[0].params.url).assertEqual(helpImageClassificationUrl);
+    });
+
+    it('fallsBackToHarmonyWebPageWhenRuntimeHelpSourceHasNoContext', 0, async () => {
+      const navigator = new RecordingExternalHelpNavigator();
+
+      const result = await openRuntimeHelpSource(undefined, helpImageClassificationUrl, 'title_image', navigator);
+
+      expect(result).assertEqual('fallback');
+      expect(navigator.routes[0].url).assertEqual(webPagePath);
+      expect(navigator.routes[0].params.titleKey).assertEqual('title_image');
+      expect(navigator.routes[0].params.url).assertEqual(helpImageClassificationUrl);
     });
 
     it('mapsAndroidLocalHelpDialogsToRuntimeWorkflows', 0, () => {

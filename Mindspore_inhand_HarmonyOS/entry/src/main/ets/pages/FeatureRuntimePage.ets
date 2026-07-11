@@ -131,9 +131,15 @@ import { featureRuntimeOverlayPreviewImageOrientationForUri } from '../features/
 import { segmentationBackgroundReplacementComponentId } from '../features/runtime/FeatureRuntimeViewIds';
 import { AppStringKey, appString } from '../common/i18n/AppStrings';
 import { AppColor, AppRadius, AppSpacing } from '../common/theme/AppTheme';
-import { common } from '@kit.AbilityKit';
+import { common, OpenLinkOptions } from '@kit.AbilityKit';
 import { image } from '@kit.ImageKit';
-import { webPagePath } from '../common/data/WebDestination';
+import {
+  ExternalHelpLinkContext,
+  ExternalHelpLinkOpenOptions,
+  ExternalHelpNavigator,
+  RuntimeHelpRouteOptions,
+  openRuntimeHelpSource
+} from '../services/web/RuntimeHelpLinkService';
 
 interface FeatureRuntimeParams {
   titleKey?: AppStringKey;
@@ -149,6 +155,33 @@ class PageLiveRuntimeFrameRunner implements LiveRuntimeFrameRunner {
 
   async runOnce(): Promise<void> {
     await this.runFrame();
+  }
+}
+
+class PageExternalHelpNavigator implements ExternalHelpNavigator {
+  private readonly pushRoute: (options: RuntimeHelpRouteOptions) => void;
+
+  constructor(pushRoute: (options: RuntimeHelpRouteOptions) => void) {
+    this.pushRoute = pushRoute;
+  }
+
+  pushUrl(options: RuntimeHelpRouteOptions): void {
+    this.pushRoute(options);
+  }
+}
+
+class PageExternalHelpLinkContext implements ExternalHelpLinkContext {
+  private readonly context: common.UIAbilityContext;
+
+  constructor(context: common.UIAbilityContext) {
+    this.context = context;
+  }
+
+  async openLink(link: string, options?: ExternalHelpLinkOpenOptions): Promise<void> {
+    const openOptions: OpenLinkOptions = {
+      hideFailureTipDialog: options?.hideFailureTipDialog === true
+    };
+    await this.context.openLink(link, openOptions);
   }
 }
 
@@ -895,13 +928,28 @@ struct FeatureRuntimePage {
     if (this.helpUrl.length === 0) {
       return;
     }
-    router.pushUrl({
-      url: webPagePath,
-      params: {
-        titleKey: this.titleKey,
-        url: this.helpUrl
-      }
-    });
+    openRuntimeHelpSource(
+      this.externalHelpLinkContext(),
+      this.helpUrl,
+      this.titleKey,
+      new PageExternalHelpNavigator((options: RuntimeHelpRouteOptions) => this.openRuntimeHelpFallback(options))
+    );
+  }
+
+  private externalHelpLinkContext(): ExternalHelpLinkContext | undefined {
+    const context = this.uiAbilityContext();
+    if (context === undefined) {
+      return undefined;
+    }
+    return new PageExternalHelpLinkContext(context);
+  }
+
+  private openRuntimeHelpFallback(options: RuntimeHelpRouteOptions): void {
+    try {
+      this.getUIContext().getRouter().pushUrl(options).catch(() => {
+      });
+    } catch (_) {
+    }
   }
 
   private showLocalHelpDialog(): void {
