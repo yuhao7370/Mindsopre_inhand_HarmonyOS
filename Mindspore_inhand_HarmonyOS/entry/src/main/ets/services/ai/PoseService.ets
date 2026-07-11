@@ -184,7 +184,11 @@ export class PoseService {
   async detectPose(imageUri: string): Promise<PoseResult> {
     const startMs = Date.now();
     try {
-      return poseResultWithAndroidTemplateSimilarity(await this.runner.detectPose(imageUri, this.mode));
+      const result = await this.runner.detectPose(imageUri, this.mode);
+      if (this.mode === 'yoga') {
+        return poseResultWithAndroidTemplateSimilarity(result);
+      }
+      return poseResultWithoutSimilarity(result);
     } catch (_) {
       return {
         ok: false,
@@ -375,6 +379,21 @@ function poseResultWithAndroidTemplateSimilarity(result: PoseResult): PoseResult
     imageHeight: result.imageHeight,
     points: result.points,
     similarity: similarity,
+    executionMs: result.executionMs
+  };
+}
+
+function poseResultWithoutSimilarity(result: PoseResult): PoseResult {
+  if (result.similarity === undefined) {
+    return result;
+  }
+  return {
+    ok: result.ok,
+    skeletonCount: result.skeletonCount,
+    pointCount: result.pointCount,
+    imageWidth: result.imageWidth,
+    imageHeight: result.imageHeight,
+    points: result.points,
     executionMs: result.executionMs
   };
 }

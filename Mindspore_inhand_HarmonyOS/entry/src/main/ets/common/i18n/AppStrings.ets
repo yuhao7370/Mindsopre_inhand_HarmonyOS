@@ -149,6 +149,9 @@ export type AppStringKey =
   'feature_runtime_help_image_classification' |
   'feature_runtime_help_object_photo' |
   'feature_runtime_help_object_camera' |
+  'feature_runtime_help_pose_net' |
+  'feature_runtime_help_image_segmentation' |
+  'feature_runtime_help_scene_detection' |
   'feature_runtime_help_style_transfer' |
   'feature_runtime_custom_model_help' |
   'feature_runtime_custom_model_done' |
@@ -248,6 +251,9 @@ export type AppStringKey =
   'feature_permission_camera' |
   'feature_permission_media' |
   'feature_permission_internet' |
+  'permission_camera_reason' |
+  'permission_media_reason' |
+  'permission_save_image_reason' |
   'workflow_summary_classification' |
   'workflow_summary_object_photo' |
   'workflow_summary_object_camera' |
@@ -412,6 +418,9 @@ const APP_STRING_KEYS: AppStringKey[] = [
   'feature_runtime_help_image_classification',
   'feature_runtime_help_object_photo',
   'feature_runtime_help_object_camera',
+  'feature_runtime_help_pose_net',
+  'feature_runtime_help_image_segmentation',
+  'feature_runtime_help_scene_detection',
   'feature_runtime_help_style_transfer',
   'feature_runtime_custom_model_help',
   'feature_runtime_custom_model_done',
@@ -511,6 +520,9 @@ const APP_STRING_KEYS: AppStringKey[] = [
   'feature_permission_camera',
   'feature_permission_media',
   'feature_permission_internet',
+  'permission_camera_reason',
+  'permission_media_reason',
+  'permission_save_image_reason',
   'workflow_summary_classification',
   'workflow_summary_object_photo',
   'workflow_summary_object_camera',
@@ -829,6 +841,12 @@ export function appString(key: AppStringKey): ResourceStr {
       return $r('app.string.feature_runtime_help_object_photo');
     case 'feature_runtime_help_object_camera':
       return $r('app.string.feature_runtime_help_object_camera');
+    case 'feature_runtime_help_pose_net':
+      return $r('app.string.feature_runtime_help_pose_net');
+    case 'feature_runtime_help_image_segmentation':
+      return $r('app.string.feature_runtime_help_image_segmentation');
+    case 'feature_runtime_help_scene_detection':
+      return $r('app.string.feature_runtime_help_scene_detection');
     case 'feature_runtime_help_style_transfer':
       return $r('app.string.feature_runtime_help_style_transfer');
     case 'feature_runtime_custom_model_help':
@@ -1027,6 +1045,12 @@ export function appString(key: AppStringKey): ResourceStr {
       return $r('app.string.feature_permission_media');
     case 'feature_permission_internet':
       return $r('app.string.feature_permission_internet');
+    case 'permission_camera_reason':
+      return $r('app.string.permission_camera_reason');
+    case 'permission_media_reason':
+      return $r('app.string.permission_media_reason');
+    case 'permission_save_image_reason':
+      return $r('app.string.permission_save_image_reason');
     case 'workflow_summary_classification':
       return $r('app.string.workflow_summary_classification');
     case 'workflow_summary_object_photo':

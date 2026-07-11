@@ -1921,6 +1921,9 @@ export default function localUnitTest() {
       expect(hasAppStringKey('title_share_commend')).assertTrue();
       expect(hasAppStringKey('me_share_done')).assertTrue();
       expect(hasAppStringKey('me_share_failed')).assertTrue();
+      expect(hasAppStringKey('permission_camera_reason')).assertTrue();
+      expect(hasAppStringKey('permission_media_reason')).assertTrue();
+      expect(hasAppStringKey('permission_save_image_reason')).assertTrue();
     });
 
     it('clipboardServiceCopiesRecognizedText', 0, async () => {
@@ -3166,6 +3169,20 @@ export default function localUnitTest() {
       expect(workflowForRoute(AppRoute.CUSTOM_MODEL.name)?.helpUrl).assertEqual(customModelMoreUrl);
     });
 
+    it('usesReachableMindSporeLiteReferenceHelpUrls', 0, () => {
+      expect(helpImageClassificationUrl).assertEqual(
+        'https://www.mindspore.cn/lite/docs/zh-CN/master/reference/image_classification_lite.html');
+      expect(helpObjectDetectionUrl).assertEqual(
+        'https://www.mindspore.cn/lite/docs/zh-CN/master/reference/object_detection_lite.html');
+      expect(helpPoseNetUrl).assertEqual('https://www.mindspore.cn/lite/docs/zh-CN/r1.5/posenet_lite.html');
+      expect(helpImageSegmentationUrl).assertEqual(
+        'https://www.mindspore.cn/lite/docs/zh-CN/master/reference/image_segmentation_lite.html');
+      expect(helpSceneDetectionUrl).assertEqual(
+        'https://www.mindspore.cn/lite/docs/zh-CN/master/reference/scene_detection_lite.html');
+      expect(helpStyleTransferUrl).assertEqual(
+        'https://www.mindspore.cn/lite/docs/zh-CN/master/reference/style_transfer_lite.html');
+    });
+
     it('opensRuntimeHelpSourceExternallyLikeAndroid', 0, async () => {
       const context = new RecordingExternalHelpLinkContext();
       const navigator = new RecordingExternalHelpNavigator();
@@ -3943,12 +3960,32 @@ export default function localUnitTest() {
       });
 
       const result = await new PoseService({
-        runner: runner
+        runner: runner,
+        mode: 'yoga'
       }).detectPose('file://selected/live-pose.jpg');
       const similarity: number = result.similarity ?? -1;
 
       expect(similarity.toFixed(2)).assertEqual('1.00');
       expect(runner.seenImageUris[0]).assertEqual('file://selected/live-pose.jpg');
+      expect(runner.seenModes[0]).assertEqual('yoga');
+    });
+
+    it('poseServiceLeavesNormalPoseWithoutAndroidLiveSkeletonTemplateSimilarity', 0, async () => {
+      const runner: FixedPoseRunner = new FixedPoseRunner({
+        ok: true,
+        skeletonCount: 1,
+        pointCount: androidLiveSkeletonTemplatePoints.length,
+        points: androidLiveSkeletonTemplatePoints,
+        executionMs: 9
+      });
+
+      const result = await new PoseService({
+        runner: runner
+      }).detectPose('file://selected/pose.jpg');
+
+      expect(result.similarity === undefined).assertTrue();
+      expect(runner.seenImageUris[0]).assertEqual('file://selected/pose.jpg');
+      expect(runner.seenModes[0]).assertEqual('normal');
     });
 
     it('aiServiceShowsLiveSkeletonSimilarityLikeAndroidRuntime', 0, async () => {
@@ -3961,7 +3998,8 @@ export default function localUnitTest() {
           pointCount: androidLiveSkeletonTemplatePoints.length,
           points: androidLiveSkeletonTemplatePoints,
           executionMs: 16
-        })
+        }),
+        mode: 'yoga'
       });
 
       const result = await new DefaultAiService({ poseService: service }).run(workflow!, {

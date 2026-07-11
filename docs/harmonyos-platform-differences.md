@@ -66,6 +66,9 @@ Current HarmonyOS behavior:
   Android page's default image plus separate Detect button.
 - The still page exposes a localized Real-time action that routes to
   `/posenet/LiveSkeletonAnalyseActivity`.
+- The still and live PoseNet pages expose a usable MindSpore Lite
+  `posenet_lite.html` help entry and a localized local Help dialog based on
+  Android's summary copy.
 - `/posenet/LiveSkeletonAnalyseActivity` remains the camera-only live route,
   auto-starts preview when the HarmonyOS surface is ready, and keeps the
   Android template similarity display.
@@ -291,6 +294,8 @@ Current HarmonyOS behavior:
 - Scene result display labels now use a recovered/readable Android-equivalent
   Chinese scene label table on Chinese locales while keeping the internal
   English/Places365 labels stable for mapping.
+- The still and live scene routes expose a usable MindSpore Lite
+  `scene_detection_lite.html` help entry and a localized local Help dialog.
 - Scene result rows list every returned scene candidate with its confidence,
   matching Android's visible result text instead of showing only the top scene.
 - The live scene route also overlays the localized scene count, each scene
@@ -388,6 +393,9 @@ Current HarmonyOS behavior:
 - `/hms/ImageSegmentationActivity` remains the still image segmentation route,
   exposes the Android-style Real-time action, and auto-runs segmentation after
   album or camera image input is ready.
+- The still, live, and portrait segmentation routes expose a usable MindSpore
+  Lite `image_segmentation_lite.html` help entry and a localized local Help
+  dialog.
 - `/hms/PortraitSegmentationActivity` now starts the shared live camera
   preview and refreshes subject segmentation through the existing live runtime
   loop.

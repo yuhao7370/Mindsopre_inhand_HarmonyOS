@@ -4,9 +4,12 @@ export const webPagePath: string = 'pages/WebPage';
 export const harmonyPrivacyRawfile: string = 'privacy.html';
 
 export const mindSporeBaseUrl: string = 'https://www.mindspore.cn';
-export const mindSporeDocBaseUrl: string = `${mindSporeBaseUrl}/doc/note/zh-CN/master`;
+export const mindSporeDocBaseUrl: string = `${mindSporeBaseUrl}/lite/docs/zh-CN/master/reference`;
 export const helpImageClassificationUrl: string = `${mindSporeDocBaseUrl}/image_classification_lite.html`;
 export const helpObjectDetectionUrl: string = `${mindSporeDocBaseUrl}/object_detection_lite.html`;
+export const helpPoseNetUrl: string = `${mindSporeBaseUrl}/lite/docs/zh-CN/r1.5/posenet_lite.html`;
+export const helpImageSegmentationUrl: string = `${mindSporeDocBaseUrl}/image_segmentation_lite.html`;
+export const helpSceneDetectionUrl: string = `${mindSporeDocBaseUrl}/scene_detection_lite.html`;
 export const helpStyleTransferUrl: string = `${mindSporeDocBaseUrl}/style_transfer_lite.html`;
 export const customModelMoreUrl: string = 'https://www.baidu.com';
 
@@ -56,6 +59,9 @@ const WEB_DESTINATION_MAPPINGS: WebDestinationMapping[] = [
   { sourceUrl: meHelpUrl, titleKey: 'me_qa_title' },
   { sourceUrl: helpImageClassificationUrl, titleKey: 'title_image' },
   { sourceUrl: helpObjectDetectionUrl, titleKey: 'title_object' },
+  { sourceUrl: helpPoseNetUrl, titleKey: 'title_pose_net' },
+  { sourceUrl: helpImageSegmentationUrl, titleKey: 'title_segmentation' },
+  { sourceUrl: helpSceneDetectionUrl, titleKey: 'title_scene_detection' },
   { sourceUrl: helpStyleTransferUrl, titleKey: 'title_style_transfer' },
   { sourceUrl: customModelMoreUrl, titleKey: 'title_custom_model' },
   { sourceUrl: intelligentPoetryUrl, titleKey: 'title_intelligent_poetry' }

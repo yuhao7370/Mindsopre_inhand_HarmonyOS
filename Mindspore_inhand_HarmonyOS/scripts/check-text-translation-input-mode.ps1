@@ -17,11 +17,11 @@ function Get-SourceSlice([string] $text, [string] $startMarker, [string] $endMar
 
 $prepareInput = Get-SourceSlice `
   $source `
-  'private prepareInput(inputKind: FeatureInputKind): void' `
+  'private prepareInput(inputKind: FeatureInputKind, initialPick: boolean = false): void' `
   'private cacheAndApplyPickedModelFile'
 $applyPickResult = Get-SourceSlice `
   $source `
-  'private applyPickResult(result: PickResult, readyKey: AppStringKey, inputKind: FeatureInputKind): void' `
+  'private applyPickResult(' `
   'private aiRunInputs()'
 
 if ($prepareInput -notmatch "(?s)if\s*\(inputKind === 'text'\)\s*\{\s*this\.textInputVisible = true;") {
@@ -31,7 +31,10 @@ if ($prepareInput -notmatch "(?s)if\s*\(inputKind === 'text'\)\s*\{\s*this\.text
 $actionIndex = $applyPickResult.IndexOf('const inputReadyAction = workflowInputReadyAction(workflow, inputKind, this.userText);')
 $textIndex = $applyPickResult.IndexOf('this.userText = inputReadyAction.userText;')
 $visibilityIndex = $applyPickResult.IndexOf('this.textInputVisible = inputReadyAction.textInputVisible;')
-$runIndex = $applyPickResult.IndexOf('if (inputReadyAction.shouldRunWorkflow)')
+$runGuardMatch = [regex]::Match(
+  $applyPickResult,
+  '(?s)if\s*\(\s*inputReadyAction\.shouldRunWorkflow\s*\|\|\s*this\.shouldRunStyleTransferAfterStyleReady\(workflow,\s*inputKind\)\s*\)\s*\{\s*this\.runWorkflow\(\);\s*\}'
+)
 
 if ($actionIndex -lt 0) {
   throw 'Successful picker input must compute workflowInputReadyAction.'
@@ -42,8 +45,8 @@ if ($textIndex -lt $actionIndex) {
 if ($visibilityIndex -lt $textIndex) {
   throw 'Successful picker input must apply textInputVisible after userText.'
 }
-if ($runIndex -lt $visibilityIndex) {
-  throw 'Successful picker input must update text input visibility before runWorkflow().'
+if (!$runGuardMatch.Success -or $runGuardMatch.Index -lt $visibilityIndex) {
+  throw 'Successful picker input must update text input visibility before gated runWorkflow().'
 }
 
 if ($source.IndexOf("if (this.inputKinds.indexOf('text') >= 0 && this.textInputVisible)") -lt 0) {

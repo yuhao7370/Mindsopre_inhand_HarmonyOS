@@ -5,7 +5,10 @@ import { PoseDetectionMode } from '../../services/ai/PoseService';
 import {
   customModelMoreUrl,
   helpImageClassificationUrl,
+  helpImageSegmentationUrl,
   helpObjectDetectionUrl,
+  helpPoseNetUrl,
+  helpSceneDetectionUrl,
   helpStyleTransferUrl
 } from '../../common/data/WebDestination';
 
@@ -88,7 +91,9 @@ export const featureWorkflows: Array<FeatureWorkflow> = [
     resultKind: 'poseOverlay',
     liveMode: false,
     sampleImageRawfilePath: 'posenet/skeleton_image.JPG',
-    linkedLiveRouteName: AppRoute.LIVE_SKELETON.name
+    linkedLiveRouteName: AppRoute.LIVE_SKELETON.name,
+    helpUrl: helpPoseNetUrl,
+    helpContentKey: 'feature_runtime_help_pose_net'
   },
   {
     routeName: AppRoute.LIVE_SKELETON.name,
@@ -98,7 +103,9 @@ export const featureWorkflows: Array<FeatureWorkflow> = [
     inputKinds: ['camera'],
     requiredPermissions: ['camera'],
     resultKind: 'poseOverlay',
-    liveMode: true
+    liveMode: true,
+    helpUrl: helpPoseNetUrl,
+    helpContentKey: 'feature_runtime_help_pose_net'
   },
   {
     routeName: AppRoute.SEGMENTATION_STILL.name,
@@ -109,7 +116,9 @@ export const featureWorkflows: Array<FeatureWorkflow> = [
     requiredPermissions: ['camera', 'media'],
     resultKind: 'segmentationMask',
     liveMode: false,
-    linkedLiveRouteName: AppRoute.SEGMENTATION_LIVE.name
+    linkedLiveRouteName: AppRoute.SEGMENTATION_LIVE.name,
+    helpUrl: helpImageSegmentationUrl,
+    helpContentKey: 'feature_runtime_help_image_segmentation'
   },
   {
     routeName: AppRoute.SEGMENTATION_LIVE.name,
@@ -119,7 +128,9 @@ export const featureWorkflows: Array<FeatureWorkflow> = [
     inputKinds: ['camera'],
     requiredPermissions: ['camera'],
     resultKind: 'segmentationMask',
-    liveMode: true
+    liveMode: true,
+    helpUrl: helpImageSegmentationUrl,
+    helpContentKey: 'feature_runtime_help_image_segmentation'
   },
   {
     routeName: AppRoute.PORTRAIT_SEGMENTATION.name,
@@ -130,7 +141,9 @@ export const featureWorkflows: Array<FeatureWorkflow> = [
     optionalInputKinds: ['backgroundImage'],
     requiredPermissions: ['camera', 'media'],
     resultKind: 'segmentationMask',
-    liveMode: true
+    liveMode: true,
+    helpUrl: helpImageSegmentationUrl,
+    helpContentKey: 'feature_runtime_help_image_segmentation'
   },
   {
     routeName: AppRoute.IMAGE_CAMERA.name,
@@ -174,7 +187,9 @@ export const featureWorkflows: Array<FeatureWorkflow> = [
     requiredPermissions: ['camera', 'media'],
     resultKind: 'sceneLabels',
     liveMode: false,
-    linkedLiveRouteName: AppRoute.SCENE_LIVE.name
+    linkedLiveRouteName: AppRoute.SCENE_LIVE.name,
+    helpUrl: helpSceneDetectionUrl,
+    helpContentKey: 'feature_runtime_help_scene_detection'
   },
   {
     routeName: AppRoute.SCENE_LIVE.name,
@@ -184,7 +199,9 @@ export const featureWorkflows: Array<FeatureWorkflow> = [
     inputKinds: ['camera'],
     requiredPermissions: ['camera'],
     resultKind: 'sceneLabels',
-    liveMode: true
+    liveMode: true,
+    helpUrl: helpSceneDetectionUrl,
+    helpContentKey: 'feature_runtime_help_scene_detection'
   },
   {
     routeName: AppRoute.TEXT_RECOGNITION.name,
