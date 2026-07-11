@@ -31,6 +31,7 @@ import {
   danceSamplingCompletionStatusKey,
   danceSamplingPageState,
   danceResultMessageKey,
+  danceSamplingResultStopsLiveCameraPreview,
   danceScoreText,
   danceTemplateDemoScore
 } from '../services/dance/DancePageService';
@@ -443,6 +444,9 @@ struct DancePage {
       this.applyDanceSamplingPageState(danceSamplingPageState(result));
       this.flowStage = 'result';
       this.stopReferenceVideo();
+      if (danceSamplingResultStopsLiveCameraPreview(result)) {
+        this.stopLiveCameraPreview();
+      }
       this.statusKey = completionStatusKey;
     } catch (_) {
       if (this.isLiveSamplingSessionCurrent(sessionId, cancellation)) {

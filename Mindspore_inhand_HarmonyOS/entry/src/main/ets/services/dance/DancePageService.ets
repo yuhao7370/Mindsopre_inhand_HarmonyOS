@@ -103,3 +103,7 @@ export function danceSamplingCompletionStatusKey(result: DanceSamplingResult): A
   }
   return 'dance_sampling_done';
 }
+
+export function danceSamplingResultStopsLiveCameraPreview(result: DanceSamplingResult): boolean {
+  return danceSamplingCompletionStatusKey(result) === 'dance_sampling_done';
+}

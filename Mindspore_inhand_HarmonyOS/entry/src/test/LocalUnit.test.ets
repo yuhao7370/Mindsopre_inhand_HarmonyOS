@@ -99,6 +99,7 @@ import {
   danceResultMessageKey,
   danceSamplingCompletionStatusKey,
   danceSamplingPageState,
+  danceSamplingResultStopsLiveCameraPreview,
   danceScoreText,
   danceTemplateDemoScore
 } from '../main/ets/services/dance/DancePageService';
@@ -2682,6 +2683,43 @@ export default function localUnitTest() {
       expect(pageState.scoreText).assertEqual(danceScoreText(danceScoreFromFrames(frames)));
       expect(pageState.resultMessageKey).assertEqual(danceResultMessageKey(danceScoreFromFrames(frames)));
       expect(pageState.summaryText).assertEqual(`${frames.length}/70`);
+    });
+
+    it('stopsDanceLiveCameraPreviewWhenSamplingShowsResultPage', 0, () => {
+      const frames = danceTemplateFrames();
+
+      expect(danceSamplingResultStopsLiveCameraPreview({
+        frameCount: 70,
+        validFrameCount: frames.length,
+        failedFrameCount: 0,
+        cancelled: false,
+        frames: frames,
+        score: danceScoreFromFrames(frames)
+      })).assertTrue();
+      expect(danceSamplingResultStopsLiveCameraPreview({
+        frameCount: 70,
+        validFrameCount: 0,
+        failedFrameCount: 0,
+        cancelled: false,
+        frames: [],
+        score: danceNoPointScore
+      })).assertTrue();
+      expect(danceSamplingResultStopsLiveCameraPreview({
+        frameCount: 2,
+        validFrameCount: 0,
+        failedFrameCount: 2,
+        cancelled: false,
+        frames: [],
+        score: danceNoPointScore
+      })).assertFalse();
+      expect(danceSamplingResultStopsLiveCameraPreview({
+        frameCount: 70,
+        validFrameCount: 1,
+        failedFrameCount: 0,
+        cancelled: true,
+        frames: frames,
+        score: danceScoreFromFrames(frames)
+      })).assertFalse();
     });
 
     it('routesDanceToDedicatedHarmonyPage', 0, () => {
