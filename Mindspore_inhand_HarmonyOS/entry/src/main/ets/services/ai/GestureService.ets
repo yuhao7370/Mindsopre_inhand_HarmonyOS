@@ -1,5 +1,8 @@
+import { fileIo } from '@kit.CoreFileKit';
+import { image } from '@kit.ImageKit';
 import { AppStringKey } from '../../common/i18n/AppStrings';
 import { ImageClassificationScoreRunner, imageCategoryLabelCount } from './ImageClassificationService';
+import { createPixelMapWithExifOrientation } from './ImageDecodeOrientation';
 
 export interface GestureRectangle {
   readonly left: number;
@@ -34,6 +37,16 @@ export interface GestureRunner {
   detectGesture(imageUri: string): Promise<GestureResult>;
 }
 
+export interface GestureRegionEstimate {
+  readonly rect: GestureRectangle;
+  readonly imageWidth: number;
+  readonly imageHeight: number;
+}
+
+export interface GestureRegionEstimator {
+  estimateRegion(imageUri: string): Promise<GestureRegionEstimate | undefined>;
+}
+
 export interface GestureServiceOptions {
   readonly runner: GestureRunner;
 }
@@ -41,6 +54,7 @@ export interface GestureServiceOptions {
 export interface ImageClassificationGestureRunnerOptions {
   readonly labels: Array<string>;
   readonly scoreRunner: ImageClassificationScoreRunner;
+  readonly regionEstimator?: GestureRegionEstimator;
   readonly maxGestures?: number;
   readonly minScore?: number;
 }
@@ -55,6 +69,7 @@ export const localGestureDetectionMaxGestureCount: number = 1;
 export const localGestureDetectionScoreThreshold: number = 0.45;
 export const localGestureDetectionImageWidth: number = 100;
 export const localGestureDetectionImageHeight: number = 100;
+export const localGestureDetectionMaxForegroundAreaRatio: number = 0.75;
 
 const localGestureDetectionBox: GestureRectangle = {
   left: 25,
@@ -105,12 +120,14 @@ export class GestureService {
 export class ImageClassificationGestureRunner implements GestureRunner {
   private readonly labels: Array<string>;
   private readonly scoreRunner: ImageClassificationScoreRunner;
+  private readonly regionEstimator?: GestureRegionEstimator;
   private readonly maxGestures: number;
   private readonly minScore: number;
 
   constructor(options: ImageClassificationGestureRunnerOptions) {
     this.labels = options.labels;
     this.scoreRunner = options.scoreRunner;
+    this.regionEstimator = options.regionEstimator;
     this.maxGestures = options.maxGestures ?? localGestureDetectionMaxGestureCount;
     this.minScore = options.minScore ?? localGestureDetectionScoreThreshold;
   }
@@ -119,12 +136,19 @@ export class ImageClassificationGestureRunner implements GestureRunner {
     const startMs = Date.now();
     try {
       const scores = await this.scoreRunner.predictScores(imageUri);
-      const gestures = topLocalGestureDetections(scores, this.labels, this.maxGestures, this.minScore);
+      let region: GestureRegionEstimate | undefined = undefined;
+      let gestures = topLocalGestureDetections(scores, this.labels, this.maxGestures, this.minScore);
+      if (gestures.length > 0) {
+        region = await this.estimateRegion(imageUri);
+        if (region !== undefined) {
+          gestures = topLocalGestureDetections(scores, this.labels, this.maxGestures, this.minScore, region.rect);
+        }
+      }
       return {
         ok: gestures.length > 0,
         gestures: gestures,
-        imageWidth: localGestureDetectionImageWidth,
-        imageHeight: localGestureDetectionImageHeight,
+        imageWidth: region?.imageWidth ?? localGestureDetectionImageWidth,
+        imageHeight: region?.imageHeight ?? localGestureDetectionImageHeight,
         executionMs: Date.now() - startMs
       };
     } catch (_) {
@@ -133,6 +157,54 @@ export class ImageClassificationGestureRunner implements GestureRunner {
         gestures: [],
         executionMs: Date.now() - startMs
       };
+    }
+  }
+
+  private async estimateRegion(imageUri: string): Promise<GestureRegionEstimate | undefined> {
+    if (this.regionEstimator === undefined) {
+      return undefined;
+    }
+    try {
+      return await this.regionEstimator.estimateRegion(imageUri);
+    } catch (_) {
+      return undefined;
+    }
+  }
+}
+
+export class HarmonyGestureRegionEstimator implements GestureRegionEstimator {
+  async estimateRegion(imageUri: string): Promise<GestureRegionEstimate | undefined> {
+    let imageFile: fileIo.File | undefined = undefined;
+    let imageSource: image.ImageSource | undefined = undefined;
+    let pixelMap: image.PixelMap | undefined = undefined;
+    try {
+      imageFile = await openGestureRegionImageFile(imageUri);
+      imageSource = image.createImageSource(imageFile.fd);
+      pixelMap = await createPixelMapWithExifOrientation(imageSource, gestureRegionDecodeOptions());
+      const imageInfo = await pixelMap.getImageInfo();
+      const width = imageInfo.size.width;
+      const height = imageInfo.size.height;
+      const rgba = new ArrayBuffer(width * height * 4);
+      await pixelMap.readPixelsToBuffer(rgba);
+      const rect = gestureRectangleFromRgbaForeground(new Uint8Array(rgba), width, height);
+      if (rect === undefined) {
+        return undefined;
+      }
+      return {
+        rect: rect,
+        imageWidth: width,
+        imageHeight: height
+      };
+    } finally {
+      if (pixelMap !== undefined) {
+        await pixelMap.release();
+      }
+      if (imageSource !== undefined) {
+        await imageSource.release();
+      }
+      if (imageFile !== undefined) {
+        await closeGestureRegionImageFile(imageFile);
+      }
     }
   }
 }
@@ -227,7 +299,8 @@ export function topLocalGestureDetections(
   scores: Array<number>,
   labels: Array<string>,
   maxGestures: number = localGestureDetectionMaxGestureCount,
-  minScore: number = localGestureDetectionScoreThreshold
+  minScore: number = localGestureDetectionScoreThreshold,
+  rect: GestureRectangle = localGestureDetectionBox
 ): Array<GestureDetection> {
   const candidates: Array<GestureDetection> = [];
   const scanLimit = Math.min(scores.length, labels.length, imageCategoryLabelCount);
@@ -244,7 +317,7 @@ export function topLocalGestureDetections(
       category: category,
       label: androidGestureLabel(category),
       score: score,
-      rect: localGestureDetectionBox
+      rect: rect
     });
   }
   candidates.sort((left: GestureDetection, right: GestureDetection) => right.score - left.score);
@@ -261,6 +334,60 @@ export function topLocalGestureDetections(
     }
   }
   return gestures;
+}
+
+export function gestureRectangleFromRgbaForeground(
+  rgba: Uint8Array,
+  width: number,
+  height: number
+): GestureRectangle | undefined {
+  if (width <= 0 || height <= 0 || rgba.length < width * height * 4) {
+    return undefined;
+  }
+
+  const topLeft = 0;
+  const topRight = (width - 1) * 4;
+  const bottomLeft = ((height - 1) * width) * 4;
+  const bottomRight = ((height - 1) * width + width - 1) * 4;
+  const backgroundR = (rgba[topLeft] + rgba[topRight] + rgba[bottomLeft] + rgba[bottomRight]) / 4;
+  const backgroundG = (rgba[topLeft + 1] + rgba[topRight + 1] + rgba[bottomLeft + 1] + rgba[bottomRight + 1]) / 4;
+  const backgroundB = (rgba[topLeft + 2] + rgba[topRight + 2] + rgba[bottomLeft + 2] + rgba[bottomRight + 2]) / 4;
+
+  let minX = width;
+  let minY = height;
+  let maxX = -1;
+  let maxY = -1;
+  const foregroundThreshold = 48;
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const offset = (y * width + x) * 4;
+      const diff = Math.abs(rgba[offset] - backgroundR) +
+        Math.abs(rgba[offset + 1] - backgroundG) +
+        Math.abs(rgba[offset + 2] - backgroundB);
+      if (rgba[offset + 3] === 0 || diff <= foregroundThreshold) {
+        continue;
+      }
+      minX = Math.min(minX, x);
+      minY = Math.min(minY, y);
+      maxX = Math.max(maxX, x);
+      maxY = Math.max(maxY, y);
+    }
+  }
+
+  if (maxX < minX || maxY < minY) {
+    return undefined;
+  }
+  const rectWidth = maxX - minX + 1;
+  const rectHeight = maxY - minY + 1;
+  if (rectWidth * rectHeight > width * height * localGestureDetectionMaxForegroundAreaRatio) {
+    return undefined;
+  }
+  return {
+    left: minX,
+    top: minY,
+    width: rectWidth,
+    height: rectHeight
+  };
 }
 
 export function gestureCategoryForImageClassificationLabel(label: string): number {
@@ -321,4 +448,29 @@ function hasGestureCategory(gestures: Array<GestureDetection>, category: number)
     }
   }
   return false;
+}
+
+function gestureRegionDecodeOptions(): image.DecodingOptions {
+  return {
+    desiredSize: {
+      width: localGestureDetectionImageWidth,
+      height: localGestureDetectionImageHeight
+    },
+    desiredPixelFormat: image.PixelMapFormat.RGBA_8888
+  };
+}
+
+async function openGestureRegionImageFile(imageUri: string): Promise<fileIo.File> {
+  try {
+    return await fileIo.open(imageUri, fileIo.OpenMode.READ_ONLY);
+  } catch (_) {
+    throw new Error('Unable to open image input for gesture region estimation.');
+  }
+}
+
+async function closeGestureRegionImageFile(imageFile: fileIo.File): Promise<void> {
+  try {
+    await fileIo.close(imageFile);
+  } catch (_) {
+  }
 }

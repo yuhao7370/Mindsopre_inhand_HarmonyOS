@@ -56,10 +56,13 @@ import {
   GestureRectanglePercent,
   GestureResult,
   ImageClassificationGestureRunner,
+  GestureRegionEstimate,
+  GestureRegionEstimator,
   GestureRunner,
   GestureService,
   androidGestureLabelKey,
   gestureCategoryForImageClassificationLabel,
+  gestureRectangleFromRgbaForeground,
   gestureRectanglePercent
 } from '../main/ets/services/ai/GestureService';
 import {
@@ -481,6 +484,35 @@ class FixedScoreRunner implements ImageClassificationScoreRunner {
 class RejectingScoreRunner implements ImageClassificationScoreRunner {
   async predictScores(_imageUri: string): Promise<Array<number>> {
     throw new Error('native runner failed');
+  }
+}
+
+class FixedGestureRegionEstimator implements GestureRegionEstimator {
+  readonly seenImageUris: Array<string> = [];
+  private readonly estimate?: GestureRegionEstimate;
+
+  constructor(rect?: GestureRectangle, width: number = 0, height: number = 0) {
+    if (rect !== undefined) {
+      this.estimate = {
+        rect: rect,
+        imageWidth: width,
+        imageHeight: height
+      };
+    }
+  }
+
+  async estimateRegion(imageUri: string): Promise<GestureRegionEstimate | undefined> {
+    this.seenImageUris.push(imageUri);
+    return this.estimate;
+  }
+}
+
+class RejectingGestureRegionEstimator implements GestureRegionEstimator {
+  readonly seenImageUris: Array<string> = [];
+
+  async estimateRegion(imageUri: string): Promise<GestureRegionEstimate | undefined> {
+    this.seenImageUris.push(imageUri);
+    throw new Error('region estimation failed');
   }
 }
 
@@ -5395,6 +5427,52 @@ export default function localUnitTest() {
       expect(gestureCategoryForImageClassificationLabel('goldfish')).assertEqual(-1);
     });
 
+    it('estimatesGestureForegroundRegionFromRgbaPixels', 0, () => {
+      const rgba = new Uint8Array(4 * 4 * 4);
+      for (let index = 0; index < rgba.length; index += 4) {
+        rgba[index] = 255;
+        rgba[index + 1] = 255;
+        rgba[index + 2] = 255;
+        rgba[index + 3] = 255;
+      }
+      for (let y = 1; y <= 2; y++) {
+        for (let x = 1; x <= 2; x++) {
+          const offset = (y * 4 + x) * 4;
+          rgba[offset] = 96;
+          rgba[offset + 1] = 72;
+          rgba[offset + 2] = 64;
+        }
+      }
+
+      const rect = gestureRectangleFromRgbaForeground(rgba, 4, 4);
+
+      expect(rect !== undefined).assertTrue();
+      if (rect === undefined) {
+        return;
+      }
+      expect(rect.left).assertEqual(1);
+      expect(rect.top).assertEqual(1);
+      expect(rect.width).assertEqual(2);
+      expect(rect.height).assertEqual(2);
+    });
+
+    it('rejectsOverbroadGestureForegroundRegionForNaturalBackgrounds', 0, () => {
+      const rgba = new Uint8Array(4 * 4 * 4);
+      for (let y = 0; y < 4; y++) {
+        for (let x = 0; x < 4; x++) {
+          const offset = (y * 4 + x) * 4;
+          rgba[offset] = x === 0 ? 40 : 220;
+          rgba[offset + 1] = y === 0 ? 60 : 210;
+          rgba[offset + 2] = 120;
+          rgba[offset + 3] = 255;
+        }
+      }
+
+      const rect = gestureRectangleFromRgbaForeground(rgba, 4, 4);
+
+      expect(rect === undefined).assertTrue();
+    });
+
     it('imageClassificationGestureRunnerDetectsHandAdjacentLabels', 0, async () => {
       const runner = new ImageClassificationGestureRunner({
         labels: ['goldfish', 'mitten', 'nail'],
@@ -5413,16 +5491,63 @@ export default function localUnitTest() {
       expect(result.imageHeight).assertEqual(100);
     });
 
+    it('imageClassificationGestureRunnerUsesEstimatedForegroundRegion', 0, async () => {
+      const estimatedRect: GestureRectangle = {
+        left: 6,
+        top: 7,
+        width: 8,
+        height: 9
+      };
+      const estimator = new FixedGestureRegionEstimator(estimatedRect, 30, 40);
+      const runner = new ImageClassificationGestureRunner({
+        labels: ['goldfish', 'mitten'],
+        scoreRunner: new FixedScoreRunner([0.1, 0.82]),
+        regionEstimator: estimator
+      });
+
+      const result = await runner.detectGesture('file://selected/hand-left.jpg');
+
+      expect(result.ok).assertTrue();
+      expect(estimator.seenImageUris[0]).assertEqual('file://selected/hand-left.jpg');
+      expect(result.gestures[0].rect?.left).assertEqual(6);
+      expect(result.gestures[0].rect?.top).assertEqual(7);
+      expect(result.gestures[0].rect?.width).assertEqual(8);
+      expect(result.gestures[0].rect?.height).assertEqual(9);
+      expect(result.imageWidth).assertEqual(30);
+      expect(result.imageHeight).assertEqual(40);
+    });
+
+    it('imageClassificationGestureRunnerFallsBackWhenRegionEstimatorFails', 0, async () => {
+      const runner = new ImageClassificationGestureRunner({
+        labels: ['goldfish', 'mitten'],
+        scoreRunner: new FixedScoreRunner([0.1, 0.82]),
+        regionEstimator: new RejectingGestureRegionEstimator()
+      });
+
+      const result = await runner.detectGesture('file://selected/hand.jpg');
+
+      expect(result.ok).assertTrue();
+      expect(result.gestures[0].rect?.left).assertEqual(25);
+      expect(result.gestures[0].rect?.top).assertEqual(10);
+      expect(result.gestures[0].rect?.width).assertEqual(50);
+      expect(result.gestures[0].rect?.height).assertEqual(70);
+      expect(result.imageWidth).assertEqual(100);
+      expect(result.imageHeight).assertEqual(100);
+    });
+
     it('imageClassificationGestureRunnerFailsWhenNoHandAdjacentLabelMatches', 0, async () => {
+      const estimator = new FixedGestureRegionEstimator();
       const runner = new ImageClassificationGestureRunner({
         labels: ['goldfish', 'hand-held_computer'],
-        scoreRunner: new FixedScoreRunner([0.95, 0.93])
+        scoreRunner: new FixedScoreRunner([0.95, 0.93]),
+        regionEstimator: estimator
       });
 
       const result = await runner.detectGesture('file://selected/fish.jpg');
 
       expect(result.ok).assertFalse();
       expect(result.gestures.length).assertEqual(0);
+      expect(estimator.seenImageUris.length).assertEqual(0);
     });
 
     it('runtimeFactoryInjectsLocalGestureServiceByDefault', 0, async () => {
@@ -5446,6 +5571,36 @@ export default function localUnitTest() {
       expect(result.code).assertEqual('GESTURE_DETECTION_DONE');
       expect(result.messageKey).assertEqual('feature_runtime_gesture_done');
       expect(result.detailText.indexOf('Other gesture 91.00% [25,10,50,70]') >= 0).assertTrue();
+    });
+
+    it('runtimeFactoryPassesGestureRegionEstimatorToLocalGestureService', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.GESTURE_STILL.name);
+      expect(workflow !== undefined).assertTrue();
+      const labelContent: Uint8Array = new Uint8Array([
+        103, 111, 108, 100, 102, 105, 115, 104, 10,
+        109, 105, 116, 116, 101, 110
+      ]);
+      const estimatedRect: GestureRectangle = {
+        left: 4,
+        top: 5,
+        width: 6,
+        height: 7
+      };
+      const estimator = new FixedGestureRegionEstimator(estimatedRect, 20, 30);
+      const service = await createRuntimeAiServiceForWorkflow(workflow!, {
+        resourceManager: new FixedRawfileContentReader(labelContent),
+        inputPreprocessor: new FixedInputPreprocessor(new ArrayBuffer(12)),
+        tensorRunner: new FixedTensorRunner([0.1, 0.91]),
+        gestureRegionEstimator: estimator
+      });
+
+      const result = await service.run(workflow!, {
+        imageUri: 'file://selected/hand-estimated.jpg'
+      });
+
+      expect(result.ok).assertTrue();
+      expect(estimator.seenImageUris[0]).assertEqual('file://selected/hand-estimated.jpg');
+      expect(result.detailText.indexOf('Other gesture 91.00% [4,5,6,7]') >= 0).assertTrue();
     });
 
     it('cachedRuntimeFactoryRetriesLocalGestureServiceAfterLoadFailure', 0, async () => {

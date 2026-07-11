@@ -59,7 +59,9 @@ import {
   PoseService
 } from './PoseService';
 import {
+  HarmonyGestureRegionEstimator,
   ImageClassificationGestureRunner,
+  GestureRegionEstimator,
   GestureRunner,
   GestureService
 } from './GestureService';
@@ -101,6 +103,7 @@ export interface HarmonyImageClassificationRuntimeOptions {
   readonly segmentationRunner?: SegmentationRunner;
   readonly poseRunner?: PoseRunner;
   readonly gestureRunner?: GestureRunner;
+  readonly gestureRegionEstimator?: GestureRegionEstimator;
   readonly sceneDetectionRunner?: SceneDetectionRunner;
 }
 
@@ -495,6 +498,7 @@ export async function createHarmonyLocalGestureService(
   return new GestureService({
     runner: new ImageClassificationGestureRunner({
       labels: labels,
+      regionEstimator: options.gestureRegionEstimator ?? new HarmonyGestureRegionEstimator(),
       scoreRunner: scoreRunner
     })
   });
