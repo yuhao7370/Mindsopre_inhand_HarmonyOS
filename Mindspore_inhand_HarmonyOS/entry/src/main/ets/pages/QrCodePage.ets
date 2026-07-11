@@ -4,7 +4,8 @@ import { AppStringKey, appString } from '../common/i18n/AppStrings';
 import { AppColor, AppSpacing } from '../common/theme/AppTheme';
 import {
   QrCodeSaveSheetAction,
-  qrCodeSaveSheetVisibleAfterAction
+  qrCodeSaveSheetVisibleAfterAction,
+  shouldStartQrCodeSave
 } from '../features/qrcode/QrCodeActionSheetState';
 import {
   HarmonyQrCodeAssetWriter,
@@ -23,6 +24,7 @@ struct QrCodePage {
   @State titleKey: AppStringKey = 'me_my_qr_code';
   @State statusKey: AppStringKey = 'empty';
   @State showSaveSheet: boolean = false;
+  @State saveInFlight: boolean = false;
 
   aboutToAppear() {
     const params = router.getParams() as QrCodePageParams;
@@ -45,23 +47,18 @@ struct QrCodePage {
     return context as common.UIAbilityContext;
   }
 
-  private saveQrCodeImage(): void {
+  private saveQrCodeImage(): Promise<QrCodeSaveResult> {
     const context = this.uiAbilityContext();
     if (context === undefined) {
-      this.statusKey = 'qr_code_save_failed';
-      return;
+      const result: QrCodeSaveResult = { ok: false, uri: '', messageKey: 'qr_code_save_failed' };
+      return Promise.resolve(result);
     }
 
-    new QrCodeSaveService(
+    return new QrCodeSaveService(
       new HarmonyQrCodeMediaReader(context.resourceManager, $r('app.media.my_qr_code')),
       new HarmonyQrCodeAssetWriter(context)
     ).save()
-      .then((result: QrCodeSaveResult) => {
-        this.statusKey = result.messageKey;
-      })
-      .catch(() => {
-        this.statusKey = 'qr_code_save_failed';
-      });
+      .catch((): QrCodeSaveResult => ({ ok: false, uri: '', messageKey: 'qr_code_save_failed' }));
   }
 
   private applySaveSheetAction(action: QrCodeSaveSheetAction): void {
@@ -69,14 +66,31 @@ struct QrCodePage {
   }
 
   private saveFromSheet(): void {
-    this.applySaveSheetAction('save');
-    this.saveQrCodeImage();
+    if (!shouldStartQrCodeSave(this.saveInFlight)) {
+      return;
+    }
+    this.saveInFlight = true;
+    this.saveQrCodeImage()
+      .then((result: QrCodeSaveResult) => {
+        const action: QrCodeSaveSheetAction = result.ok ? 'saveSuccess' : 'saveFailed';
+        this.statusKey = result.messageKey;
+        this.applySaveSheetAction(action);
+      })
+      .catch(() => {
+        this.statusKey = 'qr_code_save_failed';
+        this.applySaveSheetAction('saveFailed');
+      })
+      .finally(() => {
+        this.saveInFlight = false;
+      });
   }
 
   @Builder
   saveActionSheet() {
     Column() {
       Blank()
+        .layoutWeight(1)
+        .onClick(() => this.applySaveSheetAction('backdrop'))
       Column() {
         Row() {
           SaveButton({
@@ -90,8 +104,8 @@ struct QrCodePage {
                 this.saveFromSheet();
                 return;
               }
-              this.applySaveSheetAction('save');
               this.statusKey = 'qr_code_save_failed';
+              this.applySaveSheetAction('saveFailed');
             })
         }
         .width('100%')
@@ -117,7 +131,6 @@ struct QrCodePage {
     .width('100%')
     .height('100%')
     .backgroundColor('#66000000')
-    .onClick(() => this.applySaveSheetAction('backdrop'))
   }
 
   build() {

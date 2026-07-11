@@ -479,7 +479,8 @@ import {
   QrCodeSaveService
 } from '../main/ets/services/media/QrCodeSaveService';
 import {
-  qrCodeSaveSheetVisibleAfterAction
+  qrCodeSaveSheetVisibleAfterAction,
+  shouldStartQrCodeSave
 } from '../main/ets/features/qrcode/QrCodeActionSheetState';
 import {
   ResultImageAssetWriter,
@@ -2021,9 +2022,16 @@ export default function localUnitTest() {
     it('qrCodeSaveSheetMatchesAndroidMoreSaveCancelFlow', 0, () => {
       expect(qrCodeSaveSheetVisibleAfterAction(false, 'open')).assertTrue();
       expect(qrCodeSaveSheetVisibleAfterAction(true, 'cancel')).assertFalse();
-      expect(qrCodeSaveSheetVisibleAfterAction(true, 'save')).assertFalse();
+      expect(qrCodeSaveSheetVisibleAfterAction(true, 'saveSuccess')).assertFalse();
+      expect(qrCodeSaveSheetVisibleAfterAction(true, 'saveFailed')).assertTrue();
+      expect(qrCodeSaveSheetVisibleAfterAction(false, 'saveFailed')).assertFalse();
       expect(qrCodeSaveSheetVisibleAfterAction(true, 'backdrop')).assertFalse();
       expect(qrCodeSaveSheetVisibleAfterAction(true, 'back')).assertFalse();
+    });
+
+    it('qrCodeSaveStartsOnlyWhenNoSaveIsAlreadyInFlight', 0, () => {
+      expect(shouldStartQrCodeSave(false)).assertTrue();
+      expect(shouldStartQrCodeSave(true)).assertFalse();
     });
 
     it('resultImageSaveServiceEncodesProcessedPixelMapToGalleryJpeg', 0, async () => {
