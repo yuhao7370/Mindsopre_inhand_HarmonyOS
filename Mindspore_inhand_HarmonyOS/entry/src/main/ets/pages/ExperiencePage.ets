@@ -1,7 +1,7 @@
 import router from '@ohos.router';
 import { findRouteByName } from '../app/AppRoutes';
+import { ExperienceHeader } from '../common/components/ExperienceHeader';
 import { FeatureCard } from '../common/components/FeatureCard';
-import { GradientTitleBar } from '../common/components/GradientTitleBar';
 import { SectionTitle } from '../common/components/SectionTitle';
 import { FeatureItem, FeatureSection, visibleExperienceSections } from '../common/data/FeatureCatalog';
 import { AppColor, AppSpacing } from '../common/theme/AppTheme';
@@ -26,10 +26,7 @@ export struct ExperiencePage {
   build() {
     Scroll() {
       Column() {
-        GradientTitleBar({
-          titleKey: 'experience_head_title',
-          subtitleKey: 'experience_head_subtitle'
-        })
+        ExperienceHeader()
         Column() {
           ForEach(visibleExperienceSections, (section: FeatureSection) => {
             Column() {

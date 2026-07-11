@@ -370,6 +370,9 @@ import {
   splashLogoWidthVp
 } from '../main/ets/common/data/SplashBranding';
 import {
+  experienceHeaderHeightVp
+} from '../main/ets/common/data/ExperienceHeaderBranding';
+import {
   inputActionForKind,
   modelFileSuffixFilters,
   runtimeInputActionForWorkflowInput,
@@ -1849,6 +1852,10 @@ export default function localUnitTest() {
     it('usesAndroidSplashLogoProportions', 0, () => {
       expect(splashLogoWidthVp).assertEqual(160);
       expect(splashLogoHeightVp).assertEqual(90);
+    });
+
+    it('usesAndroidExperienceHeaderHeight', 0, () => {
+      expect(experienceHeaderHeightVp).assertEqual(160);
     });
 
     it('formatsAppVersionNameLikeAndroidPackageInfo', 0, () => {
