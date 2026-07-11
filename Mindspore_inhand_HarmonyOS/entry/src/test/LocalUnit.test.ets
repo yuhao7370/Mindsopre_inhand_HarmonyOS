@@ -2900,7 +2900,10 @@ export default function localUnitTest() {
     it('mapsDanceScoresToAndroidResultStates', 0, () => {
       expect(danceTemplateDemoScore()).assertEqual(98);
       expect(danceScoreText(98)).assertEqual('98');
-      expect(danceScoreText(danceNoActScore)).assertEqual('--');
+      expect(danceScoreText(danceNoActScore)).assertEqual('-1');
+      expect(danceScoreText(danceNoPointScore)).assertEqual('-2');
+      expect(danceScoreText(98, '恭喜完成，综合得分：')).assertEqual('恭喜完成，综合得分：98');
+      expect(danceScoreText(danceNoActScore, '恭喜完成，综合得分：')).assertEqual('恭喜完成，综合得分：-1');
       expect(danceResultMessageKey(danceNoActScore)).assertEqual('dance_score_level_no_action');
       expect(danceResultMessageKey(danceNoPointScore)).assertEqual('dance_score_level_no_point');
       expect(danceResultMessageKey(63)).assertEqual('dance_score_level_warmup');

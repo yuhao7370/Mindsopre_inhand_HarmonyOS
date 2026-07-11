@@ -440,9 +440,7 @@ struct DancePage {
         this.stopReferenceVideo();
         return;
       }
-      this.applyDanceSamplingPageState(
-        danceSamplingPageState(result)
-      );
+      this.applyDanceSamplingPageState(danceSamplingPageState(result));
       this.flowStage = 'result';
       this.stopReferenceVideo();
       this.statusKey = completionStatusKey;
@@ -703,11 +701,25 @@ struct DancePage {
           .fontSize(16)
           .fontWeight(FontWeight.Bold)
           .fontColor(AppColor.textPrimary)
-        Text(this.scoreText)
-          .fontSize(48)
-          .fontWeight(FontWeight.Bold)
-          .fontColor(AppColor.accent)
-          .margin({ top: AppSpacing.sm })
+        Row() {
+          Text(appString('dance_score_prefix'))
+            .fontSize(24)
+            .fontWeight(FontWeight.Bold)
+            .fontColor(AppColor.accent)
+            .textAlign(TextAlign.End)
+            .lineHeight(32)
+            .maxLines(2)
+            .layoutWeight(1)
+          Text(this.scoreText)
+            .fontSize(24)
+            .fontWeight(FontWeight.Bold)
+            .fontColor(AppColor.accent)
+            .lineHeight(32)
+            .flexShrink(0)
+        }
+        .width('100%')
+        .alignItems(VerticalAlign.Center)
+        .margin({ top: AppSpacing.sm })
         Text(appString(this.resultMessageKey))
           .fontSize(16)
           .fontColor(AppColor.textPrimary)

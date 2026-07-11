@@ -100,7 +100,7 @@
     { "name": "dance_sampling_frames", "value": "Valid frames" },
     { "name": "dance_reset", "value": "Reset" },
     { "name": "dance_result_title", "value": "Overall score" },
-    { "name": "dance_score_prefix", "value": "Score" },
+    { "name": "dance_score_prefix", "value": "Score: " },
     { "name": "dance_score_level_no_action", "value": "Please start moving." },
     { "name": "dance_score_level_no_point", "value": "Please keep your full body in frame." },
     { "name": "dance_score_level_try_again", "value": "You are getting the feeling." },

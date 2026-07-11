@@ -49,11 +49,8 @@ export function danceTemplateDemoScore(): number {
   return danceScoreFromFrames(danceTemplateFrames());
 }
 
-export function danceScoreText(score: number): string {
-  if (score < 0) {
-    return '--';
-  }
-  return `${Math.round(score)}`;
+export function danceScoreText(score: number, prefix: string = ''): string {
+  return `${prefix}${Math.round(score)}`;
 }
 
 export function danceResultMessageKey(score: number): AppStringKey {
@@ -87,9 +84,9 @@ export function danceResultMessageKey(score: number): AppStringKey {
   return 'empty';
 }
 
-export function danceSamplingPageState(result: DanceSamplingResult): DanceSamplingPageState {
+export function danceSamplingPageState(result: DanceSamplingResult, scorePrefix: string = ''): DanceSamplingPageState {
   const state: DanceSamplingPageState = {
-    scoreText: danceScoreText(result.score),
+    scoreText: danceScoreText(result.score, scorePrefix),
     resultMessageKey: danceResultMessageKey(result.score),
     hasResult: true,
     summaryText: `${result.validFrameCount}/${result.frameCount}`
