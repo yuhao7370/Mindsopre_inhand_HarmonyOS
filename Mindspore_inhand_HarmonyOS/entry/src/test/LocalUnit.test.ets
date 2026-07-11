@@ -283,6 +283,7 @@ import {
   shouldStartWorkflowRun,
   shouldHideTextInputWhenPreparingInput,
   shouldShowCopyTextAction,
+  shouldShowResultSaveAction,
   shouldUseLongTextInput,
   shouldUseLongTextResultRow,
   textInputPlaceholderKeyForWorkflow,
@@ -2839,6 +2840,25 @@ export default function localUnitTest() {
       expect(shouldUseLongTextResultRow(textTranslation.aiMethod, 'feature_runtime_result_translated_text')).assertTrue();
       expect(shouldUseLongTextResultRow(textTranslation.aiMethod, 'feature_runtime_result_target_language')).assertFalse();
       expect(shouldUseLongTextResultRow(styleTransfer.aiMethod, 'feature_runtime_result_output')).assertFalse();
+    });
+
+    it('keepsAndroidSaveActionReachableBeforeProcessedImagesExist', 0, () => {
+      const styleTransfer: FeatureWorkflow = workflowForRoute(AppRoute.STYLE_TRANSFER.name)!;
+      const segmentationStill: FeatureWorkflow = workflowForRoute(AppRoute.SEGMENTATION_STILL.name)!;
+      const portraitSegmentation: FeatureWorkflow = workflowForRoute(AppRoute.PORTRAIT_SEGMENTATION.name)!;
+      const textRecognition: FeatureWorkflow = workflowForRoute(AppRoute.TEXT_RECOGNITION.name)!;
+      const objectPhoto: FeatureWorkflow = workflowForRoute(AppRoute.OBJECT_PHOTO.name)!;
+      const classification: FeatureWorkflow = workflowForRoute(AppRoute.IMAGE_CAMERA.name)!;
+
+      expect(shouldShowResultSaveAction(styleTransfer, false)).assertTrue();
+      expect(shouldShowResultSaveAction(styleTransfer, true)).assertTrue();
+      expect(shouldShowResultSaveAction(segmentationStill, false)).assertTrue();
+      expect(shouldShowResultSaveAction(segmentationStill, true)).assertTrue();
+      expect(shouldShowResultSaveAction(portraitSegmentation, false)).assertFalse();
+      expect(shouldShowResultSaveAction(portraitSegmentation, true)).assertTrue();
+      expect(shouldShowResultSaveAction(textRecognition, false)).assertFalse();
+      expect(shouldShowResultSaveAction(objectPhoto, false)).assertFalse();
+      expect(shouldShowResultSaveAction(classification, false)).assertFalse();
     });
 
     it('showsAndroidCopyButtonForTextWorkflowsEvenWhenContentIsEmpty', 0, () => {

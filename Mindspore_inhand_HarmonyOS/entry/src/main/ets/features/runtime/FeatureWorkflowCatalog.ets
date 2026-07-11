@@ -350,6 +350,17 @@ export function shouldShowCopyTextAction(aiMethod: string): boolean {
   return aiMethod === 'recognizeText' || aiMethod === 'translateText';
 }
 
+export function shouldShowResultSaveAction(
+  workflow: FeatureWorkflow | undefined,
+  resultImageReady: boolean
+): boolean {
+  if (resultImageReady) {
+    return true;
+  }
+  return workflow?.routeName === AppRoute.STYLE_TRANSFER.name ||
+    workflow?.routeName === AppRoute.SEGMENTATION_STILL.name;
+}
+
 export function inputKindReplacesPrimaryInput(inputKind: FeatureInputKind): boolean {
   return inputKind !== 'modelFile' &&
     inputKind !== 'backgroundImage' &&

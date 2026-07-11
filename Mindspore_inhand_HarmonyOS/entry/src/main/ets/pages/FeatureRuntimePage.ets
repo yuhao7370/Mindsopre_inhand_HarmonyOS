@@ -20,6 +20,7 @@ import {
   shouldStartWorkflowRun,
   shouldHideTextInputWhenPreparingInput,
   shouldShowCopyTextAction,
+  shouldShowResultSaveAction,
   shouldShowStyleRecoveryControl,
   shouldUseLongTextInput,
   shouldUseLongTextResultRow,
@@ -2158,6 +2159,9 @@ struct FeatureRuntimePage {
           }
           if (this.styledImagePixelMap !== undefined) {
             this.pixelMapPreview('feature_runtime_result_styled_image', this.styledImagePixelMap)
+          }
+          if (shouldShowResultSaveAction(workflowForRoute(this.routeName), this.styledImagePixelMap !== undefined) &&
+            this.aiMethod === 'runStyleTransfer') {
             this.resultImageSaveControl(this.styledImagePixelMap)
           }
           if (shouldShowStyleRecoveryControl(this.aiMethod, this.styledImagePixelMap !== undefined)) {
@@ -2171,6 +2175,10 @@ struct FeatureRuntimePage {
           }
           if (this.segmentationForegroundPixelMap !== undefined) {
             this.pixelMapPreview('feature_runtime_result_foreground', this.segmentationForegroundPixelMap)
+          }
+          if (shouldShowResultSaveAction(workflowForRoute(this.routeName),
+            this.segmentationForegroundPixelMap !== undefined) &&
+            this.aiMethod === 'segmentPerson') {
             this.resultImageSaveControl(this.segmentationForegroundPixelMap)
           }
           if (this.shouldShowSegmentationBackgroundPreview() && this.segmentationForegroundPixelMap !== undefined) {
