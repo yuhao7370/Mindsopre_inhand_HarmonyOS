@@ -2238,6 +2238,8 @@ export default function localUnitTest() {
       expect(webDestinationForUrl(helpImageSegmentationUrl, 'me_official_title').titleKey).assertEqual('title_segmentation');
       expect(webDestinationForUrl(helpSceneDetectionUrl, 'me_official_title').titleKey).assertEqual('title_scene_detection');
       expect(webDestinationForUrl(helpStyleTransferUrl, 'me_official_title').titleKey).assertEqual('title_style_transfer');
+      expect(customModelMoreUrl.indexOf('mindspore.cn/lite/docs/zh-CN/master/infer/device_infer_example.html') >= 0)
+        .assertTrue();
       expect(webDestinationForUrl(customModelMoreUrl, 'me_official_title').titleKey).assertEqual('title_custom_model');
     });
 
