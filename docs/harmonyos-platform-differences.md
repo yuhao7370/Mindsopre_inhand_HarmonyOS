@@ -465,6 +465,16 @@ Current HarmonyOS behavior:
   template scoring demo, live camera preview, 70-frame live skeleton sampling,
   the original MindSpore reference video, 3/2/1 synchronized run start,
   Android-style result messages, and album save for the rendered result card.
+- The result screen reuses Android's `result_bk`, `dance_back`, `save`, and
+  `play_again` bitmap assets, with the background rendered using cover scaling
+  so the 1920x1080 image is not stretched on narrow HarmonyOS screens.
+- The visible play-again action uses localized HarmonyOS text instead of the
+  Chinese-only Android bitmap label, while keeping the Android action size and
+  returning to the prepare state.
+- The save action intentionally stays on HarmonyOS `SaveButton` so Gallery
+  writes keep the platform short-term authorization flow; the Android save
+  bitmap remains bundled for source parity but is not rendered over the secure
+  component.
 - HarmonyOS restores the Android reference-video cache behavior with the same
   `danceVideo2.mp4` name and 41,282,333-byte length check, but stores it in the
   app cache directory instead of public Downloads to fit HarmonyOS scoped
