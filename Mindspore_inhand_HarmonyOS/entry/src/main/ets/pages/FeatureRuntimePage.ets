@@ -10,7 +10,8 @@ import {
   inputLabelKey,
   initialInputKindForWorkflow,
   initialPreviewActionForWorkflow,
-  initialLiveCameraPositionForWorkflow,
+  rememberedLiveCameraPositionForWorkflow,
+  rememberLiveCameraPositionForRoute,
   permissionLabelKey,
   runtimeInputKindsForWorkflow,
   sampleImageUriForWorkflow,
@@ -284,7 +285,7 @@ struct FeatureRuntimePage {
     this.helpContentKey = workflow?.helpContentKey;
     this.inputKinds = workflow ? runtimeInputKindsForWorkflow(workflow) : [];
     this.permissionKinds = workflow?.requiredPermissions ?? [];
-    this.liveCameraPosition = initialLiveCameraPositionForWorkflow(workflow);
+    this.liveCameraPosition = rememberedLiveCameraPositionForWorkflow(workflow);
     this.refreshLiveCameraSwitchAvailability();
     this.applyDefaultPortraitBackgroundIfNeeded();
     setTimeout(() => this.prepareInitialInputIfNeeded(), 0);
@@ -421,6 +422,7 @@ struct FeatureRuntimePage {
     ).capability(this.liveCameraPosition);
     this.liveCameraSwitchAvailable = capability.canSwitch;
     this.liveCameraPosition = capability.preferredPosition;
+    rememberLiveCameraPositionForRoute(this.routeName, this.liveCameraPosition);
   }
 
   private autoStartLiveCameraIfNeeded(): void {
@@ -538,6 +540,7 @@ struct FeatureRuntimePage {
 
   private switchLiveCamera(): void {
     this.liveCameraPosition = nextLiveCameraPosition(this.liveCameraPosition);
+    rememberLiveCameraPositionForRoute(this.routeName, this.liveCameraPosition);
     if (this.liveCameraInputSelected || this.liveCameraActive) {
       this.stopLiveRuntimeLoop();
       this.liveCameraActive = false;

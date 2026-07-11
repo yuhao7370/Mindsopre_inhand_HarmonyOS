@@ -304,6 +304,9 @@ import {
   initialInputKindForWorkflow,
   initialPreviewActionForWorkflow,
   initialLiveCameraPositionForWorkflow,
+  rememberedLiveCameraPositionForWorkflow,
+  rememberLiveCameraPositionForRoute,
+  resetRememberedLiveCameraPositionsForTests,
   runtimeInputKindsForWorkflow,
   sampleImageUriForWorkflow,
   shouldAutoRunWorkflowAfterInputReady,
@@ -5034,7 +5037,7 @@ export default function localUnitTest() {
       expect(tensorRunner.seenModelUris.length).assertEqual(0);
     });
 
-    it('customModelDefaultOrSelectedRunnerKeepsPickedModelOverride', 0, async () => {
+    it('customModelDefaultOrSelectedRunnerRequiresExplicitDefaultModelUri', 0, async () => {
       const defaultRunner: FixedCustomModelTensorRunner = new FixedCustomModelTensorRunner([0.1]);
       const selectedRunner: FixedCustomModelTensorRunner = new FixedCustomModelTensorRunner([0.9]);
       const runner = new CustomModelDefaultOrSelectedRunner({
@@ -5042,13 +5045,16 @@ export default function localUnitTest() {
         selectedModelRunner: selectedRunner
       });
 
-      const defaultOutput = await runner.predictOutput('', new ArrayBuffer(4));
+      const defaultOutput = await runner.predictOutput(customModelDefaultModelUri, new ArrayBuffer(4));
       const selectedOutput = await runner.predictOutput('file://selected/custom.ms', new ArrayBuffer(8));
+      const emptyOutput = await runner.predictOutput('', new ArrayBuffer(12));
 
       expect(defaultOutput[0]).assertEqual(0.1);
       expect(selectedOutput[0]).assertEqual(0.9);
+      expect(emptyOutput[0]).assertEqual(0.9);
       expect(defaultRunner.seenModelUris[0]).assertEqual(customModelDefaultModelUri);
       expect(selectedRunner.seenModelUris[0]).assertEqual('file://selected/custom.ms');
+      expect(selectedRunner.seenModelUris[1]).assertEqual('');
     });
 
     it('aiServiceReportsCustomModelRunnerFailureWithI18nKey', 0, async () => {
@@ -7254,6 +7260,22 @@ export default function localUnitTest() {
       expect(initialLiveCameraPositionForWorkflow(workflowForRoute(AppRoute.OBJECT_CAMERA.name)!)).assertEqual('back');
       expect(initialLiveCameraPositionForWorkflow(workflowForRoute(AppRoute.LIVE_SKELETON.name)!)).assertEqual('back');
       expect(initialLiveCameraPositionForWorkflow(undefined)).assertEqual('back');
+    });
+
+    it('remembersLiveCameraPositionPerRouteAfterSwitches', 0, () => {
+      resetRememberedLiveCameraPositionsForTests();
+      const segmentationLive: FeatureWorkflow = workflowForRoute(AppRoute.SEGMENTATION_LIVE.name)!;
+      const sceneLive: FeatureWorkflow = workflowForRoute(AppRoute.SCENE_LIVE.name)!;
+
+      expect(rememberedLiveCameraPositionForWorkflow(segmentationLive)).assertEqual('front');
+      expect(rememberedLiveCameraPositionForWorkflow(sceneLive)).assertEqual('front');
+
+      rememberLiveCameraPositionForRoute(segmentationLive.routeName, 'back');
+
+      expect(rememberedLiveCameraPositionForWorkflow(segmentationLive)).assertEqual('back');
+      expect(rememberedLiveCameraPositionForWorkflow(sceneLive)).assertEqual('front');
+      expect(rememberedLiveCameraPositionForWorkflow(undefined)).assertEqual('back');
+      resetRememberedLiveCameraPositionsForTests();
     });
 
     it('autoPreparesObjectPhotoAlbumInputLikeAndroidPhotoActivity', 0, () => {

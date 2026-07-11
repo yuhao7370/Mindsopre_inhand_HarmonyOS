@@ -7,12 +7,12 @@ requires the user to select a model before execution, so HarmonyOS now also
 blocks image-only execution with a "select a model first" status instead of
 using the bundled MobileNetV2 model as a default custom-model fallback.
 
-## Goal
+## Superseded Original Goal
 
 Make Custom Model runnable without requiring the user to pick a model first,
 while preserving the selected `.ms` model override path.
 
-## Steps
+## Superseded Original Steps
 
 1. Treat the model file as optional in the HarmonyOS runtime workflow.
 2. Use the bundled MobileNetV2 MindSpore model as the default custom-model

@@ -332,6 +332,27 @@ export function initialLiveCameraPositionForWorkflow(
   return 'back';
 }
 
+const rememberedLiveCameraPositions: Map<string, LiveCameraPosition> = new Map<string, LiveCameraPosition>();
+
+export function rememberedLiveCameraPositionForWorkflow(
+  workflow: FeatureWorkflow | undefined
+): LiveCameraPosition {
+  const routeName = workflow?.routeName ?? '';
+  const rememberedPosition = routeName.length > 0 ? rememberedLiveCameraPositions.get(routeName) : undefined;
+  return rememberedPosition ?? initialLiveCameraPositionForWorkflow(workflow);
+}
+
+export function rememberLiveCameraPositionForRoute(routeName: string, position: LiveCameraPosition): void {
+  if (routeName.length === 0) {
+    return;
+  }
+  rememberedLiveCameraPositions.set(routeName, position);
+}
+
+export function resetRememberedLiveCameraPositionsForTests(): void {
+  rememberedLiveCameraPositions.clear();
+}
+
 export function poseModeForWorkflow(workflow: FeatureWorkflow): PoseDetectionMode {
   if (workflow.routeName === AppRoute.LIVE_SKELETON.name) {
     return 'yoga';

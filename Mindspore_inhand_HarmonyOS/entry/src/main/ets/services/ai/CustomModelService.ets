@@ -147,7 +147,7 @@ export class CustomModelDefaultOrSelectedRunner implements CustomModelTensorRunn
   }
 
   async predictOutput(modelUri: string, inputBuffer: ArrayBuffer): Promise<Array<number>> {
-    if (modelUri.length === 0 || modelUri === this.defaultModelUri) {
+    if (modelUri === this.defaultModelUri) {
       return this.defaultModelRunner.predictOutput(this.defaultModelUri, inputBuffer);
     }
     return this.selectedModelRunner.predictOutput(modelUri, inputBuffer);
