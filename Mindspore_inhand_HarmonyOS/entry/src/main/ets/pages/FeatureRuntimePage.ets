@@ -89,6 +89,7 @@ import {
   ObjectDetectionBoxPercent,
   objectDetectionBoxPercent,
   objectDetectionOverlayColor,
+  objectDetectionOverlayLabel,
   objectDetectionOverlayTextColor
 } from '../services/ai/ObjectDetectionService';
 import {
@@ -1454,9 +1455,8 @@ struct FeatureRuntimePage {
     return this.gestureImageWidth / this.gestureImageHeight;
   }
 
-  private objectDetectionLabel(detection: ObjectDetection): string {
-    const label = detection.label.length > 0 ? detection.label : `${detection.labelId}`;
-    return `${label} ${(detection.score * 100).toFixed(1)}%`;
+  private objectDetectionLabel(detection: ObjectDetection, index: number): string {
+    return objectDetectionOverlayLabel(detection, index);
   }
 
   private gestureLabelResource(gesture: GestureDetection): ResourceStr {
@@ -1844,7 +1844,7 @@ struct FeatureRuntimePage {
   @Builder
   objectDetectionBox(detection: ObjectDetection, index: number) {
     Column() {
-      Text(this.objectDetectionLabel(detection))
+      Text(this.objectDetectionLabel(detection, index))
         .fontSize(10)
         .fontColor(objectDetectionOverlayTextColor(index))
         .backgroundColor(objectDetectionOverlayColor(index))

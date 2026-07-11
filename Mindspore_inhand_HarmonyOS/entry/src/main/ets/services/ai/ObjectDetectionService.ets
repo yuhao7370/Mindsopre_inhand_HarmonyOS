@@ -447,6 +447,12 @@ export function objectDetectionOverlayTextColor(_index: number): string {
   return '#333333';
 }
 
+export function objectDetectionOverlayLabel(detection: ObjectDetection, resultIndex: number): string {
+  const rectId = (resultIndex < 0 ? 0 : resultIndex) + 1;
+  const label = detection.label.length > 0 ? detection.label : `${detection.labelId}`;
+  return `${rectId}-${label}-${(detection.score * 100).toFixed(2)}%`;
+}
+
 interface ObjectDetectionWhBox {
   readonly w: number;
   readonly h: number;

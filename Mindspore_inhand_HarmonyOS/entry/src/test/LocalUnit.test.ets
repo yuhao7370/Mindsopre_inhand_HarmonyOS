@@ -241,6 +241,7 @@ import {
   objectDetectionModelOutputFromFloatArrays,
   objectDetectionOverlayColor,
   objectDetectionOverlayTextColor,
+  objectDetectionOverlayLabel,
   normalizedObjectDetectionRgbInputFromRgba,
   parseObjectCategoryLabels
 } from '../main/ets/services/ai/ObjectDetectionService';
@@ -4787,6 +4788,32 @@ export default function localUnitTest() {
       expect(objectDetectionOverlayTextColor(2)).assertEqual('#333333');
       expect(objectDetectionOverlayTextColor(3)).assertEqual('#333333');
       expect(objectDetectionOverlayTextColor(4)).assertEqual('#333333');
+    });
+
+    it('formatsObjectDetectionOverlayLabelsLikeAndroidRectView', 0, () => {
+      const detection: ObjectDetection = {
+        imageId: 741,
+        labelId: 1,
+        label: 'person',
+        score: 0.75,
+        left: 1,
+        top: 2,
+        right: 101,
+        bottom: 202
+      };
+      const unlabeledDetection: ObjectDetection = {
+        imageId: 1900,
+        labelId: 7,
+        label: '',
+        score: 0.1234,
+        left: 1,
+        top: 2,
+        right: 101,
+        bottom: 202
+      };
+
+      expect(objectDetectionOverlayLabel(detection, 0)).assertEqual('1-person-75.00%');
+      expect(objectDetectionOverlayLabel(unlabeledDetection, 4)).assertEqual('5-7-12.34%');
     });
 
     it('objectDetectionServiceHandlesRunnerFailureAsInvalidOutput', 0, async () => {
