@@ -305,6 +305,8 @@ import { featureRuntimeOverlayPreviewImageOrientationFromRotationDegrees } from 
 import {
   declaredPermissionNames,
   PermissionRequestSummary,
+  runtimePermissionRecoveryActionForWorkflow,
+  runtimePermissionRunActionForWorkflow,
   runtimePermissionNamesForWorkflow,
   startupPermissionNames
 } from '../main/ets/services/permissions/PermissionService';
@@ -5767,6 +5769,61 @@ export default function localUnitTest() {
       expect(permissionNames.indexOf('ohos.permission.READ_IMAGEVIDEO') >= 0).assertTrue();
       expect(permissionNames.indexOf('ohos.permission.INTERNET')).assertEqual(-1);
       expect(permissionNames.indexOf('ohos.permission.SHORT_TERM_WRITE_IMAGEVIDEO')).assertEqual(-1);
+    });
+
+    it('recoversRuntimePermissionDenialWithAndroidLikeRetryActions', 0, () => {
+      const textTranslation: FeatureWorkflow = workflowForRoute(AppRoute.TEXT_TRANSLATION.name)!;
+      const imageCamera: FeatureWorkflow = workflowForRoute(AppRoute.IMAGE_CAMERA.name)!;
+      const liveCameraRouteNames: Array<string> = [
+        AppRoute.IMAGE_CAMERA.name,
+        AppRoute.OBJECT_CAMERA.name,
+        AppRoute.GESTURE_LIVE.name,
+        AppRoute.SCENE_LIVE.name,
+        AppRoute.SEGMENTATION_LIVE.name,
+        AppRoute.PORTRAIT_SEGMENTATION.name,
+        AppRoute.LIVE_SKELETON.name
+      ];
+
+      expect(runtimePermissionRecoveryActionForWorkflow(
+        textTranslation,
+        'feature_runtime_permission_denied'
+      )).assertEqual('retryRun');
+      expect(runtimePermissionRecoveryActionForWorkflow(
+        imageCamera,
+        'feature_runtime_permission_denied'
+      )).assertEqual('retryCameraInput');
+      expect(runtimePermissionRecoveryActionForWorkflow(
+        imageCamera,
+        'feature_runtime_live_camera_failed'
+      )).assertEqual('none');
+      expect(runtimePermissionRecoveryActionForWorkflow(
+        undefined,
+        'feature_runtime_permission_denied'
+      )).assertEqual('none');
+
+      expect(runtimePermissionRunActionForWorkflow(
+        imageCamera,
+        'feature_runtime_permission_denied'
+      )).assertEqual('retryCameraInput');
+      expect(runtimePermissionRunActionForWorkflow(
+        textTranslation,
+        'feature_runtime_permission_denied'
+      )).assertEqual('runWorkflow');
+      expect(runtimePermissionRunActionForWorkflow(
+        imageCamera,
+        'feature_runtime_live_camera_failed'
+      )).assertEqual('runWorkflow');
+      liveCameraRouteNames.forEach((routeName: string) => {
+        const workflow: FeatureWorkflow = workflowForRoute(routeName)!;
+        expect(runtimePermissionRecoveryActionForWorkflow(
+          workflow,
+          'feature_runtime_permission_denied'
+        )).assertEqual('retryCameraInput');
+        expect(runtimePermissionRunActionForWorkflow(
+          workflow,
+          'feature_runtime_permission_denied'
+        )).assertEqual('retryCameraInput');
+      });
     });
 
     it('mapsWorkflowInputsToPickerActions', 0, () => {

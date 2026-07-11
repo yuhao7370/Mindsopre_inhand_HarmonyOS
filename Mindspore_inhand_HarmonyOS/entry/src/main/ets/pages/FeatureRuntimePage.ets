@@ -40,7 +40,14 @@ import {
   copyableTextForAiResult
 } from '../services/ai/AiService';
 import { cachedRuntimeAiServiceForHarmonyResourceManager } from '../services/ai/ImageClassificationRuntimeFactory';
-import { PermissionRequestSummary, PermissionService } from '../services/permissions/PermissionService';
+import {
+  PermissionRequestSummary,
+  PermissionService,
+  RuntimePermissionRecoveryAction,
+  RuntimePermissionRunAction,
+  runtimePermissionRecoveryActionForWorkflow,
+  runtimePermissionRunActionForWorkflow
+} from '../services/permissions/PermissionService';
 import { ClipboardService, CopyTextResult } from '../services/clipboard/ClipboardService';
 import { PickerService, PickResult, runtimeInputActionForWorkflowInput } from '../services/picker/PickerService';
 import {
@@ -964,6 +971,37 @@ struct FeatureRuntimePage {
     const liveRuntimeLoopReady = shouldRunLiveRuntimeLoop(workflow.aiMethod, workflow.liveMode,
       this.liveCameraInputSelected, this.liveCameraActive);
     return shouldStartWorkflowRun(workflow, this.workflowRunning, liveRuntimeLoopReady);
+  }
+
+  private runtimePermissionRecoveryAction(): RuntimePermissionRecoveryAction {
+    return runtimePermissionRecoveryActionForWorkflow(workflowForRoute(this.routeName), this.statusKey);
+  }
+
+  private runtimePermissionRunAction(): RuntimePermissionRunAction {
+    return runtimePermissionRunActionForWorkflow(workflowForRoute(this.routeName), this.statusKey);
+  }
+
+  private shouldShowRuntimePermissionRetry(): boolean {
+    return this.runtimePermissionRecoveryAction() !== 'none';
+  }
+
+  private runPrimaryAction(): void {
+    if (this.runtimePermissionRunAction() === 'retryCameraInput') {
+      this.prepareInput('camera');
+      return;
+    }
+    this.runWorkflow();
+  }
+
+  private retryRuntimePermission(): void {
+    const action = this.runtimePermissionRecoveryAction();
+    if (action === 'retryCameraInput') {
+      this.prepareInput('camera');
+      return;
+    }
+    if (action === 'retryRun') {
+      this.runWorkflow();
+    }
   }
 
   private selectBuiltInStyle(style: BuiltInStyleTransferStyle): void {
@@ -2012,7 +2050,7 @@ struct FeatureRuntimePage {
           .height(44)
           .margin({ top: AppSpacing.lg })
           .enabled(this.runActionEnabled())
-          .onClick(() => this.runWorkflow())
+          .onClick(() => this.runPrimaryAction())
 
         Column() {
           Text(appString('feature_runtime_result_title'))
@@ -2025,6 +2063,12 @@ struct FeatureRuntimePage {
             .fontColor(AppColor.textSecondary)
             .margin({ top: AppSpacing.sm })
             .width('100%')
+          if (this.shouldShowRuntimePermissionRetry()) {
+            Button(appString('splash_permission_retry'))
+              .height(36)
+              .margin({ top: AppSpacing.sm })
+              .onClick(() => this.retryRuntimePermission())
+          }
           if (this.resultRows.length > 0) {
             ForEach(this.resultRows, (row: AiRunResultRow) => {
               this.resultRow(row)

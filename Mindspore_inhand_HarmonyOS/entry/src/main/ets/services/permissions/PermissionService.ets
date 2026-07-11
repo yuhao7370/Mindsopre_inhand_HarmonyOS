@@ -18,6 +18,9 @@ export interface PermissionRequestSummary {
   readonly requested: Array<Permissions>;
 }
 
+export type RuntimePermissionRecoveryAction = 'none' | 'retryRun' | 'retryCameraInput';
+export type RuntimePermissionRunAction = 'runWorkflow' | 'retryCameraInput';
+
 export function permissionNameForKind(kind: FeaturePermissionKind): Permissions {
   switch (kind) {
     case 'camera':
@@ -48,6 +51,28 @@ export function startupPermissionNames(): Array<Permissions> {
     cameraPermissionName,
     mediaPermissionName
   ];
+}
+
+export function runtimePermissionRecoveryActionForWorkflow(
+  workflow: FeatureWorkflow | undefined,
+  statusKey: string
+): RuntimePermissionRecoveryAction {
+  if (statusKey !== 'feature_runtime_permission_denied' || workflow === undefined) {
+    return 'none';
+  }
+  if (workflow.liveMode && workflow.inputKinds.indexOf('camera') >= 0) {
+    return 'retryCameraInput';
+  }
+  return 'retryRun';
+}
+
+export function runtimePermissionRunActionForWorkflow(
+  workflow: FeatureWorkflow | undefined,
+  statusKey: string
+): RuntimePermissionRunAction {
+  return runtimePermissionRecoveryActionForWorkflow(workflow, statusKey) === 'retryCameraInput' ?
+    'retryCameraInput' :
+    'runWorkflow';
 }
 
 export class PermissionService {

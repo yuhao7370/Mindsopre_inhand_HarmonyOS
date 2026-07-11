@@ -29,6 +29,20 @@ Current HarmonyOS behavior:
   cache slot `mindspore_live_frame.jpg` before running the existing image-based
   local runner.
 
+## Runtime Permission Recovery
+
+Android shows the shared `app_need_permission` guidance and gives the user a
+manual authorization path when camera/storage permissions are denied.
+
+Current HarmonyOS behavior:
+
+- The startup splash gate blocks app entry until camera/media runtime
+  permissions are granted or the user exits.
+- Feature Runtime pages now show the localized retry action when a workflow
+  permission request is denied. Non-live workflows retry the current run, while
+  live camera workflows retry the camera input startup so the preview and live
+  loop recover through the same path as the original Android page.
+
 ## PoseNet
 
 Android keeps a still PoseNet page at `/hms/PosenetMainActivitys` and a
