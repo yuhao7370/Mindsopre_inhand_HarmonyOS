@@ -3969,6 +3969,27 @@ export default function localUnitTest() {
       expect(englishResult.translatedText).assertEqual('\u56FE\u50CF\u5206\u7C7B\n\u76EE\u6807\u68C0\u6D4B');
     });
 
+    it('localTextTranslationRunnerHandlesAndroidSeparatedTitlesOffline', 0, async () => {
+      const runner = new LocalTextTranslationRunner();
+
+      const englishTitles = await runner.translate(
+        'Object Detection(Photo)\nObject Detection(Real-time)\nReal-time translation',
+        'zh'
+      );
+      expect(englishTitles.ok).assertTrue();
+      expect(englishTitles.translatedText)
+        .assertEqual('\u5BF9\u8C61\u68C0\u6D4B(\u56FE\u7247)\n' +
+          '\u5BF9\u8C61\u68C0\u6D4B(\u5B9E\u65F6)\n\u5B9E\u65F6\u7FFB\u8BD1');
+
+      const chineseTitles = await runner.translate(
+        '\u5BF9\u8C61\u68C0\u6D4B(\u56FE\u7247)\n\u5BF9\u8C61\u68C0\u6D4B(\u5B9E\u65F6)\n\u5B9E\u65F6\u7FFB\u8BD1',
+        'en'
+      );
+      expect(chineseTitles.ok).assertTrue();
+      expect(chineseTitles.translatedText)
+        .assertEqual('Object Detection(Photo)\nObject Detection(Real-time)\nreal-time translation');
+    });
+
     it('localTextTranslationRunnerKeepsCommonAiPhoneSentencesNaturalOffline', 0, async () => {
       const runner = new LocalTextTranslationRunner();
 

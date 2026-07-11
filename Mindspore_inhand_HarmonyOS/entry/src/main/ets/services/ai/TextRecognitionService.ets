@@ -166,11 +166,15 @@ const localChineseToEnglishPhrases: Array<LocalTranslationPhrase> = [
   { source: '\u6A21\u578B', target: 'model' },
   { source: '\u56FE\u50CF\u5206\u7C7B', target: 'image classification' },
   { source: '\u76EE\u6807\u68C0\u6D4B', target: 'object detection' },
+  { source: '\u5BF9\u8C61\u68C0\u6D4B', target: 'object detection' },
+  { source: '\u5BF9\u8C61\u68C0\u6D4B\u56FE\u7247', target: 'Object Detection(Photo)' },
+  { source: '\u5BF9\u8C61\u68C0\u6D4B\u5B9E\u65F6', target: 'Object Detection(Real-time)' },
   { source: '\u4EBA\u50CF\u5206\u5272', target: 'portrait segmentation' },
   { source: '\u59FF\u6001\u4F30\u8BA1', target: 'pose estimation' },
   { source: '\u624B\u52BF\u8BC6\u522B', target: 'gesture recognition' },
   { source: '\u573A\u666F\u68C0\u6D4B', target: 'scene detection' },
   { source: '\u6587\u672C\u63D0\u53D6', target: 'text extraction' },
+  { source: '\u5B9E\u65F6\u7FFB\u8BD1', target: 'real-time translation' },
   { source: '\u98CE\u683C\u8FC1\u79FB', target: 'style transfer' },
   { source: '\u81EA\u5B9A\u4E49\u6A21\u578B', target: 'custom model' },
   { source: '\u53EF\u4EE5\u5728\u624B\u673A\u4E0A\u8FD0\u884C', target: 'can run on phone' },
@@ -178,6 +182,7 @@ const localChineseToEnglishPhrases: Array<LocalTranslationPhrase> = [
   { source: '\u53EF\u4EE5', target: 'can' },
   { source: '\u8FD0\u884C', target: 'run' },
   { source: '\u5728\u624B\u673A\u4E0A', target: 'on phone' },
+  { source: '\u5B9E\u65F6', target: 'real-time' },
   { source: '\u76F8\u673A', target: 'camera' },
   { source: '\u7167\u7247', target: 'photo' }
 ];
@@ -239,11 +244,14 @@ const localEnglishToChinesePhrases: Array<LocalTranslationPhrase> = [
   { source: 'model', target: '\u6A21\u578B' },
   { source: 'image classification', target: '\u56FE\u50CF\u5206\u7C7B' },
   { source: 'object detection', target: '\u76EE\u6807\u68C0\u6D4B' },
+  { source: 'object detection photo', target: '\u5BF9\u8C61\u68C0\u6D4B(\u56FE\u7247)' },
+  { source: 'object detection real time', target: '\u5BF9\u8C61\u68C0\u6D4B(\u5B9E\u65F6)' },
   { source: 'portrait segmentation', target: '\u4EBA\u50CF\u5206\u5272' },
   { source: 'pose estimation', target: '\u59FF\u6001\u4F30\u8BA1' },
   { source: 'gesture recognition', target: '\u624B\u52BF\u8BC6\u522B' },
   { source: 'scene detection', target: '\u573A\u666F\u68C0\u6D4B' },
   { source: 'text extraction', target: '\u6587\u672C\u63D0\u53D6' },
+  { source: 'real time translation', target: '\u5B9E\u65F6\u7FFB\u8BD1' },
   { source: 'style transfer', target: '\u98CE\u683C\u8FC1\u79FB' },
   { source: 'custom model', target: '\u81EA\u5B9A\u4E49\u6A21\u578B' },
   { source: 'can run on the phone', target: '\u53EF\u4EE5\u5728\u624B\u673A\u4E0A\u8FD0\u884C' },
@@ -257,6 +265,7 @@ const localEnglishToChinesePhrases: Array<LocalTranslationPhrase> = [
   { source: 'runs', target: '\u8FD0\u884C' },
   { source: 'on the phone', target: '\u5728\u624B\u673A\u4E0A' },
   { source: 'on phone', target: '\u5728\u624B\u673A\u4E0A' },
+  { source: 'real time', target: '\u5B9E\u65F6' },
   { source: 'camera', target: '\u76F8\u673A' },
   { source: 'photo', target: '\u7167\u7247' }
 ];
@@ -513,11 +522,16 @@ function normalizeLocalTranslationTargetLanguage(targetLanguage: string): string
 
 function normalizeLocalTranslationPhrase(text: string): string {
   let value = text.split('\r').join('').trim().toLowerCase();
+  const separators: Array<string> =
+    ['(', ')', '[', ']', '{', '}', '\uFF08', '\uFF09', '\u3010', '\u3011', '-', '_', '/', '\\'];
+  for (let index = 0; index < separators.length; index++) {
+    value = value.split(separators[index]).join(' ');
+  }
   const punctuation: Array<string> = ['.', ',', '!', '?', ':', ';', '\uFF0C', '\u3002', '\uFF01', '\uFF1F'];
   for (let index = 0; index < punctuation.length; index++) {
     value = value.split(punctuation[index]).join('');
   }
-  return value;
+  return value.split(' ').filter((part: string) => part.length > 0).join(' ');
 }
 
 async function openTextRecognitionImageFile(imageUri: string): Promise<fileIo.File> {
