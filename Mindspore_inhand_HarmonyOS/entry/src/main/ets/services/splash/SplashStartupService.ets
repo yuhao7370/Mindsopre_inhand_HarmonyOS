@@ -32,6 +32,14 @@ export function canFinishSplashForStartupPermissionState(state: SplashStartupPer
   return state === 'ready';
 }
 
+export function shouldConsumeSplashBackPress(): boolean {
+  return true;
+}
+
+export function shouldConsumeIndexBackPress(showMainPage: boolean): boolean {
+  return !showMainPage && shouldConsumeSplashBackPress();
+}
+
 export function splashStartupTransitionForRequest(request: PermissionRequestSummary): SplashStartupTransition {
   const state = splashStartupPermissionStateForRequest(request);
   return splashStartupTransitionForState(state);

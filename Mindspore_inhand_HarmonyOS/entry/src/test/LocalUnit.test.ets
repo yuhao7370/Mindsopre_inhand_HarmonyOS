@@ -315,6 +315,8 @@ import {
   canFinishSplashForStartupPermissionState,
   finishSplashActionForStartupPermissionState,
   SplashFinishAction,
+  shouldConsumeSplashBackPress,
+  shouldConsumeIndexBackPress,
   splashRetryPermissionAction,
   SplashRetryPermissionAction,
   splashStartupTransitionForMissingContext,
@@ -1717,6 +1719,12 @@ export default function localUnitTest() {
       expect(hasAppStringKey('app_need_permission')).assertTrue();
       expect(hasAppStringKey('splash_permission_retry')).assertTrue();
       expect(hasAppStringKey('splash_permission_exit')).assertTrue();
+    });
+
+    it('consumesSplashBackPressLikeAndroidStartupActivity', 0, () => {
+      expect(shouldConsumeSplashBackPress()).assertTrue();
+      expect(shouldConsumeIndexBackPress(false)).assertTrue();
+      expect(shouldConsumeIndexBackPress(true)).assertFalse();
     });
 
     it('formatsAppVersionNameLikeAndroidPackageInfo', 0, () => {
