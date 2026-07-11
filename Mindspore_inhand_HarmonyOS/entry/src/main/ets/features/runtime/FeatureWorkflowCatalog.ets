@@ -411,6 +411,11 @@ export function shouldClearTextInputAfterInputReady(workflow: FeatureWorkflow, i
     (inputKind === 'photo' || inputKind === 'camera');
 }
 
+export function shouldHideTextInputWhenPreparingInput(workflow: FeatureWorkflow, inputKind: FeatureInputKind): boolean {
+  return workflow.routeName === AppRoute.TEXT_TRANSLATION.name &&
+    (inputKind === 'photo' || inputKind === 'camera');
+}
+
 export function shouldShowStyleRecoveryControl(aiMethod: string, styledImageReady: boolean): boolean {
   return aiMethod === 'runStyleTransfer' && styledImageReady;
 }

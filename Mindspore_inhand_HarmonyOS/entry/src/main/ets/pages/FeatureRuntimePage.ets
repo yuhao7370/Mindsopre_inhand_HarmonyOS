@@ -18,6 +18,7 @@ import {
   shouldDeferRuntimeResultClearUntilPickResult,
   shouldLeaveRuntimeAfterCancelledInitialPick,
   shouldStartWorkflowRun,
+  shouldHideTextInputWhenPreparingInput,
   shouldShowCopyTextAction,
   shouldShowStyleRecoveryControl,
   shouldUseLongTextInput,
@@ -308,6 +309,9 @@ struct FeatureRuntimePage {
         uri: uri
       }, 'feature_runtime_image_ready', inputKind);
       return;
+    }
+    if (workflow && shouldHideTextInputWhenPreparingInput(workflow, inputKind)) {
+      this.textInputVisible = false;
     }
     const context = this.uiAbilityContext();
     if (!context) {

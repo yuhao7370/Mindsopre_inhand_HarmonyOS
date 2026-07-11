@@ -277,6 +277,7 @@ import {
   shouldClearTextInputAfterInputReady,
   shouldLeaveRuntimeAfterCancelledInitialPick,
   shouldStartWorkflowRun,
+  shouldHideTextInputWhenPreparingInput,
   shouldShowCopyTextAction,
   shouldUseLongTextInput,
   shouldUseLongTextResultRow,
@@ -6068,6 +6069,18 @@ export default function localUnitTest() {
       expect(shouldClearTextInputAfterInputReady(textTranslation, 'camera')).assertTrue();
       expect(shouldClearTextInputAfterInputReady(textTranslation, 'text')).assertFalse();
       expect(shouldClearTextInputAfterInputReady(textRecognition, 'photo')).assertFalse();
+    });
+
+    it('hidesTextTranslationEditorWhenPreparingAndroidImageInput', 0, () => {
+      const textRecognition: FeatureWorkflow = workflowForRoute(AppRoute.TEXT_RECOGNITION.name)!;
+      const textTranslation: FeatureWorkflow = workflowForRoute(AppRoute.TEXT_TRANSLATION.name)!;
+      const styleTransfer: FeatureWorkflow = workflowForRoute(AppRoute.STYLE_TRANSFER.name)!;
+
+      expect(shouldHideTextInputWhenPreparingInput(textTranslation, 'photo')).assertTrue();
+      expect(shouldHideTextInputWhenPreparingInput(textTranslation, 'camera')).assertTrue();
+      expect(shouldHideTextInputWhenPreparingInput(textTranslation, 'text')).assertFalse();
+      expect(shouldHideTextInputWhenPreparingInput(textRecognition, 'photo')).assertFalse();
+      expect(shouldHideTextInputWhenPreparingInput(styleTransfer, 'photo')).assertFalse();
     });
 
     it('computesTextImageInputReadyPageActionBeforeAutoRun', 0, () => {
