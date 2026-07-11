@@ -321,6 +321,7 @@ import {
   shouldPreserveRuntimeVisualResultOnAiResult,
   runtimeSegmentationBackgroundImageUri,
   shouldHideTextInputWhenPreparingInput,
+  textInputVisibleAfterCancelledPick,
   shouldClearRuntimeResultAtWorkflowStart,
   shouldShowCopyTextAction,
   shouldShowResultSaveAction,
@@ -7443,6 +7444,17 @@ export default function localUnitTest() {
       expect(shouldHideTextInputWhenPreparingInput(textTranslation, 'text')).assertFalse();
       expect(shouldHideTextInputWhenPreparingInput(textRecognition, 'photo')).assertFalse();
       expect(shouldHideTextInputWhenPreparingInput(styleTransfer, 'photo')).assertFalse();
+    });
+
+    it('restoresTextTranslationEditorVisibilityAfterCancelledImagePick', 0, () => {
+      const textTranslation: FeatureWorkflow = workflowForRoute(AppRoute.TEXT_TRANSLATION.name)!;
+      const textRecognition: FeatureWorkflow = workflowForRoute(AppRoute.TEXT_RECOGNITION.name)!;
+
+      expect(textInputVisibleAfterCancelledPick(textTranslation, 'photo', false, true)).assertTrue();
+      expect(textInputVisibleAfterCancelledPick(textTranslation, 'camera', false, true)).assertTrue();
+      expect(textInputVisibleAfterCancelledPick(textTranslation, 'photo', false, false)).assertFalse();
+      expect(textInputVisibleAfterCancelledPick(textTranslation, 'text', false, true)).assertFalse();
+      expect(textInputVisibleAfterCancelledPick(textRecognition, 'photo', false, true)).assertFalse();
     });
 
     it('computesTextImageInputReadyPageActionBeforeAutoRun', 0, () => {

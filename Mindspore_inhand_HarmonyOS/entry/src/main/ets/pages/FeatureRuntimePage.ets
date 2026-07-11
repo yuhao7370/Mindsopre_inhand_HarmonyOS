@@ -25,6 +25,7 @@ import {
   runtimeSegmentationBackgroundImageUri,
   shouldStartWorkflowRun,
   shouldHideTextInputWhenPreparingInput,
+  textInputVisibleAfterCancelledPick,
   shouldClearRuntimeResultAtWorkflowStart,
   shouldMirrorSegmentationForeground,
   shouldShowCopyTextAction,
@@ -274,6 +275,7 @@ struct FeatureRuntimePage {
   private liveCameraInputSelected: boolean = false;
   private liveRuntimeLoopService: LiveRuntimeLoopService = new LiveRuntimeLoopService();
   private initialInputPrepared: boolean = false;
+  private pendingPickTextInputVisible: boolean | undefined = undefined;
 
   aboutToAppear() {
     const params = router.getParams() as FeatureRuntimeParams;
@@ -309,6 +311,7 @@ struct FeatureRuntimePage {
   private prepareInput(inputKind: FeatureInputKind, initialPick: boolean = false): void {
     this.statusKey = 'feature_runtime_status_preparing';
     const workflow = workflowForRoute(this.routeName);
+    this.pendingPickTextInputVisible = undefined;
     if (!workflow || !shouldDeferRuntimeResultClearUntilPickResult(workflow, inputKind)) {
       this.clearRuntimeResultState();
     }
@@ -338,11 +341,19 @@ struct FeatureRuntimePage {
       return;
     }
     if (workflow && shouldHideTextInputWhenPreparingInput(workflow, inputKind)) {
+      this.pendingPickTextInputVisible = this.textInputVisible;
       this.textInputVisible = false;
     }
     const context = this.uiAbilityContext();
     if (!context) {
       this.statusKey = 'feature_runtime_pick_cancelled';
+      this.textInputVisible = textInputVisibleAfterCancelledPick(
+        workflow,
+        inputKind,
+        this.textInputVisible,
+        this.pendingPickTextInputVisible
+      );
+      this.pendingPickTextInputVisible = undefined;
       return;
     }
     const pickerService = new PickerService(context);
@@ -558,21 +569,29 @@ struct FeatureRuntimePage {
     shouldRunReadyWorkflow: boolean = true,
     initialPick: boolean = false
   ): void {
+    const workflow = workflowForRoute(this.routeName);
     if (!result.ok) {
-      const workflow = workflowForRoute(this.routeName);
+      const previousTextInputVisible = this.pendingPickTextInputVisible;
+      this.pendingPickTextInputVisible = undefined;
       this.statusKey = cancelledPickStatusKeyForWorkflow(workflow, inputKind, initialPick);
       this.applyPickedInputState(runtimePickedInputStateAfterCancelledPick(
         this.routeName,
         inputKind,
         this.pickedInputState()
       ));
+      this.textInputVisible = textInputVisibleAfterCancelledPick(
+        workflow,
+        inputKind,
+        this.textInputVisible,
+        previousTextInputVisible
+      );
       if (workflow && shouldLeaveRuntimeAfterCancelledInitialPick(workflow, inputKind, initialPick)) {
         this.showRuntimeToast(cancelledPickToastStatusKeyForWorkflow(workflow, inputKind, initialPick));
         router.back();
       }
       return;
     }
-    const workflow = workflowForRoute(this.routeName);
+    this.pendingPickTextInputVisible = undefined;
     if (!shouldPreserveRuntimeResultAfterInputReady(workflow, inputKind)) {
       this.clearRuntimeResultState();
     }

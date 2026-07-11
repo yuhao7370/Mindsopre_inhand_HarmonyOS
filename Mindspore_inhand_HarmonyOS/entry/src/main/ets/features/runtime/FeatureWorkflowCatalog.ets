@@ -594,6 +594,20 @@ export function shouldHideTextInputWhenPreparingInput(workflow: FeatureWorkflow,
     (inputKind === 'photo' || inputKind === 'camera');
 }
 
+export function textInputVisibleAfterCancelledPick(
+  workflow: FeatureWorkflow | undefined,
+  inputKind: FeatureInputKind,
+  currentTextInputVisible: boolean,
+  previousTextInputVisible: boolean | undefined
+): boolean {
+  if (workflow !== undefined &&
+    shouldHideTextInputWhenPreparingInput(workflow, inputKind) &&
+    previousTextInputVisible !== undefined) {
+    return previousTextInputVisible;
+  }
+  return currentTextInputVisible;
+}
+
 export function shouldShowStyleRecoveryControl(aiMethod: string, styledImageReady: boolean): boolean {
   return aiMethod === 'runStyleTransfer' && styledImageReady;
 }

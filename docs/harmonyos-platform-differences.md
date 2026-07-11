@@ -237,6 +237,9 @@ Current HarmonyOS behavior:
   clearing runtime results until a new input is actually selected.
 - Canceling those pickers now keeps the previous input URI, result rows, and
   visual overlay/preview state while showing the localized canceled status.
+- Text Translation photo/camera cancellation also restores the pre-picker text
+  editor visibility, so typed input stays visible when the user backs out of an
+  image-based translation pick.
 - Invalid selected model files still clear stale results and preserve the last
   compatible cached model, matching the model-override guard above.
 
