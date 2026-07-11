@@ -22,6 +22,7 @@ import {
   shouldMirrorSegmentationForeground,
   shouldShowCopyTextAction,
   shouldShowLiveGestureCameraOverlay,
+  shouldShowLiveObjectDetectionCameraOverlay,
   shouldShowResultSaveAction,
   shouldShowStyleRecoveryControl,
   shouldUseLongTextInput,
@@ -1417,6 +1418,12 @@ struct FeatureRuntimePage {
           .onDestroy(() => this.stopLiveCameraPreview())
         if (this.sceneOverlayRows.length > 0 && this.shouldShowLiveSceneOverlay()) {
           this.liveSceneOverlay()
+        }
+        if (this.objectDetections.length > 0 &&
+          shouldShowLiveObjectDetectionCameraOverlay(workflowForRoute(this.routeName))) {
+          ForEach(this.objectDetections, (detection: ObjectDetection, index: number) => {
+            this.objectDetectionBox(detection, index)
+          }, (detection: ObjectDetection) => `${detection.imageId}-${detection.labelId}-${detection.score}`)
         }
         if (this.visibleGestureDetections().length > 0 &&
           shouldShowLiveGestureCameraOverlay(workflowForRoute(this.routeName))) {

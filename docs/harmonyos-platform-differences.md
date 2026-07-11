@@ -347,6 +347,9 @@ Current HarmonyOS behavior:
 - If that initial album pick is cancelled, HarmonyOS returns to the previous
   page instead of leaving an empty runtime screen, matching Android's
   `finish()` path for invalid initial photo selection.
+- Live Object Detection draws the same result boxes directly over the
+  HarmonyOS camera preview, matching Android `ObjectCameraActivity`'s preview
+  overlay behavior while still reusing the shared captured-frame result state.
 - User-selected `.ms` files remain optional. When selected, HarmonyOS copies
   the file into the app cache as `object_detection_model.ms` before runtime use,
   so the MindSpore Lite runner receives an app-owned path instead of depending

@@ -295,6 +295,7 @@ import {
   shouldShowCopyTextAction,
   shouldShowResultSaveAction,
   shouldShowLiveGestureCameraOverlay,
+  shouldShowLiveObjectDetectionCameraOverlay,
   shouldMirrorSegmentationForeground,
   shouldUseLongTextInput,
   shouldUseLongTextResultRow,
@@ -6556,6 +6557,17 @@ export default function localUnitTest() {
       expect(shouldShowLiveGestureCameraOverlay(workflowForRoute(AppRoute.SCENE_LIVE.name)))
         .assertFalse();
       expect(shouldShowLiveGestureCameraOverlay(undefined))
+        .assertFalse();
+    });
+
+    it('showsObjectBoxesOnOnlyTheAndroidStyleLiveObjectPreview', 0, () => {
+      expect(shouldShowLiveObjectDetectionCameraOverlay(workflowForRoute(AppRoute.OBJECT_CAMERA.name)))
+        .assertTrue();
+      expect(shouldShowLiveObjectDetectionCameraOverlay(workflowForRoute(AppRoute.OBJECT_PHOTO.name)))
+        .assertFalse();
+      expect(shouldShowLiveObjectDetectionCameraOverlay(workflowForRoute(AppRoute.GESTURE_LIVE.name)))
+        .assertFalse();
+      expect(shouldShowLiveObjectDetectionCameraOverlay(undefined))
         .assertFalse();
     });
 
