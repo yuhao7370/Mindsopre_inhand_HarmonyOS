@@ -1,4 +1,5 @@
 import { i18n, resourceManager } from '@kit.LocalizationKit';
+import { AppRoute } from '../../app/AppRoutes';
 import { FeatureWorkflow } from '../../features/runtime/FeatureWorkflowCatalog';
 import { DefaultAiService } from './AiService';
 import {
@@ -48,6 +49,7 @@ import {
 import { MindSporeLiteModelRunner, RawfileContentReader } from './MindSporeLiteModelRunner';
 import {
   HarmonySubjectSegmentationRunner,
+  SegmentationAndroidScene,
   SegmentationRunner,
   SegmentationService
 } from './SegmentationService';
@@ -301,7 +303,7 @@ export async function createRuntimeAiServiceForWorkflow(
   }
   if (workflow.aiMethod === 'segmentPerson') {
     return new DefaultAiService({
-      segmentationService: createHarmonySegmentationService(options)
+      segmentationService: createHarmonySegmentationService(options, workflow)
     });
   }
   if (workflow.aiMethod === 'detectPose') {
@@ -444,11 +446,21 @@ export async function createHarmonyTextTranslationService(
 }
 
 export function createHarmonySegmentationService(
-  options: HarmonyImageClassificationRuntimeOptions
+  options: HarmonyImageClassificationRuntimeOptions,
+  workflow?: FeatureWorkflow
 ): SegmentationService {
   return new SegmentationService({
-    runner: options.segmentationRunner ?? new HarmonySubjectSegmentationRunner()
+    runner: options.segmentationRunner ?? new HarmonySubjectSegmentationRunner({
+      androidScene: workflow === undefined ? 'all' : segmentationAndroidSceneForWorkflow(workflow)
+    })
   });
+}
+
+export function segmentationAndroidSceneForWorkflow(workflow: FeatureWorkflow): SegmentationAndroidScene {
+  if (workflow.routeName === AppRoute.SEGMENTATION_STILL.name) {
+    return 'all';
+  }
+  return 'foregroundOnly';
 }
 
 export function createHarmonyPoseService(

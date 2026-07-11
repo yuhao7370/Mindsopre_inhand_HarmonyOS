@@ -45,6 +45,12 @@ export interface SegmentationRunner {
   segmentPerson(imageUri: string): Promise<SegmentationResult>;
 }
 
+export type SegmentationAndroidScene = 'all' | 'foregroundOnly';
+
+export interface HarmonySubjectSegmentationRunnerOptions {
+  readonly androidScene?: SegmentationAndroidScene;
+}
+
 export interface SegmentationServiceOptions {
   readonly runner: SegmentationRunner;
 }
@@ -74,6 +80,12 @@ export class SegmentationService {
 }
 
 export class HarmonySubjectSegmentationRunner implements SegmentationRunner {
+  private readonly androidScene: SegmentationAndroidScene;
+
+  constructor(options?: HarmonySubjectSegmentationRunnerOptions) {
+    this.androidScene = options?.androidScene ?? 'all';
+  }
+
   async segmentPerson(imageUri: string): Promise<SegmentationResult> {
     let imageFile: fileIo.File | undefined = undefined;
     let imageSource: image.ImageSource | undefined = undefined;
@@ -88,11 +100,7 @@ export class HarmonySubjectSegmentationRunner implements SegmentationRunner {
       pixelMap = await imageSource.createPixelMap(decodingOptionsWithImageRotation({}, rotationDegrees));
       const result = await subjectSegmentation.doSegmentation({
         pixelMap: pixelMap
-      }, {
-        maxCount: 6,
-        enableSubjectDetails: true,
-        enableSubjectForegroundImage: true
-      });
+      }, segmentationConfigForAndroidScene(this.androidScene));
       const segmentationResult = await segmentationResultFromCoreVision(
         result,
         Date.now() - startMs,
@@ -113,6 +121,16 @@ export class HarmonySubjectSegmentationRunner implements SegmentationRunner {
       }
     }
   }
+}
+
+export function segmentationConfigForAndroidScene(
+  scene: SegmentationAndroidScene
+): subjectSegmentation.SegmentationConfig {
+  return {
+    maxCount: 6,
+    enableSubjectDetails: scene === 'all',
+    enableSubjectForegroundImage: true
+  };
 }
 
 export async function segmentationResultFromCoreVision(

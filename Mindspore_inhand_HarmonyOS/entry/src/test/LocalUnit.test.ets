@@ -28,6 +28,7 @@ import {
   SegmentationResult,
   SegmentationRunner,
   SegmentationService,
+  segmentationConfigForAndroidScene,
   segmentationRectanglePercent
 } from '../main/ets/services/ai/SegmentationService';
 import {
@@ -201,6 +202,7 @@ import {
   rawfileAsciiContentToText,
   rawfileUtf8ContentToText,
   resetHarmonyRuntimeAiServiceCachesForTests,
+  segmentationAndroidSceneForWorkflow,
   setHarmonyRuntimeLabelLocaleForTests
 } from '../main/ets/services/ai/ImageClassificationRuntimeFactory';
 import {
@@ -5892,6 +5894,26 @@ export default function localUnitTest() {
       expect(result.ok).assertTrue();
       expect(result.code).assertEqual('SEGMENTATION_DONE');
       expect(runner.seenImageUris[0]).assertEqual('file://selected/person.jpg');
+    });
+
+    it('runtimeFactoryMapsAndroidSegmentationSceneModes', 0, () => {
+      const stillWorkflow: FeatureWorkflow = workflowForRoute(AppRoute.SEGMENTATION_STILL.name)!;
+      const liveWorkflow: FeatureWorkflow = workflowForRoute(AppRoute.SEGMENTATION_LIVE.name)!;
+      const portraitWorkflow: FeatureWorkflow = workflowForRoute(AppRoute.PORTRAIT_SEGMENTATION.name)!;
+
+      expect(segmentationAndroidSceneForWorkflow(stillWorkflow)).assertEqual('all');
+      expect(segmentationAndroidSceneForWorkflow(liveWorkflow)).assertEqual('foregroundOnly');
+      expect(segmentationAndroidSceneForWorkflow(portraitWorkflow)).assertEqual('foregroundOnly');
+
+      const allConfig = segmentationConfigForAndroidScene('all');
+      expect(allConfig.maxCount).assertEqual(6);
+      expect(allConfig.enableSubjectDetails).assertTrue();
+      expect(allConfig.enableSubjectForegroundImage).assertTrue();
+
+      const foregroundOnlyConfig = segmentationConfigForAndroidScene('foregroundOnly');
+      expect(foregroundOnlyConfig.maxCount).assertEqual(6);
+      expect(foregroundOnlyConfig.enableSubjectDetails).assertFalse();
+      expect(foregroundOnlyConfig.enableSubjectForegroundImage).assertTrue();
     });
 
     it('runtimeFactoryInjectsPoseServiceForPoseWorkflow', 0, async () => {
