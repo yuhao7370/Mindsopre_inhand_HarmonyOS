@@ -6764,6 +6764,54 @@ export default function localUnitTest() {
       expect(sceneDetection.ok).assertTrue();
       expect(sceneDetection.translatedText)
         .assertEqual('\u573A\u666F\u68C0\u6D4B\u53EF\u4EE5\u5224\u65AD\u76EE\u6807\u573A\u666F\u7684\u7C7B\u578B');
+
+      const photoDetection = await runner.translate(
+        'Photo detection can identify the category of the object and mark its position in the image.',
+        'zh'
+      );
+      expect(photoDetection.ok).assertTrue();
+      expect(photoDetection.translatedText)
+        .assertEqual('\u7167\u7247\u68C0\u6D4B\u53EF\u4EE5\u8BC6\u522B\u51FA\u56FE\u4E2D\u7269\u4F53\u7684\u7C7B\u522B\uFF0C\u5E76\u540C\u65F6\u6807\u793A\u7269\u4F53\u4F4D\u7F6E\u3002');
+
+      const cameraDetection = await runner.translate(
+        '\u89C6\u9891\u68C0\u6D4B\u53EF\u4EE5\u8BC6\u522B\u51FA\u6444\u50CF\u5934\u4E2D\u7269\u4F53\u7684\u7C7B\u522B\uFF0C\u5E76\u540C\u65F6\u6807\u793A\u7269\u4F53\u4F4D\u7F6E\u3002',
+        'en'
+      );
+      expect(cameraDetection.ok).assertTrue();
+      expect(cameraDetection.translatedText)
+        .assertEqual('Camera detection can identify the category of the object and mark its position in the camera');
+
+      const posenet = await runner.translate(
+        '\u9AA8\u9ABC\u68C0\u6D4B\u53EF\u4EE5\u8BC6\u522B\u6444\u50CF\u5934\u4E2D\uFF0C\u4E0D\u540C\u59FF\u52BF\u4E0B\u4EBA\u4F53\u7684\u9762\u90E8\u4E94\u5B98\u4E0E\u80A2\u4F53\u59FF\u52BF\u3002',
+        'en'
+      );
+      expect(posenet.ok).assertTrue();
+      expect(posenet.translatedText)
+        .assertEqual('Posenet can identify the facial features and body postures of human in different positions in the camera');
+
+      const styleTransfer = await runner.translate(
+        '\u98CE\u683C\u8FC1\u79FB\u53EF\u4EE5\u6839\u636EAPP\u5185\u7F6E\u7684\u6807\u51C6\u56FE\u7247\u6539\u53D8\u7528\u6237\u76EE\u6807\u56FE\u7247\u7684\u827A\u672F\u98CE\u683C\u3002',
+        'en'
+      );
+      expect(styleTransfer.ok).assertTrue();
+      expect(styleTransfer.translatedText)
+        .assertEqual('Style transfer can change the art style of users target images based on the standard image in the APP');
+
+      const imageSegmentation = await runner.translate(
+        'Image segmentation is used to detect the position of the target or the category of the object in the picture.',
+        'zh'
+      );
+      expect(imageSegmentation.ok).assertTrue();
+      expect(imageSegmentation.translatedText)
+        .assertEqual('\u56FE\u50CF\u5206\u5272\u7528\u4E8E\u68C0\u6D4B\u76EE\u6807\u5728\u56FE\u7247\u4E2D\u7684\u4F4D\u7F6E\u6216\u8005\u56FE\u7247\u4E2D\u51FA\u73B0\u7684\u7269\u4F53\u662F\u5C5E\u4E8E\u4F55\u79CD\u7C7B\u522B\u7684\u3002');
+
+      const garbageClassification = await runner.translate(
+        '\u5783\u573E\u5206\u7C7B\u53EF\u8BC6\u522B\u51FA\u955C\u5934\u4E2D\u7269\u4F53\u6240\u5C5E\u7684\u5783\u573E\u7C7B\u522B\u3002',
+        'en'
+      );
+      expect(garbageClassification.ok).assertTrue();
+      expect(garbageClassification.translatedText)
+        .assertEqual('Garbage classification identifies the garbage category of the object detected by the camera lens');
     });
 
     it('localTextTranslationCoversAndroidHmsPromptAndFailureCopy', 0, async () => {
