@@ -438,7 +438,13 @@ function normalizeGestureLabel(label: string): string {
 }
 
 function gestureLabelEqualsKeyword(label: string, keyword: string): boolean {
-  return label === keyword || label === `hand_${keyword}` || label === `${keyword}_hand`;
+  return label === keyword ||
+    label === `hand_${keyword}` ||
+    label === `${keyword}_hand` ||
+    label === `gesture_${keyword}` ||
+    label === `${keyword}_gesture` ||
+    label === `hand_${keyword}_gesture` ||
+    label === `gesture_${keyword}_hand`;
 }
 
 function usesAndroidGestureLabel(gesture: GestureDetection, runnerLabel: string): boolean {

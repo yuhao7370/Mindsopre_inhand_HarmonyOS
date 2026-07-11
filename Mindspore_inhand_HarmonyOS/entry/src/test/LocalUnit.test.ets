@@ -6211,6 +6211,10 @@ export default function localUnitTest() {
       expect(gestureCategoryForImageClassificationLabel('ok_sign_hand')).assertEqual(13);
       expect(gestureCategoryForImageClassificationLabel('heart_gesture')).assertEqual(12);
       expect(gestureCategoryForImageClassificationLabel('finger_heart_hand')).assertEqual(12);
+      expect(gestureCategoryForImageClassificationLabel('gesture_one')).assertEqual(0);
+      expect(gestureCategoryForImageClassificationLabel('one_gesture')).assertEqual(0);
+      expect(gestureCategoryForImageClassificationLabel('hand_five_gesture')).assertEqual(4);
+      expect(gestureCategoryForImageClassificationLabel('gesture_ok_sign')).assertEqual(13);
       expect(gestureCategoryForImageClassificationLabel('like')).assertEqual(-1);
       expect(gestureCategoryForImageClassificationLabel('nail')).assertEqual(-1);
       expect(gestureCategoryForImageClassificationLabel('hand-held_computer')).assertEqual(-1);

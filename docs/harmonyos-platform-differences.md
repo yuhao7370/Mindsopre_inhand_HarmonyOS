@@ -108,11 +108,12 @@ Current HarmonyOS behavior:
   `Closed_Fist`, `Open_Palm`, `Thumb_Up`, `Thumb_Down`, `DISS`,
   `like_gesture`, `thumb_down_gesture`, `Victory`, `Pointing_Up`, `OK sign`,
   `heart_gesture`, and `finger heart gesture`, plus common variants such as
-  `palm`, `high_five`, `peace_sign`, and `thumbs_up_gesture`, mapping them
-  back onto the Android `MLGesture` category set. Injected or future gesture
-  runners that return those aliases are canonicalized to the Android labels so
-  result rows and live overlays use the same localized strings as the Android
-  app.
+  `palm`, `high_five`, `peace_sign`, and `thumbs_up_gesture`. The mapper also
+  accepts controlled `gesture_` / `_gesture` wrappers such as `gesture_one`,
+  `one_gesture`, `hand_five_gesture`, and `gesture_ok_sign`, mapping them back
+  onto the Android `MLGesture` category set. Injected or future gesture runners
+  that return those aliases are canonicalized to the Android labels so result
+  rows and live overlays use the same localized strings as the Android app.
 - The local image-classification fallback keeps up to three distinct mapped
   Android gesture categories per run, preserving the score threshold and
   category de-duplication while moving closer to Android's multi-gesture
