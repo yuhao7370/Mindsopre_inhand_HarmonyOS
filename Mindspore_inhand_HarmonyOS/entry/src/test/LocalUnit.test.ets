@@ -1904,6 +1904,8 @@ export default function localUnitTest() {
 
     it('assignsI18nKeysToVisibleShellData', 0, () => {
       expect(hasAppStringKey(mainTabs[0].titleKey)).assertTrue();
+      expect(hasAppStringKey('experience_group_experience')).assertTrue();
+      expect(hasAppStringKey('experience_group_advanced')).assertTrue();
       expect(hasAppStringKey(experienceSections[0].titleKey)).assertTrue();
       expect(hasAppStringKey(allExperienceFeatures[0].titleKey)).assertTrue();
       expect(hasAppStringKey(collegeItems[0].titleKey)).assertTrue();
@@ -1980,6 +1982,15 @@ export default function localUnitTest() {
       expect(hasAppStringKey('permission_camera_reason')).assertTrue();
       expect(hasAppStringKey('permission_media_reason')).assertTrue();
       expect(hasAppStringKey('permission_save_image_reason')).assertTrue();
+    });
+
+    it('groupsExperienceCatalogLikeAndroidVisionFragment', 0, () => {
+      expect(visibleExperienceSections[0].id).assertEqual('experience-vision');
+      expect(visibleExperienceSections[0].groupTitleKey).assertEqual('experience_group_experience');
+      expect(visibleExperienceSections[1].id).assertEqual('experience-speech');
+      expect(visibleExperienceSections[1].groupTitleKey).assertUndefined();
+      expect(visibleExperienceSections[2].id).assertEqual('advanced-vision');
+      expect(visibleExperienceSections[2].groupTitleKey).assertEqual('experience_group_advanced');
     });
 
     it('usesAndroidNoticeDialogTreatmentForCollegeSummary', 0, () => {

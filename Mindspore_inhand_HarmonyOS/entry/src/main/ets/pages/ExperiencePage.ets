@@ -4,6 +4,7 @@ import { ExperienceHeader } from '../common/components/ExperienceHeader';
 import { FeatureCard } from '../common/components/FeatureCard';
 import { SectionTitle } from '../common/components/SectionTitle';
 import { FeatureItem, FeatureSection, visibleExperienceSections } from '../common/data/FeatureCatalog';
+import { appString, AppStringKey } from '../common/i18n/AppStrings';
 import { AppColor, AppSpacing } from '../common/theme/AppTheme';
 
 @Component
@@ -23,6 +24,29 @@ export struct ExperiencePage {
     });
   }
 
+  @Builder
+  private groupTitle(titleKey: AppStringKey) {
+    Row() {
+      Divider()
+        .strokeWidth(1)
+        .color(AppColor.divider)
+        .layoutWeight(1)
+      Text(appString(titleKey))
+        .fontSize(16)
+        .fontWeight(FontWeight.Bold)
+        .fontColor(AppColor.textPrimary)
+        .margin({ left: AppSpacing.md, right: AppSpacing.md })
+      Divider()
+        .strokeWidth(1)
+        .color(AppColor.divider)
+        .layoutWeight(1)
+    }
+    .width('100%')
+    .height(36)
+    .alignItems(VerticalAlign.Center)
+    .margin({ top: AppSpacing.sm, bottom: AppSpacing.md })
+  }
+
   build() {
     Scroll() {
       Column() {
@@ -30,6 +54,9 @@ export struct ExperiencePage {
         Column() {
           ForEach(visibleExperienceSections, (section: FeatureSection) => {
             Column() {
+              if (section.groupTitleKey !== undefined) {
+                this.groupTitle(section.groupTitleKey)
+              }
               SectionTitle({ titleKey: section.titleKey })
               Column() {
                 ForEach(section.items, (item: FeatureItem) => {

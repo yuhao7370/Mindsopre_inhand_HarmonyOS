@@ -6,6 +6,8 @@ export type AppStringKey =
   'main_tab_title_one' |
   'main_tab_title_two' |
   'main_tab_title_three' |
+  'experience_group_experience' |
+  'experience_group_advanced' |
   'tab_experience_one' |
   'tab_speech_two' |
   'experience_head_title' |
@@ -278,6 +280,8 @@ const APP_STRING_KEYS: AppStringKey[] = [
   'main_tab_title_one',
   'main_tab_title_two',
   'main_tab_title_three',
+  'experience_group_experience',
+  'experience_group_advanced',
   'tab_experience_one',
   'tab_speech_two',
   'experience_head_title',
@@ -561,6 +565,10 @@ export function appString(key: AppStringKey): ResourceStr {
       return $r('app.string.main_tab_title_two');
     case 'main_tab_title_three':
       return $r('app.string.main_tab_title_three');
+    case 'experience_group_experience':
+      return $r('app.string.experience_group_experience');
+    case 'experience_group_advanced':
+      return $r('app.string.experience_group_advanced');
     case 'tab_experience_one':
       return $r('app.string.tab_experience_one');
     case 'tab_speech_two':

@@ -18,6 +18,7 @@ export interface FeatureSection {
   readonly id: FeatureCategory;
   readonly title: string;
   readonly titleKey: AppStringKey;
+  readonly groupTitleKey?: AppStringKey;
   readonly items: FeatureItem[];
 }
 
@@ -26,6 +27,7 @@ export const experienceSections: FeatureSection[] = [
     id: 'experience-vision',
     title: 'Computer Vision',
     titleKey: 'tab_experience_one',
+    groupTitleKey: 'experience_group_experience',
     items: [
       { id: 'posenet', title: 'PoseNet', titleKey: 'title_pose_net', icon: 'people', routeName: AppRoute.POSENET.name, visibleByDefault: true },
       { id: 'segmentation', title: 'Portrait Segmentation', titleKey: 'title_segmentation', icon: 'image', routeName: AppRoute.SEGMENTATION_LIVE.name, visibleByDefault: true },
@@ -48,6 +50,7 @@ export const experienceSections: FeatureSection[] = [
     id: 'advanced-vision',
     title: 'Computer Vision',
     titleKey: 'tab_experience_one',
+    groupTitleKey: 'experience_group_advanced',
     items: [
       { id: 'objectPhoto', title: 'Object Detection(Photo)', titleKey: 'title_object', icon: 'photo', routeName: AppRoute.OBJECT_PHOTO.name, visibleByDefault: true },
       { id: 'objectCamera', title: 'Object Detection(Real-time)', titleKey: 'title_object_camera', icon: 'camera', routeName: AppRoute.OBJECT_CAMERA.name, visibleByDefault: true },
@@ -76,6 +79,7 @@ function createVisibleSection(section: FeatureSection): FeatureSection {
     id: section.id,
     title: section.title,
     titleKey: section.titleKey,
+    groupTitleKey: section.groupTitleKey,
     items: section.items.filter((item: FeatureItem) => item.visibleByDefault)
   };
 }
