@@ -192,8 +192,9 @@ Current HarmonyOS behavior:
   small offline dictionary fallback for common demo phrases in Chinese and
   English, including the app name, Experience subtitle, app intro, College
   summary copy, permission/status copy, common Android/HMS feature help
-  sentences, the main shell tab and Experience section labels, and Android
-  title strings that use parenthesized or hyphenated separators such as
+  sentences, Android/HMS prompt and failure copy, the main shell tab and
+  Experience section labels, and Android title strings that use parenthesized
+  or hyphenated separators such as
   `Object Detection(Photo)` and `Real-time translation`. It can compose known
   adjacent phrases such as `Hello, MindSpore!` and preserves Android's default
   target-language rule (`zh` text translates to `en`, other text translates to

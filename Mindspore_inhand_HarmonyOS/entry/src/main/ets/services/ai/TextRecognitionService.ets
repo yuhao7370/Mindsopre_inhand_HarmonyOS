@@ -147,6 +147,22 @@ const localChineseToEnglishPhrases: Array<LocalTranslationPhrase> = [
     source: '\u573A\u666F\u68C0\u6D4B\u53EF\u4EE5\u5224\u65AD\u76EE\u6807\u573A\u666F\u7684\u7C7B\u578B',
     target: 'Scene detection can estimate the category of the target scene'
   },
+  {
+    source: '\u8BF7\u70B9\u51FB\u4E0B\u65B9\u56FE\u7247\u3001\u76F8\u673A\u3001\u5B9E\u65F6\u8FDB\u884C\u8BC6\u522B',
+    target: 'Please click on the picture below, camera, and real-time recognition'
+  },
+  {
+    source: '\u8BF7\u70B9\u51FB\u4E0B\u65B9\u56FE\u7247\u3001\u76F8\u673A\u8FDB\u884C\u63D0\u53D6',
+    target: 'Please click on the picture below and the camera to extract'
+  },
+  {
+    source: '\u672A\u68C0\u6D4B\u5230\u624B\u52BF\uFF0C\u518D\u6362\u4E00\u5F20\u56FE\u7247\u8BD5\u8BD5',
+    target: 'No gesture detected, try another image'
+  },
+  {
+    source: '\u56FE\u50CF\u5206\u5272\u5931\u8D25\uFF0C\u518D\u6362\u4E00\u5F20\u56FE\u7247\u8BD5\u8BD5',
+    target: 'Image segmentation failed, try another image'
+  },
   { source: '\u8FD9\u662F\u4E00\u4E2A', target: 'this is a' },
   { source: '\u4F60\u597D\u4E16\u754C', target: 'hello world' },
   { source: '\u4F60\u597D', target: 'hello' },
@@ -222,6 +238,22 @@ const localEnglishToChinesePhrases: Array<LocalTranslationPhrase> = [
   {
     source: 'scene detection can estimate the category of the target scene',
     target: '\u573A\u666F\u68C0\u6D4B\u53EF\u4EE5\u5224\u65AD\u76EE\u6807\u573A\u666F\u7684\u7C7B\u578B'
+  },
+  {
+    source: 'please click on the picture below camera and real time recognition',
+    target: '\u8BF7\u70B9\u51FB\u4E0B\u65B9\u56FE\u7247\u3001\u76F8\u673A\u3001\u5B9E\u65F6\u8FDB\u884C\u8BC6\u522B'
+  },
+  {
+    source: 'please click on the picture below and the camera to extract',
+    target: '\u8BF7\u70B9\u51FB\u4E0B\u65B9\u56FE\u7247\u3001\u76F8\u673A\u8FDB\u884C\u63D0\u53D6'
+  },
+  {
+    source: 'no gesture detected try another image',
+    target: '\u672A\u68C0\u6D4B\u5230\u624B\u52BF\uFF0C\u518D\u6362\u4E00\u5F20\u56FE\u7247\u8BD5\u8BD5'
+  },
+  {
+    source: 'image segmentation failed try another image',
+    target: '\u56FE\u50CF\u5206\u5272\u5931\u8D25\uFF0C\u518D\u6362\u4E00\u5F20\u56FE\u7247\u8BD5\u8BD5'
   },
   { source: 'this is a', target: '\u8FD9\u662F\u4E00\u4E2A' },
   { source: 'this is an', target: '\u8FD9\u662F\u4E00\u4E2A' },

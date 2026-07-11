@@ -6766,6 +6766,33 @@ export default function localUnitTest() {
         .assertEqual('\u573A\u666F\u68C0\u6D4B\u53EF\u4EE5\u5224\u65AD\u76EE\u6807\u573A\u666F\u7684\u7C7B\u578B');
     });
 
+    it('localTextTranslationCoversAndroidHmsPromptAndFailureCopy', 0, async () => {
+      const runner = new LocalTextTranslationRunner();
+
+      const englishPrompt = await runner.translate(
+        'Please click on the picture below, camera, and real-time recognition',
+        'zh'
+      );
+      expect(englishPrompt.ok).assertTrue();
+      expect(englishPrompt.translatedText)
+        .assertEqual('\u8BF7\u70B9\u51FB\u4E0B\u65B9\u56FE\u7247\u3001\u76F8\u673A\u3001\u5B9E\u65F6\u8FDB\u884C\u8BC6\u522B');
+
+      const chinesePrompt =
+        await runner.translate('\u8BF7\u70B9\u51FB\u4E0B\u65B9\u56FE\u7247\u3001\u76F8\u673A\u8FDB\u884C\u63D0\u53D6', 'en');
+      expect(chinesePrompt.ok).assertTrue();
+      expect(chinesePrompt.translatedText).assertEqual('Please click on the picture below and the camera to extract');
+
+      const gestureFailure = await runner.translate('No gesture detected, try another image', 'zh');
+      expect(gestureFailure.ok).assertTrue();
+      expect(gestureFailure.translatedText)
+        .assertEqual('\u672A\u68C0\u6D4B\u5230\u624B\u52BF\uFF0C\u518D\u6362\u4E00\u5F20\u56FE\u7247\u8BD5\u8BD5');
+
+      const segmentationFailure =
+        await runner.translate('\u56FE\u50CF\u5206\u5272\u5931\u8D25\uFF0C\u518D\u6362\u4E00\u5F20\u56FE\u7247\u8BD5\u8BD5', 'en');
+      expect(segmentationFailure.ok).assertTrue();
+      expect(segmentationFailure.translatedText).assertEqual('Image segmentation failed, try another image');
+    });
+
     it('runtimeFactoryLocalFallbackFailsUnknownTranslationHonestly', 0, async () => {
       const workflow = workflowForRoute(AppRoute.TEXT_TRANSLATION.name);
       expect(workflow !== undefined).assertTrue();
