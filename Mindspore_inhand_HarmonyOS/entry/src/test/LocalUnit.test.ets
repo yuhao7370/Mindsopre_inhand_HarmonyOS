@@ -366,6 +366,10 @@ import {
   splashStartupPermissionStateForRequest
 } from '../main/ets/services/splash/SplashStartupService';
 import {
+  splashLogoHeightVp,
+  splashLogoWidthVp
+} from '../main/ets/common/data/SplashBranding';
+import {
   inputActionForKind,
   modelFileSuffixFilters,
   runtimeInputActionForWorkflowInput,
@@ -1840,6 +1844,11 @@ export default function localUnitTest() {
       expect(shouldConsumeSplashBackPress()).assertTrue();
       expect(shouldConsumeIndexBackPress(false)).assertTrue();
       expect(shouldConsumeIndexBackPress(true)).assertFalse();
+    });
+
+    it('usesAndroidSplashLogoProportions', 0, () => {
+      expect(splashLogoWidthVp).assertEqual(160);
+      expect(splashLogoHeightVp).assertEqual(90);
     });
 
     it('formatsAppVersionNameLikeAndroidPackageInfo', 0, () => {

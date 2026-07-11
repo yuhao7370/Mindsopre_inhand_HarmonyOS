@@ -1,5 +1,6 @@
 import { common } from '@kit.AbilityKit';
 import router from '@ohos.router';
+import { splashLogoHeightVp, splashLogoWidthVp } from '../common/data/SplashBranding';
 import { userPrivacyRulesUrl, webPagePath } from '../common/data/WebDestination';
 import { appString } from '../common/i18n/AppStrings';
 import { AppColor, AppRadius, AppSpacing } from '../common/theme/AppTheme';
@@ -296,9 +297,9 @@ export struct SplashPage {
         }
         .width('100%')
         .padding({ top: AppSpacing.lg, right: AppSpacing.lg })
-        Image($r('app.media.startIcon'))
-          .width(112)
-          .height(112)
+        Image($r('app.media.logo_splash'))
+          .width(splashLogoWidthVp)
+          .height(splashLogoHeightVp)
           .objectFit(ImageFit.Contain)
           .margin({ top: 88 })
         Text(appString('EntryAbility_label'))
