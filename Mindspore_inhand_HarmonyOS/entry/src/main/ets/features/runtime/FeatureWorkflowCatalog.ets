@@ -363,6 +363,16 @@ export function shouldDeferRuntimeResultClearUntilPickResult(
   return inputKind !== 'camera' || !workflow.liveMode;
 }
 
+export function shouldLeaveRuntimeAfterCancelledInitialPick(
+  workflow: FeatureWorkflow,
+  inputKind: FeatureInputKind,
+  initialPick: boolean
+): boolean {
+  return initialPick &&
+    workflow.routeName === AppRoute.OBJECT_PHOTO.name &&
+    inputKind === 'photo';
+}
+
 export function shouldAutoRunWorkflowAfterInputReady(workflow: FeatureWorkflow, inputKind: FeatureInputKind): boolean {
   if (workflow.routeName === AppRoute.OBJECT_PHOTO.name && inputKind === 'photo') {
     return true;

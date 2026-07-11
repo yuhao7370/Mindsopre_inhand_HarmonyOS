@@ -292,6 +292,9 @@ Current HarmonyOS behavior:
 - `/imageobject/ObjectPhotoActivity` follows the Android page flow: opening the
   route prepares the album image input once, and a selected image immediately
   runs object detection.
+- If that initial album pick is cancelled, HarmonyOS returns to the previous
+  page instead of leaving an empty runtime screen, matching Android's
+  `finish()` path for invalid initial photo selection.
 - User-selected `.ms` files remain optional. When selected, HarmonyOS copies
   the file into the app cache as `object_detection_model.ms` before runtime use,
   so the MindSpore Lite runner receives an app-owned path instead of depending

@@ -16,6 +16,7 @@ import {
   sampleImageUriForWorkflow,
   shouldAutoRunStyleTransferAfterStyleReady,
   shouldDeferRuntimeResultClearUntilPickResult,
+  shouldLeaveRuntimeAfterCancelledInitialPick,
   shouldStartWorkflowRun,
   shouldShowStyleRecoveryControl,
   shouldUseLongTextInput,
@@ -232,7 +233,7 @@ struct FeatureRuntimePage {
     return context as common.UIAbilityContext;
   }
 
-  private prepareInput(inputKind: FeatureInputKind): void {
+  private prepareInput(inputKind: FeatureInputKind, initialPick: boolean = false): void {
     this.statusKey = 'feature_runtime_status_preparing';
     const workflow = workflowForRoute(this.routeName);
     if (!workflow || !shouldDeferRuntimeResultClearUntilPickResult(workflow, inputKind)) {
@@ -273,23 +274,30 @@ struct FeatureRuntimePage {
       inputKind === 'stylePredictModelFile' ||
       inputKind === 'styleTransferModelFile') {
       pickerService.pickModelFile().then((result: PickResult) =>
-        this.cacheAndApplyPickedModelFile(result, context.cacheDir, inputKind));
+        this.cacheAndApplyPickedModelFile(result, context.cacheDir, inputKind, initialPick));
       return;
     }
     if (inputKind === 'camera') {
-      pickerService.captureImage().then((result: PickResult) => this.applyPickResult(result, 'feature_runtime_image_ready', inputKind));
+      pickerService.captureImage().then((result: PickResult) =>
+        this.applyPickResult(result, 'feature_runtime_image_ready', inputKind, true, initialPick));
       return;
     }
-    pickerService.pickImage().then((result: PickResult) => this.applyPickResult(result, 'feature_runtime_image_ready', inputKind));
+    pickerService.pickImage().then((result: PickResult) =>
+      this.applyPickResult(result, 'feature_runtime_image_ready', inputKind, true, initialPick));
   }
 
-  private cacheAndApplyPickedModelFile(result: PickResult, cacheDir: string, inputKind: FeatureInputKind): void {
+  private cacheAndApplyPickedModelFile(
+    result: PickResult,
+    cacheDir: string,
+    inputKind: FeatureInputKind,
+    initialPick: boolean = false
+  ): void {
     if (!result.ok) {
-      this.applyPickResult(result, 'feature_runtime_model_ready', inputKind);
+      this.applyPickResult(result, 'feature_runtime_model_ready', inputKind, true, initialPick);
       return;
     }
     if (!shouldCachePickedModelFileForRoute(this.routeName, inputKind)) {
-      this.applyPickResult(result, 'feature_runtime_model_ready', inputKind);
+      this.applyPickResult(result, 'feature_runtime_model_ready', inputKind, true, initialPick);
       return;
     }
     new RuntimeModelFileCacheService().cachePickedModelFile(result.uri, cacheDir, this.routeName, inputKind)
@@ -357,7 +365,7 @@ struct FeatureRuntimePage {
     const inputKind = initialInputKindForWorkflow(workflow);
     if (inputKind !== undefined) {
       this.initialInputPrepared = true;
-      this.prepareInput(inputKind);
+      this.prepareInput(inputKind, true);
     }
   }
 
@@ -452,7 +460,8 @@ struct FeatureRuntimePage {
     result: PickResult,
     readyKey: AppStringKey,
     inputKind: FeatureInputKind,
-    shouldRunReadyWorkflow: boolean = true
+    shouldRunReadyWorkflow: boolean = true,
+    initialPick: boolean = false
   ): void {
     if (!result.ok) {
       this.statusKey = 'feature_runtime_pick_cancelled';
@@ -461,6 +470,10 @@ struct FeatureRuntimePage {
         inputKind,
         this.pickedInputState()
       ));
+      const workflow = workflowForRoute(this.routeName);
+      if (workflow && shouldLeaveRuntimeAfterCancelledInitialPick(workflow, inputKind, initialPick)) {
+        router.back();
+      }
       return;
     }
     this.clearRuntimeResultState();

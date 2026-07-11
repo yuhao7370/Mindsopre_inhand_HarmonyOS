@@ -275,6 +275,7 @@ import {
   shouldAutoRunWorkflowAfterInputReady,
   shouldAutoRunStyleTransferAfterStyleReady,
   shouldClearTextInputAfterInputReady,
+  shouldLeaveRuntimeAfterCancelledInitialPick,
   shouldStartWorkflowRun,
   shouldUseLongTextInput,
   shouldUseLongTextResultRow,
@@ -5976,6 +5977,16 @@ export default function localUnitTest() {
       expect(initialInputKindForWorkflow(workflowForRoute(AppRoute.OBJECT_CAMERA.name)!)).assertUndefined();
       expect(initialInputKindForWorkflow(workflowForRoute(AppRoute.POSENET.name)!)).assertUndefined();
       expect(initialInputKindForWorkflow(workflowForRoute(AppRoute.TEXT_RECOGNITION.name)!)).assertUndefined();
+    });
+
+    it('leavesRuntimeOnlyWhenObjectPhotoInitialPickIsCancelledLikeAndroid', 0, () => {
+      const objectPhoto: FeatureWorkflow = workflowForRoute(AppRoute.OBJECT_PHOTO.name)!;
+      expect(shouldLeaveRuntimeAfterCancelledInitialPick(objectPhoto, 'photo', true)).assertTrue();
+      expect(shouldLeaveRuntimeAfterCancelledInitialPick(objectPhoto, 'photo', false)).assertFalse();
+      expect(shouldLeaveRuntimeAfterCancelledInitialPick(objectPhoto, 'modelFile', true)).assertFalse();
+
+      const textRecognition: FeatureWorkflow = workflowForRoute(AppRoute.TEXT_RECOGNITION.name)!;
+      expect(shouldLeaveRuntimeAfterCancelledInitialPick(textRecognition, 'photo', true)).assertFalse();
     });
 
     it('previewsAndroidPoseNetSampleOnEntryWithoutAutoDetecting', 0, () => {
