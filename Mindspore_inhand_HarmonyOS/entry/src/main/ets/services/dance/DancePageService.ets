@@ -19,6 +19,7 @@ export function danceCountdownSequence(): Array<number> {
 }
 
 export interface DanceSamplingPageState {
+  readonly scoreLabelKey: AppStringKey;
   readonly scoreText: string;
   readonly resultMessageKey: AppStringKey;
   readonly hasResult: boolean;
@@ -49,16 +50,29 @@ export function danceTemplateDemoScore(): number {
   return danceScoreFromFrames(danceTemplateFrames());
 }
 
-export function danceScoreText(score: number, prefix: string = ''): string {
-  return `${prefix}${Math.round(score)}`;
-}
-
-export function danceResultMessageKey(score: number): AppStringKey {
+export function danceResultScoreLabelKey(score: number): AppStringKey {
   if (score === danceNoActScore) {
     return 'dance_score_level_no_action';
   }
   if (score === danceNoPointScore) {
     return 'dance_score_level_no_point';
+  }
+  return 'dance_score_prefix';
+}
+
+export function danceScoreText(score: number): string {
+  if (score === danceNoActScore || score === danceNoPointScore) {
+    return '';
+  }
+  return `${Math.round(score)}`;
+}
+
+export function danceResultMessageKey(score: number): AppStringKey {
+  if (score === danceNoActScore) {
+    return 'empty';
+  }
+  if (score === danceNoPointScore) {
+    return 'empty';
   }
   if (score === 100) {
     return 'dance_score_level_full';
@@ -84,9 +98,10 @@ export function danceResultMessageKey(score: number): AppStringKey {
   return 'empty';
 }
 
-export function danceSamplingPageState(result: DanceSamplingResult, scorePrefix: string = ''): DanceSamplingPageState {
+export function danceSamplingPageState(result: DanceSamplingResult): DanceSamplingPageState {
   const state: DanceSamplingPageState = {
-    scoreText: danceScoreText(result.score, scorePrefix),
+    scoreLabelKey: danceResultScoreLabelKey(result.score),
+    scoreText: danceScoreText(result.score),
     resultMessageKey: danceResultMessageKey(result.score),
     hasResult: true,
     summaryText: `${result.validFrameCount}/${result.frameCount}`

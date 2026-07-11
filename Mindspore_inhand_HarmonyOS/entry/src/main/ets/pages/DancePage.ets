@@ -28,6 +28,7 @@ import {
   danceReferenceVideoCanStartLive,
   danceReferenceVideoPlayerPreparedAfterCacheResult,
   danceResultComponentId,
+  danceResultScoreLabelKey,
   danceSamplingCompletionStatusKey,
   danceSamplingPageState,
   danceResultMessageKey,
@@ -63,6 +64,7 @@ type DanceFlowStage = 'prepare' | 'countdown' | 'sampling' | 'result';
 @Entry
 @Component
 struct DancePage {
+  @State scoreLabelKey: AppStringKey = 'dance_score_prefix';
   @State scoreText: string = '--';
   @State resultMessageKey: AppStringKey = 'empty';
   @State hasResult: boolean = false;
@@ -105,6 +107,7 @@ struct DancePage {
     this.cancelLiveSampling();
     this.stopReferenceVideo();
     const score = danceTemplateDemoScore();
+    this.scoreLabelKey = danceResultScoreLabelKey(score);
     this.scoreText = danceScoreText(score);
     this.resultMessageKey = danceResultMessageKey(score);
     this.hasResult = true;
@@ -116,6 +119,7 @@ struct DancePage {
   private reset(): void {
     this.cancelLiveSampling();
     this.stopReferenceVideo();
+    this.scoreLabelKey = 'dance_score_prefix';
     this.scoreText = '--';
     this.resultMessageKey = 'empty';
     this.hasResult = false;
@@ -377,6 +381,7 @@ struct DancePage {
     }
     this.stopReferenceVideo();
     this.hasResult = false;
+    this.scoreLabelKey = 'dance_score_prefix';
     this.scoreText = '--';
     this.resultMessageKey = 'empty';
     this.samplingSummaryText = '';
@@ -401,6 +406,7 @@ struct DancePage {
     this.samplingCancellation = cancellation;
     this.sampling = true;
     this.hasResult = false;
+    this.scoreLabelKey = 'dance_score_prefix';
     this.scoreText = '--';
     this.resultMessageKey = 'empty';
     this.samplingSummaryText = '';
@@ -465,6 +471,7 @@ struct DancePage {
   }
 
   private applyDanceSamplingPageState(state: DanceSamplingPageState): void {
+    this.scoreLabelKey = state.scoreLabelKey;
     this.scoreText = state.scoreText;
     this.resultMessageKey = state.resultMessageKey;
     this.hasResult = state.hasResult;
@@ -705,31 +712,45 @@ struct DancePage {
           .fontSize(16)
           .fontWeight(FontWeight.Bold)
           .fontColor(AppColor.textPrimary)
-        Row() {
-          Text(appString('dance_score_prefix'))
-            .fontSize(24)
-            .fontWeight(FontWeight.Bold)
-            .fontColor(AppColor.accent)
-            .textAlign(TextAlign.End)
-            .lineHeight(32)
-            .maxLines(2)
-            .layoutWeight(1)
-          Text(this.scoreText)
-            .fontSize(24)
-            .fontWeight(FontWeight.Bold)
-            .fontColor(AppColor.accent)
-            .lineHeight(32)
-            .flexShrink(0)
-        }
-        .width('100%')
-        .alignItems(VerticalAlign.Center)
-        .margin({ top: AppSpacing.sm })
-        Text(appString(this.resultMessageKey))
-          .fontSize(16)
-          .fontColor(AppColor.textPrimary)
-          .textAlign(TextAlign.Center)
-          .lineHeight(24)
+        if (this.scoreText.length > 0) {
+          Row() {
+            Text(appString(this.scoreLabelKey))
+              .fontSize(24)
+              .fontWeight(FontWeight.Bold)
+              .fontColor(AppColor.accent)
+              .textAlign(TextAlign.End)
+              .lineHeight(32)
+              .maxLines(2)
+              .layoutWeight(1)
+            Text(this.scoreText)
+              .fontSize(24)
+              .fontWeight(FontWeight.Bold)
+              .fontColor(AppColor.accent)
+              .lineHeight(32)
+              .flexShrink(0)
+          }
+          .width('100%')
+          .alignItems(VerticalAlign.Center)
           .margin({ top: AppSpacing.sm })
+        } else {
+          Text(appString(this.scoreLabelKey))
+            .fontSize(24)
+            .fontWeight(FontWeight.Bold)
+            .fontColor(AppColor.accent)
+            .textAlign(TextAlign.Center)
+            .lineHeight(32)
+            .width('100%')
+            .maxLines(2)
+            .margin({ top: AppSpacing.sm })
+        }
+        if (this.resultMessageKey !== 'empty') {
+          Text(appString(this.resultMessageKey))
+            .fontSize(16)
+            .fontColor(AppColor.textPrimary)
+            .textAlign(TextAlign.Center)
+            .lineHeight(24)
+            .margin({ top: AppSpacing.sm })
+        }
         if (this.samplingSummaryText.length > 0) {
           Row() {
             Text(appString('dance_sampling_frames'))

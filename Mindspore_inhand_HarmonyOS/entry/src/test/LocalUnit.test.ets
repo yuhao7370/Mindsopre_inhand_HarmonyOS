@@ -96,6 +96,7 @@ import {
   danceReferenceVideoCanStartLive,
   danceReferenceVideoPlayerPreparedAfterCacheResult,
   danceResultComponentId,
+  danceResultScoreLabelKey,
   danceResultMessageKey,
   danceSamplingCompletionStatusKey,
   danceSamplingPageState,
@@ -2680,6 +2681,7 @@ export default function localUnitTest() {
       });
 
       expect(pageState.hasResult).assertTrue();
+      expect(pageState.scoreLabelKey).assertEqual(danceResultScoreLabelKey(danceScoreFromFrames(frames)));
       expect(pageState.scoreText).assertEqual(danceScoreText(danceScoreFromFrames(frames)));
       expect(pageState.resultMessageKey).assertEqual(danceResultMessageKey(danceScoreFromFrames(frames)));
       expect(pageState.summaryText).assertEqual(`${frames.length}/70`);
@@ -2937,13 +2939,14 @@ export default function localUnitTest() {
 
     it('mapsDanceScoresToAndroidResultStates', 0, () => {
       expect(danceTemplateDemoScore()).assertEqual(98);
+      expect(danceResultScoreLabelKey(98)).assertEqual('dance_score_prefix');
+      expect(danceResultScoreLabelKey(danceNoActScore)).assertEqual('dance_score_level_no_action');
+      expect(danceResultScoreLabelKey(danceNoPointScore)).assertEqual('dance_score_level_no_point');
       expect(danceScoreText(98)).assertEqual('98');
-      expect(danceScoreText(danceNoActScore)).assertEqual('-1');
-      expect(danceScoreText(danceNoPointScore)).assertEqual('-2');
-      expect(danceScoreText(98, '恭喜完成，综合得分：')).assertEqual('恭喜完成，综合得分：98');
-      expect(danceScoreText(danceNoActScore, '恭喜完成，综合得分：')).assertEqual('恭喜完成，综合得分：-1');
-      expect(danceResultMessageKey(danceNoActScore)).assertEqual('dance_score_level_no_action');
-      expect(danceResultMessageKey(danceNoPointScore)).assertEqual('dance_score_level_no_point');
+      expect(danceScoreText(danceNoActScore)).assertEqual('');
+      expect(danceScoreText(danceNoPointScore)).assertEqual('');
+      expect(danceResultMessageKey(danceNoActScore)).assertEqual('empty');
+      expect(danceResultMessageKey(danceNoPointScore)).assertEqual('empty');
       expect(danceResultMessageKey(63)).assertEqual('dance_score_level_warmup');
       expect(danceResultMessageKey(76)).assertEqual('dance_score_level_good');
       expect(danceResultMessageKey(88)).assertEqual('dance_score_level_great');
