@@ -383,6 +383,14 @@ export function shouldShowLiveSegmentationCameraOverlay(workflow: FeatureWorkflo
   return workflow?.aiMethod === 'segmentPerson' && workflow.liveMode;
 }
 
+export function shouldShowLiveClassificationCameraOverlay(workflow: FeatureWorkflow | undefined): boolean {
+  return workflow?.aiMethod === 'classifyImage' && workflow.liveMode;
+}
+
+export function shouldClearRuntimeResultAtWorkflowStart(workflow: FeatureWorkflow | undefined): boolean {
+  return !shouldShowLiveClassificationCameraOverlay(workflow);
+}
+
 export function shouldMirrorSegmentationForeground(
   workflow: FeatureWorkflow | undefined,
   liveCameraPosition: LiveCameraPosition

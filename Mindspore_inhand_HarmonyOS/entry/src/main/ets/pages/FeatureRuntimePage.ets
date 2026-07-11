@@ -19,8 +19,10 @@ import {
   shouldLeaveRuntimeAfterCancelledInitialPick,
   shouldStartWorkflowRun,
   shouldHideTextInputWhenPreparingInput,
+  shouldClearRuntimeResultAtWorkflowStart,
   shouldMirrorSegmentationForeground,
   shouldShowCopyTextAction,
+  shouldShowLiveClassificationCameraOverlay,
   shouldShowLiveGestureCameraOverlay,
   shouldShowLiveObjectDetectionCameraOverlay,
   shouldShowLivePoseCameraOverlay,
@@ -675,8 +677,10 @@ struct FeatureRuntimePage {
     }
     this.statusKey = 'feature_runtime_status_preparing';
     this.resultText = '';
-    this.resultRows = [];
-    this.clearVisualResults();
+    if (shouldClearRuntimeResultAtWorkflowStart(workflow)) {
+      this.resultRows = [];
+      this.clearVisualResults();
+    }
     try {
       const permission: PermissionRequestSummary = await new PermissionService().requestForWorkflow(context, workflow);
       if (!permission.ok) {
@@ -1450,6 +1454,10 @@ struct FeatureRuntimePage {
           }, (gesture: GestureDetection) =>
             `${gesture.category}-${gesture.score}-${gesture.rect?.left}-${gesture.rect?.top}`)
         }
+        if (this.resultRows.length > 0 &&
+          shouldShowLiveClassificationCameraOverlay(workflowForRoute(this.routeName))) {
+          this.liveClassificationOverlay(this.resultRows[0])
+        }
       }
         .width('100%')
         .height(260)
@@ -1490,6 +1498,31 @@ struct FeatureRuntimePage {
     .border({ radius: 6 })
     .margin({ left: 10, top: 10 })
     .width(190)
+  }
+
+  @Builder
+  liveClassificationOverlay(row: AiRunResultRow) {
+    Column() {
+      Row() {
+        Text(this.resultRowValue(row))
+          .fontSize(18)
+          .fontColor(Color.White)
+          .fontWeight(FontWeight.Medium)
+          .layoutWeight(1)
+          .maxLines(1)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+      }
+      .height(44)
+      .width('100%')
+      .padding({ left: 12, right: 12 })
+      .backgroundColor('#66000000')
+      .borderRadius(6)
+      .alignItems(VerticalAlign.Center)
+    }
+    .width('100%')
+    .height('100%')
+    .padding({ left: 10, right: 10, bottom: 10 })
+    .justifyContent(FlexAlign.End)
   }
 
   @Builder

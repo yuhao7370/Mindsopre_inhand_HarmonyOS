@@ -292,8 +292,10 @@ import {
   shouldLeaveRuntimeAfterCancelledInitialPick,
   shouldStartWorkflowRun,
   shouldHideTextInputWhenPreparingInput,
+  shouldClearRuntimeResultAtWorkflowStart,
   shouldShowCopyTextAction,
   shouldShowResultSaveAction,
+  shouldShowLiveClassificationCameraOverlay,
   shouldShowLiveGestureCameraOverlay,
   shouldShowLiveObjectDetectionCameraOverlay,
   shouldShowLivePoseCameraOverlay,
@@ -6595,6 +6597,28 @@ export default function localUnitTest() {
         .assertFalse();
       expect(shouldShowLiveSegmentationCameraOverlay(undefined))
         .assertFalse();
+    });
+
+    it('showsClassificationLabelOnOnlyTheAndroidStyleLiveImagePreview', 0, () => {
+      expect(shouldShowLiveClassificationCameraOverlay(workflowForRoute(AppRoute.IMAGE_CAMERA.name)))
+        .assertTrue();
+      expect(shouldShowLiveClassificationCameraOverlay(workflowForRoute(AppRoute.OBJECT_CAMERA.name)))
+        .assertFalse();
+      expect(shouldShowLiveClassificationCameraOverlay(workflowForRoute(AppRoute.CUSTOM_MODEL.name)))
+        .assertFalse();
+      expect(shouldShowLiveClassificationCameraOverlay(undefined))
+        .assertFalse();
+    });
+
+    it('keepsPreviousLiveClassificationLabelUntilNextResultLikeAndroid', 0, () => {
+      expect(shouldClearRuntimeResultAtWorkflowStart(workflowForRoute(AppRoute.IMAGE_CAMERA.name)))
+        .assertFalse();
+      expect(shouldClearRuntimeResultAtWorkflowStart(workflowForRoute(AppRoute.OBJECT_CAMERA.name)))
+        .assertTrue();
+      expect(shouldClearRuntimeResultAtWorkflowStart(workflowForRoute(AppRoute.TEXT_RECOGNITION.name)))
+        .assertTrue();
+      expect(shouldClearRuntimeResultAtWorkflowStart(undefined))
+        .assertTrue();
     });
 
     it('autoStartsOnlyCameraOnlyLiveWorkflowsLikeAndroidLiveActivities', 0, () => {

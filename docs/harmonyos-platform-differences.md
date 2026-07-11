@@ -248,6 +248,8 @@ Current HarmonyOS behavior:
 - Image Classification result labels now load the Android Chinese label table
   on Chinese locales while keeping the existing English rawfile for other
   locales.
+- The live camera preview shows the latest classification label in a bottom
+  overlay, matching Android's `bottomLayout` / `HorTextView` result surface.
 
 ## Scene Detection
 
