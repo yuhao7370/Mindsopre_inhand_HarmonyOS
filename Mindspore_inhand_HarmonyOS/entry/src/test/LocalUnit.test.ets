@@ -284,6 +284,7 @@ import {
   shouldHideTextInputWhenPreparingInput,
   shouldShowCopyTextAction,
   shouldShowResultSaveAction,
+  shouldMirrorSegmentationForeground,
   shouldUseLongTextInput,
   shouldUseLongTextResultRow,
   textInputPlaceholderKeyForWorkflow,
@@ -2859,6 +2860,18 @@ export default function localUnitTest() {
       expect(shouldShowResultSaveAction(textRecognition, false)).assertFalse();
       expect(shouldShowResultSaveAction(objectPhoto, false)).assertFalse();
       expect(shouldShowResultSaveAction(classification, false)).assertFalse();
+    });
+
+    it('mirrorsOnlyAndroidPortraitForegroundForFrontCamera', 0, () => {
+      const portraitSegmentation: FeatureWorkflow = workflowForRoute(AppRoute.PORTRAIT_SEGMENTATION.name)!;
+      const segmentationLive: FeatureWorkflow = workflowForRoute(AppRoute.SEGMENTATION_LIVE.name)!;
+      const segmentationStill: FeatureWorkflow = workflowForRoute(AppRoute.SEGMENTATION_STILL.name)!;
+
+      expect(shouldMirrorSegmentationForeground(portraitSegmentation, 'front')).assertTrue();
+      expect(shouldMirrorSegmentationForeground(portraitSegmentation, 'back')).assertFalse();
+      expect(shouldMirrorSegmentationForeground(segmentationLive, 'front')).assertFalse();
+      expect(shouldMirrorSegmentationForeground(segmentationStill, 'front')).assertFalse();
+      expect(shouldMirrorSegmentationForeground(undefined, 'front')).assertFalse();
     });
 
     it('showsAndroidCopyButtonForTextWorkflowsEvenWhenContentIsEmpty', 0, () => {

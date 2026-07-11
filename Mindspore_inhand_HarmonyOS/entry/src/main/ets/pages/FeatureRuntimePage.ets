@@ -19,6 +19,7 @@ import {
   shouldLeaveRuntimeAfterCancelledInitialPick,
   shouldStartWorkflowRun,
   shouldHideTextInputWhenPreparingInput,
+  shouldMirrorSegmentationForeground,
   shouldShowCopyTextAction,
   shouldShowResultSaveAction,
   shouldShowStyleRecoveryControl,
@@ -1535,6 +1536,10 @@ struct FeatureRuntimePage {
     );
   }
 
+  private segmentationForegroundMirrorScaleX(): number {
+    return shouldMirrorSegmentationForeground(workflowForRoute(this.routeName), this.liveCameraPosition) ? -1 : 1;
+  }
+
   private segmentationBoxStyle(rectangle: SegmentationRectangle): SegmentationRectanglePercent {
     return segmentationRectanglePercent(
       rectangle,
@@ -1732,6 +1737,7 @@ struct FeatureRuntimePage {
           .width('100%')
           .height('100%')
           .objectFit(ImageFit.Fill)
+          .scale({ x: this.segmentationForegroundMirrorScaleX(), y: 1 })
       }
       .width('100%')
       .aspectRatio(this.segmentationAspectRatio())

@@ -1,5 +1,6 @@
 import { AppRoute } from '../../app/AppRoutes';
 import { AppStringKey } from '../../common/i18n/AppStrings';
+import { LiveCameraPosition } from '../../services/camera/LiveCameraService';
 import {
   helpImageClassificationUrl,
   helpObjectDetectionUrl,
@@ -359,6 +360,14 @@ export function shouldShowResultSaveAction(
   }
   return workflow?.routeName === AppRoute.STYLE_TRANSFER.name ||
     workflow?.routeName === AppRoute.SEGMENTATION_STILL.name;
+}
+
+export function shouldMirrorSegmentationForeground(
+  workflow: FeatureWorkflow | undefined,
+  liveCameraPosition: LiveCameraPosition
+): boolean {
+  return workflow?.routeName === AppRoute.PORTRAIT_SEGMENTATION.name &&
+    liveCameraPosition === 'front';
 }
 
 export function inputKindReplacesPrimaryInput(inputKind: FeatureInputKind): boolean {
