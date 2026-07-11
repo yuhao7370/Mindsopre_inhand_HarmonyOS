@@ -222,6 +222,7 @@
     { "name": "feature_runtime_scene_overlay_scene", "value": "场景" },
     { "name": "feature_runtime_scene_overlay_score", "value": "置信度" },
     { "name": "feature_runtime_result_top_detection", "value": "首个目标" },
+    { "name": "feature_runtime_result_detections", "value": "检测目标" },
     { "name": "feature_runtime_result_lines", "value": "行数" },
     { "name": "feature_runtime_result_text", "value": "文本" },
     { "name": "feature_runtime_result_subjects", "value": "主体数" },

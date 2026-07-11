@@ -2006,6 +2006,7 @@ export default function localUnitTest() {
       expect(hasAppStringKey('feature_runtime_preview_title')).assertTrue();
       expect(hasAppStringKey('feature_runtime_switch_camera')).assertTrue();
       expect(hasAppStringKey('feature_runtime_result_count')).assertTrue();
+      expect(hasAppStringKey('feature_runtime_result_detections')).assertTrue();
       expect(hasAppStringKey('feature_runtime_result_text')).assertTrue();
       expect(hasAppStringKey('feature_runtime_result_similarity')).assertTrue();
       expect(hasAppStringKey('feature_runtime_result_pose_template')).assertTrue();
@@ -5767,6 +5768,45 @@ export default function localUnitTest() {
       expect(result.detailText.indexOf('street.jpg') >= 0).assertTrue();
       expect(aiRunResultRows(result)[0].labelKey).assertEqual('feature_runtime_result_count');
       expect(aiRunResultRows(result)[1].value.indexOf('person') >= 0).assertTrue();
+    });
+
+    it('aiServiceObjectDetectionRowsListAllDetections', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.OBJECT_PHOTO.name);
+      expect(workflow !== undefined).assertTrue();
+      const person: ObjectDetection = {
+        imageId: 4,
+        labelId: 1,
+        label: 'person',
+        score: 0.75,
+        left: 1,
+        top: 2,
+        right: 101,
+        bottom: 202
+      };
+      const bicycle: ObjectDetection = {
+        imageId: 4,
+        labelId: 2,
+        label: 'bicycle',
+        score: 0.60,
+        left: 12,
+        top: 22,
+        right: 112,
+        bottom: 222
+      };
+      const service = new ObjectDetectionService({
+        labels: ['background', 'person', 'bicycle'],
+        runner: new FixedObjectDetectionRunner([person, bicycle])
+      });
+
+      const result: AiRunResult = await new DefaultAiService({ objectDetectionService: service }).run(workflow!, {
+        imageUri: 'file://selected/street.jpg'
+      });
+      const rows: Array<AiRunResultRow> = aiRunResultRows(result);
+      const detectionsRow = rows.filter((row: AiRunResultRow) => row.labelKey === 'feature_runtime_result_detections')[0];
+
+      expect(result.ok).assertTrue();
+      expect(detectionsRow.value.indexOf('1. person 75.00%') >= 0).assertTrue();
+      expect(detectionsRow.value.indexOf('2. bicycle 60.00%') >= 0).assertTrue();
     });
 
     it('runtimeFactoryInjectsObjectDetectionServiceForObjectWorkflow', 0, async () => {

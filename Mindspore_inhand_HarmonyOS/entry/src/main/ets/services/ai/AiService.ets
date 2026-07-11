@@ -1056,12 +1056,22 @@ function objectDetectionResultRows(data: AiObjectDetectionsData): Array<AiRunRes
     const top = data.detections[0];
     const label = top.label.length > 0 ? top.label : `${top.labelId}`;
     rows.push(resultRow('feature_runtime_result_top_detection', `${label} ${(top.score * 100).toFixed(2)}%`));
+    rows.push(resultRow('feature_runtime_result_detections', objectDetectionListText(data.detections)));
   }
   rows.push(resultRow('feature_runtime_result_image', runtimePathSegment(data.imageUri)));
   if (data.modelUri.length > 0) {
     rows.push(resultRow('feature_runtime_result_model', runtimePathSegment(data.modelUri)));
   }
   return rows;
+}
+
+function objectDetectionListText(detections: Array<ObjectDetection>): string {
+  const lines: Array<string> = [];
+  detections.forEach((detection: ObjectDetection, index: number) => {
+    const label = detection.label.length > 0 ? detection.label : `${detection.labelId}`;
+    lines.push(`${index + 1}. ${label} ${(detection.score * 100).toFixed(2)}%`);
+  });
+  return lines.join('\n');
 }
 
 function gestureResultRows(data: AiGestureData): Array<AiRunResultRow> {

@@ -222,6 +222,7 @@
     { "name": "feature_runtime_scene_overlay_scene", "value": "Scene" },
     { "name": "feature_runtime_scene_overlay_score", "value": "Score" },
     { "name": "feature_runtime_result_top_detection", "value": "Top detection" },
+    { "name": "feature_runtime_result_detections", "value": "Detections" },
     { "name": "feature_runtime_result_lines", "value": "Lines" },
     { "name": "feature_runtime_result_text", "value": "Text" },
     { "name": "feature_runtime_result_subjects", "value": "Subjects" },

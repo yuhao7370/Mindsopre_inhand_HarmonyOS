@@ -221,6 +221,7 @@ export type AppStringKey =
   'feature_runtime_scene_overlay_scene' |
   'feature_runtime_scene_overlay_score' |
   'feature_runtime_result_top_detection' |
+  'feature_runtime_result_detections' |
   'feature_runtime_result_lines' |
   'feature_runtime_result_text' |
   'feature_runtime_result_subjects' |
@@ -497,6 +498,7 @@ const APP_STRING_KEYS: AppStringKey[] = [
   'feature_runtime_scene_overlay_scene',
   'feature_runtime_scene_overlay_score',
   'feature_runtime_result_top_detection',
+  'feature_runtime_result_detections',
   'feature_runtime_result_lines',
   'feature_runtime_result_text',
   'feature_runtime_result_subjects',
@@ -999,6 +1001,8 @@ export function appString(key: AppStringKey): ResourceStr {
       return $r('app.string.feature_runtime_scene_overlay_score');
     case 'feature_runtime_result_top_detection':
       return $r('app.string.feature_runtime_result_top_detection');
+    case 'feature_runtime_result_detections':
+      return $r('app.string.feature_runtime_result_detections');
     case 'feature_runtime_result_lines':
       return $r('app.string.feature_runtime_result_lines');
     case 'feature_runtime_result_text':
