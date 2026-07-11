@@ -25,6 +25,7 @@
     { "name": "mindspore_college_title", "value": "MindSpore 学院" },
     { "name": "account_title", "value": "账号" },
     { "name": "action_back", "value": "返回" },
+    { "name": "app_cancel", "value": "取消" },
     { "name": "confirm", "value": "确定" },
     { "name": "title_button_text_angle", "value": "HOT" },
     { "name": "title_pose_net", "value": "PoseNet" },

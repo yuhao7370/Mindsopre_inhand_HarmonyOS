@@ -424,6 +424,9 @@ import {
   QrCodeSaveService
 } from '../main/ets/services/media/QrCodeSaveService';
 import {
+  qrCodeSaveSheetVisibleAfterAction
+} from '../main/ets/features/qrcode/QrCodeActionSheetState';
+import {
   ResultImageAssetWriter,
   ResultImagePixelMapEncoder,
   ResultImageSaveService,
@@ -1816,6 +1819,7 @@ export default function localUnitTest() {
       expect(hasAppStringKey('feature_runtime_custom_model_help')).assertTrue();
       expect(hasAppStringKey('qr_code_save_done')).assertTrue();
       expect(hasAppStringKey('qr_code_save_failed')).assertTrue();
+      expect(hasAppStringKey('app_cancel')).assertTrue();
       expect(hasAppStringKey('title_share')).assertTrue();
       expect(hasAppStringKey('title_share_commend')).assertTrue();
       expect(hasAppStringKey('me_share_done')).assertTrue();
@@ -1881,6 +1885,14 @@ export default function localUnitTest() {
       expect(isFullQrCodeWrite(bytes, 3)).assertTrue();
       expect(isFullQrCodeWrite(bytes, 2)).assertFalse();
       expect(isFullQrCodeWrite(bytes, 4)).assertFalse();
+    });
+
+    it('qrCodeSaveSheetMatchesAndroidMoreSaveCancelFlow', 0, () => {
+      expect(qrCodeSaveSheetVisibleAfterAction(false, 'open')).assertTrue();
+      expect(qrCodeSaveSheetVisibleAfterAction(true, 'cancel')).assertFalse();
+      expect(qrCodeSaveSheetVisibleAfterAction(true, 'save')).assertFalse();
+      expect(qrCodeSaveSheetVisibleAfterAction(true, 'backdrop')).assertFalse();
+      expect(qrCodeSaveSheetVisibleAfterAction(true, 'back')).assertFalse();
     });
 
     it('resultImageSaveServiceEncodesProcessedPixelMapToGalleryJpeg', 0, async () => {
