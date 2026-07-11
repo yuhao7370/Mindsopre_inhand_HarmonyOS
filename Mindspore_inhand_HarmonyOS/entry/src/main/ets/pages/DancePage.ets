@@ -686,6 +686,8 @@ struct DancePage {
     .width('100%')
     .padding(AppSpacing.xl)
     .backgroundColor(AppColor.cardBackground)
+    .backgroundImage($r('app.media.dance_prepare_bk'))
+    .backgroundImageSize(ImageSize.Cover)
     .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
   }
 
@@ -724,6 +726,9 @@ struct DancePage {
     }
     .width('100%')
     .margin({ top: AppSpacing.lg })
+    .padding(AppSpacing.sm)
+    .backgroundImage($r('app.media.dance_run_bk'))
+    .backgroundImageSize(ImageSize.Cover)
   }
 
   @Builder

@@ -95,6 +95,7 @@ import {
   danceReferenceVideoUrl,
   danceReferenceVideoCanStartLive,
   danceReferenceVideoPlayerPreparedAfterCacheResult,
+  dancePrepareBackgroundMediaName,
   danceResultActionButtonHeightPx,
   danceResultActionButtonWidthPx,
   danceResultBackgroundAspectRatio,
@@ -104,6 +105,7 @@ import {
   danceResultBackgroundMediaName,
   danceResultBackgroundWidthPx,
   danceResultBackMediaName,
+  danceRunBackgroundMediaName,
   danceResultComponentId,
   danceResultPlayAgainLabelKey,
   danceResultPlayAgainMediaName,
@@ -2917,6 +2919,8 @@ export default function localUnitTest() {
       expect(danceReferenceVideoLengthBytes).assertEqual(41282333);
       expect(danceCountdownSequence().join(',')).assertEqual('3,2,1');
       expect(danceCountdownStepMs).assertEqual(1000);
+      expect(dancePrepareBackgroundMediaName).assertEqual('app.media.dance_prepare_bk');
+      expect(danceRunBackgroundMediaName).assertEqual('app.media.dance_run_bk');
       expect(danceResultBackgroundMediaName).assertEqual('app.media.dance_result_bk');
       expect(danceResultSaveMediaName).assertEqual('app.media.dance_result_save');
       expect(danceResultPlayAgainMediaName).assertEqual('app.media.dance_result_play_again');

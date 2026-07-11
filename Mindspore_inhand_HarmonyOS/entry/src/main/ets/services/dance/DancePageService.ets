@@ -13,6 +13,8 @@ export const danceReferenceVideoUrl: string =
   'https://download.mindspore.cn/model_zoo/official/lite/apk/danceFactory/dance_factory_demo2.mp4';
 export const danceReferenceVideoLengthBytes: number = 41282333;
 export const danceCountdownStepMs: number = 1000;
+export const dancePrepareBackgroundMediaName: string = 'app.media.dance_prepare_bk';
+export const danceRunBackgroundMediaName: string = 'app.media.dance_run_bk';
 export const danceResultBackgroundMediaName: string = 'app.media.dance_result_bk';
 export const danceResultSaveMediaName: string = 'app.media.dance_result_save';
 export const danceResultPlayAgainMediaName: string = 'app.media.dance_result_play_again';

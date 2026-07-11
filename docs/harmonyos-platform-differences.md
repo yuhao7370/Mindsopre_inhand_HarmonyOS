@@ -501,6 +501,10 @@ Current HarmonyOS behavior:
 - The Dance page keeps the HarmonyOS window awake while it is visible, matching
   Android's `FLAG_KEEP_SCREEN_ON` behavior without changing the app-wide screen
   policy.
+- The prepare and live-preview areas reuse Android's original `prepare_bk` and
+  `run_bk` bitmap backgrounds as decorative HarmonyOS media. Android's
+  Chinese-only start/countdown bitmap labels are not rendered directly so the
+  HarmonyOS page can keep localized text.
 - The result screen reuses Android's `result_bk`, `dance_back`, `save`, and
   `play_again` bitmap assets, with the background rendered using cover scaling
   so the 1920x1080 image is not stretched on narrow HarmonyOS screens.
