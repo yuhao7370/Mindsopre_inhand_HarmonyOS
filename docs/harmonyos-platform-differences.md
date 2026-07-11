@@ -101,9 +101,9 @@ Current HarmonyOS behavior:
 - `Gesture Recognition` keeps the Android route and entry available.
 - The still gesture route exposes the Android-style Real-time action and
   auto-runs gesture analysis after album or camera image input is ready.
-- HMS still-image workflows that used Android's `btn_photo` now keep a
-  dedicated Photo button label in HarmonyOS instead of falling back to the
-  generic image-input label.
+- HMS still-image workflows that used Android's `btn_photo`/`btn_camera` now
+  keep dedicated Photo and Camera button labels in HarmonyOS instead of falling
+  back to the generic image/camera input labels.
 - The default HarmonyOS runtime reuses the bundled MobileNetV2 image
   classification model as a conservative local approximation. With the bundled
   ImageNet labels this currently only treats the exact `mitten` class as a

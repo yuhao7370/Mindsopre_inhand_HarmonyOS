@@ -2119,6 +2119,7 @@ export default function localUnitTest() {
       expect(hasAppStringKey('feature_runtime_copy_text')).assertTrue();
       expect(hasAppStringKey('feature_runtime_copy_done')).assertTrue();
       expect(hasAppStringKey('feature_input_photo_android')).assertTrue();
+      expect(hasAppStringKey('feature_input_camera_android')).assertTrue();
       expect(hasAppStringKey('feature_runtime_model_cache_failed')).assertTrue();
       expect(hasAppStringKey('feature_runtime_model_incompatible')).assertTrue();
       expect(hasAppStringKey('feature_runtime_image_invalid')).assertTrue();
@@ -5426,13 +5427,21 @@ export default function localUnitTest() {
       const customModel = workflowForRoute(AppRoute.CUSTOM_MODEL.name);
 
       expect(workflowInputLabelKey(poseNet, 'photo')).assertEqual('feature_input_photo_android');
+      expect(workflowInputLabelKey(poseNet, 'camera')).assertEqual('feature_input_camera_android');
       expect(workflowInputLabelKey(segmentationStill, 'photo')).assertEqual('feature_input_photo_android');
+      expect(workflowInputLabelKey(segmentationStill, 'camera')).assertEqual('feature_input_camera_android');
       expect(workflowInputLabelKey(gestureStill, 'photo')).assertEqual('feature_input_photo_android');
+      expect(workflowInputLabelKey(gestureStill, 'camera')).assertEqual('feature_input_camera_android');
       expect(workflowInputLabelKey(sceneStill, 'photo')).assertEqual('feature_input_photo_android');
+      expect(workflowInputLabelKey(sceneStill, 'camera')).assertEqual('feature_input_camera_android');
       expect(workflowInputLabelKey(textRecognition, 'photo')).assertEqual('feature_input_photo_android');
+      expect(workflowInputLabelKey(textRecognition, 'camera')).assertEqual('feature_input_camera_android');
       expect(workflowInputLabelKey(textTranslation, 'photo')).assertEqual('feature_input_photo_android');
+      expect(workflowInputLabelKey(textTranslation, 'camera')).assertEqual('feature_input_camera_android');
       expect(workflowInputLabelKey(objectPhoto, 'photo')).assertEqual('feature_input_photo');
+      expect(workflowInputLabelKey(objectPhoto, 'camera')).assertEqual('feature_input_camera');
       expect(workflowInputLabelKey(customModel, 'photo')).assertEqual('feature_runtime_custom_model_select_photo');
+      expect(workflowInputLabelKey(customModel, 'camera')).assertEqual('feature_runtime_custom_model_take_photo');
     });
 
     it('customModelRequiresNativeRunnerInsteadOfSimulatedOutput', 0, async () => {

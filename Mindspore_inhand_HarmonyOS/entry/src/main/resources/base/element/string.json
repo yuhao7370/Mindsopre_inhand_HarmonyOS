@@ -256,6 +256,7 @@
     { "name": "feature_runtime_result_background", "value": "背景图" },
     { "name": "feature_runtime_result_background_replacement", "value": "背景替换预览" },
     { "name": "feature_input_photo_android", "value": "图片" },
+    { "name": "feature_input_camera_android", "value": "相机" },
     { "name": "feature_input_camera", "value": "相机" },
     { "name": "feature_input_photo", "value": "图片" },
     { "name": "feature_input_sample_image", "value": "示例图" },
