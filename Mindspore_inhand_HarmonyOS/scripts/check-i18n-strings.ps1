@@ -4,6 +4,7 @@ $root = Split-Path -Parent $PSScriptRoot
 $resourceRoot = Join-Path $root 'entry/src/main/resources'
 $locales = @('base', 'en_US', 'zh_CN')
 $tables = @{}
+$valueTables = @{}
 
 foreach ($locale in $locales) {
   $path = Join-Path $resourceRoot "$locale/element/string.json"
@@ -18,6 +19,11 @@ foreach ($locale in $locales) {
     throw "Duplicate string keys for ${locale}: $($duplicates -join ', ')"
   }
   $tables[$locale] = $names
+  $values = @{}
+  foreach ($entry in @($json.string)) {
+    $values[$entry.name] = $entry.value
+  }
+  $valueTables[$locale] = $values
 }
 
 $baseNames = @($tables['base'])
@@ -27,6 +33,20 @@ foreach ($locale in @('en_US', 'zh_CN')) {
   $extra = @($names | Where-Object { $_ -notin $baseNames })
   if ($missing.Count -gt 0 -or $extra.Count -gt 0) {
     throw "String key mismatch for $locale. Missing: $($missing -join ', ') Extra: $($extra -join ', ')"
+  }
+}
+
+$baseValues = $valueTables['base']
+$zhValues = $valueTables['zh_CN']
+$baseZhMismatches = @($baseNames | Where-Object { $baseValues[$_] -ne $zhValues[$_] })
+if ($baseZhMismatches.Count -gt 0) {
+  throw "Base string resources must match zh_CN Android-style fallback values. Mismatched keys: $($baseZhMismatches -join ', ')"
+}
+
+$enValues = $valueTables['en_US']
+foreach ($englishKey in @('main_tab_title_one', 'title_image', 'feature_runtime_run')) {
+  if ($enValues[$englishKey] -eq $baseValues[$englishKey]) {
+    throw "en_US string resource should remain localized separately from base for key: $englishKey"
   }
 }
 
