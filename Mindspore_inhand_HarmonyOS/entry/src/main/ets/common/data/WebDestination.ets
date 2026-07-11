@@ -4,10 +4,10 @@ export const webPagePath: string = 'pages/WebPage';
 export const harmonyPrivacyRawfile: string = 'privacy.html';
 
 export const mindSporeBaseUrl: string = 'https://www.mindspore.cn';
-export const mindSporeDocBaseUrl: string = `${mindSporeBaseUrl}/lite/docs/zh-CN/master/reference`;
+export const mindSporeDocBaseUrl: string = `${mindSporeBaseUrl}/doc/note/zh-CN/master`;
 export const helpImageClassificationUrl: string = `${mindSporeDocBaseUrl}/image_classification_lite.html`;
 export const helpObjectDetectionUrl: string = `${mindSporeDocBaseUrl}/object_detection_lite.html`;
-export const helpPoseNetUrl: string = `${mindSporeBaseUrl}/lite/docs/zh-CN/r1.5/posenet_lite.html`;
+export const helpPoseNetUrl: string = `${mindSporeDocBaseUrl}/posenet_lite.html`;
 export const helpImageSegmentationUrl: string = `${mindSporeDocBaseUrl}/image_segmentation_lite.html`;
 export const helpSceneDetectionUrl: string = `${mindSporeDocBaseUrl}/scene_detection_lite.html`;
 export const helpStyleTransferUrl: string = `${mindSporeDocBaseUrl}/style_transfer_lite.html`;

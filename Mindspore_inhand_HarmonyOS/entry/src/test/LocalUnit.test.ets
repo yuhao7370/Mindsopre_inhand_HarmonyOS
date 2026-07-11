@@ -3221,18 +3221,18 @@ export default function localUnitTest() {
       expect(workflowForRoute(AppRoute.CUSTOM_MODEL.name)?.helpUrl).assertEqual(customModelMoreUrl);
     });
 
-    it('usesReachableMindSporeLiteReferenceHelpUrls', 0, () => {
+    it('usesAndroidMindSporeHelpUrlsFromMsLinkUtils', 0, () => {
       expect(helpImageClassificationUrl).assertEqual(
-        'https://www.mindspore.cn/lite/docs/zh-CN/master/reference/image_classification_lite.html');
+        'https://www.mindspore.cn/doc/note/zh-CN/master/image_classification_lite.html');
       expect(helpObjectDetectionUrl).assertEqual(
-        'https://www.mindspore.cn/lite/docs/zh-CN/master/reference/object_detection_lite.html');
-      expect(helpPoseNetUrl).assertEqual('https://www.mindspore.cn/lite/docs/zh-CN/r1.5/posenet_lite.html');
+        'https://www.mindspore.cn/doc/note/zh-CN/master/object_detection_lite.html');
+      expect(helpPoseNetUrl).assertEqual('https://www.mindspore.cn/doc/note/zh-CN/master/posenet_lite.html');
       expect(helpImageSegmentationUrl).assertEqual(
-        'https://www.mindspore.cn/lite/docs/zh-CN/master/reference/image_segmentation_lite.html');
+        'https://www.mindspore.cn/doc/note/zh-CN/master/image_segmentation_lite.html');
       expect(helpSceneDetectionUrl).assertEqual(
-        'https://www.mindspore.cn/lite/docs/zh-CN/master/reference/scene_detection_lite.html');
+        'https://www.mindspore.cn/doc/note/zh-CN/master/scene_detection_lite.html');
       expect(helpStyleTransferUrl).assertEqual(
-        'https://www.mindspore.cn/lite/docs/zh-CN/master/reference/style_transfer_lite.html');
+        'https://www.mindspore.cn/doc/note/zh-CN/master/style_transfer_lite.html');
     });
 
     it('opensRuntimeHelpSourceExternallyLikeAndroid', 0, async () => {
