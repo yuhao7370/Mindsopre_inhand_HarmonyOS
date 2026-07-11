@@ -480,6 +480,11 @@ import {
 } from '../main/ets/services/web/RuntimeHelpLinkService';
 import {
   collegeItems,
+  collegeAdapterViewTitleKey,
+  collegeQuickActionVisual,
+  collegeTimelineVisualForItem,
+  CollegeQuickActionVisual,
+  CollegeTimelineVisual,
   collegeSummaryDialogTitleKey,
   isCollegeItemUrlNavigable
 } from '../main/ets/common/data/CollegeCatalog';
@@ -1766,6 +1771,49 @@ export default function localUnitTest() {
     it('usesAndroidCollegeSummaryDialogTitleKey', 0, () => {
       expect(collegeSummaryDialogTitleKey).assertEqual('college_dialog_title');
       expect(hasAppStringKey(collegeSummaryDialogTitleKey)).assertTrue();
+    });
+
+    it('definesAndroidCollegeTimelineVisuals', 0, () => {
+      const summaryUnchecked: CollegeTimelineVisual = collegeTimelineVisualForItem(collegeItems[0], false);
+      const summaryChecked: CollegeTimelineVisual = collegeTimelineVisualForItem(collegeItems[0], true);
+      const quickChecked: CollegeTimelineVisual = collegeTimelineVisualForItem(collegeItems[2], true);
+      const forumChecked: CollegeTimelineVisual = collegeTimelineVisualForItem(collegeItems[4], true);
+
+      expect(summaryUnchecked.iconMediaName).assertEqual('college_summary_uncheck');
+      expect(summaryUnchecked.checkedIconMediaName).assertEqual('college_summary_checked');
+      expect(summaryUnchecked.uncheckedIconMediaName).assertEqual('college_summary_uncheck');
+      expect(summaryUnchecked.iconSizeVp).assertEqual(45);
+      expect(summaryUnchecked.rowHeightVp).assertEqual(100);
+      expect(summaryUnchecked.showsTrailingLine).assertTrue();
+      expect(summaryUnchecked.showsProgressDot).assertFalse();
+      expect(summaryUnchecked.lineColor).assertEqual('#33999999');
+
+      expect(summaryChecked.iconMediaName).assertEqual('college_summary_checked');
+      expect(summaryChecked.showsProgressDot).assertTrue();
+      expect(summaryChecked.lineColor).assertEqual('#6189FF');
+      expect(quickChecked.rowHeightVp).assertEqual(150);
+      expect(forumChecked.showsTrailingLine).assertFalse();
+      expect(forumChecked.showsProgressDot).assertFalse();
+      expect(collegeAdapterViewTitleKey).assertEqual('college_adapter_view');
+      expect(hasAppStringKey(collegeAdapterViewTitleKey)).assertTrue();
+    });
+
+    it('definesAndroidCollegeQuickActionVisuals', 0, () => {
+      const quickActions = collegeItems[2].quickActions ?? [];
+      const trainUnchecked: CollegeQuickActionVisual = collegeQuickActionVisual(quickActions[0], false);
+      const trainChecked: CollegeQuickActionVisual = collegeQuickActionVisual(quickActions[0], true);
+      const executeChecked: CollegeQuickActionVisual = collegeQuickActionVisual(quickActions[1], true);
+
+      expect(quickActions.length).assertEqual(4);
+      expect(trainUnchecked.iconMediaName).assertEqual('college_train_uncheck');
+      expect(trainUnchecked.borderColor).assertEqual('#E6E6E6');
+      expect(trainUnchecked.textColor).assertEqual('#303133');
+      expect(trainUnchecked.widthVp).assertEqual(55);
+      expect(trainUnchecked.heightVp).assertEqual(60);
+      expect(trainChecked.iconMediaName).assertEqual('college_train_checked');
+      expect(trainChecked.borderColor).assertEqual('#6189FF');
+      expect(trainChecked.textColor).assertEqual('#6189FF');
+      expect(executeChecked.iconMediaName).assertEqual('college_execute_checked');
     });
 
     it('usesAndroidPreferenceKeysForCollegeProgress', 0, () => {
