@@ -340,8 +340,10 @@ import {
 } from '../main/ets/services/picker/ModelFileCacheService';
 import {
   LiveCameraPreviewDriver,
+  LiveCameraDevicePositionProvider,
   LiveCameraPosition,
   LiveCameraPreviewService,
+  LiveCameraSwitchCapabilityService,
   LiveFrameImageEncoder,
   LiveFrameImageResult,
   LiveFrameImageService,
@@ -355,6 +357,8 @@ import {
   liveRuntimeIntervalMs,
   liveCameraXComponentId,
   liveFrameImagePackingOption,
+  liveCameraPreferredPositionForAvailablePositions,
+  liveCameraSwitchAvailableForPositions,
   nextLiveCameraPosition,
   shouldRunLiveRuntimeLoop,
   shouldAutoRunLiveRuntimeAfterPreview,
@@ -1422,6 +1426,24 @@ class RecordingLiveCameraPreviewDriver implements LiveCameraPreviewDriver {
   }
 
   async stop(): Promise<void> {
+  }
+}
+
+class FixedLiveCameraDevicePositionProvider implements LiveCameraDevicePositionProvider {
+  private readonly positions: Array<LiveCameraPosition>;
+
+  constructor(positions: Array<LiveCameraPosition>) {
+    this.positions = positions;
+  }
+
+  supportedCameraPositions(): Array<LiveCameraPosition> {
+    return this.positions;
+  }
+}
+
+class ThrowingLiveCameraDevicePositionProvider implements LiveCameraDevicePositionProvider {
+  supportedCameraPositions(): Array<LiveCameraPosition> {
+    throw new Error('camera capability unavailable');
   }
 }
 
@@ -6090,6 +6112,36 @@ export default function localUnitTest() {
       expect(driver.startedPositions[0]).assertEqual('front');
       expect(nextLiveCameraPosition('back')).assertEqual('front');
       expect(nextLiveCameraPosition('front')).assertEqual('back');
+    });
+
+    it('showsLiveCameraSwitchOnlyWhenFrontAndBackCamerasAreAvailable', 0, () => {
+      expect(liveCameraSwitchAvailableForPositions(['back', 'front'])).assertTrue();
+      expect(liveCameraSwitchAvailableForPositions(['front', 'back', 'front'])).assertTrue();
+      expect(liveCameraSwitchAvailableForPositions(['back'])).assertFalse();
+      expect(liveCameraSwitchAvailableForPositions(['front'])).assertFalse();
+      expect(liveCameraSwitchAvailableForPositions([])).assertFalse();
+    });
+
+    it('usesAvailableLiveCameraPositionWhenPreferredCameraIsMissing', 0, () => {
+      expect(liveCameraPreferredPositionForAvailablePositions('back', ['back', 'front'])).assertEqual('back');
+      expect(liveCameraPreferredPositionForAvailablePositions('front', ['back', 'front'])).assertEqual('front');
+      expect(liveCameraPreferredPositionForAvailablePositions('back', ['front'])).assertEqual('front');
+      expect(liveCameraPreferredPositionForAvailablePositions('front', ['back'])).assertEqual('back');
+      expect(liveCameraPreferredPositionForAvailablePositions('back', [])).assertEqual('back');
+    });
+
+    it('liveCameraSwitchCapabilityFallsBackToPreviousManualSwitchBehavior', 0, () => {
+      const frontOnly = new LiveCameraSwitchCapabilityService(
+        new FixedLiveCameraDevicePositionProvider(['front'])
+      ).capability('back');
+      const unknown = new LiveCameraSwitchCapabilityService(
+        new ThrowingLiveCameraDevicePositionProvider()
+      ).capability('front');
+
+      expect(frontOnly.canSwitch).assertFalse();
+      expect(frontOnly.preferredPosition).assertEqual('front');
+      expect(unknown.canSwitch).assertTrue();
+      expect(unknown.preferredPosition).assertEqual('front');
     });
 
     it('liveFrameImageServiceCapturesSurfaceToCacheImageUri', 0, async () => {

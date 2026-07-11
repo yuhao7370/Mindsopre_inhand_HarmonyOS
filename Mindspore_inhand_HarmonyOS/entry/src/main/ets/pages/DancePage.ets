@@ -10,11 +10,13 @@ import {
 } from '../services/ai/PoseService';
 import {
   HarmonyLiveCameraPreviewDriver,
+  HarmonyLiveCameraDevicePositionProvider,
   HarmonyLiveFrameImageEncoder,
   HarmonyLiveFrameImageStore,
   LiveCameraPosition,
   LiveCameraPreviewResult,
   LiveCameraPreviewService,
+  LiveCameraSwitchCapabilityService,
   LiveFrameImageService,
   liveCameraXComponentId,
   nextLiveCameraPosition
@@ -69,6 +71,7 @@ struct DancePage {
   @State liveCameraSurfaceId: string = '';
   @State liveCameraActive: boolean = false;
   @State liveCameraPosition: LiveCameraPosition = 'front';
+  @State liveCameraSwitchAvailable: boolean = true;
   @State flowStage: DanceFlowStage = 'prepare';
   @State countdownText: string = '';
   @State referenceVideoFailed: boolean = false;
@@ -86,6 +89,7 @@ struct DancePage {
   private countdownTimer: number = -1;
 
   aboutToAppear() {
+    this.refreshLiveCameraSwitchAvailability();
     this.prepareReferenceVideo();
   }
 
@@ -286,6 +290,19 @@ struct DancePage {
     this.statusKey = result.messageKey;
     this.liveCameraActive = result.ok;
     this.liveCameraSurfaceId = result.surfaceId;
+  }
+
+  private refreshLiveCameraSwitchAvailability(): void {
+    const context = this.uiAbilityContext();
+    if (context === undefined) {
+      this.liveCameraSwitchAvailable = true;
+      return;
+    }
+    const capability = new LiveCameraSwitchCapabilityService(
+      new HarmonyLiveCameraDevicePositionProvider(context)
+    ).capability(this.liveCameraPosition);
+    this.liveCameraSwitchAvailable = capability.canSwitch;
+    this.liveCameraPosition = capability.preferredPosition;
   }
 
   private async startLiveCameraPreviewAsync(): Promise<boolean> {
@@ -666,11 +683,13 @@ struct DancePage {
           this.cancelLiveSampling();
           this.stopLiveCameraPreview();
         })
-      Button(appString('feature_runtime_switch_camera'))
-        .height(32)
-        .margin({ top: AppSpacing.sm })
-        .enabled(!this.sampling && this.flowStage !== 'countdown')
-        .onClick(() => this.switchLiveCamera())
+      if (this.liveCameraSwitchAvailable) {
+        Button(appString('feature_runtime_switch_camera'))
+          .height(32)
+          .margin({ top: AppSpacing.sm })
+          .enabled(!this.sampling && this.flowStage !== 'countdown')
+          .onClick(() => this.switchLiveCamera())
+      }
     }
     .width('100%')
     .margin({ top: AppSpacing.lg })

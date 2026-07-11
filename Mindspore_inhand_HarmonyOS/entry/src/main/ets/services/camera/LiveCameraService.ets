@@ -29,6 +29,15 @@ export interface LiveCameraPreviewDriver {
   stop(): Promise<void>;
 }
 
+export interface LiveCameraDevicePositionProvider {
+  supportedCameraPositions(): Array<LiveCameraPosition>;
+}
+
+export interface LiveCameraSwitchCapability {
+  readonly canSwitch: boolean;
+  readonly preferredPosition: LiveCameraPosition;
+}
+
 export interface LiveFrameImageResult {
   readonly ok: boolean;
   readonly uri: string;
@@ -113,6 +122,79 @@ export function shouldAutoRunLiveRuntimeAfterPreview(
 
 export function nextLiveCameraPosition(position: LiveCameraPosition): LiveCameraPosition {
   return position === 'back' ? 'front' : 'back';
+}
+
+export function liveCameraSwitchAvailableForPositions(positions: Array<LiveCameraPosition>): boolean {
+  return positions.indexOf('back') >= 0 && positions.indexOf('front') >= 0;
+}
+
+export function liveCameraPreferredPositionForAvailablePositions(
+  preferredPosition: LiveCameraPosition,
+  positions: Array<LiveCameraPosition>
+): LiveCameraPosition {
+  if (positions.indexOf(preferredPosition) >= 0 || positions.length === 0) {
+    return preferredPosition;
+  }
+  return positions[0];
+}
+
+export function liveCameraPositionFromHarmonyPosition(
+  position: camera.CameraPosition
+): LiveCameraPosition | undefined {
+  if (position === camera.CameraPosition.CAMERA_POSITION_BACK) {
+    return 'back';
+  }
+  if (position === camera.CameraPosition.CAMERA_POSITION_FRONT) {
+    return 'front';
+  }
+  return undefined;
+}
+
+export class HarmonyLiveCameraDevicePositionProvider implements LiveCameraDevicePositionProvider {
+  private readonly context: common.UIAbilityContext;
+
+  constructor(context: common.UIAbilityContext) {
+    this.context = context;
+  }
+
+  supportedCameraPositions(): Array<LiveCameraPosition> {
+    const positions: Array<LiveCameraPosition> = [];
+    const manager = camera.getCameraManager(this.context);
+    manager.getSupportedCameras().forEach((device: camera.CameraDevice) => {
+      const position = liveCameraPositionFromHarmonyPosition(device.cameraPosition);
+      if (position !== undefined && positions.indexOf(position) < 0) {
+        positions.push(position);
+      }
+    });
+    return positions;
+  }
+}
+
+export class LiveCameraSwitchCapabilityService {
+  private readonly provider: LiveCameraDevicePositionProvider;
+
+  constructor(provider: LiveCameraDevicePositionProvider) {
+    this.provider = provider;
+  }
+
+  canSwitch(): boolean {
+    return this.capability(defaultLiveCameraPosition).canSwitch;
+  }
+
+  capability(preferredPosition: LiveCameraPosition): LiveCameraSwitchCapability {
+    try {
+      const positions = this.provider.supportedCameraPositions();
+      return {
+        canSwitch: liveCameraSwitchAvailableForPositions(positions),
+        preferredPosition: liveCameraPreferredPositionForAvailablePositions(preferredPosition, positions)
+      };
+    } catch (_) {
+      return {
+        canSwitch: true,
+        preferredPosition: preferredPosition
+      };
+    }
+  }
 }
 
 export class HarmonyLiveRuntimeLoopScheduler implements LiveRuntimeLoopScheduler {

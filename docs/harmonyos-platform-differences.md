@@ -28,6 +28,12 @@ Current HarmonyOS behavior:
 - Shared live AI routes capture each preview frame into the normalized app
   cache slot `mindspore_live_frame.jpg` before running the existing image-based
   local runner.
+- Live camera pages query `CameraKit` for supported camera positions and show
+  the Switch Camera action only when both front and back cameras are available.
+  If a workflow's Android-style preferred camera is unavailable, the page starts
+  with the reported available camera instead. If capability discovery fails,
+  HarmonyOS keeps the action visible to preserve the previous manual-switch
+  behavior.
 
 ## Runtime Permission Recovery
 

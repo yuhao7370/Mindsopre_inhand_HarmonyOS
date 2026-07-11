@@ -57,11 +57,13 @@ import {
 } from '../services/picker/ModelFileCacheService';
 import {
   HarmonyLiveCameraPreviewDriver,
+  HarmonyLiveCameraDevicePositionProvider,
   HarmonyLiveFrameImageEncoder,
   HarmonyLiveFrameImageStore,
   LiveCameraPosition,
   LiveCameraPreviewResult,
   LiveCameraPreviewService,
+  LiveCameraSwitchCapabilityService,
   LiveFrameImageResult,
   LiveFrameImageService,
   LiveRuntimeFrameRunner,
@@ -204,6 +206,7 @@ struct FeatureRuntimePage {
   @State liveCameraSurfaceId: string = '';
   @State liveCameraActive: boolean = false;
   @State liveCameraPosition: LiveCameraPosition = 'back';
+  @State liveCameraSwitchAvailable: boolean = true;
   private liveCameraController: XComponentController = new XComponentController();
   private liveCameraService: LiveCameraPreviewService | undefined = undefined;
   private liveCameraInputSelected: boolean = false;
@@ -224,6 +227,7 @@ struct FeatureRuntimePage {
     this.inputKinds = workflow ? runtimeInputKindsForWorkflow(workflow) : [];
     this.permissionKinds = workflow?.requiredPermissions ?? [];
     this.liveCameraPosition = initialLiveCameraPositionForWorkflow(workflow);
+    this.refreshLiveCameraSwitchAvailability();
     this.applyDefaultPortraitBackgroundIfNeeded();
     setTimeout(() => this.prepareInitialInputIfNeeded(), 0);
   }
@@ -339,6 +343,23 @@ struct FeatureRuntimePage {
     }
     return runtimeInputKindsForWorkflow(workflow).some((inputKind: FeatureInputKind) =>
       runtimeInputActionForWorkflowInput(workflow, inputKind) === 'startLiveCamera');
+  }
+
+  private refreshLiveCameraSwitchAvailability(): void {
+    if (!this.hasLiveCameraInput()) {
+      this.liveCameraSwitchAvailable = false;
+      return;
+    }
+    const context = this.uiAbilityContext();
+    if (!context) {
+      this.liveCameraSwitchAvailable = true;
+      return;
+    }
+    const capability = new LiveCameraSwitchCapabilityService(
+      new HarmonyLiveCameraDevicePositionProvider(context)
+    ).capability(this.liveCameraPosition);
+    this.liveCameraSwitchAvailable = capability.canSwitch;
+    this.liveCameraPosition = capability.preferredPosition;
   }
 
   private autoStartLiveCameraIfNeeded(): void {
@@ -1316,10 +1337,12 @@ struct FeatureRuntimePage {
           this.autoStartLiveCameraIfNeeded();
         })
         .onDestroy(() => this.stopLiveCameraPreview())
-      Button(appString('feature_runtime_switch_camera'))
-        .height(32)
-        .margin({ top: AppSpacing.sm })
-        .onClick(() => this.switchLiveCamera())
+      if (this.liveCameraSwitchAvailable) {
+        Button(appString('feature_runtime_switch_camera'))
+          .height(32)
+          .margin({ top: AppSpacing.sm })
+          .onClick(() => this.switchLiveCamera())
+      }
     }
     .width('100%')
     .margin({ top: AppSpacing.md })
