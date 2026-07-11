@@ -78,6 +78,9 @@ Current HarmonyOS behavior:
   the platform's generic skeleton detector, but its standard body point types
   are mapped back to Android's Yoga template point types for the similarity
   display unless a Yoga-specific runner/model is injected.
+- Pose results that report success without any skeleton or points are
+  normalized to the localized pose failure state, matching Android's empty
+  skeleton-list failure path.
 - Live Skeleton detections draw the same skeleton lines and points directly on
   the HarmonyOS camera preview, matching Android `SkeletonGraphic` overlay
   behavior while still reusing the shared captured-frame result state.

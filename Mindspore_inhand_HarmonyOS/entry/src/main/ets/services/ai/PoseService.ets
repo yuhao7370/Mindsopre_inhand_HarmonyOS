@@ -184,7 +184,7 @@ export class PoseService {
   async detectPose(imageUri: string): Promise<PoseResult> {
     const startMs = Date.now();
     try {
-      const result = await this.runner.detectPose(imageUri, this.mode);
+      const result = poseResultWithEmptySuccessGuard(await this.runner.detectPose(imageUri, this.mode));
       if (this.mode === 'yoga') {
         return poseResultWithAndroidTemplateSimilarity(result);
       }
@@ -199,6 +199,21 @@ export class PoseService {
       };
     }
   }
+}
+
+function poseResultWithEmptySuccessGuard(result: PoseResult): PoseResult {
+  if (!result.ok || (result.skeletonCount > 0 && result.pointCount > 0 && result.points.length > 0)) {
+    return result;
+  }
+  return {
+    ok: false,
+    skeletonCount: result.skeletonCount,
+    pointCount: result.pointCount,
+    imageWidth: result.imageWidth,
+    imageHeight: result.imageHeight,
+    points: result.points,
+    executionMs: result.executionMs
+  };
 }
 
 export class HarmonySkeletonDetectionRunner implements PoseRunner {

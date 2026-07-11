@@ -4583,6 +4583,28 @@ export default function localUnitTest() {
       expect(result.messageKey).assertEqual('feature_runtime_pose_failed');
     });
 
+    it('aiServiceReportsEmptyPoseSuccessAsFailureLikeAndroid', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.POSENET.name);
+      expect(workflow !== undefined).assertTrue();
+      const service = new PoseService({
+        runner: new FixedPoseRunner({
+          ok: true,
+          skeletonCount: 0,
+          pointCount: 0,
+          points: [],
+          executionMs: 11
+        })
+      });
+
+      const result = await new DefaultAiService({ poseService: service }).run(workflow!, {
+        imageUri: 'file://selected/empty-pose.jpg'
+      });
+
+      expect(result.ok).assertFalse();
+      expect(result.code).assertEqual('POSE_DETECTION_FAILED');
+      expect(result.messageKey).assertEqual('feature_runtime_pose_failed');
+    });
+
     it('gestureDetectionRequiresImageInputWhenServiceIsProvided', 0, async () => {
       const workflow = workflowForRoute(AppRoute.GESTURE_STILL.name);
       expect(workflow !== undefined).assertTrue();
@@ -7117,11 +7139,12 @@ export default function localUnitTest() {
     it('runtimeFactoryInjectsPoseServiceForPoseWorkflow', 0, async () => {
       const workflow = workflowForRoute(AppRoute.POSENET.name);
       expect(workflow !== undefined).assertTrue();
+      const point: PosePoint = { type: 0, score: 0.95, x: 10, y: 20 };
       const runner: FixedPoseRunner = new FixedPoseRunner({
         ok: true,
         skeletonCount: 1,
-        pointCount: 0,
-        points: [],
+        pointCount: 1,
+        points: [point],
         executionMs: 6
       });
       const service = await createRuntimeAiServiceForWorkflow(workflow!, {
@@ -7146,11 +7169,12 @@ export default function localUnitTest() {
       expect(liveWorkflow !== undefined).assertTrue();
       expect(poseModeForWorkflow(stillWorkflow!)).assertEqual('normal');
       expect(poseModeForWorkflow(liveWorkflow!)).assertEqual('yoga');
+      const point: PosePoint = { type: 0, score: 0.95, x: 10, y: 20 };
       const runner: FixedPoseRunner = new FixedPoseRunner({
         ok: true,
         skeletonCount: 1,
-        pointCount: 0,
-        points: [],
+        pointCount: 1,
+        points: [point],
         executionMs: 6
       });
       const service = await createRuntimeAiServiceForWorkflow(liveWorkflow!, {
