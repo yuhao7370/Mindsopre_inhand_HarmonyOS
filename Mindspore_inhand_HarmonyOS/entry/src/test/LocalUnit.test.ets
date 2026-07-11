@@ -362,8 +362,10 @@ import {
 } from '../main/ets/features/runtime/FeatureRuntimeViewIds';
 import { featureRuntimeOverlayPreviewImageOrientationFromRotationDegrees } from '../main/ets/features/runtime/FeatureRuntimeOverlayPreview';
 import {
+  appDetailsSettingsWantForBundle,
   declaredPermissionNames,
   PermissionRequestSummary,
+  runtimeOpenAppSettingsAction,
   runtimePermissionRecoveryActionForWorkflow,
   runtimePermissionRunActionForWorkflow,
   runtimePermissionNamesForWorkflow,
@@ -375,7 +377,6 @@ import {
   SplashFinishAction,
   shouldConsumeSplashBackPress,
   shouldConsumeIndexBackPress,
-  appDetailsSettingsWantForBundle,
   splashOpenAppSettingsAction,
   SplashOpenAppSettingsAction,
   splashRetryPermissionAction,
@@ -7010,6 +7011,11 @@ export default function localUnitTest() {
         imageCamera,
         'feature_runtime_live_camera_failed'
       )).assertEqual('runWorkflow');
+      const runtimeSettingsAction = runtimeOpenAppSettingsAction('com.example.mindspore');
+      expect(runtimeSettingsAction.openSettings).assertTrue();
+      expect(runtimeSettingsAction.want.action).assertEqual('action.settings.app.info');
+      expect(JSON.stringify(runtimeSettingsAction.want.parameters))
+        .assertEqual('{"settingsParamBundleName":"com.example.mindspore"}');
       liveCameraRouteNames.forEach((routeName: string) => {
         const workflow: FeatureWorkflow = workflowForRoute(routeName)!;
         expect(runtimePermissionRecoveryActionForWorkflow(

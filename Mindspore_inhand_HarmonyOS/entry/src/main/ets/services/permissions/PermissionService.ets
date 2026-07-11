@@ -1,6 +1,7 @@
-import { abilityAccessCtrl, common, PermissionRequestResult, Permissions } from '@kit.AbilityKit';
+import { abilityAccessCtrl, common, PermissionRequestResult, Permissions, Want } from '@kit.AbilityKit';
 import { FeaturePermissionKind, FeatureWorkflow } from '../../features/runtime/FeatureWorkflowCatalog';
 
+export const appDetailsSettingsAction = 'action.settings.app.info';
 export const cameraPermissionName: Permissions = 'ohos.permission.CAMERA';
 export const mediaPermissionName: Permissions = 'ohos.permission.READ_IMAGEVIDEO';
 export const internetPermissionName: Permissions = 'ohos.permission.INTERNET';
@@ -18,8 +19,29 @@ export interface PermissionRequestSummary {
   readonly requested: Array<Permissions>;
 }
 
+export interface OpenAppSettingsAction {
+  readonly openSettings: boolean;
+  readonly want: Want;
+}
+
 export type RuntimePermissionRecoveryAction = 'none' | 'retryRun' | 'retryCameraInput';
 export type RuntimePermissionRunAction = 'runWorkflow' | 'retryCameraInput';
+
+export function appDetailsSettingsWantForBundle(bundleName: string): Want {
+  return {
+    action: appDetailsSettingsAction,
+    parameters: {
+      settingsParamBundleName: bundleName
+    }
+  };
+}
+
+export function runtimeOpenAppSettingsAction(bundleName: string): OpenAppSettingsAction {
+  return {
+    openSettings: true,
+    want: appDetailsSettingsWantForBundle(bundleName)
+  };
+}
 
 export function permissionNameForKind(kind: FeaturePermissionKind): Permissions {
   switch (kind) {

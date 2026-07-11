@@ -68,6 +68,7 @@ import {
   PermissionService,
   RuntimePermissionRecoveryAction,
   RuntimePermissionRunAction,
+  runtimeOpenAppSettingsAction,
   runtimePermissionRecoveryActionForWorkflow,
   runtimePermissionRunActionForWorkflow
 } from '../services/permissions/PermissionService';
@@ -1153,6 +1154,19 @@ struct FeatureRuntimePage {
     }
     if (action === 'retryRun') {
       this.runWorkflow();
+    }
+  }
+
+  private openRuntimePermissionSettings(): void {
+    const context = this.uiAbilityContext();
+    if (context === undefined) {
+      return;
+    }
+    try {
+      const action = runtimeOpenAppSettingsAction(context.applicationInfo.name);
+      context.startAbility(action.want).catch(() => {
+      });
+    } catch (_) {
     }
   }
 
@@ -2389,6 +2403,10 @@ struct FeatureRuntimePage {
               .height(36)
               .margin({ top: AppSpacing.sm })
               .onClick(() => this.retryRuntimePermission())
+            Button(appString('app_permission_by_hand'))
+              .height(36)
+              .margin({ top: AppSpacing.sm })
+              .onClick(() => this.openRuntimePermissionSettings())
           }
           if (this.shouldShowTranslationSnapshotSave()) {
             this.translationSnapshotPreview()
