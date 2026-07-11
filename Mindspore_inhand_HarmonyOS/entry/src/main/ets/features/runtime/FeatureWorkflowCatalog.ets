@@ -418,10 +418,10 @@ export function shouldShowResultSaveAction(
 export function shouldShowTranslationSnapshotSaveAction(
   workflow: FeatureWorkflow | undefined,
   imageInputReady: boolean,
-  resultRowsReady: boolean,
+  translatedTextReady: boolean,
   textInputVisible: boolean
 ): boolean {
-  return workflow?.aiMethod === 'translateText' && imageInputReady && resultRowsReady && !textInputVisible;
+  return workflow?.aiMethod === 'translateText' && imageInputReady && translatedTextReady && !textInputVisible;
 }
 
 export function shouldShowLiveGestureCameraOverlay(workflow: FeatureWorkflow | undefined): boolean {

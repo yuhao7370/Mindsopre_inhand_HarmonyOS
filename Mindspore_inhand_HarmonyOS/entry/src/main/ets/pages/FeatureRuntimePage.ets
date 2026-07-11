@@ -62,7 +62,8 @@ import {
   aiRunResultRows,
   copyableTextForAiResult,
   segmentationMetadataWithBackground,
-  sceneDetectionOverlayRows
+  sceneDetectionOverlayRows,
+  translationSnapshotTranslatedTextReady
 } from '../services/ai/AiService';
 import { cachedRuntimeAiServiceForHarmonyResourceManager } from '../services/ai/ImageClassificationRuntimeFactory';
 import {
@@ -1294,7 +1295,7 @@ struct FeatureRuntimePage {
     return shouldShowTranslationSnapshotSaveAction(
       workflowForRoute(this.routeName),
       this.imageInputUri.length > 0,
-      this.resultRows.length > 0,
+      translationSnapshotTranslatedTextReady(this.resultRows),
       this.textInputVisible
     );
   }

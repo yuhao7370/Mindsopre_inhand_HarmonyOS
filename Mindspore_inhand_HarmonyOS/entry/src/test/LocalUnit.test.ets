@@ -14,7 +14,8 @@ import {
   aiRunResultRows,
   copyableTextForAiResult,
   segmentationMetadataWithBackground,
-  sceneDetectionOverlayRows
+  sceneDetectionOverlayRows,
+  translationSnapshotTranslatedTextReady
 } from '../main/ets/services/ai/AiService';
 import { ClipboardService, TextClipboardWriter } from '../main/ets/services/clipboard/ClipboardService';
 import {
@@ -3300,6 +3301,35 @@ export default function localUnitTest() {
       expect(shouldShowTranslationSnapshotSaveAction(textTranslation, true, false, false)).assertFalse();
       expect(shouldShowTranslationSnapshotSaveAction(textTranslation, true, true, true)).assertFalse();
       expect(shouldShowTranslationSnapshotSaveAction(textRecognition, true, true, false)).assertFalse();
+    });
+
+    it('hidesImageTranslationSnapshotSaveUntilTranslatedTextExists', 0, () => {
+      const textTranslation: FeatureWorkflow = workflowForRoute(AppRoute.TEXT_TRANSLATION.name)!;
+      const sourceRow: AiRunResultRow = {
+        labelKey: 'feature_runtime_result_text',
+        value: 'unmapped phrase'
+      };
+      const translatedRow: AiRunResultRow = {
+        labelKey: 'feature_runtime_result_translated_text',
+        value: '\u4F60\u597D'
+      };
+      const sourceOnlyRows: Array<AiRunResultRow> = [sourceRow];
+      const translatedRows: Array<AiRunResultRow> = [sourceRow, translatedRow];
+
+      expect(translationSnapshotTranslatedTextReady(sourceOnlyRows)).assertFalse();
+      expect(shouldShowTranslationSnapshotSaveAction(
+        textTranslation,
+        true,
+        translationSnapshotTranslatedTextReady(sourceOnlyRows),
+        false
+      )).assertFalse();
+      expect(translationSnapshotTranslatedTextReady(translatedRows)).assertTrue();
+      expect(shouldShowTranslationSnapshotSaveAction(
+        textTranslation,
+        true,
+        translationSnapshotTranslatedTextReady(translatedRows),
+        false
+      )).assertTrue();
     });
 
     it('mirrorsOnlyAndroidPortraitForegroundForFrontCamera', 0, () => {
@@ -7060,6 +7090,7 @@ export default function localUnitTest() {
       expect(result.detailText.indexOf('source=\u4F60\u597D') >= 0).assertTrue();
       expect(result.detailText.indexOf('translated=hello') >= 0).assertTrue();
       expect(recognitionRunner.seenImageUris[0]).assertEqual('file://selected/translation.jpg');
+      expect(translationSnapshotTranslatedTextReady(aiRunResultRows(result))).assertTrue();
     });
 
     it('runtimeFactoryUsesLocalFallbackForTypedTranslationWithoutTranslator', 0, async () => {
@@ -7265,6 +7296,13 @@ export default function localUnitTest() {
       expect(result.ok).assertFalse();
       expect(result.code).assertEqual('TEXT_TRANSLATION_FAILED');
       expect(aiRunResultRows(result)[1].value).assertEqual('unmapped phrase\n');
+      expect(translationSnapshotTranslatedTextReady(aiRunResultRows(result))).assertFalse();
+      expect(shouldShowTranslationSnapshotSaveAction(
+        workflow!,
+        true,
+        translationSnapshotTranslatedTextReady(aiRunResultRows(result)),
+        false
+      )).assertFalse();
       expect(copyableTextForAiResult('translateText', aiRunResultRows(result))).assertEqual('unmapped phrase\n');
     });
 

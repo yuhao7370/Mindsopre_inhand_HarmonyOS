@@ -215,6 +215,10 @@ Current HarmonyOS behavior:
   preserve the source text in result details, rows, and copy action.
 - Blank typed text and blank OCR output are treated as missing or failed input
   instead of successful empty translation/recognition results.
+- Image-based translation only exposes the result snapshot save action after a
+  translated-text row exists. Unknown local-fallback phrases still preserve the
+  OCR source text for copying, but no longer create a misleading translated
+  snapshot.
 
 ## Model File Overrides
 
