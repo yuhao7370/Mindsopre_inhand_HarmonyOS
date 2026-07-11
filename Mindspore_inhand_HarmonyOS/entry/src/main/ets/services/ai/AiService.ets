@@ -1016,12 +1016,22 @@ export function aiRunResultRows(result: AiRunResult): Array<AiRunResultRow> {
     case 'scenes':
       return sceneDetectionResultRows(data);
     case 'customModel':
+      const outputValue = customModelOutputRowValue(result.detailText, data.outputCount);
       return [
         resultRow('feature_runtime_result_model', runtimePathSegment(data.modelUri)),
-        resultRow('feature_runtime_result_output', `${data.outputCount}`),
+        resultRow('feature_runtime_result_output', outputValue),
         resultRow('feature_runtime_result_execution_time', `${data.executionMs}ms`)
       ];
   }
+}
+
+function customModelOutputRowValue(detailText: string, outputCount: number): string {
+  const outputHeader = 'Output data (first 10 values):';
+  const outputStart = detailText.indexOf(outputHeader);
+  if (outputStart >= 0) {
+    return detailText.substring(outputStart);
+  }
+  return `${outputCount}`;
 }
 
 function objectDetectionResultRows(data: AiObjectDetectionsData): Array<AiRunResultRow> {

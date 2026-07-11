@@ -2891,6 +2891,7 @@ export default function localUnitTest() {
       const textRecognition: FeatureWorkflow = workflowForRoute(AppRoute.TEXT_RECOGNITION.name)!;
       const textTranslation: FeatureWorkflow = workflowForRoute(AppRoute.TEXT_TRANSLATION.name)!;
       const styleTransfer: FeatureWorkflow = workflowForRoute(AppRoute.STYLE_TRANSFER.name)!;
+      const customModel: FeatureWorkflow = workflowForRoute(AppRoute.CUSTOM_MODEL.name)!;
 
       expect(shouldUseLongTextInput(textTranslation)).assertTrue();
       expect(shouldUseLongTextInput(textRecognition)).assertFalse();
@@ -2900,6 +2901,7 @@ export default function localUnitTest() {
       expect(shouldUseLongTextResultRow(textTranslation.aiMethod, 'feature_runtime_result_translated_text')).assertTrue();
       expect(shouldUseLongTextResultRow(textTranslation.aiMethod, 'feature_runtime_result_target_language')).assertFalse();
       expect(shouldUseLongTextResultRow(styleTransfer.aiMethod, 'feature_runtime_result_output')).assertFalse();
+      expect(shouldUseLongTextResultRow(customModel.aiMethod, 'feature_runtime_result_output')).assertTrue();
     });
 
     it('keepsAndroidSaveActionReachableBeforeProcessedImagesExist', 0, () => {
@@ -4520,6 +4522,28 @@ export default function localUnitTest() {
       expect(result.detailText.indexOf('Model execution completed!') >= 0).assertTrue();
       expect(result.detailText.indexOf('Value[0]: 0.100000') >= 0).assertTrue();
       expect(result.detailText.indexOf('... (showing first 10 values)') >= 0).assertTrue();
+    });
+
+    it('customModelResultRowsShowAndroidStyleOutputValues', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.CUSTOM_MODEL.name);
+      expect(workflow !== undefined).assertTrue();
+      const customModelService = new CustomModelService({
+        preprocessor: new FixedCustomModelPreprocessor(new ArrayBuffer(12)),
+        tensorRunner: new FixedCustomModelTensorRunner([0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1])
+      });
+
+      const result = await new DefaultAiService({ customModelService: customModelService }).run(workflow!, {
+        imageUri: 'file://selected/input.png',
+        modelUri: 'file://selected/custom_model.ms'
+      });
+
+      const rows: Array<AiRunResultRow> = aiRunResultRows(result);
+      const outputRows = rows.filter((row: AiRunResultRow) => row.labelKey === 'feature_runtime_result_output');
+
+      expect(outputRows.length).assertEqual(1);
+      expect(outputRows[0].value.indexOf('Output data (first 10 values):') >= 0).assertTrue();
+      expect(outputRows[0].value.indexOf('Value[0]: 0.100000') >= 0).assertTrue();
+      expect(outputRows[0].value.indexOf('... (showing first 10 values)') >= 0).assertTrue();
     });
 
     it('aiServiceUsesBundledCustomModelWhenNoModelFileSelected', 0, async () => {
