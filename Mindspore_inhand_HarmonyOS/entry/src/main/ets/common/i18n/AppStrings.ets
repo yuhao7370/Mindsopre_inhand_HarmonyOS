@@ -206,6 +206,7 @@ export type AppStringKey =
   'feature_runtime_result_label' |
   'feature_runtime_result_score' |
   'feature_runtime_result_count' |
+  'feature_runtime_result_scenes' |
   'feature_runtime_result_top_detection' |
   'feature_runtime_result_lines' |
   'feature_runtime_result_text' |
@@ -465,6 +466,7 @@ const APP_STRING_KEYS: AppStringKey[] = [
   'feature_runtime_result_label',
   'feature_runtime_result_score',
   'feature_runtime_result_count',
+  'feature_runtime_result_scenes',
   'feature_runtime_result_top_detection',
   'feature_runtime_result_lines',
   'feature_runtime_result_text',
@@ -935,6 +937,8 @@ export function appString(key: AppStringKey): ResourceStr {
       return $r('app.string.feature_runtime_result_score');
     case 'feature_runtime_result_count':
       return $r('app.string.feature_runtime_result_count');
+    case 'feature_runtime_result_scenes':
+      return $r('app.string.feature_runtime_result_scenes');
     case 'feature_runtime_result_top_detection':
       return $r('app.string.feature_runtime_result_top_detection');
     case 'feature_runtime_result_lines':

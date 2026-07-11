@@ -1856,6 +1856,7 @@ export default function localUnitTest() {
       expect(hasAppStringKey('feature_runtime_scene_runner_unavailable')).assertTrue();
       expect(hasAppStringKey('feature_runtime_scene_done')).assertTrue();
       expect(hasAppStringKey('feature_runtime_scene_failed')).assertTrue();
+      expect(hasAppStringKey('feature_runtime_result_scenes')).assertTrue();
       expect(hasAppStringKey('workflow_summary_scene')).assertTrue();
       expect(hasAppStringKey('feature_runtime_text_recognition_done')).assertTrue();
       expect(hasAppStringKey('feature_runtime_text_translation_failed')).assertTrue();
@@ -4159,10 +4160,42 @@ export default function localUnitTest() {
       expect(result.code).assertEqual('SCENE_DETECTION_DONE');
       expect(result.messageKey).assertEqual('feature_runtime_scene_done');
       expect(result.detailText.indexOf('beach 96.00%') >= 0).assertTrue();
-      expect(aiRunResultRows(result)[0].labelKey).assertEqual('feature_runtime_result_label');
-      expect(aiRunResultRows(result)[0].value).assertEqual('beach');
+      const rows = aiRunResultRows(result);
+      expect(rows[0].labelKey).assertEqual('feature_runtime_result_count');
+      expect(rows[0].value).assertEqual('1');
+      expect(rows[1].labelKey).assertEqual('feature_runtime_result_scenes');
+      expect(rows[1].value).assertEqual('1. beach 96.00%');
       expect(result.data?.kind).assertEqual('scenes');
       expect(runner.seenImageUris[0]).assertEqual('file://selected/beach.jpg');
+    });
+
+    it('sceneDetectionResultRowsListAllScenesLikeAndroid', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.SCENE_STILL.name);
+      expect(workflow !== undefined).assertTrue();
+      const runner = new FixedSceneDetectionRunner({
+        ok: true,
+        scenes: [
+          { label: 'beach', score: 0.96 },
+          { label: 'mountain', score: 0.82 },
+          { label: 'restaurant', score: 0.7 }
+        ],
+        executionMs: 9
+      });
+      const service = new SceneDetectionService({
+        runner: runner
+      });
+
+      const result = await new DefaultAiService({ sceneDetectionService: service }).run(workflow!, {
+        imageUri: 'file://selected/scenes.jpg'
+      });
+      const rows = aiRunResultRows(result);
+
+      expect(rows[0].labelKey).assertEqual('feature_runtime_result_count');
+      expect(rows[0].value).assertEqual('3');
+      expect(rows[1].labelKey).assertEqual('feature_runtime_result_scenes');
+      expect(rows[1].value).assertEqual('1. beach 96.00%\n2. mountain 82.00%\n3. restaurant 70.00%');
+      expect(rows[2].labelKey).assertEqual('feature_runtime_result_image');
+      expect(rows[3].labelKey).assertEqual('feature_runtime_result_execution_time');
     });
 
     it('aiServiceReportsSceneDetectionFailureWithI18nKey', 0, async () => {
@@ -4325,7 +4358,9 @@ export default function localUnitTest() {
 
       expect(result.ok).assertTrue();
       expect(result.detailText.indexOf('舞台 88.00%') >= 0).assertTrue();
-      expect(aiRunResultRows(result)[0].value).assertEqual('舞台');
+      const rows = aiRunResultRows(result);
+      expect(rows[1].labelKey).assertEqual('feature_runtime_result_scenes');
+      expect(rows[1].value).assertEqual('1. 舞台 88.00%');
     });
 
     it('customModelRequiresModelAndImageInputs', 0, async () => {
@@ -6089,7 +6124,9 @@ export default function localUnitTest() {
 
       expect(result.ok).assertTrue();
       expect(result.detailText.indexOf('舞台 82.00%') >= 0).assertTrue();
-      expect(aiRunResultRows(result)[0].value).assertEqual('舞台');
+      const rows = aiRunResultRows(result);
+      expect(rows[1].labelKey).assertEqual('feature_runtime_result_scenes');
+      expect(rows[1].value.indexOf('1. 舞台 82.00%') >= 0).assertTrue();
     });
 
     it('runtimeFactoryLocalizesDefaultLocalSceneDetectionLabelsForChineseLocale', 0, async () => {
@@ -6114,7 +6151,9 @@ export default function localUnitTest() {
       expect(resourceManager.seenPaths[0]).assertEqual('labels/places365.txt');
       expect(result.ok).assertTrue();
       expect(result.detailText.indexOf('舞台 82.00%') >= 0).assertTrue();
-      expect(aiRunResultRows(result)[0].value).assertEqual('舞台');
+      const rows = aiRunResultRows(result);
+      expect(rows[1].labelKey).assertEqual('feature_runtime_result_scenes');
+      expect(rows[1].value.indexOf('1. 舞台 82.00%') >= 0).assertTrue();
     });
 
     it('runtimeFactoryInjectsSegmentationServiceForSegmentationWorkflow', 0, async () => {

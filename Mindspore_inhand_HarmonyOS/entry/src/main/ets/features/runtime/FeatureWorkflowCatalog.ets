@@ -346,6 +346,9 @@ export function shouldUseLongTextResultRow(aiMethod: string, labelKey: AppString
     return labelKey === 'feature_runtime_result_text' ||
       labelKey === 'feature_runtime_result_translated_text';
   }
+  if (aiMethod === 'detectScene') {
+    return labelKey === 'feature_runtime_result_scenes';
+  }
   return false;
 }
 

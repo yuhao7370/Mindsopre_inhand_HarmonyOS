@@ -271,6 +271,8 @@ Current HarmonyOS behavior:
 - Scene result display labels now use a recovered/readable Android-equivalent
   Chinese scene label table on Chinese locales while keeping the internal
   English/Places365 labels stable for mapping.
+- Scene result rows list every returned scene candidate with its confidence,
+  matching Android's visible result text instead of showing only the top scene.
 - A real scene detection runner can still be injected; if no service exists at
   all, the app reports the localized
   `feature_runtime_scene_runner_unavailable` adapter status.

@@ -1053,13 +1053,19 @@ function sceneDetectionResultRows(data: AiSceneData): Array<AiRunResultRow> {
     resultRow('feature_runtime_result_count', `${data.result.scenes.length}`)
   ];
   if (data.result.scenes.length > 0) {
-    const top = data.result.scenes[0];
-    rows.unshift(resultRow('feature_runtime_result_label', top.label));
-    rows.push(resultRow('feature_runtime_result_score', `${(top.score * 100).toFixed(2)}%`));
+    rows.push(resultRow('feature_runtime_result_scenes', sceneDetectionListText(data.result.scenes)));
   }
   rows.push(resultRow('feature_runtime_result_image', runtimePathSegment(data.imageUri)));
   rows.push(resultRow('feature_runtime_result_execution_time', `${data.result.executionMs}ms`));
   return rows;
+}
+
+function sceneDetectionListText(scenes: Array<SceneDetection>): string {
+  const lines: Array<string> = [];
+  scenes.forEach((scene: SceneDetection, index: number) => {
+    lines.push(`${index + 1}. ${scene.label} ${(scene.score * 100).toFixed(2)}%`);
+  });
+  return lines.join('\n');
 }
 
 function resultRow(labelKey: AppStringKey, value: string, valueKey?: AppStringKey): AiRunResultRow {
