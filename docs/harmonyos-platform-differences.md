@@ -379,6 +379,8 @@ Current HarmonyOS behavior:
   background selected by default.
 - Canceling the album picker keeps the current built-in or custom background,
   matching Android's `onActivityResult` behavior.
+- Live segmentation routes draw the detected foreground layer directly on the
+  HarmonyOS camera preview, matching Android's foreground overlay behavior.
 - HarmonyOS reuses the foreground/background composite preview and save path
   already used for still segmentation results; the live frame is captured
   through the current app-cache JPEG fallback rather than a native analyzer

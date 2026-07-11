@@ -24,6 +24,7 @@ import {
   shouldShowLiveGestureCameraOverlay,
   shouldShowLiveObjectDetectionCameraOverlay,
   shouldShowLivePoseCameraOverlay,
+  shouldShowLiveSegmentationCameraOverlay,
   shouldShowResultSaveAction,
   shouldShowStyleRecoveryControl,
   shouldUseLongTextInput,
@@ -1419,6 +1420,14 @@ struct FeatureRuntimePage {
           .onDestroy(() => this.stopLiveCameraPreview())
         if (this.sceneOverlayRows.length > 0 && this.shouldShowLiveSceneOverlay()) {
           this.liveSceneOverlay()
+        }
+        if (this.segmentationForegroundPixelMap !== undefined &&
+          shouldShowLiveSegmentationCameraOverlay(workflowForRoute(this.routeName))) {
+          Image(this.segmentationForegroundPixelMap)
+            .width('100%')
+            .height('100%')
+            .objectFit(ImageFit.Fill)
+            .scale({ x: this.segmentationForegroundMirrorScaleX(), y: 1 })
         }
         if (this.objectDetections.length > 0 &&
           shouldShowLiveObjectDetectionCameraOverlay(workflowForRoute(this.routeName))) {

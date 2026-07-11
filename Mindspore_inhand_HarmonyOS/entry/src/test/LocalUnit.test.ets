@@ -297,6 +297,7 @@ import {
   shouldShowLiveGestureCameraOverlay,
   shouldShowLiveObjectDetectionCameraOverlay,
   shouldShowLivePoseCameraOverlay,
+  shouldShowLiveSegmentationCameraOverlay,
   shouldMirrorSegmentationForeground,
   shouldUseLongTextInput,
   shouldUseLongTextResultRow,
@@ -6580,6 +6581,19 @@ export default function localUnitTest() {
       expect(shouldShowLivePoseCameraOverlay(workflowForRoute(AppRoute.OBJECT_CAMERA.name)))
         .assertFalse();
       expect(shouldShowLivePoseCameraOverlay(undefined))
+        .assertFalse();
+    });
+
+    it('showsSegmentationForegroundOnOnlyTheAndroidStyleLiveSegmentationPreview', 0, () => {
+      expect(shouldShowLiveSegmentationCameraOverlay(workflowForRoute(AppRoute.SEGMENTATION_LIVE.name)))
+        .assertTrue();
+      expect(shouldShowLiveSegmentationCameraOverlay(workflowForRoute(AppRoute.PORTRAIT_SEGMENTATION.name)))
+        .assertTrue();
+      expect(shouldShowLiveSegmentationCameraOverlay(workflowForRoute(AppRoute.SEGMENTATION_STILL.name)))
+        .assertFalse();
+      expect(shouldShowLiveSegmentationCameraOverlay(workflowForRoute(AppRoute.OBJECT_CAMERA.name)))
+        .assertFalse();
+      expect(shouldShowLiveSegmentationCameraOverlay(undefined))
         .assertFalse();
     });
 

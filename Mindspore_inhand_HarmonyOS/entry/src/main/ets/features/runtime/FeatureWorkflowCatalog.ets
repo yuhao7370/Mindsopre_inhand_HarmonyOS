@@ -379,6 +379,10 @@ export function shouldShowLivePoseCameraOverlay(workflow: FeatureWorkflow | unde
   return workflow?.aiMethod === 'detectPose' && workflow.liveMode;
 }
 
+export function shouldShowLiveSegmentationCameraOverlay(workflow: FeatureWorkflow | undefined): boolean {
+  return workflow?.aiMethod === 'segmentPerson' && workflow.liveMode;
+}
+
 export function shouldMirrorSegmentationForeground(
   workflow: FeatureWorkflow | undefined,
   liveCameraPosition: LiveCameraPosition
