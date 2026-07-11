@@ -211,6 +211,9 @@ Current HarmonyOS behavior:
   them ahead of useful scene labels. This makes the still/live scene workflows
   runnable offline, but it is a local approximation rather than HMS ML Kit
   equivalent output.
+- Scene result display labels now use a recovered/readable Android-equivalent
+  Chinese scene label table on Chinese locales while keeping the internal
+  English/Places365 labels stable for mapping.
 - A real scene detection runner can still be injected; if no service exists at
   all, the app reports the localized
   `feature_runtime_scene_runner_unavailable` adapter status.

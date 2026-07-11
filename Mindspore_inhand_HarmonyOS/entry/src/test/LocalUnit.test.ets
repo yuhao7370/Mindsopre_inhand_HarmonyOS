@@ -119,6 +119,7 @@ import {
 } from '../main/ets/services/dance/DanceSamplingService';
 import {
   androidSceneDetectionLabels,
+  androidSceneDetectionLabelsZh,
   ImageClassificationSceneDetectionRunner,
   parseSceneDetectionLabels,
   places365SceneLabelCount,
@@ -126,6 +127,7 @@ import {
   SceneDetectionResult,
   SceneDetectionRunner,
   SceneDetectionService,
+  sceneDetectionDisplayLabel,
   sceneDetectionLabelRawfilePath,
   sceneDetectionModelRawfilePath,
   sceneLabelForImageClassificationLabel,
@@ -3965,6 +3967,40 @@ export default function localUnitTest() {
       expect(result.messageKey).assertEqual('feature_runtime_scene_failed');
     });
 
+    it('mapsAndroidSceneLabelsToChineseDisplayLabelsWithoutChangingUnknownLabels', 0, () => {
+      expect(androidSceneDetectionLabels.length).assertEqual(androidSceneDetectionLabelsZh.length);
+      expect(sceneDetectionDisplayLabel('stage', 'zh-CN')).assertEqual('舞台');
+      expect(sceneDetectionDisplayLabel('beach', 'zh-Hans-CN')).assertEqual('沙滩');
+      expect(sceneDetectionDisplayLabel('aircraft', 'zh-CN')).assertEqual('飞机');
+      expect(sceneDetectionDisplayLabel('fucharacter', 'zh-CN')).assertEqual('福字');
+      expect(sceneDetectionDisplayLabel('other', 'zh-CN')).assertEqual('其他');
+      expect(sceneDetectionDisplayLabel('stage', 'en-US')).assertEqual('stage');
+      expect(sceneDetectionDisplayLabel('unknown_scene', 'zh-CN')).assertEqual('unknown_scene');
+    });
+
+    it('sceneDetectionServiceLocalizesAndroidSceneLabelsForChineseResultDisplay', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.SCENE_STILL.name);
+      expect(workflow !== undefined).assertTrue();
+      const scene: SceneDetection = { label: 'stage', score: 0.88 };
+      const sceneResult: SceneDetectionResult = {
+        ok: true,
+        scenes: [scene],
+        executionMs: 6
+      };
+      const service = new SceneDetectionService({
+        labelLocale: 'zh-CN',
+        runner: new FixedSceneDetectionRunner(sceneResult)
+      });
+
+      const result = await new DefaultAiService({ sceneDetectionService: service }).run(workflow!, {
+        imageUri: 'file://selected/scene.jpg'
+      });
+
+      expect(result.ok).assertTrue();
+      expect(result.detailText.indexOf('舞台 88.00%') >= 0).assertTrue();
+      expect(aiRunResultRows(result)[0].value).assertEqual('舞台');
+    });
+
     it('customModelRequiresModelAndImageInputs', 0, async () => {
       const workflow = workflowForRoute(AppRoute.CUSTOM_MODEL.name);
       expect(workflow !== undefined).assertTrue();
@@ -5206,6 +5242,34 @@ export default function localUnitTest() {
       expect(resourceManager.seenPaths[0]).assertEqual('labels/places365.txt');
     });
 
+    it('cachedRuntimeFactoryReloadsLocalSceneDetectionServiceWhenLabelLocaleChanges', 0, async () => {
+      resetHarmonyRuntimeAiServiceCachesForTests();
+      try {
+        const workflow = workflowForRoute(AppRoute.SCENE_LIVE.name);
+        expect(workflow !== undefined).assertTrue();
+        const labelContent: Uint8Array = new Uint8Array([
+          97, 105, 114, 102, 105, 101, 108, 100, 10,
+          98, 101, 97, 99, 104
+        ]);
+
+        setHarmonyRuntimeLabelLocaleForTests('en-US');
+        const englishResourceManager: FixedRawfileContentReader = new FixedRawfileContentReader(labelContent);
+        const firstService = await cachedRuntimeAiServiceForWorkflow(workflow!, englishResourceManager);
+
+        setHarmonyRuntimeLabelLocaleForTests('zh-CN');
+        const chineseResourceManager: FixedRawfileContentReader = new FixedRawfileContentReader(labelContent);
+        const secondService = await cachedRuntimeAiServiceForWorkflow(workflow!, chineseResourceManager);
+
+        expect(firstService === secondService).assertFalse();
+        expect(englishResourceManager.seenPaths.length).assertEqual(1);
+        expect(chineseResourceManager.seenPaths.length).assertEqual(1);
+        expect(englishResourceManager.seenPaths[0]).assertEqual('labels/places365.txt');
+        expect(chineseResourceManager.seenPaths[0]).assertEqual('labels/places365.txt');
+      } finally {
+        resetHarmonyRuntimeAiServiceCachesForTests();
+      }
+    });
+
     it('cachedRuntimeFactoryRetriesLocalSceneDetectionServiceAfterLoadFailure', 0, async () => {
       resetHarmonyRuntimeAiServiceCachesForTests();
       const workflow = workflowForRoute(AppRoute.SCENE_LIVE.name);
@@ -5500,6 +5564,56 @@ export default function localUnitTest() {
       expect(result.ok).assertTrue();
       expect(result.code).assertEqual('SCENE_DETECTION_DONE');
       expect(runner.seenImageUris[0]).assertEqual('file://selected/food.jpg');
+    });
+
+    it('runtimeFactoryLocalizesInjectedSceneDetectionLabelsForChineseLocale', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.SCENE_STILL.name);
+      expect(workflow !== undefined).assertTrue();
+      const scene: SceneDetection = { label: 'stage', score: 0.82 };
+      const sceneResult: SceneDetectionResult = {
+        ok: true,
+        scenes: [scene],
+        executionMs: 7
+      };
+      const runner: FixedSceneDetectionRunner = new FixedSceneDetectionRunner(sceneResult);
+      const service = await createRuntimeAiServiceForWorkflow(workflow!, {
+        resourceManager: new ThrowingRawfileContentReader(),
+        labelLocale: 'zh-CN',
+        sceneDetectionRunner: runner
+      });
+
+      const result: AiRunResult = await service.run(workflow!, {
+        imageUri: 'file://selected/stage.jpg'
+      });
+
+      expect(result.ok).assertTrue();
+      expect(result.detailText.indexOf('舞台 82.00%') >= 0).assertTrue();
+      expect(aiRunResultRows(result)[0].value).assertEqual('舞台');
+    });
+
+    it('runtimeFactoryLocalizesDefaultLocalSceneDetectionLabelsForChineseLocale', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.SCENE_STILL.name);
+      expect(workflow !== undefined).assertTrue();
+      const labelContent: Uint8Array = new Uint8Array([
+        115, 116, 97, 103, 101, 10,
+        98, 101, 97, 99, 104
+      ]);
+      const resourceManager: FixedRawfileContentReader = new FixedRawfileContentReader(labelContent);
+      const service = await createRuntimeAiServiceForWorkflow(workflow!, {
+        resourceManager: resourceManager,
+        labelLocale: 'zh-CN',
+        inputPreprocessor: new FixedInputPreprocessor(new ArrayBuffer(12)),
+        tensorRunner: new FixedTensorRunner([0.82, 0.1])
+      });
+
+      const result: AiRunResult = await service.run(workflow!, {
+        imageUri: 'file://selected/stage.jpg'
+      });
+
+      expect(resourceManager.seenPaths[0]).assertEqual('labels/places365.txt');
+      expect(result.ok).assertTrue();
+      expect(result.detailText.indexOf('舞台 82.00%') >= 0).assertTrue();
+      expect(aiRunResultRows(result)[0].value).assertEqual('舞台');
     });
 
     it('runtimeFactoryInjectsSegmentationServiceForSegmentationWorkflow', 0, async () => {

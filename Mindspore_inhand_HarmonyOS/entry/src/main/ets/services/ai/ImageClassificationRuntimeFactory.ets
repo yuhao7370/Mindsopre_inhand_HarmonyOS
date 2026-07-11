@@ -106,6 +106,7 @@ let cachedHarmonyDefaultAiService: Promise<DefaultAiService> | undefined = undef
 let cachedHarmonyDefaultAiServiceLocale: string = '';
 let cachedHarmonyLocalGestureAiService: Promise<DefaultAiService> | undefined = undefined;
 let cachedHarmonyLocalSceneDetectionAiService: Promise<DefaultAiService> | undefined = undefined;
+let cachedHarmonyLocalSceneDetectionAiServiceLocale: string = '';
 let harmonyRuntimeLabelLocaleForTests: string | undefined = undefined;
 
 export function resetHarmonyRuntimeAiServiceCachesForTests(): void {
@@ -113,6 +114,7 @@ export function resetHarmonyRuntimeAiServiceCachesForTests(): void {
   cachedHarmonyDefaultAiServiceLocale = '';
   cachedHarmonyLocalGestureAiService = undefined;
   cachedHarmonyLocalSceneDetectionAiService = undefined;
+  cachedHarmonyLocalSceneDetectionAiServiceLocale = '';
   harmonyRuntimeLabelLocaleForTests = undefined;
 }
 
@@ -149,12 +151,16 @@ export function cachedHarmonyDefaultAiServiceForResourceManager(
 export function cachedHarmonyLocalSceneDetectionAiServiceForResourceManager(
   resourceManager: RawfileContentReader
 ): Promise<DefaultAiService> {
-  if (cachedHarmonyLocalSceneDetectionAiService === undefined) {
-    const servicePromise = createHarmonyLocalSceneDetectionAiService(resourceManager);
+  const labelLocale = currentLabelLocale();
+  if (cachedHarmonyLocalSceneDetectionAiService === undefined ||
+    cachedHarmonyLocalSceneDetectionAiServiceLocale !== labelLocale) {
+    const servicePromise = createHarmonyLocalSceneDetectionAiService(resourceManager, labelLocale);
     cachedHarmonyLocalSceneDetectionAiService = servicePromise;
+    cachedHarmonyLocalSceneDetectionAiServiceLocale = labelLocale;
     servicePromise.catch(() => {
       if (cachedHarmonyLocalSceneDetectionAiService === servicePromise) {
         cachedHarmonyLocalSceneDetectionAiService = undefined;
+        cachedHarmonyLocalSceneDetectionAiServiceLocale = '';
       }
     });
   }
@@ -187,11 +193,13 @@ async function createHarmonyLocalGestureAiService(
 }
 
 async function createHarmonyLocalSceneDetectionAiService(
-  resourceManager: RawfileContentReader
+  resourceManager: RawfileContentReader,
+  labelLocale: string
 ): Promise<DefaultAiService> {
   return new DefaultAiService({
     sceneDetectionService: await createHarmonyLocalSceneDetectionService({
-      resourceManager: resourceManager
+      resourceManager: resourceManager,
+      labelLocale: labelLocale
     })
   });
 }
@@ -314,7 +322,10 @@ export async function createRuntimeAiServiceForWorkflow(
   if (workflow.aiMethod === 'detectScene') {
     if (options.sceneDetectionRunner !== undefined) {
       return new DefaultAiService({
-        sceneDetectionService: createHarmonySceneDetectionService(options.sceneDetectionRunner)
+        sceneDetectionService: createHarmonySceneDetectionService(
+          options.sceneDetectionRunner,
+          labelLocaleForOptions(options)
+        )
       });
     }
     return new DefaultAiService({
@@ -477,9 +488,13 @@ export async function createHarmonyLocalGestureService(
   });
 }
 
-export function createHarmonySceneDetectionService(runner: SceneDetectionRunner): SceneDetectionService {
+export function createHarmonySceneDetectionService(
+  runner: SceneDetectionRunner,
+  labelLocale: string = ''
+): SceneDetectionService {
   return new SceneDetectionService({
-    runner: runner
+    runner: runner,
+    labelLocale: labelLocale
   });
 }
 
@@ -497,6 +512,7 @@ export async function createHarmonyLocalSceneDetectionService(
     tensorRunner: tensorRunner
   });
   return new SceneDetectionService({
+    labelLocale: labelLocaleForOptions(options),
     runner: new ImageClassificationSceneDetectionRunner({
       labels: labels,
       scoreRunner: scoreRunner

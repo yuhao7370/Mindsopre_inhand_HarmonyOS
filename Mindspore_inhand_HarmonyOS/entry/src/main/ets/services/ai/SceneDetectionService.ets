@@ -19,6 +19,7 @@ export interface SceneDetectionRunner {
 
 export interface SceneDetectionServiceOptions {
   readonly runner: SceneDetectionRunner;
+  readonly labelLocale?: string;
 }
 
 export const sceneDetectionLabelRawfilePath: string = 'labels/places365.txt';
@@ -40,6 +41,19 @@ export const androidSceneDetectionLabels: Array<string> = [
   'thesmurfs', 'littlepony', 'butterfly', 'ladybug', 'dragonfly', 'billiardroom', 'meetingroom',
   'office', 'bar', 'mallcourtyard', 'deer', 'cathedralhall', 'bee', 'helicopter', 'mahjong',
   'chess', 'mcDonalds', 'ornamentalfish', 'widebuildings', 'other'
+];
+export const androidSceneDetectionLabelsZh: Array<string> = [
+  '舞台', '沙滩', '蓝天', '日出日落', '美食', '花朵', '绿植', '雪景', '夜景', '文字',
+  '猫', '狗', '烟花', '阴天', '秋叶', '熊猫', '汽车', '中式建筑', '自行车', '瀑布',
+  '游乐场', '走廊巷道', '火车飞机内', '卫生间', '厨房', '卧室', '餐厅', '客厅', '摩天大楼+塔', '桥梁',
+  '海滨/湖滨', '山峰', '城市俯瞰', '工地', '伊斯兰式建筑', '欧式建筑', '足球场', '棒球场', '网球场', '轿车内部',
+  '羽毛球馆', '乒乓球馆', '游泳馆', '羊驼', '图书馆', '超市', '饭店', '老虎', '企鹅', '大象',
+  '恐龙', '水面', '室内篮球场', '保龄球馆', '教室', '兔子', '犀牛', '骆驼', '乌龟', '豹子',
+  '长颈鹿', '孔雀', '袋鼠', '狮子', '电动车/摩托车', '飞机', '火车', '轮船', '眼镜', '手表',
+  '高跟鞋', '洗衣机', '空调', '相机', '地图', '键盘', '红包', '福字', '囍字', '舞龙',
+  '舞狮', '围棋', '泰迪熊', '京剧脸谱', '蓝精灵', '小马宝莉', '蝴蝶', '瓢虫', '蜻蜓', '桌球房',
+  '会议室', '办公室', '酒吧', '商场中庭', '梅花鹿', '教堂正厅', '蜜蜂', '直升机', '麻将', '象棋',
+  '麦当劳', '观赏鱼', '广角城楼', '其他'
 ];
 
 export interface ImageClassificationSceneDetectionRunnerOptions {
@@ -135,15 +149,17 @@ const localSceneLabelKeywordMaps: Array<SceneLabelKeywordMap> = [
 
 export class SceneDetectionService {
   private readonly runner: SceneDetectionRunner;
+  private readonly labelLocale: string;
 
   constructor(options: SceneDetectionServiceOptions) {
     this.runner = options.runner;
+    this.labelLocale = options.labelLocale ?? '';
   }
 
   async detectScenes(imageUri: string): Promise<SceneDetectionResult> {
     const startMs = Date.now();
     try {
-      return await this.runner.detectScenes(imageUri);
+      return localizedSceneDetectionResult(await this.runner.detectScenes(imageUri), this.labelLocale);
     } catch (_) {
       return {
         ok: false,
@@ -222,6 +238,19 @@ export function parseSceneDetectionLabels(rawText: string): Array<string> {
   return parseImageCategoryLabels(rawText);
 }
 
+export function sceneDetectionDisplayLabel(label: string, labelLocale: string): string {
+  if (!isChineseSceneLabelLocale(labelLocale)) {
+    return label;
+  }
+  const normalized = normalizeSceneLabel(label);
+  for (let index = 0; index < androidSceneDetectionLabels.length; index++) {
+    if (normalizeSceneLabel(androidSceneDetectionLabels[index]) === normalized) {
+      return androidSceneDetectionLabelsZh[index];
+    }
+  }
+  return label;
+}
+
 export function sceneLabelForImageClassificationLabel(label: string): string {
   const normalized = normalizeSceneLabel(label);
   if (isDeniedSceneLabel(normalized)) {
@@ -270,6 +299,28 @@ function sceneLabelForPlaces365Label(normalizedLabel: string): string {
 
 function normalizeSceneLabel(label: string): string {
   return label.trim().toLowerCase().split(' ').join('_').split('-').join('_').split('/').join('_');
+}
+
+function localizedSceneDetectionResult(result: SceneDetectionResult, labelLocale: string): SceneDetectionResult {
+  const scenes: Array<SceneDetection> = [];
+  result.scenes.forEach((scene: SceneDetection) => {
+    scenes.push({
+      label: sceneDetectionDisplayLabel(scene.label, labelLocale),
+      score: scene.score
+    });
+  });
+  return {
+    ok: result.ok,
+    scenes: scenes,
+    imageWidth: result.imageWidth,
+    imageHeight: result.imageHeight,
+    executionMs: result.executionMs
+  };
+}
+
+function isChineseSceneLabelLocale(locale: string): boolean {
+  const normalized = locale.toLowerCase().split('_').join('-');
+  return normalized === 'zh' || normalized.startsWith('zh-');
 }
 
 function sceneLabelContainsKeyword(label: string, keyword: string): boolean {
