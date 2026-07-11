@@ -74,9 +74,10 @@ Current HarmonyOS behavior:
   Android template similarity display.
 - The live skeleton workflow now carries Android's default Yoga skeleton mode
   through the runtime factory into `PoseService`/`PoseRunner`, while the still
-  PoseNet route remains in normal pose mode. The current CoreVision fallback
-  still uses the platform's generic skeleton detector unless a Yoga-specific
-  runner/model is injected.
+  PoseNet route remains in normal pose mode. The CoreVision fallback still uses
+  the platform's generic skeleton detector, but its standard body point types
+  are mapped back to Android's Yoga template point types for the similarity
+  display unless a Yoga-specific runner/model is injected.
 - Live Skeleton detections draw the same skeleton lines and points directly on
   the HarmonyOS camera preview, matching Android `SkeletonGraphic` overlay
   behavior while still reusing the shared captured-frame result state.

@@ -356,7 +356,11 @@ export function isPosePointVisible(point: PosePoint): boolean {
 }
 
 export function poseSimilarityToAndroidTemplate(points: Array<PosePoint>): number | undefined {
-  return poseSimilarityToTemplate(points, androidLiveSkeletonTemplatePoints);
+  const similarity = poseSimilarityToTemplate(points, androidLiveSkeletonTemplatePoints);
+  if (similarity !== undefined) {
+    return similarity;
+  }
+  return poseSimilarityToTemplate(coreVisionPosePointsAsAndroidYogaPoints(points), androidLiveSkeletonTemplatePoints);
 }
 
 export function poseSimilarityPercent(similarity: number): string {
@@ -442,6 +446,53 @@ function visiblePosePointMap(points: Array<PosePoint>): Map<number, PosePoint> {
     }
   });
   return pointByType;
+}
+
+function coreVisionPosePointsAsAndroidYogaPoints(points: Array<PosePoint>): Array<PosePoint> {
+  const mappedPoints: Array<PosePoint> = [];
+  points.forEach((point: PosePoint) => {
+    const yogaType = androidYogaPointTypeForCoreVisionPointType(point.type);
+    if (yogaType !== undefined) {
+      mappedPoints.push({
+        type: yogaType,
+        score: point.score,
+        x: point.x,
+        y: point.y
+      });
+    }
+  });
+  return mappedPoints;
+}
+
+function androidYogaPointTypeForCoreVisionPointType(type: number): number | undefined {
+  switch (type) {
+    case skeletonDetection.SkeletonPointType.LEFT_SHOULDER:
+      return 101;
+    case skeletonDetection.SkeletonPointType.LEFT_ELBOW:
+      return 102;
+    case skeletonDetection.SkeletonPointType.LEFT_WRIST:
+      return 103;
+    case skeletonDetection.SkeletonPointType.RIGHT_SHOULDER:
+      return 104;
+    case skeletonDetection.SkeletonPointType.RIGHT_ELBOW:
+      return 105;
+    case skeletonDetection.SkeletonPointType.RIGHT_WRIST:
+      return 106;
+    case skeletonDetection.SkeletonPointType.LEFT_HIP:
+      return 107;
+    case skeletonDetection.SkeletonPointType.LEFT_KNEE:
+      return 108;
+    case skeletonDetection.SkeletonPointType.LEFT_ANKLE:
+      return 109;
+    case skeletonDetection.SkeletonPointType.RIGHT_HIP:
+      return 110;
+    case skeletonDetection.SkeletonPointType.RIGHT_KNEE:
+      return 111;
+    case skeletonDetection.SkeletonPointType.RIGHT_ANKLE:
+      return 112;
+    default:
+      return undefined;
+  }
 }
 
 function poseBounds(points: Array<PosePoint>): PoseBounds {

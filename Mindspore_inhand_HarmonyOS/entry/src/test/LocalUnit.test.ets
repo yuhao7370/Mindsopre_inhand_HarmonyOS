@@ -4487,6 +4487,26 @@ export default function localUnitTest() {
       expect(similarity.toFixed(2)).assertEqual('1.00');
     });
 
+    it('calculatesAndroidLiveSkeletonTemplateSimilarityFromCoreVisionPointTypes', 0, () => {
+      const coreVisionBodyTypes: Array<number> = [5, 7, 9, 6, 8, 10, 11, 13, 15, 12, 14, 16];
+      const shiftedPoints: Array<PosePoint> =
+        androidLiveSkeletonTemplatePoints.slice(0, coreVisionBodyTypes.length).map((
+          point: PosePoint,
+          index: number
+        ): PosePoint => {
+          return {
+            type: coreVisionBodyTypes[index],
+            score: point.score,
+            x: point.x * 0.5 + 12,
+            y: point.y * 0.5 + 30
+          };
+        });
+
+      const similarity: number = poseSimilarityToAndroidTemplate(shiftedPoints) ?? -1;
+
+      expect(similarity.toFixed(2)).assertEqual('1.00');
+    });
+
     it('aiServiceReportsPoseFailureWithI18nKey', 0, async () => {
       const workflow = workflowForRoute(AppRoute.POSENET.name);
       expect(workflow !== undefined).assertTrue();
