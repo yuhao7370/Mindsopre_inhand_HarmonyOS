@@ -8,6 +8,7 @@ export const mindSporeDocBaseUrl: string = `${mindSporeBaseUrl}/doc/note/zh-CN/m
 export const helpImageClassificationUrl: string = `${mindSporeDocBaseUrl}/image_classification_lite.html`;
 export const helpObjectDetectionUrl: string = `${mindSporeDocBaseUrl}/object_detection_lite.html`;
 export const helpStyleTransferUrl: string = `${mindSporeDocBaseUrl}/style_transfer_lite.html`;
+export const customModelMoreUrl: string = 'https://www.baidu.com';
 
 export const userPrivacyRulesUrl: string = 'file:///android_asset/privacy.html';
 export const collegeMainCloudUrl: string = `${mindSporeBaseUrl}/news/newschildren?id=354`;
@@ -56,6 +57,7 @@ const WEB_DESTINATION_MAPPINGS: WebDestinationMapping[] = [
   { sourceUrl: helpImageClassificationUrl, titleKey: 'title_image' },
   { sourceUrl: helpObjectDetectionUrl, titleKey: 'title_object' },
   { sourceUrl: helpStyleTransferUrl, titleKey: 'title_style_transfer' },
+  { sourceUrl: customModelMoreUrl, titleKey: 'title_custom_model' },
   { sourceUrl: intelligentPoetryUrl, titleKey: 'title_intelligent_poetry' }
 ];
 

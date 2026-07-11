@@ -392,6 +392,7 @@ import {
   collegeQuickExecuteUrl,
   collegeQuickTrainUrl,
   collegeQuickVideoUrl,
+  customModelMoreUrl,
   harmonyPrivacyRawfile,
   helpImageClassificationUrl,
   helpObjectDetectionUrl,
@@ -2101,6 +2102,7 @@ export default function localUnitTest() {
       expect(webDestinationForUrl(mindSporeBaseUrl, 'me_qa_title').titleKey).assertEqual('me_official_title');
       expect(webDestinationForUrl(meCodeUrl, 'me_official_title').titleKey).assertEqual('me_official_code_title');
       expect(webDestinationForUrl(meHelpUrl, 'me_official_title').titleKey).assertEqual('me_qa_title');
+      expect(webDestinationForUrl(customModelMoreUrl, 'me_official_title').titleKey).assertEqual('title_custom_model');
     });
 
     it('retainsHiddenNavigableMeWebEntries', 0, () => {
@@ -3084,6 +3086,7 @@ export default function localUnitTest() {
       expect(workflowForRoute(AppRoute.OBJECT_PHOTO.name)?.helpUrl).assertEqual(helpObjectDetectionUrl);
       expect(workflowForRoute(AppRoute.OBJECT_CAMERA.name)?.helpUrl).assertEqual(helpObjectDetectionUrl);
       expect(workflowForRoute(AppRoute.STYLE_TRANSFER.name)?.helpUrl).assertEqual(helpStyleTransferUrl);
+      expect(workflowForRoute(AppRoute.CUSTOM_MODEL.name)?.helpUrl).assertEqual(customModelMoreUrl);
     });
 
     it('opensRuntimeHelpSourceExternallyLikeAndroid', 0, async () => {

@@ -2,6 +2,7 @@ import { AppRoute } from '../../app/AppRoutes';
 import { AppStringKey } from '../../common/i18n/AppStrings';
 import { LiveCameraPosition } from '../../services/camera/LiveCameraService';
 import {
+  customModelMoreUrl,
   helpImageClassificationUrl,
   helpObjectDetectionUrl,
   helpStyleTransferUrl
@@ -254,6 +255,7 @@ export const featureWorkflows: Array<FeatureWorkflow> = [
     requiredPermissions: ['camera', 'media'],
     resultKind: 'tensorSummary',
     liveMode: false,
+    helpUrl: customModelMoreUrl,
     helpContentKey: 'feature_runtime_custom_model_help'
   }
 ];
