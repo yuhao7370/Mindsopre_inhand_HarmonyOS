@@ -20,11 +20,18 @@ $resourcePaths = @(
   'entry/src/main/resources/en_US/element/string.json',
   'entry/src/main/resources/zh_CN/element/string.json'
 )
+
+function Decode-Utf8Base64([string] $encoded) {
+  return [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($encoded))
+}
+
 $forbiddenResourceValuePatterns = @(
   'HarmonyOS shell',
   '\brunner\b',
-  '对接原 Android',
-  '原 Android MindSpore',
+  ([regex]::Escape((Decode-Utf8Base64 '5a+55o6l5Y6fIEFuZHJvaWQ='))),
+  ([regex]::Escape((Decode-Utf8Base64 '5Y6fIEFuZHJvaWQgTWluZFNwb3Jl'))),
+  ([regex]::Escape((Decode-Utf8Base64 '5Y6f5aeLIE1pbmRTcG9yZQ=='))),
+  'original MindSpore',
   'NATIVE_ADAPTER_PENDING',
   'service migration',
   '\bqueued\b'

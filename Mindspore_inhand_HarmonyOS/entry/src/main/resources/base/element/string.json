@@ -110,7 +110,7 @@
     { "name": "dance_score_level_excellent", "value": "隐藏在民间的高手！" },
     { "name": "dance_score_level_perfect", "value": "给大神献上膝盖！" },
     { "name": "dance_score_level_full", "value": "这个舞台属于你！" },
-    { "name": "dance_platform_note", "value": "实时评分已接入原始 MindSpore 参考视频、HarmonyOS 相机预览、画面抓取与骨骼检测能力。" },
+    { "name": "dance_platform_note", "value": "实时评分已接入参考视频、HarmonyOS 相机预览、画面抓取与骨骼检测能力。" },
     { "name": "feature_runtime_inputs_title", "value": "输入" },
     { "name": "feature_runtime_permissions_title", "value": "平台权限" },
     { "name": "feature_runtime_result_title", "value": "运行状态" },
