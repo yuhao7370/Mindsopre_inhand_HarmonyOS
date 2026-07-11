@@ -255,6 +255,7 @@
     { "name": "feature_runtime_result_foreground", "value": "Foreground" },
     { "name": "feature_runtime_result_background", "value": "Background" },
     { "name": "feature_runtime_result_background_replacement", "value": "Background replacement preview" },
+    { "name": "feature_input_photo_android", "value": "PHOTO" },
     { "name": "feature_input_camera", "value": "Camera" },
     { "name": "feature_input_photo", "value": "Image" },
     { "name": "feature_input_sample_image", "value": "Sample" },

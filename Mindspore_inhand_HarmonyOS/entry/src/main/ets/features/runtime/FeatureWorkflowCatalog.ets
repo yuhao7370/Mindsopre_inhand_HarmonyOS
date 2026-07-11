@@ -704,7 +704,20 @@ export function workflowInputLabelKey(
       return 'feature_runtime_custom_model_take_photo';
     }
   }
+  if (inputKind === 'photo' && workflowUsesAndroidHmsPhotoButton(workflow)) {
+    return 'feature_input_photo_android';
+  }
   return inputLabelKey(inputKind);
+}
+
+function workflowUsesAndroidHmsPhotoButton(workflow: FeatureWorkflow | undefined): boolean {
+  const routeName = workflow?.routeName ?? '';
+  return routeName === AppRoute.POSENET.name ||
+    routeName === AppRoute.SEGMENTATION_STILL.name ||
+    routeName === AppRoute.GESTURE_STILL.name ||
+    routeName === AppRoute.SCENE_STILL.name ||
+    routeName === AppRoute.TEXT_RECOGNITION.name ||
+    routeName === AppRoute.TEXT_TRANSLATION.name;
 }
 
 export function permissionLabelKey(permissionKind: FeaturePermissionKind): AppStringKey {

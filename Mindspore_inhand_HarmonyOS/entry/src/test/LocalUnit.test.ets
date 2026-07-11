@@ -2118,6 +2118,7 @@ export default function localUnitTest() {
       expect(hasAppStringKey('feature_runtime_result_pose_template')).assertTrue();
       expect(hasAppStringKey('feature_runtime_copy_text')).assertTrue();
       expect(hasAppStringKey('feature_runtime_copy_done')).assertTrue();
+      expect(hasAppStringKey('feature_input_photo_android')).assertTrue();
       expect(hasAppStringKey('feature_runtime_model_cache_failed')).assertTrue();
       expect(hasAppStringKey('feature_runtime_model_incompatible')).assertTrue();
       expect(hasAppStringKey('feature_runtime_image_invalid')).assertTrue();
@@ -5412,6 +5413,26 @@ export default function localUnitTest() {
       expect(workflowResultTitleKey(imageClassification)).assertEqual('feature_runtime_result_title');
       expect(workflowInitialStatusKey(workflow)).assertEqual('feature_runtime_custom_model_output_placeholder');
       expect(workflowInitialStatusKey(imageClassification)).assertEqual('feature_runtime_status_idle');
+    });
+
+    it('hmsStillPhotoWorkflowsUseAndroidPhotoButtonCopy', 0, () => {
+      const poseNet = workflowForRoute(AppRoute.POSENET.name);
+      const segmentationStill = workflowForRoute(AppRoute.SEGMENTATION_STILL.name);
+      const gestureStill = workflowForRoute(AppRoute.GESTURE_STILL.name);
+      const sceneStill = workflowForRoute(AppRoute.SCENE_STILL.name);
+      const textRecognition = workflowForRoute(AppRoute.TEXT_RECOGNITION.name);
+      const textTranslation = workflowForRoute(AppRoute.TEXT_TRANSLATION.name);
+      const objectPhoto = workflowForRoute(AppRoute.OBJECT_PHOTO.name);
+      const customModel = workflowForRoute(AppRoute.CUSTOM_MODEL.name);
+
+      expect(workflowInputLabelKey(poseNet, 'photo')).assertEqual('feature_input_photo_android');
+      expect(workflowInputLabelKey(segmentationStill, 'photo')).assertEqual('feature_input_photo_android');
+      expect(workflowInputLabelKey(gestureStill, 'photo')).assertEqual('feature_input_photo_android');
+      expect(workflowInputLabelKey(sceneStill, 'photo')).assertEqual('feature_input_photo_android');
+      expect(workflowInputLabelKey(textRecognition, 'photo')).assertEqual('feature_input_photo_android');
+      expect(workflowInputLabelKey(textTranslation, 'photo')).assertEqual('feature_input_photo_android');
+      expect(workflowInputLabelKey(objectPhoto, 'photo')).assertEqual('feature_input_photo');
+      expect(workflowInputLabelKey(customModel, 'photo')).assertEqual('feature_runtime_custom_model_select_photo');
     });
 
     it('customModelRequiresNativeRunnerInsteadOfSimulatedOutput', 0, async () => {
