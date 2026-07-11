@@ -2131,6 +2131,10 @@ export default function localUnitTest() {
       expect(hasAppStringKey('feature_runtime_save_image_missing')).assertTrue();
       expect(hasAppStringKey('feature_runtime_style_recovery')).assertTrue();
       expect(hasAppStringKey('feature_runtime_style_recovered')).assertTrue();
+      expect(hasAppStringKey('feature_runtime_style_album')).assertTrue();
+      expect(hasAppStringKey('feature_runtime_style_take_photo')).assertTrue();
+      expect(hasAppStringKey('feature_runtime_style_select_predict_model')).assertTrue();
+      expect(hasAppStringKey('feature_runtime_style_select_transfer_model')).assertTrue();
       expect(hasAppStringKey('feature_runtime_go_live_android_hms')).assertTrue();
       expect(hasAppStringKey('feature_runtime_help')).assertTrue();
       expect(hasAppStringKey('feature_runtime_help_image_classification')).assertTrue();
@@ -5460,6 +5464,22 @@ export default function localUnitTest() {
       expect(workflowGoLiveLabelKey(sceneStill)).assertEqual('feature_runtime_go_live_android_hms');
       expect(workflowGoLiveLabelKey(textRecognition)).assertEqual('feature_runtime_go_live');
       expect(workflowGoLiveLabelKey(imageClassification)).assertEqual('feature_runtime_go_live');
+    });
+
+    it('styleTransferUsesAndroidSpecificInputCopy', 0, () => {
+      const styleTransfer = workflowForRoute(AppRoute.STYLE_TRANSFER.name);
+      const imageClassification = workflowForRoute(AppRoute.IMAGE_CAMERA.name);
+      expect(styleTransfer !== undefined).assertTrue();
+      expect(imageClassification !== undefined).assertTrue();
+
+      expect(workflowInputLabelKey(styleTransfer, 'contentImage')).assertEqual('feature_runtime_style_album');
+      expect(workflowInputLabelKey(styleTransfer, 'camera')).assertEqual('feature_runtime_style_take_photo');
+      expect(workflowInputLabelKey(styleTransfer, 'stylePredictModelFile'))
+        .assertEqual('feature_runtime_style_select_predict_model');
+      expect(workflowInputLabelKey(styleTransfer, 'styleTransferModelFile'))
+        .assertEqual('feature_runtime_style_select_transfer_model');
+      expect(workflowInputLabelKey(styleTransfer, 'styleImage')).assertEqual('feature_input_style_image');
+      expect(workflowInputLabelKey(imageClassification, 'camera')).assertEqual('feature_input_camera');
     });
 
     it('customModelRequiresNativeRunnerInsteadOfSimulatedOutput', 0, async () => {

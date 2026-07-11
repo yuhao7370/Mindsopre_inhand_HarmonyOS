@@ -704,6 +704,20 @@ export function workflowInputLabelKey(
       return 'feature_runtime_custom_model_take_photo';
     }
   }
+  if (workflow?.routeName === AppRoute.STYLE_TRANSFER.name) {
+    if (inputKind === 'contentImage') {
+      return 'feature_runtime_style_album';
+    }
+    if (inputKind === 'camera') {
+      return 'feature_runtime_style_take_photo';
+    }
+    if (inputKind === 'stylePredictModelFile') {
+      return 'feature_runtime_style_select_predict_model';
+    }
+    if (inputKind === 'styleTransferModelFile') {
+      return 'feature_runtime_style_select_transfer_model';
+    }
+  }
   if (inputKind === 'photo' && workflowUsesAndroidHmsStillButton(workflow)) {
     return 'feature_input_photo_android';
   }

@@ -411,6 +411,10 @@ Current HarmonyOS behavior:
 - Cached custom predict/transfer `.ms` model files are restored from the app
   cache when the runtime page is recreated, matching Android's static
   custom-model path behavior after `recreate()`.
+- HarmonyOS uses Style Transfer-specific input labels for the original-image
+  album pick, camera capture, predict-model picker, and transfer-model picker,
+  matching the Android page's dedicated button copy while localizing the English
+  surface instead of preserving Chinese-only hardcoded labels.
 - HarmonyOS shows the localized Recovery control whenever the Style Transfer
   page is open, matching Android's always-visible button. If no original image
   has been selected yet, the action reports the Android-style original-image
