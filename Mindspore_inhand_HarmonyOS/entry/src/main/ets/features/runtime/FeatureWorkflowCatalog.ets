@@ -517,6 +517,30 @@ export function shouldLeaveRuntimeAfterCancelledInitialPick(
     inputKind === 'photo';
 }
 
+export function cancelledPickStatusKeyForWorkflow(
+  workflow: FeatureWorkflow | undefined,
+  inputKind: FeatureInputKind,
+  initialPick: boolean
+): AppStringKey {
+  if (workflow !== undefined &&
+    shouldLeaveRuntimeAfterCancelledInitialPick(workflow, inputKind, initialPick)) {
+    return 'feature_runtime_image_invalid';
+  }
+  return 'feature_runtime_pick_cancelled';
+}
+
+export function cancelledPickToastStatusKeyForWorkflow(
+  workflow: FeatureWorkflow | undefined,
+  inputKind: FeatureInputKind,
+  initialPick: boolean
+): AppStringKey | undefined {
+  if (workflow !== undefined &&
+    shouldLeaveRuntimeAfterCancelledInitialPick(workflow, inputKind, initialPick)) {
+    return cancelledPickStatusKeyForWorkflow(workflow, inputKind, initialPick);
+  }
+  return undefined;
+}
+
 export function shouldAutoRunWorkflowAfterInputReady(workflow: FeatureWorkflow, inputKind: FeatureInputKind): boolean {
   if (workflow.routeName === AppRoute.OBJECT_PHOTO.name && inputKind === 'photo') {
     return true;

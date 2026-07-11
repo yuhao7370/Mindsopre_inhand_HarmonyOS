@@ -181,6 +181,7 @@ export type AppStringKey =
   'feature_runtime_model_incompatible' |
   'feature_runtime_text_ready' |
   'feature_runtime_pick_cancelled' |
+  'feature_runtime_image_invalid' |
   'feature_runtime_text_placeholder' |
   'feature_runtime_text_translation_placeholder' |
   'feature_runtime_copy_text' |
@@ -452,6 +453,7 @@ const APP_STRING_KEYS: AppStringKey[] = [
   'feature_runtime_model_incompatible',
   'feature_runtime_text_ready',
   'feature_runtime_pick_cancelled',
+  'feature_runtime_image_invalid',
   'feature_runtime_text_placeholder',
   'feature_runtime_text_translation_placeholder',
   'feature_runtime_copy_text',
@@ -909,6 +911,8 @@ export function appString(key: AppStringKey): ResourceStr {
       return $r('app.string.feature_runtime_text_ready');
     case 'feature_runtime_pick_cancelled':
       return $r('app.string.feature_runtime_pick_cancelled');
+    case 'feature_runtime_image_invalid':
+      return $r('app.string.feature_runtime_image_invalid');
     case 'feature_runtime_text_placeholder':
       return $r('app.string.feature_runtime_text_placeholder');
     case 'feature_runtime_text_translation_placeholder':

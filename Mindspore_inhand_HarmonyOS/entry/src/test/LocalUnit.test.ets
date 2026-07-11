@@ -314,6 +314,8 @@ import {
   styleTransferStyleReadyStatusKey,
   shouldClearTextInputAfterInputReady,
   shouldLeaveRuntimeAfterCancelledInitialPick,
+  cancelledPickStatusKeyForWorkflow,
+  cancelledPickToastStatusKeyForWorkflow,
   shouldStartWorkflowRun,
   shouldPreserveRuntimeResultAfterInputReady,
   shouldPreserveRuntimeVisualResultOnAiResult,
@@ -1950,6 +1952,7 @@ export default function localUnitTest() {
       expect(hasAppStringKey('feature_runtime_copy_done')).assertTrue();
       expect(hasAppStringKey('feature_runtime_model_cache_failed')).assertTrue();
       expect(hasAppStringKey('feature_runtime_model_incompatible')).assertTrue();
+      expect(hasAppStringKey('feature_runtime_image_invalid')).assertTrue();
       expect(hasAppStringKey('feature_runtime_classification_runner_unavailable')).assertTrue();
       expect(hasAppStringKey('feature_runtime_save_image')).assertTrue();
       expect(hasAppStringKey('feature_runtime_save_image_done')).assertTrue();
@@ -7290,9 +7293,18 @@ export default function localUnitTest() {
       expect(shouldLeaveRuntimeAfterCancelledInitialPick(objectPhoto, 'photo', true)).assertTrue();
       expect(shouldLeaveRuntimeAfterCancelledInitialPick(objectPhoto, 'photo', false)).assertFalse();
       expect(shouldLeaveRuntimeAfterCancelledInitialPick(objectPhoto, 'modelFile', true)).assertFalse();
+      expect(cancelledPickStatusKeyForWorkflow(objectPhoto, 'photo', true)).assertEqual('feature_runtime_image_invalid');
+      expect(cancelledPickToastStatusKeyForWorkflow(objectPhoto, 'photo', true))
+        .assertEqual('feature_runtime_image_invalid');
+      expect(cancelledPickStatusKeyForWorkflow(objectPhoto, 'photo', false))
+        .assertEqual('feature_runtime_pick_cancelled');
+      expect(cancelledPickToastStatusKeyForWorkflow(objectPhoto, 'photo', false)).assertUndefined();
 
       const textRecognition: FeatureWorkflow = workflowForRoute(AppRoute.TEXT_RECOGNITION.name)!;
       expect(shouldLeaveRuntimeAfterCancelledInitialPick(textRecognition, 'photo', true)).assertFalse();
+      expect(cancelledPickStatusKeyForWorkflow(textRecognition, 'photo', true))
+        .assertEqual('feature_runtime_pick_cancelled');
+      expect(cancelledPickToastStatusKeyForWorkflow(textRecognition, 'photo', true)).assertUndefined();
     });
 
     it('previewsAndroidPoseNetSampleOnEntryWithoutAutoDetecting', 0, () => {

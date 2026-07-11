@@ -18,6 +18,8 @@ import {
   shouldAutoRunStyleTransferAfterStyleReady,
   shouldDeferRuntimeResultClearUntilPickResult,
   shouldLeaveRuntimeAfterCancelledInitialPick,
+  cancelledPickStatusKeyForWorkflow,
+  cancelledPickToastStatusKeyForWorkflow,
   shouldPreserveRuntimeResultAfterInputReady,
   shouldPreserveRuntimeVisualResultOnAiResult,
   runtimeSegmentationBackgroundImageUri,
@@ -556,14 +558,15 @@ struct FeatureRuntimePage {
     initialPick: boolean = false
   ): void {
     if (!result.ok) {
-      this.statusKey = 'feature_runtime_pick_cancelled';
+      const workflow = workflowForRoute(this.routeName);
+      this.statusKey = cancelledPickStatusKeyForWorkflow(workflow, inputKind, initialPick);
       this.applyPickedInputState(runtimePickedInputStateAfterCancelledPick(
         this.routeName,
         inputKind,
         this.pickedInputState()
       ));
-      const workflow = workflowForRoute(this.routeName);
       if (workflow && shouldLeaveRuntimeAfterCancelledInitialPick(workflow, inputKind, initialPick)) {
+        this.showRuntimeToast(cancelledPickToastStatusKeyForWorkflow(workflow, inputKind, initialPick));
         router.back();
       }
       return;
@@ -1030,6 +1033,19 @@ struct FeatureRuntimePage {
         action: () => {}
       }
     });
+  }
+
+  private showRuntimeToast(statusKey: AppStringKey | undefined): void {
+    if (statusKey === undefined) {
+      return;
+    }
+    try {
+      this.getUIContext().getPromptAction().showToast({
+        message: appString(statusKey),
+        duration: 2000
+      });
+    } catch (_) {
+    }
   }
 
   private hasLinkedLiveRoute(): boolean {

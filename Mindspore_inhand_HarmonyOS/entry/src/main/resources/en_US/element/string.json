@@ -182,6 +182,7 @@
     { "name": "feature_runtime_model_incompatible", "value": "The selected MindSpore model is not compatible with this feature." },
     { "name": "feature_runtime_text_ready", "value": "Text input is ready." },
     { "name": "feature_runtime_pick_cancelled", "value": "No file was selected." },
+    { "name": "feature_runtime_image_invalid", "value": "The image path you selected is not valid. Please choose again" },
     { "name": "feature_runtime_text_placeholder", "value": "Enter text for translation or text-based demos" },
     { "name": "feature_runtime_text_translation_placeholder", "value": "Enter text to translate..." },
     { "name": "feature_runtime_copy_text", "value": "copy" },

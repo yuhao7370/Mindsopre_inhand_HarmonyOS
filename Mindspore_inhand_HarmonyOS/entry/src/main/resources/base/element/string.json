@@ -182,6 +182,7 @@
     { "name": "feature_runtime_model_incompatible", "value": "所选 MindSpore 模型与当前功能不兼容。" },
     { "name": "feature_runtime_text_ready", "value": "文本输入已就绪。" },
     { "name": "feature_runtime_pick_cancelled", "value": "未选择文件。" },
+    { "name": "feature_runtime_image_invalid", "value": "您选择的图像路径无效。请再次选择" },
     { "name": "feature_runtime_text_placeholder", "value": "输入用于翻译或文本类示例的文本" },
     { "name": "feature_runtime_text_translation_placeholder", "value": "请输入需要翻译的内容..." },
     { "name": "feature_runtime_copy_text", "value": "复制" },
