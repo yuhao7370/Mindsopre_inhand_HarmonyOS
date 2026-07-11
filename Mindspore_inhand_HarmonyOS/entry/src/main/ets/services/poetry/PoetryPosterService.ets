@@ -10,20 +10,26 @@ export const poetryJavascriptGenerateMethod: string = 'getGeneratePoetry';
 export interface PoetryPosterVisualSpec {
   readonly backgroundMediaName: string;
   readonly frameMediaName: string;
+  readonly logoMediaName: string;
   readonly outerPaddingVp: number;
   readonly poemTopMarginVp: number;
   readonly poemTextPaddingVp: number;
   readonly poemTextFontSizeFp: number;
+  readonly logoWidthVp: number;
+  readonly logoHeightVp: number;
   readonly qrCodeSizeVp: number;
 }
 
 export const poetryPosterVisualSpec: PoetryPosterVisualSpec = {
   backgroundMediaName: 'poem_bg',
   frameMediaName: 'poem_frame',
+  logoMediaName: 'poem_logo2',
   outerPaddingVp: 20,
   poemTopMarginVp: 20,
   poemTextPaddingVp: 60,
   poemTextFontSizeFp: 15,
+  logoWidthVp: 76,
+  logoHeightVp: 57,
   qrCodeSizeVp: 80
 };
 

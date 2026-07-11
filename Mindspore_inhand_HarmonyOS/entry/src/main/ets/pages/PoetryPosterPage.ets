@@ -129,9 +129,17 @@ struct PoetryPosterPage {
       .backgroundImageSize(ImageSize.FILL)
 
       Row() {
-        Text(appString('poem_ai_credit'))
-          .fontSize(poetryPosterVisualSpec.poemTextFontSizeFp)
-          .fontColor(AppColor.textMuted)
+        Column() {
+          Image($r('app.media.poem_logo2'))
+            .width(poetryPosterVisualSpec.logoWidthVp)
+            .height(poetryPosterVisualSpec.logoHeightVp)
+            .objectFit(ImageFit.Contain)
+          Text(appString('poem_ai_credit'))
+            .fontSize(poetryPosterVisualSpec.poemTextFontSizeFp)
+            .fontColor(AppColor.textMuted)
+            .margin({ top: AppSpacing.xs })
+        }
+        .alignItems(HorizontalAlign.Start)
           .layoutWeight(1)
 
         Image($r('app.media.my_qr_code'))

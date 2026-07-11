@@ -541,3 +541,5 @@ Current HarmonyOS behavior:
 - The poster page reuses Android's original poem background and frame assets
   with the same 20/60/80vp layout proportions for the poster body, poem text
   inset, and QR code.
+- The poster footer also restores Android's `logo2` brand image above the
+  localized MindSpore AI credit text, next to the original bundled QR code.

@@ -2459,10 +2459,13 @@ export default function localUnitTest() {
     it('portsAndroidPoetryPosterVisualAssetsAndLayoutSpec', 0, () => {
       expect(poetryPosterVisualSpec.backgroundMediaName).assertEqual('poem_bg');
       expect(poetryPosterVisualSpec.frameMediaName).assertEqual('poem_frame');
+      expect(poetryPosterVisualSpec.logoMediaName).assertEqual('poem_logo2');
       expect(poetryPosterVisualSpec.outerPaddingVp).assertEqual(20);
       expect(poetryPosterVisualSpec.poemTopMarginVp).assertEqual(20);
       expect(poetryPosterVisualSpec.poemTextPaddingVp).assertEqual(60);
       expect(poetryPosterVisualSpec.poemTextFontSizeFp).assertEqual(15);
+      expect(poetryPosterVisualSpec.logoWidthVp).assertEqual(76);
+      expect(poetryPosterVisualSpec.logoHeightVp).assertEqual(57);
       expect(poetryPosterVisualSpec.qrCodeSizeVp).assertEqual(80);
     });
 
