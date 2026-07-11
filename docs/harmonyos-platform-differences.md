@@ -287,8 +287,9 @@ not ship a standalone HMS scene model that can be copied into HarmonyOS.
 Current HarmonyOS behavior:
 
 - Scene detection keeps the Android still and live route names available.
-- The routes are runtime-ready but hidden from the default Experience grid,
-  matching the current Android app shell visibility.
+- The still route is visible from the default Experience grid. The live route
+  remains runtime-only and is reached from the still route's Android-style
+  Real-time action.
 - The still scene route exposes the Android-style Real-time action and
   auto-runs scene analysis after album or camera image input is ready.
 - The default HarmonyOS runtime now uses the bundled
