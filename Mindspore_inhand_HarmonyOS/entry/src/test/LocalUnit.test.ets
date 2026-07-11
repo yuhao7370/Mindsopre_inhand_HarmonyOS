@@ -3754,6 +3754,28 @@ export default function localUnitTest() {
       expect(result.messageKey).assertEqual('feature_runtime_text_recognition_failed');
     });
 
+    it('aiServiceReportsBlankTextRecognitionAsFailure', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.TEXT_RECOGNITION.name);
+      expect(workflow !== undefined).assertTrue();
+      const service = new TextRecognitionService({
+        runner: new FixedTextRecognitionRunner({
+          ok: true,
+          text: '   \n',
+          lineCount: 1,
+          blockCount: 1,
+          executionMs: 5
+        })
+      });
+
+      const result = await new DefaultAiService({ textRecognitionService: service }).run(workflow!, {
+        imageUri: 'file://selected/blank-text.jpg'
+      });
+
+      expect(result.ok).assertFalse();
+      expect(result.code).assertEqual('TEXT_RECOGNITION_FAILED');
+      expect(result.messageKey).assertEqual('feature_runtime_text_recognition_failed');
+    });
+
     it('textTranslationRequiresTextInputWhenServiceIsProvided', 0, async () => {
       const workflow = workflowForRoute(AppRoute.TEXT_TRANSLATION.name);
       expect(workflow !== undefined).assertTrue();
@@ -3765,6 +3787,23 @@ export default function localUnitTest() {
 
       expect(result.ok).assertFalse();
       expect(result.code).assertEqual('MISSING_INPUT');
+    });
+
+    it('textTranslationTreatsBlankTextAsMissingInput', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.TEXT_TRANSLATION.name);
+      expect(workflow !== undefined).assertTrue();
+      const runner: FixedTextTranslationRunner = new FixedTextTranslationRunner('translated');
+      const service = new TextTranslationService({
+        runner: runner
+      });
+
+      const result = await new DefaultAiService({ textTranslationService: service }).run(workflow!, {
+        text: '   \n'
+      });
+
+      expect(result.ok).assertFalse();
+      expect(result.code).assertEqual('MISSING_INPUT');
+      expect(runner.seenTexts.length).assertEqual(0);
     });
 
     it('defaultAiServiceUsesLocalTranslationFallbackForTextInput', 0, async () => {

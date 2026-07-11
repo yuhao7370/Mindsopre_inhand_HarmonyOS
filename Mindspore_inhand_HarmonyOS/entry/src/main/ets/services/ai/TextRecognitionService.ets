@@ -40,7 +40,17 @@ export class TextRecognitionService {
   async recognizeText(imageUri: string): Promise<TextRecognitionResult> {
     const startMs = Date.now();
     try {
-      return await this.runner.recognizeText(imageUri);
+      const result: TextRecognitionResult = await this.runner.recognizeText(imageUri);
+      if (result.ok && !hasMeaningfulText(result.text)) {
+        return {
+          ok: false,
+          text: result.text,
+          lineCount: result.lineCount,
+          blockCount: result.blockCount,
+          executionMs: result.executionMs
+        };
+      }
+      return result;
     } catch (_) {
       return {
         ok: false,
@@ -51,6 +61,10 @@ export class TextRecognitionService {
       };
     }
   }
+}
+
+export function hasMeaningfulText(text: string): boolean {
+  return text.trim().length > 0;
 }
 
 export class HarmonyTextRecognitionRunner implements TextRecognitionRunner {
@@ -70,7 +84,7 @@ export class HarmonyTextRecognitionRunner implements TextRecognitionRunner {
       });
       const text = textRecognitionOutputFromBlocks(result.blocks);
       return {
-        ok: text.length > 0,
+        ok: hasMeaningfulText(text),
         text: text,
         lineCount: countTextRecognitionLines(result.blocks),
         blockCount: result.blocks.length,

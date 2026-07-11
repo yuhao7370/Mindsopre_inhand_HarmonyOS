@@ -43,6 +43,7 @@ import {
   LocalTextTranslationRunner,
   TextRecognitionResult,
   TextRecognitionService,
+  hasMeaningfulText,
   TextTranslationResult,
   TextTranslationService
 } from './TextRecognitionService';
@@ -490,12 +491,12 @@ export class DefaultAiService {
   private async translateText(inputs: AiRunInputs): Promise<AiRunResult> {
     let text = inputs.text ?? '';
     const imageUri = inputs.imageUri ?? '';
-    if (text.length === 0 && imageUri.length > 0) {
+    if (!hasMeaningfulText(text) && imageUri.length > 0) {
       if (this.textRecognitionService === undefined) {
         return this.pendingAdapterResult('translateText');
       }
       const recognitionResult: TextRecognitionResult = await this.textRecognitionService.recognizeText(imageUri);
-      if (!recognitionResult.ok || recognitionResult.text.length === 0) {
+      if (!recognitionResult.ok || !hasMeaningfulText(recognitionResult.text)) {
         return {
           ok: false,
           code: 'TEXT_RECOGNITION_FAILED',
@@ -507,7 +508,7 @@ export class DefaultAiService {
       text = recognitionResult.text;
     }
 
-    if (text.length === 0) {
+    if (!hasMeaningfulText(text)) {
       return {
         ok: false,
         code: 'MISSING_INPUT',

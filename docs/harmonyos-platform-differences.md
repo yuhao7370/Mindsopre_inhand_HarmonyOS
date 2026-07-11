@@ -206,6 +206,8 @@ Current HarmonyOS behavior:
 - A real translation runner can still be injected. Without one, known typed or
   OCR-recognized phrases use the bundled local fallback while unknown phrases
   preserve the source text in result details, rows, and copy action.
+- Blank typed text and blank OCR output are treated as missing or failed input
+  instead of successful empty translation/recognition results.
 
 ## Model File Overrides
 
