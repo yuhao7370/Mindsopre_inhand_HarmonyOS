@@ -24,6 +24,7 @@ import {
   shouldPreserveRuntimeVisualResultOnAiResult,
   runtimeSegmentationBackgroundImageUri,
   shouldStartWorkflowRun,
+  shouldAllowRuntimeInputChange,
   shouldHideTextInputWhenPreparingInput,
   textInputVisibleAfterCancelledPick,
   shouldClearRuntimeResultAtWorkflowStart,
@@ -310,8 +311,12 @@ struct FeatureRuntimePage {
   }
 
   private prepareInput(inputKind: FeatureInputKind, initialPick: boolean = false): void {
-    this.statusKey = 'feature_runtime_status_preparing';
     const workflow = workflowForRoute(this.routeName);
+    if (!shouldAllowRuntimeInputChange(workflow, inputKind, this.workflowRunning)) {
+      this.statusKey = 'feature_runtime_status_running';
+      return;
+    }
+    this.statusKey = 'feature_runtime_status_preparing';
     this.pendingPickTextInputVisible = undefined;
     if (!workflow || !shouldDeferRuntimeResultClearUntilPickResult(workflow, inputKind)) {
       this.clearRuntimeResultState();
@@ -571,6 +576,11 @@ struct FeatureRuntimePage {
     initialPick: boolean = false
   ): void {
     const workflow = workflowForRoute(this.routeName);
+    if (result.ok && !shouldAllowRuntimeInputChange(workflow, inputKind, this.workflowRunning)) {
+      this.pendingPickTextInputVisible = undefined;
+      this.statusKey = 'feature_runtime_status_running';
+      return;
+    }
     if (!result.ok) {
       const previousTextInputVisible = this.pendingPickTextInputVisible;
       this.pendingPickTextInputVisible = undefined;
@@ -1191,9 +1201,13 @@ struct FeatureRuntimePage {
   }
 
   private selectBuiltInStyle(style: BuiltInStyleTransferStyle): void {
+    const workflow = workflowForRoute(this.routeName);
+    if (!shouldAllowRuntimeInputChange(workflow, 'styleImage', this.workflowRunning)) {
+      this.statusKey = 'feature_runtime_status_running';
+      return;
+    }
     this.styleImageUri = builtInStyleTransferUri(style);
     this.selectedInputSummary = style.rawfilePath;
-    const workflow = workflowForRoute(this.routeName);
     this.statusKey = workflow ?
       styleTransferStyleReadyStatusKey(workflow, 'styleImage', this.styleTransferContentInputReady(),
         'feature_runtime_image_ready') :

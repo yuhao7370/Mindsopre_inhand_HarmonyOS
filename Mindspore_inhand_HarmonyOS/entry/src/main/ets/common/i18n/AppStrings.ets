@@ -121,6 +121,7 @@ export type AppStringKey =
   'feature_runtime_run_translation' |
   'feature_runtime_status_idle' |
   'feature_runtime_status_preparing' |
+  'feature_runtime_status_running' |
   'feature_runtime_live_camera_ready' |
   'feature_runtime_live_camera_failed' |
   'feature_runtime_live_camera_surface_missing' |
@@ -399,6 +400,7 @@ const APP_STRING_KEYS: AppStringKey[] = [
   'feature_runtime_run_translation',
   'feature_runtime_status_idle',
   'feature_runtime_status_preparing',
+  'feature_runtime_status_running',
   'feature_runtime_live_camera_ready',
   'feature_runtime_live_camera_failed',
   'feature_runtime_live_camera_surface_missing',
@@ -803,6 +805,8 @@ export function appString(key: AppStringKey): ResourceStr {
       return $r('app.string.feature_runtime_status_idle');
     case 'feature_runtime_status_preparing':
       return $r('app.string.feature_runtime_status_preparing');
+    case 'feature_runtime_status_running':
+      return $r('app.string.feature_runtime_status_running');
     case 'feature_runtime_live_camera_ready':
       return $r('app.string.feature_runtime_live_camera_ready');
     case 'feature_runtime_live_camera_failed':

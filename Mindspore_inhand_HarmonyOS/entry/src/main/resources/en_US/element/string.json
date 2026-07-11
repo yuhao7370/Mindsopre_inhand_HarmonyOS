@@ -122,6 +122,7 @@
     { "name": "feature_runtime_run_translation", "value": "Translation" },
     { "name": "feature_runtime_status_idle", "value": "Select the required inputs, then run." },
     { "name": "feature_runtime_status_preparing", "value": "Preparing feature input..." },
+    { "name": "feature_runtime_status_running", "value": "A style transfer run is already in progress." },
     { "name": "feature_runtime_live_camera_ready", "value": "Live camera preview is running." },
     { "name": "feature_runtime_live_camera_failed", "value": "Live camera preview failed to start." },
     { "name": "feature_runtime_live_camera_surface_missing", "value": "Camera preview surface is not ready yet." },

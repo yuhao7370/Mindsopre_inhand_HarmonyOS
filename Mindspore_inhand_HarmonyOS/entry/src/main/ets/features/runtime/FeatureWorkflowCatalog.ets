@@ -617,6 +617,14 @@ export function shouldStartWorkflowRun(workflow: FeatureWorkflow, workflowRunnin
   return (workflow.liveMode && liveRuntimeLoopReady) || !workflowRunning;
 }
 
+export function shouldAllowRuntimeInputChange(
+  workflow: FeatureWorkflow | undefined,
+  _inputKind: FeatureInputKind,
+  workflowRunning: boolean
+): boolean {
+  return !workflowRunning || workflow?.routeName !== AppRoute.STYLE_TRANSFER.name;
+}
+
 export function workflowInputReadyAction(workflow: FeatureWorkflow, inputKind: FeatureInputKind,
   currentUserText: string): WorkflowInputReadyAction {
   const shouldClearTextInput = shouldClearTextInputAfterInputReady(workflow, inputKind);

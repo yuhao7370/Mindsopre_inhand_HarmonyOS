@@ -380,6 +380,10 @@ Current HarmonyOS behavior:
 - After the content/original image is ready, selecting a built-in or album
   style image immediately runs style transfer, matching Android's style-list
   selection flow.
+- While an async style-transfer run is in progress, HarmonyOS ignores new
+  Style Transfer input picks or preset taps so the highlighted input continues
+  to match the result being produced, mirroring Android's synchronous locked
+  execution path.
 - After a styled output is produced, HarmonyOS now shows a localized Recovery
   control that clears only the styled preview and restores the original/content
   preview state.

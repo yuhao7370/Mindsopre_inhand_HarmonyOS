@@ -325,6 +325,7 @@ import {
   runtimeSegmentationBackgroundImageUri,
   shouldHideTextInputWhenPreparingInput,
   textInputVisibleAfterCancelledPick,
+  shouldAllowRuntimeInputChange,
   shouldClearRuntimeResultAtWorkflowStart,
   shouldShowCopyTextAction,
   shouldShowResultSaveAction,
@@ -7433,6 +7434,21 @@ export default function localUnitTest() {
       expect(shouldStartWorkflowRun(customModel, true, false)).assertFalse();
       expect(shouldStartWorkflowRun(objectCamera, true, false)).assertFalse();
       expect(shouldStartWorkflowRun(objectCamera, true, true)).assertTrue();
+    });
+
+    it('blocksStyleTransferInputChangesWhileAsyncRunIsInProgress', 0, () => {
+      const styleTransfer: FeatureWorkflow = workflowForRoute(AppRoute.STYLE_TRANSFER.name)!;
+      const textRecognition: FeatureWorkflow = workflowForRoute(AppRoute.TEXT_RECOGNITION.name)!;
+
+      expect(shouldAllowRuntimeInputChange(styleTransfer, 'styleImage', true)).assertFalse();
+      expect(shouldAllowRuntimeInputChange(styleTransfer, 'contentImage', true)).assertFalse();
+      expect(shouldAllowRuntimeInputChange(styleTransfer, 'camera', true)).assertFalse();
+      expect(shouldAllowRuntimeInputChange(styleTransfer, 'stylePredictModelFile', true)).assertFalse();
+      expect(shouldAllowRuntimeInputChange(styleTransfer, 'styleTransferModelFile', true)).assertFalse();
+      expect(shouldAllowRuntimeInputChange(styleTransfer, 'styleImage', false)).assertTrue();
+      expect(shouldAllowRuntimeInputChange(textRecognition, 'photo', true)).assertTrue();
+      expect(shouldAllowRuntimeInputChange(undefined, 'photo', true)).assertTrue();
+      expect(hasAppStringKey('feature_runtime_status_running')).assertTrue();
     });
 
     it('clearsTypedTranslationTextWhenAndroidImageTranslationInputIsReady', 0, () => {

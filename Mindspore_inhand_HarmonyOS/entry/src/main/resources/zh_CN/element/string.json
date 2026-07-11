@@ -122,6 +122,7 @@
     { "name": "feature_runtime_run_translation", "value": "翻  译" },
     { "name": "feature_runtime_status_idle", "value": "选择所需输入后，点击运行。" },
     { "name": "feature_runtime_status_preparing", "value": "正在准备功能输入..." },
+    { "name": "feature_runtime_status_running", "value": "风格迁移正在运行。" },
     { "name": "feature_runtime_live_camera_ready", "value": "实时相机预览已启动。" },
     { "name": "feature_runtime_live_camera_failed", "value": "实时相机预览启动失败。" },
     { "name": "feature_runtime_live_camera_surface_missing", "value": "相机预览画布尚未就绪。" },
