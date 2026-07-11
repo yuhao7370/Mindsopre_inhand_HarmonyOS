@@ -3719,6 +3719,26 @@ export default function localUnitTest() {
         .assertEqual('experience\ncomputer vision\nspeech semantic technology\ncollege\nme');
     });
 
+    it('localTextTranslationRunnerCoversRuntimePermissionAndStatusCopyOffline', 0, async () => {
+      const runner = new LocalTextTranslationRunner();
+
+      const permissionResult = await runner.translate(
+        'MindSpore needs camera and media access. Grant these permissions to continue.',
+        'zh'
+      );
+      expect(permissionResult.ok).assertTrue();
+      expect(permissionResult.translatedText)
+        .assertEqual('MindSpore \u9700\u8981\u76F8\u673A\u548C\u5A92\u4F53\u8BBF\u95EE\u6743\u9650\uFF0C\u6388\u6743\u540E\u624D\u80FD\u7EE7\u7EED\u4F7F\u7528');
+
+      const statusResult = await runner.translate('Text translation completed.', 'zh');
+      expect(statusResult.ok).assertTrue();
+      expect(statusResult.translatedText).assertEqual('\u6587\u672C\u7FFB\u8BD1\u5DF2\u5B8C\u6210');
+
+      const chineseStatusResult = await runner.translate('\u6587\u672C\u7FFB\u8BD1\u5DF2\u5B8C\u6210\u3002', 'en');
+      expect(chineseStatusResult.ok).assertTrue();
+      expect(chineseStatusResult.translatedText).assertEqual('text translation completed');
+    });
+
     it('segmentationRequiresImageInputWhenServiceIsProvided', 0, async () => {
       const workflow = workflowForRoute(AppRoute.PORTRAIT_SEGMENTATION.name);
       expect(workflow !== undefined).assertTrue();
