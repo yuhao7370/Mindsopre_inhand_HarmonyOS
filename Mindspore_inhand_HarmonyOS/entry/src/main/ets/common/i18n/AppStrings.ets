@@ -163,6 +163,12 @@ export type AppStringKey =
   'feature_runtime_custom_model_done' |
   'feature_runtime_custom_model_failed' |
   'feature_runtime_custom_model_model_required' |
+  'feature_runtime_custom_model_image_required' |
+  'feature_runtime_custom_model_select_model' |
+  'feature_runtime_custom_model_select_photo' |
+  'feature_runtime_custom_model_take_photo' |
+  'feature_runtime_custom_model_output_title' |
+  'feature_runtime_custom_model_output_placeholder' |
   'feature_runtime_classification_runner_unavailable' |
   'feature_runtime_classification_done' |
   'feature_runtime_classification_failed' |
@@ -442,6 +448,12 @@ const APP_STRING_KEYS: AppStringKey[] = [
   'feature_runtime_custom_model_done',
   'feature_runtime_custom_model_failed',
   'feature_runtime_custom_model_model_required',
+  'feature_runtime_custom_model_image_required',
+  'feature_runtime_custom_model_select_model',
+  'feature_runtime_custom_model_select_photo',
+  'feature_runtime_custom_model_take_photo',
+  'feature_runtime_custom_model_output_title',
+  'feature_runtime_custom_model_output_placeholder',
   'feature_runtime_classification_runner_unavailable',
   'feature_runtime_classification_done',
   'feature_runtime_classification_failed',
@@ -889,6 +901,18 @@ export function appString(key: AppStringKey): ResourceStr {
       return $r('app.string.feature_runtime_custom_model_failed');
     case 'feature_runtime_custom_model_model_required':
       return $r('app.string.feature_runtime_custom_model_model_required');
+    case 'feature_runtime_custom_model_image_required':
+      return $r('app.string.feature_runtime_custom_model_image_required');
+    case 'feature_runtime_custom_model_select_model':
+      return $r('app.string.feature_runtime_custom_model_select_model');
+    case 'feature_runtime_custom_model_select_photo':
+      return $r('app.string.feature_runtime_custom_model_select_photo');
+    case 'feature_runtime_custom_model_take_photo':
+      return $r('app.string.feature_runtime_custom_model_take_photo');
+    case 'feature_runtime_custom_model_output_title':
+      return $r('app.string.feature_runtime_custom_model_output_title');
+    case 'feature_runtime_custom_model_output_placeholder':
+      return $r('app.string.feature_runtime_custom_model_output_placeholder');
     case 'feature_runtime_classification_runner_unavailable':
       return $r('app.string.feature_runtime_classification_runner_unavailable');
     case 'feature_runtime_classification_done':

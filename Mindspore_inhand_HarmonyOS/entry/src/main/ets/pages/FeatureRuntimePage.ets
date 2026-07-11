@@ -7,7 +7,6 @@ import {
   FeatureWorkflow,
   autoStartInputKindForWorkflow,
   inputKindReplacesPrimaryInput,
-  inputLabelKey,
   initialInputKindForWorkflow,
   initialPreviewActionForWorkflow,
   rememberedLiveCameraPositionForWorkflow,
@@ -45,6 +44,9 @@ import {
   styleTransferRecoveryStatusKey,
   styleTransferStyleReadyStatusKey,
   textInputPlaceholderKeyForWorkflow,
+  workflowInitialStatusKey,
+  workflowInputLabelKey,
+  workflowResultTitleKey,
   workflowRunActionKey,
   workflowInputReadyAction,
   workflowForRoute
@@ -292,6 +294,7 @@ struct FeatureRuntimePage {
     this.titleKey = params?.titleKey ?? workflow?.titleKey ?? this.titleKey;
     this.summaryKey = workflow?.summaryKey ?? this.summaryKey;
     this.aiMethod = workflow?.aiMethod ?? '';
+    this.statusKey = workflowInitialStatusKey(workflow);
     this.runActionKey = workflowRunActionKey(workflow);
     this.longTextInput = shouldUseLongTextInput(workflow);
     this.helpUrl = workflow?.helpUrl ?? '';
@@ -1355,7 +1358,7 @@ struct FeatureRuntimePage {
 
   @Builder
   inputChip(inputKind: FeatureInputKind) {
-    Text(appString(inputLabelKey(inputKind)))
+    Text(appString(workflowInputLabelKey(workflowForRoute(this.routeName), inputKind)))
       .fontSize(12)
       .fontColor(AppColor.accent)
       .padding({ left: AppSpacing.sm, right: AppSpacing.sm, top: AppSpacing.xs, bottom: AppSpacing.xs })
@@ -2503,7 +2506,7 @@ struct FeatureRuntimePage {
           .onClick(() => this.runPrimaryAction())
 
         Column() {
-          Text(appString('feature_runtime_result_title'))
+          Text(appString(workflowResultTitleKey(workflowForRoute(this.routeName))))
             .fontSize(16)
             .fontWeight(FontWeight.Bold)
             .fontColor(AppColor.textPrimary)

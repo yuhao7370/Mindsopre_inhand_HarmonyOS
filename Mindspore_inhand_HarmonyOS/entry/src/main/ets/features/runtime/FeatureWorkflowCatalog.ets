@@ -372,6 +372,18 @@ export function workflowRunActionKey(workflow: FeatureWorkflow | undefined): App
   return workflow?.runActionKey ?? 'feature_runtime_run';
 }
 
+export function workflowInitialStatusKey(workflow: FeatureWorkflow | undefined): AppStringKey {
+  return workflow?.routeName === AppRoute.CUSTOM_MODEL.name ?
+    'feature_runtime_custom_model_output_placeholder' :
+    'feature_runtime_status_idle';
+}
+
+export function workflowResultTitleKey(workflow: FeatureWorkflow | undefined): AppStringKey {
+  return workflow?.routeName === AppRoute.CUSTOM_MODEL.name ?
+    'feature_runtime_custom_model_output_title' :
+    'feature_runtime_result_title';
+}
+
 export function shouldUseLongTextInput(workflow: FeatureWorkflow | undefined): boolean {
   return workflow?.routeName === AppRoute.TEXT_TRANSLATION.name;
 }
@@ -675,6 +687,24 @@ export function inputLabelKey(inputKind: FeatureInputKind): AppStringKey {
     case 'text':
       return 'feature_input_text';
   }
+}
+
+export function workflowInputLabelKey(
+  workflow: FeatureWorkflow | undefined,
+  inputKind: FeatureInputKind
+): AppStringKey {
+  if (workflow?.routeName === AppRoute.CUSTOM_MODEL.name) {
+    if (inputKind === 'modelFile') {
+      return 'feature_runtime_custom_model_select_model';
+    }
+    if (inputKind === 'photo') {
+      return 'feature_runtime_custom_model_select_photo';
+    }
+    if (inputKind === 'camera') {
+      return 'feature_runtime_custom_model_take_photo';
+    }
+  }
+  return inputLabelKey(inputKind);
 }
 
 export function permissionLabelKey(permissionKind: FeaturePermissionKind): AppStringKey {

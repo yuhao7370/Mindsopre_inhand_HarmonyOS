@@ -718,7 +718,7 @@ export class DefaultAiService {
         ok: false,
         code: 'MISSING_INPUT',
         aiMethod: 'runCustomModel',
-        messageKey: 'feature_runtime_missing_input',
+        messageKey: 'feature_runtime_custom_model_image_required',
         detailText: ''
       };
     }

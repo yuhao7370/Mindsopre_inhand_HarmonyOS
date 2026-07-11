@@ -371,6 +371,9 @@ Current HarmonyOS behavior:
 - If the user has not selected a model file, HarmonyOS now matches Android and
   blocks execution with a "select a model first" status instead of running the
   bundled MobileNetV2 model as a default custom-model fallback.
+- HarmonyOS uses Android Custom Model's dedicated visible copy for Select
+  Model, Select Photo, Take Photo, Output Result, the initial output
+  placeholder, and the "select an image first" missing-input status.
 - The visible output row mirrors Android's `tvOutput` content by showing the
   execution time separately plus the first 10 output float values, including
   Android's overflow note when more values are available.

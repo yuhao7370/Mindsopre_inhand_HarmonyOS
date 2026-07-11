@@ -361,6 +361,9 @@ import {
   styleTransferRecoveryStatusKey,
   poseModeForWorkflow,
   workflowInputReadyAction,
+  workflowInitialStatusKey,
+  workflowInputLabelKey,
+  workflowResultTitleKey,
   workflowRunActionKey,
   workflowForRoute
 } from '../main/ets/features/runtime/FeatureWorkflowCatalog';
@@ -2135,6 +2138,12 @@ export default function localUnitTest() {
       expect(hasAppStringKey('feature_runtime_help_style_transfer')).assertTrue();
       expect(hasAppStringKey('feature_runtime_custom_model_help')).assertTrue();
       expect(hasAppStringKey('feature_runtime_custom_model_model_required')).assertTrue();
+      expect(hasAppStringKey('feature_runtime_custom_model_image_required')).assertTrue();
+      expect(hasAppStringKey('feature_runtime_custom_model_select_model')).assertTrue();
+      expect(hasAppStringKey('feature_runtime_custom_model_select_photo')).assertTrue();
+      expect(hasAppStringKey('feature_runtime_custom_model_take_photo')).assertTrue();
+      expect(hasAppStringKey('feature_runtime_custom_model_output_title')).assertTrue();
+      expect(hasAppStringKey('feature_runtime_custom_model_output_placeholder')).assertTrue();
       expect(hasAppStringKey('qr_code_save_done')).assertTrue();
       expect(hasAppStringKey('qr_code_save_failed')).assertTrue();
       expect(hasAppStringKey('app_cancel')).assertTrue();
@@ -5372,6 +5381,7 @@ export default function localUnitTest() {
       const result = await new DefaultAiService().run(workflow!);
       expect(result.ok).assertFalse();
       expect(result.code).assertEqual('MISSING_INPUT');
+      expect(result.messageKey).assertEqual('feature_runtime_custom_model_image_required');
 
       const imageOnlyResult = await new DefaultAiService().run(workflow!, {
         imageUri: 'file://selected/input.png'
@@ -5385,6 +5395,23 @@ export default function localUnitTest() {
       });
       expect(modelOnlyResult.ok).assertFalse();
       expect(modelOnlyResult.code).assertEqual('MISSING_INPUT');
+      expect(modelOnlyResult.messageKey).assertEqual('feature_runtime_custom_model_image_required');
+    });
+
+    it('customModelUsesAndroidSpecificInputAndOutputCopy', 0, () => {
+      const workflow = workflowForRoute(AppRoute.CUSTOM_MODEL.name);
+      const imageClassification = workflowForRoute(AppRoute.IMAGE_CAMERA.name);
+      expect(workflow !== undefined).assertTrue();
+      expect(imageClassification !== undefined).assertTrue();
+
+      expect(workflowInputLabelKey(workflow, 'modelFile')).assertEqual('feature_runtime_custom_model_select_model');
+      expect(workflowInputLabelKey(workflow, 'photo')).assertEqual('feature_runtime_custom_model_select_photo');
+      expect(workflowInputLabelKey(workflow, 'camera')).assertEqual('feature_runtime_custom_model_take_photo');
+      expect(workflowInputLabelKey(imageClassification, 'camera')).assertEqual('feature_input_camera');
+      expect(workflowResultTitleKey(workflow)).assertEqual('feature_runtime_custom_model_output_title');
+      expect(workflowResultTitleKey(imageClassification)).assertEqual('feature_runtime_result_title');
+      expect(workflowInitialStatusKey(workflow)).assertEqual('feature_runtime_custom_model_output_placeholder');
+      expect(workflowInitialStatusKey(imageClassification)).assertEqual('feature_runtime_status_idle');
     });
 
     it('customModelRequiresNativeRunnerInsteadOfSimulatedOutput', 0, async () => {
