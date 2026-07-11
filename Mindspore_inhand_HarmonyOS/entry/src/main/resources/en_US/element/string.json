@@ -207,6 +207,7 @@
     { "name": "feature_runtime_preview_style", "value": "Style" },
     { "name": "feature_runtime_preview_model", "value": "Model" },
     { "name": "feature_runtime_style_presets_title", "value": "Choose a Style" },
+    { "name": "feature_runtime_style_custom", "value": "Custom style" },
     { "name": "feature_runtime_portrait_background_presets", "value": "Choose a background" },
     { "name": "feature_runtime_portrait_background_custom", "value": "Custom" },
     { "name": "feature_runtime_portrait_background_1", "value": "Background 1" },

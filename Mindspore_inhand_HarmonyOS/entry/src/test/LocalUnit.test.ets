@@ -171,6 +171,7 @@ import {
   builtInStyleTransferStyles,
   builtInStyleTransferMediaName,
   builtInStyleTransferUri,
+  isCustomStyleTransferUri,
   rawfilePathFromBuiltInStyleTransferUri,
   StyleTransferInputPreprocessor,
   StyleTransferModelUris,
@@ -195,6 +196,8 @@ import {
   styleTransferPixelMapOptions,
   styleTransferRgbaOutputFromFloatOutput,
   styleTransferRgbUnitInputFromRgba,
+  styleTransferCustomStylePickerIndex,
+  styleTransferStylePickerItemCount,
   styleTransferStyleImageSize
 } from '../main/ets/services/ai/StyleTransferService';
 import {
@@ -6734,6 +6737,14 @@ export default function localUnitTest() {
         .assertEqual('styletransfer/style18.jpg');
       expect(rawfilePathFromBuiltInStyleTransferUri('file://selected/style.jpg')).assertEqual('');
       expect(inputLabelKey('styleImage')).assertEqual('feature_input_style_image');
+    });
+
+    it('addsAndroidStyleTransferCustomStylePickerItem', 0, () => {
+      expect(styleTransferStylePickerItemCount).assertEqual(builtInStyleTransferStyleCount + 1);
+      expect(styleTransferCustomStylePickerIndex).assertEqual(19);
+      expect(isCustomStyleTransferUri('file://selected/custom-style.jpg')).assertTrue();
+      expect(isCustomStyleTransferUri(builtInStyleTransferUri(builtInStyleTransferStyles[0]))).assertFalse();
+      expect(hasAppStringKey('feature_runtime_style_custom')).assertTrue();
     });
 
     it('mapsAndroidBuiltInStyleTransferStylesToDistinctMediaNames', 0, () => {

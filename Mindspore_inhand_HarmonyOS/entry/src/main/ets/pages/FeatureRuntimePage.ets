@@ -142,6 +142,7 @@ import {
   builtInStyleTransferMediaName,
   builtInStyleTransferStyles,
   builtInStyleTransferUri,
+  isCustomStyleTransferUri,
   styleTransferPixelMapFromRgbaOutput
 } from '../services/ai/StyleTransferService';
 import {
@@ -1334,6 +1335,9 @@ struct FeatureRuntimePage {
             this.styleTransferStyleItem(style)
           }
         }, (style: BuiltInStyleTransferStyle) => `${style.id}`)
+        GridItem() {
+          this.styleTransferCustomStyleItem()
+        }
       }
       .columnsTemplate('1fr 1fr 1fr 1fr')
       .columnsGap(AppSpacing.sm)
@@ -1360,6 +1364,43 @@ struct FeatureRuntimePage {
     })
     .clip(true)
     .onClick(() => this.selectBuiltInStyle(style))
+  }
+
+  @Builder
+  styleTransferCustomStyleItem() {
+    Column() {
+      if (isCustomStyleTransferUri(this.styleImageUri)) {
+        Image(this.styleImageUri)
+          .width('100%')
+          .height('72%')
+          .objectFit(ImageFit.Cover)
+      } else {
+        Text('+')
+          .fontSize(28)
+          .fontColor(AppColor.accent)
+          .width('100%')
+          .height('72%')
+          .textAlign(TextAlign.Center)
+      }
+      Text(appString('feature_runtime_style_custom'))
+        .fontSize(9)
+        .fontColor(AppColor.textSecondary)
+        .maxLines(1)
+        .width('100%')
+        .textAlign(TextAlign.Center)
+    }
+    .width('100%')
+    .aspectRatio(1)
+    .padding(2)
+    .justifyContent(FlexAlign.Center)
+    .border({
+      width: isCustomStyleTransferUri(this.styleImageUri) ? 2 : 1,
+      color: isCustomStyleTransferUri(this.styleImageUri) ? AppColor.accent : AppColor.divider,
+      radius: AppRadius.card
+    })
+    .backgroundColor('#F7F8FA')
+    .clip(true)
+    .onClick(() => this.prepareInput('styleImage'))
   }
 
   @Builder

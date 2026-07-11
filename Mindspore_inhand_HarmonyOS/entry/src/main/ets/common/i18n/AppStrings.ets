@@ -206,6 +206,7 @@ export type AppStringKey =
   'feature_runtime_preview_style' |
   'feature_runtime_preview_model' |
   'feature_runtime_style_presets_title' |
+  'feature_runtime_style_custom' |
   'feature_runtime_portrait_background_presets' |
   'feature_runtime_portrait_background_custom' |
   'feature_runtime_portrait_background_1' |
@@ -483,6 +484,7 @@ const APP_STRING_KEYS: AppStringKey[] = [
   'feature_runtime_preview_style',
   'feature_runtime_preview_model',
   'feature_runtime_style_presets_title',
+  'feature_runtime_style_custom',
   'feature_runtime_portrait_background_presets',
   'feature_runtime_portrait_background_custom',
   'feature_runtime_portrait_background_1',
@@ -971,6 +973,8 @@ export function appString(key: AppStringKey): ResourceStr {
       return $r('app.string.feature_runtime_preview_model');
     case 'feature_runtime_style_presets_title':
       return $r('app.string.feature_runtime_style_presets_title');
+    case 'feature_runtime_style_custom':
+      return $r('app.string.feature_runtime_style_custom');
     case 'feature_runtime_portrait_background_presets':
       return $r('app.string.feature_runtime_portrait_background_presets');
     case 'feature_runtime_portrait_background_custom':

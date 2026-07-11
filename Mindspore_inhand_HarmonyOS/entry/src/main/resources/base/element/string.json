@@ -207,6 +207,7 @@
     { "name": "feature_runtime_preview_style", "value": "风格图" },
     { "name": "feature_runtime_preview_model", "value": "模型" },
     { "name": "feature_runtime_style_presets_title", "value": "选择风格" },
+    { "name": "feature_runtime_style_custom", "value": "自定义风格" },
     { "name": "feature_runtime_portrait_background_presets", "value": "选择背景" },
     { "name": "feature_runtime_portrait_background_custom", "value": "自定义" },
     { "name": "feature_runtime_portrait_background_1", "value": "背景 1" },

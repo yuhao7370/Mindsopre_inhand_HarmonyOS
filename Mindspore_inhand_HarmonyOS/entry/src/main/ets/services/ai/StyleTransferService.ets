@@ -21,6 +21,8 @@ export const styleTransferMindSporeCpuThreadNum: number = 4;
 export const styleTransferOutputFloatCount: number =
   styleTransferContentImageSize * styleTransferContentImageSize * styleTransferChannels;
 export const builtInStyleTransferStyleCount: number = 19;
+export const styleTransferCustomStylePickerIndex: number = builtInStyleTransferStyleCount;
+export const styleTransferStylePickerItemCount: number = builtInStyleTransferStyleCount + 1;
 export const builtInStyleTransferRawfileUriPrefix: string = 'rawfile://';
 
 export interface BuiltInStyleTransferStyle {
@@ -123,6 +125,10 @@ export function rawfilePathFromBuiltInStyleTransferUri(uri: string): string {
     return '';
   }
   return uri.substring(builtInStyleTransferRawfileUriPrefix.length);
+}
+
+export function isCustomStyleTransferUri(uri: string): boolean {
+  return uri.length > 0 && rawfilePathFromBuiltInStyleTransferUri(uri).length === 0;
 }
 
 export interface StyleTransferMindSporeRunnerOptions {
