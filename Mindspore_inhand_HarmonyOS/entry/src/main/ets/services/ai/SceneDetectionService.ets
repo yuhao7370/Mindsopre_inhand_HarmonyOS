@@ -93,6 +93,7 @@ const places365SceneLabelAliasMaps: Array<SceneLabelAliasMap> = [
   { sceneLabel: 'classroom', aliases: ['art_school', 'kindergarden_classroom', 'lecture_room', 'schoolhouse'] },
   { sceneLabel: 'meetingroom', aliases: ['conference_center', 'conference_room', 'banquet_hall'] },
   { sceneLabel: 'construction', aliases: ['construction_site'] },
+  { sceneLabel: 'corridor', aliases: ['alley'] },
   { sceneLabel: 'diningroom', aliases: ['dining_room'] },
   { sceneLabel: 'flower', aliases: ['florist_shop'] },
   { sceneLabel: 'footballfield', aliases: ['football_field', 'soccer_field'] },

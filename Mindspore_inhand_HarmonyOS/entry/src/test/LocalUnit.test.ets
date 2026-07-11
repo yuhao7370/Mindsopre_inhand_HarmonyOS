@@ -4873,6 +4873,7 @@ export default function localUnitTest() {
       expect(sceneLabelForImageClassificationLabel('snowfield')).assertEqual('snow');
       expect(sceneLabelForImageClassificationLabel('ski_slope')).assertEqual('snow');
       expect(sceneLabelForImageClassificationLabel('mountain_snowy')).assertEqual('snow');
+      expect(sceneLabelForImageClassificationLabel('alley')).assertEqual('corridor');
       expect(sceneLabelForImageClassificationLabel('market')).assertEqual('supermarket');
       expect(sceneLabelForImageClassificationLabel('bazaar')).assertEqual('supermarket');
       expect(sceneLabelForImageClassificationLabel('flea_market')).assertEqual('supermarket');

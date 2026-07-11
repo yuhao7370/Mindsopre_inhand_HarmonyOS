@@ -308,7 +308,7 @@ Current HarmonyOS behavior:
 - The Places365-to-Android mapper includes exact aliases for common indoor,
   outdoor, transport, food, office, school, retail, and water scenes such as
   `coffee_shop`, `bookstore`, `lecture_room`, `sky`, `river`, `runway`,
-  `subway_station`, `apartment_building`, `aquarium`/`fishpond`,
+  `subway_station`, `alley`, `apartment_building`, `aquarium`/`fishpond`,
   `snowfield`/`ski_slope`/`mountain_snowy`, and
   `market`/`bazaar`/`flea_market`.
 - Scene result display labels now use a recovered/readable Android-equivalent
