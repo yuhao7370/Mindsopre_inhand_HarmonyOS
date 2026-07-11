@@ -312,6 +312,7 @@ import {
   shouldShowLivePoseTemplateOverlay,
   shouldShowLiveSegmentationCameraOverlay,
   shouldMirrorSegmentationForeground,
+  shouldShowTranslationSnapshotSaveAction,
   shouldUseLongTextInput,
   shouldUseLongTextResultRow,
   textInputPlaceholderKeyForWorkflow,
@@ -336,7 +337,10 @@ import {
   portraitSegmentationBackgroundUri,
   portraitSegmentationCustomBackgroundId
 } from '../main/ets/features/runtime/PortraitSegmentationBackgroundCatalog';
-import { segmentationBackgroundReplacementComponentId } from '../main/ets/features/runtime/FeatureRuntimeViewIds';
+import {
+  segmentationBackgroundReplacementComponentId,
+  translationSnapshotComponentId
+} from '../main/ets/features/runtime/FeatureRuntimeViewIds';
 import { featureRuntimeOverlayPreviewImageOrientationFromRotationDegrees } from '../main/ets/features/runtime/FeatureRuntimeOverlayPreview';
 import {
   declaredPermissionNames,
@@ -2970,6 +2974,17 @@ export default function localUnitTest() {
       expect(shouldShowResultSaveAction(classification, false)).assertFalse();
     });
 
+    it('showsImageTranslationSnapshotSaveAfterImageResultIsReady', 0, () => {
+      const textTranslation: FeatureWorkflow = workflowForRoute(AppRoute.TEXT_TRANSLATION.name)!;
+      const textRecognition: FeatureWorkflow = workflowForRoute(AppRoute.TEXT_RECOGNITION.name)!;
+
+      expect(shouldShowTranslationSnapshotSaveAction(textTranslation, true, true, false)).assertTrue();
+      expect(shouldShowTranslationSnapshotSaveAction(textTranslation, false, true, false)).assertFalse();
+      expect(shouldShowTranslationSnapshotSaveAction(textTranslation, true, false, false)).assertFalse();
+      expect(shouldShowTranslationSnapshotSaveAction(textTranslation, true, true, true)).assertFalse();
+      expect(shouldShowTranslationSnapshotSaveAction(textRecognition, true, true, false)).assertFalse();
+    });
+
     it('mirrorsOnlyAndroidPortraitForegroundForFrontCamera', 0, () => {
       const portraitSegmentation: FeatureWorkflow = workflowForRoute(AppRoute.PORTRAIT_SEGMENTATION.name)!;
       const segmentationLive: FeatureWorkflow = workflowForRoute(AppRoute.SEGMENTATION_LIVE.name)!;
@@ -3181,6 +3196,7 @@ export default function localUnitTest() {
 
     it('targetsPortraitBackgroundReplacementPreviewForCompositeSave', 0, () => {
       expect(segmentationBackgroundReplacementComponentId).assertEqual('segmentationBackgroundReplacementPreview');
+      expect(translationSnapshotComponentId).assertEqual('translationSnapshotPreview');
       expect(hasAppStringKey('feature_runtime_result_background_replacement')).assertTrue();
       expect(hasAppStringKey('feature_runtime_save_image_done')).assertTrue();
       expect(hasAppStringKey('feature_runtime_save_image_failed')).assertTrue();

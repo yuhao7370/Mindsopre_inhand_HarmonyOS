@@ -32,6 +32,7 @@ import {
   shouldShowLivePoseTemplateOverlay,
   shouldShowLiveSegmentationCameraOverlay,
   shouldShowResultSaveAction,
+  shouldShowTranslationSnapshotSaveAction,
   shouldShowStyleRecoveryControl,
   shouldUseLongTextInput,
   shouldUseLongTextResultRow,
@@ -147,7 +148,10 @@ import {
   portraitSegmentationCustomBackgroundId
 } from '../features/runtime/PortraitSegmentationBackgroundCatalog';
 import { featureRuntimeOverlayPreviewImageOrientationForUri } from '../features/runtime/FeatureRuntimeOverlayPreview';
-import { segmentationBackgroundReplacementComponentId } from '../features/runtime/FeatureRuntimeViewIds';
+import {
+  segmentationBackgroundReplacementComponentId,
+  translationSnapshotComponentId
+} from '../features/runtime/FeatureRuntimeViewIds';
 import { AppStringKey, appString } from '../common/i18n/AppStrings';
 import { AppColor, AppRadius, AppSpacing } from '../common/theme/AppTheme';
 import { common, OpenLinkOptions } from '@kit.AbilityKit';
@@ -1189,6 +1193,15 @@ struct FeatureRuntimePage {
     return copyableTextForAiResult(this.aiMethod, this.resultRows);
   }
 
+  private shouldShowTranslationSnapshotSave(): boolean {
+    return shouldShowTranslationSnapshotSaveAction(
+      workflowForRoute(this.routeName),
+      this.imageInputUri.length > 0,
+      this.resultRows.length > 0,
+      this.textInputVisible
+    );
+  }
+
   private copyRecognizedText(): void {
     new ClipboardService().copyText(this.recognizedTextForCopy()).then((result: CopyTextResult) => {
       this.statusKey = result.ok ? 'feature_runtime_copy_done' : 'feature_runtime_copy_failed';
@@ -2133,6 +2146,20 @@ struct FeatureRuntimePage {
   }
 
   @Builder
+  translationSnapshotPreview() {
+    Column() {
+      this.imagePreview('feature_runtime_preview_image', this.imageInputUri)
+      ForEach(this.resultRows, (row: AiRunResultRow) => {
+        this.resultRow(row)
+      }, (row: AiRunResultRow) => row.labelKey)
+    }
+    .id(translationSnapshotComponentId)
+    .width('100%')
+    .padding({ top: AppSpacing.xs, bottom: AppSpacing.xs })
+    .backgroundColor(Color.White)
+  }
+
+  @Builder
   filePreview(labelKey: AppStringKey, uri: string) {
     Row() {
       Text(appString(labelKey))
@@ -2348,7 +2375,10 @@ struct FeatureRuntimePage {
               .margin({ top: AppSpacing.sm })
               .onClick(() => this.retryRuntimePermission())
           }
-          if (this.resultRows.length > 0) {
+          if (this.shouldShowTranslationSnapshotSave()) {
+            this.translationSnapshotPreview()
+            this.resultComponentImageSaveControl(translationSnapshotComponentId)
+          } else if (this.resultRows.length > 0) {
             ForEach(this.resultRows, (row: AiRunResultRow) => {
               this.resultRow(row)
             }, (row: AiRunResultRow) => row.labelKey)

@@ -395,6 +395,15 @@ export function shouldShowResultSaveAction(
     workflow?.routeName === AppRoute.SEGMENTATION_STILL.name;
 }
 
+export function shouldShowTranslationSnapshotSaveAction(
+  workflow: FeatureWorkflow | undefined,
+  imageInputReady: boolean,
+  resultRowsReady: boolean,
+  textInputVisible: boolean
+): boolean {
+  return workflow?.aiMethod === 'translateText' && imageInputReady && resultRowsReady && !textInputVisible;
+}
+
 export function shouldShowLiveGestureCameraOverlay(workflow: FeatureWorkflow | undefined): boolean {
   return workflow?.aiMethod === 'detectGesture' && workflow.liveMode;
 }
