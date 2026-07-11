@@ -168,9 +168,9 @@ Current HarmonyOS behavior:
 - Text translation keeps the Android route and entry available.
 - The default HarmonyOS runtime and low-level `DefaultAiService` include a
   small offline dictionary fallback for common demo phrases in Chinese and
-  English, including the app name, Experience subtitle, app intro, and College
-  summary copy, plus the main shell tab and Experience section labels. It can
-  compose known adjacent phrases such as
+  English, including the app name, Experience subtitle, app intro, College
+  summary copy, permission/status copy, plus the main shell tab and Experience
+  section labels. It can compose known adjacent phrases such as
   `Hello, MindSpore!` and preserves Android's default target-language rule
   (`zh` text translates to `en`, other text translates to `zh`).
 - This fallback is not equivalent to HMS cloud translation. Unknown phrases

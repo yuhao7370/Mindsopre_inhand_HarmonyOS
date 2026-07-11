@@ -127,9 +127,14 @@ const localChineseToEnglishPhrases: Array<LocalTranslationPhrase> = [
     target: 'a one-stop platform of collaborative learning, demonstrating, and experiencing for AI users'
   },
   {
+    source: 'MindSpore \u9700\u8981\u76F8\u673A\u548C\u5A92\u4F53\u8BBF\u95EE\u6743\u9650\uFF0C\u6388\u6743\u540E\u624D\u80FD\u7EE7\u7EED\u4F7F\u7528',
+    target: 'MindSpore needs camera and media access. Grant these permissions to continue'
+  },
+  {
     source: 'MindSpore \u662F\u5168\u573A\u666F AI \u8BA1\u7B97\u6846\u67B6',
     target: 'MindSpore is a full-scenario AI computing framework'
   },
+  { source: '\u6587\u672C\u7FFB\u8BD1\u5DF2\u5B8C\u6210', target: 'text translation completed' },
   {
     source: '\u672C\u9875\u63D0\u4F9B\u672C\u5730\u5B66\u4E60\u5165\u53E3\uFF0C\u5E76\u901A\u8FC7\u7F51\u9875\u6253\u5F00\u5916\u90E8\u8D44\u6E90',
     target: 'this page provides local learning entries and opens external resources in a web page'
@@ -185,9 +190,14 @@ const localEnglishToChinesePhrases: Array<LocalTranslationPhrase> = [
     target: 'AI \u7231\u597D\u8005\u7684\u4E00\u7AD9\u5F0F\u534F\u540C\u5B66\u4E60\u3001\u6F14\u793A\u3001\u4F53\u9A8C\u5E73\u53F0'
   },
   {
+    source: 'mindspore needs camera and media access grant these permissions to continue',
+    target: 'MindSpore \u9700\u8981\u76F8\u673A\u548C\u5A92\u4F53\u8BBF\u95EE\u6743\u9650\uFF0C\u6388\u6743\u540E\u624D\u80FD\u7EE7\u7EED\u4F7F\u7528'
+  },
+  {
     source: 'mindspore is a full-scenario ai computing framework',
     target: 'MindSpore \u662F\u5168\u573A\u666F AI \u8BA1\u7B97\u6846\u67B6'
   },
+  { source: 'text translation completed', target: '\u6587\u672C\u7FFB\u8BD1\u5DF2\u5B8C\u6210' },
   {
     source: 'this page provides local learning entries and opens external resources in a web page',
     target: '\u672C\u9875\u63D0\u4F9B\u672C\u5730\u5B66\u4E60\u5165\u53E3\uFF0C\u5E76\u901A\u8FC7\u7F51\u9875\u6253\u5F00\u5916\u90E8\u8D44\u6E90'

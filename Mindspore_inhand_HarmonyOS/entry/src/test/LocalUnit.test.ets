@@ -3730,6 +3730,14 @@ export default function localUnitTest() {
       expect(permissionResult.translatedText)
         .assertEqual('MindSpore \u9700\u8981\u76F8\u673A\u548C\u5A92\u4F53\u8BBF\u95EE\u6743\u9650\uFF0C\u6388\u6743\u540E\u624D\u80FD\u7EE7\u7EED\u4F7F\u7528');
 
+      const chinesePermissionResult = await runner.translate(
+        'MindSpore \u9700\u8981\u76F8\u673A\u548C\u5A92\u4F53\u8BBF\u95EE\u6743\u9650\uFF0C\u6388\u6743\u540E\u624D\u80FD\u7EE7\u7EED\u4F7F\u7528',
+        'en'
+      );
+      expect(chinesePermissionResult.ok).assertTrue();
+      expect(chinesePermissionResult.translatedText)
+        .assertEqual('MindSpore needs camera and media access. Grant these permissions to continue');
+
       const statusResult = await runner.translate('Text translation completed.', 'zh');
       expect(statusResult.ok).assertTrue();
       expect(statusResult.translatedText).assertEqual('\u6587\u672C\u7FFB\u8BD1\u5DF2\u5B8C\u6210');
