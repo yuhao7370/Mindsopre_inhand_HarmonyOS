@@ -466,6 +466,7 @@ import {
   poetryPosterComponentId,
   poetryPosterPagePath,
   poetryPosterTextFromParam,
+  poetryPosterVisualSpec,
   shouldInstallPoetryJavascriptBridge
 } from '../main/ets/services/poetry/PoetryPosterService';
 
@@ -2203,6 +2204,16 @@ export default function localUnitTest() {
       expect(hasAppStringKey('poem_share_done')).assertTrue();
       expect(hasAppStringKey('poem_share_failed')).assertTrue();
       expect(hasAppStringKey('poem_ai_credit')).assertTrue();
+    });
+
+    it('portsAndroidPoetryPosterVisualAssetsAndLayoutSpec', 0, () => {
+      expect(poetryPosterVisualSpec.backgroundMediaName).assertEqual('poem_bg');
+      expect(poetryPosterVisualSpec.frameMediaName).assertEqual('poem_frame');
+      expect(poetryPosterVisualSpec.outerPaddingVp).assertEqual(20);
+      expect(poetryPosterVisualSpec.poemTopMarginVp).assertEqual(20);
+      expect(poetryPosterVisualSpec.poemTextPaddingVp).assertEqual(60);
+      expect(poetryPosterVisualSpec.poemTextFontSizeFp).assertEqual(15);
+      expect(poetryPosterVisualSpec.qrCodeSizeVp).assertEqual(80);
     });
 
     it('portsAndroidDanceTemplateAndPerfectScoreContract', 0, () => {

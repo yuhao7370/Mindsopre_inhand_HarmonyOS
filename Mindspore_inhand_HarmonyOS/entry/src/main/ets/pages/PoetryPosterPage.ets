@@ -19,7 +19,8 @@ import {
 import {
   poetryPosterComponentId,
   poetryPosterImageSharePayload,
-  poetryPosterTextFromParam
+  poetryPosterTextFromParam,
+  poetryPosterVisualSpec
 } from '../services/poetry/PoetryPosterService';
 
 interface PoetryPosterPageParams {
@@ -112,33 +113,30 @@ struct PoetryPosterPage {
   @Builder
   posterCard() {
     Column() {
-      Text(this.poemText)
-        .fontSize(16)
-        .fontColor(AppColor.textPrimary)
-        .textAlign(TextAlign.Center)
-        .lineHeight(28)
-        .padding({ left: AppSpacing.xl, right: AppSpacing.xl, top: 44, bottom: 44 })
-        .width('100%')
-        .backgroundColor('#FFFDF8')
-        .border({ width: 1, color: '#D8C7A4', radius: AppRadius.card })
+      Column() {
+        Text(this.poemText)
+          .fontSize(poetryPosterVisualSpec.poemTextFontSizeFp)
+          .fontColor(AppColor.textPrimary)
+          .textAlign(TextAlign.Center)
+          .lineHeight(28)
+          .padding(poetryPosterVisualSpec.poemTextPaddingVp)
+          .width('100%')
+      }
+      .width('100%')
+      .margin({ top: poetryPosterVisualSpec.poemTopMarginVp })
+      .padding({ top: AppSpacing.xs, bottom: AppSpacing.xs })
+      .backgroundImage($r('app.media.poem_frame'))
+      .backgroundImageSize(ImageSize.FILL)
 
       Row() {
-        Column() {
-          Text('MindSpore')
-            .fontSize(22)
-            .fontWeight(FontWeight.Bold)
-            .fontColor(AppColor.primary)
-          Text(appString('poem_ai_credit'))
-            .fontSize(13)
-            .fontColor(AppColor.textMuted)
-            .margin({ top: AppSpacing.xs })
-        }
-        .alignItems(HorizontalAlign.Start)
-        .layoutWeight(1)
+        Text(appString('poem_ai_credit'))
+          .fontSize(poetryPosterVisualSpec.poemTextFontSizeFp)
+          .fontColor(AppColor.textMuted)
+          .layoutWeight(1)
 
         Image($r('app.media.my_qr_code'))
-          .width(72)
-          .height(72)
+          .width(poetryPosterVisualSpec.qrCodeSizeVp)
+          .height(poetryPosterVisualSpec.qrCodeSizeVp)
           .objectFit(ImageFit.Contain)
       }
       .width('100%')
@@ -147,11 +145,9 @@ struct PoetryPosterPage {
     }
     .id(poetryPosterComponentId)
     .width('100%')
-    .padding(AppSpacing.xl)
-    .linearGradient({
-      angle: 180,
-      colors: [['#F8F0DC', 0], ['#FFFFFF', 1]]
-    })
+    .padding(poetryPosterVisualSpec.outerPaddingVp)
+    .backgroundImage($r('app.media.poem_bg'))
+    .backgroundImageSize(ImageSize.FILL)
   }
 
   build() {

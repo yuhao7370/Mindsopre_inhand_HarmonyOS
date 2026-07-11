@@ -427,3 +427,6 @@ Current HarmonyOS behavior:
   routes generated poem text into the HarmonyOS poster page.
 - The poster page snapshots the rendered poster and uses HarmonyOS save/share
   services for image export.
+- The poster page reuses Android's original poem background and frame assets
+  with the same 20/60/80vp layout proportions for the poster body, poem text
+  inset, and QR code.
