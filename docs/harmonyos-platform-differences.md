@@ -276,6 +276,8 @@ Current HarmonyOS behavior:
 - Image Classification result labels now load the Android Chinese label table
   on Chinese locales while keeping the existing English rawfile for other
   locales.
+- Build-time label verification covers both English and Chinese rawfiles and
+  rejects UTF-8 BOMs so localized first labels do not receive hidden prefixes.
 - The live camera preview shows the latest classification label in a bottom
   overlay, matching Android's `bottomLayout` / `HorTextView` result surface.
 
@@ -387,6 +389,8 @@ Current HarmonyOS behavior:
   anchors, thresholds, and label mapping.
 - Object labels now load the Android Chinese `object_category` table on
   Chinese locales while keeping the existing English labels for other locales.
+- Build-time label verification covers both English and Chinese rawfiles and
+  rejects UTF-8 BOMs so localized first labels do not receive hidden prefixes.
 - Empty SSD outputs are treated as object-detection failure, matching Android's
   `train_invalid` path when the analyzer returns no boxes for a still image;
   live camera refreshes simply clear the overlay until a later frame detects
