@@ -2163,6 +2163,12 @@ export default function localUnitTest() {
       expect(webDestinationForUrl(mindSporeBaseUrl, 'me_qa_title').titleKey).assertEqual('me_official_title');
       expect(webDestinationForUrl(meCodeUrl, 'me_official_title').titleKey).assertEqual('me_official_code_title');
       expect(webDestinationForUrl(meHelpUrl, 'me_official_title').titleKey).assertEqual('me_qa_title');
+      expect(webDestinationForUrl(helpImageClassificationUrl, 'me_official_title').titleKey).assertEqual('title_image');
+      expect(webDestinationForUrl(helpObjectDetectionUrl, 'me_official_title').titleKey).assertEqual('title_object');
+      expect(webDestinationForUrl(helpPoseNetUrl, 'me_official_title').titleKey).assertEqual('title_pose_net');
+      expect(webDestinationForUrl(helpImageSegmentationUrl, 'me_official_title').titleKey).assertEqual('title_segmentation');
+      expect(webDestinationForUrl(helpSceneDetectionUrl, 'me_official_title').titleKey).assertEqual('title_scene_detection');
+      expect(webDestinationForUrl(helpStyleTransferUrl, 'me_official_title').titleKey).assertEqual('title_style_transfer');
       expect(webDestinationForUrl(customModelMoreUrl, 'me_official_title').titleKey).assertEqual('title_custom_model');
     });
 
@@ -6209,6 +6215,26 @@ export default function localUnitTest() {
       expect(result.code).assertEqual('TEXT_TRANSLATION_DONE');
       expect(result.detailText.indexOf('translated=\u6607\u601D') >= 0).assertTrue();
       expect(reader.seenPaths.indexOf(translationLanguagePairsRawfilePath) >= 0).assertTrue();
+    });
+
+    it('localTextTranslationCoversAndroidHmsFeatureHelpSentences', 0, async () => {
+      const runner = new LocalTextTranslationRunner();
+
+      const imageClassification = await runner.translate(
+        '\u56FE\u50CF\u5206\u7C7B\u53EF\u4EE5\u63A8\u6D4B\u56FE\u7247\u4E2D\u51FA\u73B0\u7269\u4F53\u7684\u6240\u5C5E\u7C7B\u522B',
+        'en'
+      );
+      expect(imageClassification.ok).assertTrue();
+      expect(imageClassification.translatedText)
+        .assertEqual('Image classification can infer the category of the object in the picture');
+
+      const sceneDetection = await runner.translate(
+        'Scene detection can estimate the category of the target scene.',
+        'zh'
+      );
+      expect(sceneDetection.ok).assertTrue();
+      expect(sceneDetection.translatedText)
+        .assertEqual('\u573A\u666F\u68C0\u6D4B\u53EF\u4EE5\u5224\u65AD\u76EE\u6807\u573A\u666F\u7684\u7C7B\u578B');
     });
 
     it('runtimeFactoryLocalFallbackFailsUnknownTranslationHonestly', 0, async () => {

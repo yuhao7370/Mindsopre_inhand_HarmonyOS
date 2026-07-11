@@ -139,6 +139,14 @@ const localChineseToEnglishPhrases: Array<LocalTranslationPhrase> = [
     source: '\u672C\u9875\u63D0\u4F9B\u672C\u5730\u5B66\u4E60\u5165\u53E3\uFF0C\u5E76\u901A\u8FC7\u7F51\u9875\u6253\u5F00\u5916\u90E8\u8D44\u6E90',
     target: 'this page provides local learning entries and opens external resources in a web page'
   },
+  {
+    source: '\u56FE\u50CF\u5206\u7C7B\u53EF\u4EE5\u63A8\u6D4B\u56FE\u7247\u4E2D\u51FA\u73B0\u7269\u4F53\u7684\u6240\u5C5E\u7C7B\u522B',
+    target: 'Image classification can infer the category of the object in the picture'
+  },
+  {
+    source: '\u573A\u666F\u68C0\u6D4B\u53EF\u4EE5\u5224\u65AD\u76EE\u6807\u573A\u666F\u7684\u7C7B\u578B',
+    target: 'Scene detection can estimate the category of the target scene'
+  },
   { source: '\u8FD9\u662F\u4E00\u4E2A', target: 'this is a' },
   { source: '\u4F60\u597D\u4E16\u754C', target: 'hello world' },
   { source: '\u4F60\u597D', target: 'hello' },
@@ -201,6 +209,14 @@ const localEnglishToChinesePhrases: Array<LocalTranslationPhrase> = [
   {
     source: 'this page provides local learning entries and opens external resources in a web page',
     target: '\u672C\u9875\u63D0\u4F9B\u672C\u5730\u5B66\u4E60\u5165\u53E3\uFF0C\u5E76\u901A\u8FC7\u7F51\u9875\u6253\u5F00\u5916\u90E8\u8D44\u6E90'
+  },
+  {
+    source: 'image classification can infer the category of the object in the picture',
+    target: '\u56FE\u50CF\u5206\u7C7B\u53EF\u4EE5\u63A8\u6D4B\u56FE\u7247\u4E2D\u51FA\u73B0\u7269\u4F53\u7684\u6240\u5C5E\u7C7B\u522B'
+  },
+  {
+    source: 'scene detection can estimate the category of the target scene',
+    target: '\u573A\u666F\u68C0\u6D4B\u53EF\u4EE5\u5224\u65AD\u76EE\u6807\u573A\u666F\u7684\u7C7B\u578B'
   },
   { source: 'this is a', target: '\u8FD9\u662F\u4E00\u4E2A' },
   { source: 'this is an', target: '\u8FD9\u662F\u4E00\u4E2A' },

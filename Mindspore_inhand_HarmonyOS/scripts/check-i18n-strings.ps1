@@ -53,6 +53,16 @@ function Get-AppStringCaseKeys([string] $text) {
   return @([regex]::Matches($text, "(?m)^\s*case\s+'([^']+)'\s*:\s*$") | ForEach-Object { $_.Groups[1].Value })
 }
 
+$appStringUnionSlice = Get-SourceSlice `
+  $appStringsSource `
+  'export type AppStringKey =' `
+  ';'
+$unionKeys = @([regex]::Matches($appStringUnionSlice, "'([^']+)'") | ForEach-Object { $_.Groups[1].Value })
+$unionDuplicates = @($unionKeys | Group-Object | Where-Object { $_.Count -gt 1 } | ForEach-Object { $_.Name })
+if ($unionDuplicates.Count -gt 0) {
+  throw "Duplicate AppStringKey union entries: $($unionDuplicates -join ', ')"
+}
+
 $appStringKeysSlice = Get-SourceSlice `
   $appStringsSource `
   'const APP_STRING_KEYS: AppStringKey[] = [' `
@@ -72,6 +82,12 @@ $caseKeys = Get-AppStringCaseKeys $appStringSwitchSlice
 $caseDuplicates = @($caseKeys | Group-Object | Where-Object { $_.Count -gt 1 } | ForEach-Object { $_.Name })
 if ($caseDuplicates.Count -gt 0) {
   throw "Duplicate appString switch cases: $($caseDuplicates -join ', ')"
+}
+
+$unionMissing = @($baseNames | Where-Object { $_ -notin $unionKeys })
+$unionExtra = @($unionKeys | Where-Object { $_ -notin $baseNames })
+if ($unionMissing.Count -gt 0 -or $unionExtra.Count -gt 0) {
+  throw "AppStringKey union mismatch with base resources. Missing: $($unionMissing -join ', ') Extra: $($unionExtra -join ', ')"
 }
 
 $typedMissing = @($baseNames | Where-Object { $_ -notin $typedKeys })
