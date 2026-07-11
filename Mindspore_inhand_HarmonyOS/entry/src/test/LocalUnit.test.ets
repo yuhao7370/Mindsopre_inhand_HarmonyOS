@@ -3875,6 +3875,69 @@ export default function localUnitTest() {
       expect(runner.seenImageUris[0]).assertEqual('file://selected/person.jpg');
     });
 
+    it('segmentationServiceTreatsMissingForegroundAsAndroidFailure', 0, async () => {
+      const service = new SegmentationService({
+        runner: new FixedSegmentationRunner({
+          ok: true,
+          subjectCount: 1,
+          detailCount: 0,
+          foregroundAvailable: false,
+          imageWidth: 100,
+          imageHeight: 200,
+          rectangles: [{
+            left: 1,
+            top: 2,
+            width: 3,
+            height: 4
+          }],
+          executionMs: 9
+        })
+      });
+
+      const result: SegmentationResult = await service.segmentPerson('file://selected/person.jpg');
+
+      expect(result.ok).assertFalse();
+      expect(result.subjectCount).assertEqual(1);
+      expect(result.detailCount).assertEqual(0);
+      expect(result.foregroundAvailable).assertFalse();
+      expect(result.imageWidth).assertEqual(100);
+      expect(result.imageHeight).assertEqual(200);
+      expect(result.rectangles.length).assertEqual(1);
+      expect(result.executionMs).assertEqual(9);
+    });
+
+    it('aiServiceReportsSegmentationFailureWhenForegroundImageIsMissing', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.PORTRAIT_SEGMENTATION.name);
+      expect(workflow !== undefined).assertTrue();
+      const service = new SegmentationService({
+        runner: new FixedSegmentationRunner({
+          ok: true,
+          subjectCount: 1,
+          detailCount: 0,
+          foregroundAvailable: false,
+          rectangles: [{
+            left: 1,
+            top: 2,
+            width: 3,
+            height: 4
+          }],
+          executionMs: 9
+        })
+      });
+
+      const result = await new DefaultAiService({ segmentationService: service }).run(workflow!, {
+        imageUri: 'file://selected/person.jpg'
+      });
+
+      expect(result.ok).assertFalse();
+      expect(result.code).assertEqual('SEGMENTATION_FAILED');
+      expect(result.messageKey).assertEqual('feature_runtime_segmentation_failed');
+      expect(result.detailText.indexOf('subjectCount=1') >= 0).assertTrue();
+      expect(result.detailText.indexOf('foregroundAvailable=false') >= 0).assertTrue();
+      expect(result.detailText.indexOf('executionMs=9') >= 0).assertTrue();
+      expect(result.detailText.indexOf('[1,2,3,4]') >= 0).assertTrue();
+    });
+
     it('mapsSegmentationRectangleToPercentOverlay', 0, () => {
       const rectangle: SegmentationRectangle = {
         left: 20,
@@ -5215,6 +5278,36 @@ export default function localUnitTest() {
       expect(result.code).assertEqual('DETECTION_INVALID_OUTPUT');
     });
 
+    it('objectDetectionServiceTreatsEmptyRunnerResultAsAndroidInvalidOutput', 0, async () => {
+      const service = new ObjectDetectionService({
+        labels: ['background'],
+        runner: new FixedObjectDetectionRunner([])
+      });
+
+      const result: ObjectDetectionRunResult = await service.detectObjects('file://selected/street.jpg');
+
+      expect(result.ok).assertFalse();
+      expect(result.code).assertEqual('DETECTION_INVALID_OUTPUT');
+      expect(result.detections.length).assertEqual(0);
+    });
+
+    it('aiServiceReportsObjectDetectionFailureWhenNoObjectsAreDetected', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.OBJECT_PHOTO.name);
+      expect(workflow !== undefined).assertTrue();
+      const service = new ObjectDetectionService({
+        labels: ['background'],
+        runner: new FixedObjectDetectionRunner([])
+      });
+
+      const result: AiRunResult = await new DefaultAiService({ objectDetectionService: service }).run(workflow!, {
+        imageUri: 'file://selected/street.jpg'
+      });
+
+      expect(result.ok).assertFalse();
+      expect(result.code).assertEqual('OBJECT_DETECTION_FAILED');
+      expect(result.messageKey).assertEqual('feature_runtime_object_detection_failed');
+    });
+
     it('aiServiceUsesRealObjectDetectionServiceWhenProvided', 0, async () => {
       const workflow = workflowForRoute(AppRoute.OBJECT_PHOTO.name);
       expect(workflow !== undefined).assertTrue();
@@ -6456,7 +6549,10 @@ export default function localUnitTest() {
         ok: true,
         subjectCount: 1,
         detailCount: 0,
-        foregroundAvailable: false,
+        foregroundAvailable: true,
+        foregroundImageRgba: new Uint8Array([0, 0, 0, 255]).buffer as ArrayBuffer,
+        foregroundImageWidth: 1,
+        foregroundImageHeight: 1,
         rectangles: [],
         executionMs: 8
       });

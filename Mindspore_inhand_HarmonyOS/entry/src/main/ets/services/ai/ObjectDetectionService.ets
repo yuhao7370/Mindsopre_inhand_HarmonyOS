@@ -229,7 +229,11 @@ export class ObjectDetectionService {
       return this.runResult(false, 'DETECTION_INVALID_OUTPUT', []);
     }
 
-    return this.runResult(true, 'DETECTION_DONE', mapObjectDetectionLabels(detections, this.labels));
+    const mappedDetections = mapObjectDetectionLabels(detections, this.labels);
+    if (mappedDetections.length === 0) {
+      return this.runResult(false, 'DETECTION_INVALID_OUTPUT', []);
+    }
+    return this.runResult(true, 'DETECTION_DONE', mappedDetections);
   }
 
   private runResult(

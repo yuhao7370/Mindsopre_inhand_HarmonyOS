@@ -65,7 +65,20 @@ export class SegmentationService {
   async segmentPerson(imageUri: string): Promise<SegmentationResult> {
     const startMs = Date.now();
     try {
-      return await this.runner.segmentPerson(imageUri);
+      const result = await this.runner.segmentPerson(imageUri);
+      if (!result.ok || result.foregroundAvailable) {
+        return result;
+      }
+      return {
+        ok: false,
+        subjectCount: result.subjectCount,
+        detailCount: result.detailCount,
+        foregroundAvailable: false,
+        imageWidth: result.imageWidth,
+        imageHeight: result.imageHeight,
+        rectangles: result.rectangles,
+        executionMs: result.executionMs
+      };
     } catch (_) {
       return {
         ok: false,

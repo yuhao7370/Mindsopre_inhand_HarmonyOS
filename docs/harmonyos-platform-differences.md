@@ -377,6 +377,10 @@ Current HarmonyOS behavior:
   anchors, thresholds, and label mapping.
 - Object labels now load the Android Chinese `object_category` table on
   Chinese locales while keeping the existing English labels for other locales.
+- Empty SSD outputs are treated as object-detection failure, matching Android's
+  `train_invalid` path when the analyzer returns no boxes for a still image;
+  live camera refreshes simply clear the overlay until a later frame detects
+  objects.
 - `/imageobject/ObjectPhotoActivity` follows the Android page flow: opening the
   route prepares the album image input once, and a selected image immediately
   runs object detection.
@@ -415,6 +419,9 @@ Current HarmonyOS behavior:
   background selected by default.
 - Canceling the album picker keeps the current built-in or custom background,
   matching Android's `onActivityResult` behavior.
+- Segmentation results without a foreground image are treated as failure,
+  matching Android's still-image `getForeground() == null` guard instead of
+  reporting success with only rectangle metadata.
 - Live segmentation routes draw the detected foreground layer directly on the
   HarmonyOS camera preview, matching Android's foreground overlay behavior.
 - HarmonyOS reuses the foreground/background composite preview and save path
