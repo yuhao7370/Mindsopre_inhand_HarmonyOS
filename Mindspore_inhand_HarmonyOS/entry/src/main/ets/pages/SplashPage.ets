@@ -12,7 +12,8 @@ import {
   SplashStartupTransition,
   SplashRetryPermissionAction,
   splashStartupTransitionForMissingContext,
-  splashStartupTransitionForRequest
+  splashStartupTransitionForRequest,
+  splashStartupTransitionForRequestAfterPrivacyAccept
 } from '../services/splash/SplashStartupService';
 import {
   HarmonyPrivacyConsentStore,
@@ -85,26 +86,36 @@ export struct SplashPage {
     }
   }
 
-  private requestStartupPermissionsThenEnter(): void {
+  private requestStartupPermissionsThenEnter(finishImmediatelyWhenReady: boolean = false): void {
     const context = this.uiAbilityContext();
     if (context === undefined) {
       this.applyStartupTransition(splashStartupTransitionForMissingContext());
       return;
     }
     new PermissionService().requestStartup(context).then((permission: PermissionRequestSummary) => {
-      this.handleStartupPermissionRequest(permission);
+      this.handleStartupPermissionRequest(permission, finishImmediatelyWhenReady);
     }).catch(() => {
-      this.handleStartupPermissionRequest({ ok: false, requested: [] });
+      this.handleStartupPermissionRequest({ ok: false, requested: [] }, finishImmediatelyWhenReady);
     });
   }
 
-  private handleStartupPermissionRequest(permission: PermissionRequestSummary): void {
-    this.applyStartupTransition(splashStartupTransitionForRequest(permission));
+  private handleStartupPermissionRequest(
+    permission: PermissionRequestSummary,
+    finishImmediatelyWhenReady: boolean = false
+  ): void {
+    this.applyStartupTransition(finishImmediatelyWhenReady ?
+      splashStartupTransitionForRequestAfterPrivacyAccept(permission) :
+      splashStartupTransitionForRequest(permission));
   }
 
   private applyStartupTransition(transition: SplashStartupTransition): void {
     this.startupPermissionState = transition.permissionState;
     this.showPermissionDialog = transition.showPermissionDialog;
+    if (transition.finishImmediately) {
+      this.stopCountdown();
+      this.finishSplash();
+      return;
+    }
     if (transition.startCountdown) {
       this.startCountdown();
       return;
@@ -127,7 +138,7 @@ export struct SplashPage {
     }
     this.showPrivacyDialog = false;
     this.showPermissionDialog = false;
-    this.requestStartupPermissionsThenEnter();
+    this.requestStartupPermissionsThenEnter(true);
   }
 
   private declinePrivacy(): void {
@@ -145,7 +156,7 @@ export struct SplashPage {
     const action: SplashRetryPermissionAction = splashRetryPermissionAction();
     this.showPermissionDialog = action.showPermissionDialog;
     if (action.requestPermissions) {
-      this.requestStartupPermissionsThenEnter();
+      this.requestStartupPermissionsThenEnter(true);
     }
   }
 

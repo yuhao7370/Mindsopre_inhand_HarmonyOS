@@ -6,6 +6,7 @@ export interface SplashStartupTransition {
   readonly permissionState: SplashStartupPermissionState;
   readonly showPermissionDialog: boolean;
   readonly startCountdown: boolean;
+  readonly finishImmediately: boolean;
 }
 
 export interface SplashFinishAction {
@@ -36,6 +37,21 @@ export function splashStartupTransitionForRequest(request: PermissionRequestSumm
   return splashStartupTransitionForState(state);
 }
 
+export function splashStartupTransitionForRequestAfterPrivacyAccept(
+  request: PermissionRequestSummary
+): SplashStartupTransition {
+  const state = splashStartupPermissionStateForRequest(request);
+  if (state === 'ready') {
+    return {
+      permissionState: state,
+      showPermissionDialog: false,
+      startCountdown: false,
+      finishImmediately: true
+    };
+  }
+  return splashStartupTransitionForState(state);
+}
+
 export function splashStartupTransitionForMissingContext(): SplashStartupTransition {
   return splashStartupTransitionForState(splashStartupPermissionStateForMissingContext());
 }
@@ -59,6 +75,7 @@ function splashStartupTransitionForState(state: SplashStartupPermissionState): S
   return {
     permissionState: state,
     showPermissionDialog: state === 'blocked',
-    startCountdown: state === 'ready'
+    startCountdown: state === 'ready',
+    finishImmediately: false
   };
 }

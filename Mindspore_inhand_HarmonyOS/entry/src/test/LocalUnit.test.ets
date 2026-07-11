@@ -318,6 +318,7 @@ import {
   SplashRetryPermissionAction,
   splashStartupTransitionForMissingContext,
   splashStartupTransitionForRequest,
+  splashStartupTransitionForRequestAfterPrivacyAccept,
   SplashStartupTransition,
   splashStartupPermissionStateForMissingContext,
   splashStartupPermissionStateForRequest
@@ -1692,6 +1693,16 @@ export default function localUnitTest() {
       const grantedTransition: SplashStartupTransition = splashStartupTransitionForRequest(granted);
       expect(grantedTransition.showPermissionDialog).assertFalse();
       expect(grantedTransition.startCountdown).assertTrue();
+      expect(grantedTransition.finishImmediately).assertFalse();
+      const firstAcceptGrantedTransition: SplashStartupTransition =
+        splashStartupTransitionForRequestAfterPrivacyAccept(granted);
+      expect(firstAcceptGrantedTransition.showPermissionDialog).assertFalse();
+      expect(firstAcceptGrantedTransition.startCountdown).assertFalse();
+      expect(firstAcceptGrantedTransition.finishImmediately).assertTrue();
+      const firstAcceptDeniedTransition: SplashStartupTransition =
+        splashStartupTransitionForRequestAfterPrivacyAccept(denied);
+      expect(firstAcceptDeniedTransition.showPermissionDialog).assertTrue();
+      expect(firstAcceptDeniedTransition.finishImmediately).assertFalse();
       const blockedFinish: SplashFinishAction = finishSplashActionForStartupPermissionState('blocked');
       const readyFinish: SplashFinishAction = finishSplashActionForStartupPermissionState('ready');
       const retryAction: SplashRetryPermissionAction = splashRetryPermissionAction();
