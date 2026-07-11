@@ -46,6 +46,7 @@ import {
   textInputPlaceholderKeyForWorkflow,
   workflowInitialStatusKey,
   workflowInputLabelKey,
+  workflowGoLiveLabelKey,
   workflowResultTitleKey,
   workflowRunActionKey,
   workflowInputReadyAction,
@@ -2408,7 +2409,7 @@ struct FeatureRuntimePage {
           .width('100%')
           .margin({ top: AppSpacing.md })
           if (this.hasLinkedLiveRoute()) {
-            Button(appString('feature_runtime_go_live'))
+            Button(appString(workflowGoLiveLabelKey(workflowForRoute(this.routeName))))
               .height(34)
               .margin({ top: AppSpacing.xs })
               .onClick(() => this.openLinkedLiveRoute())

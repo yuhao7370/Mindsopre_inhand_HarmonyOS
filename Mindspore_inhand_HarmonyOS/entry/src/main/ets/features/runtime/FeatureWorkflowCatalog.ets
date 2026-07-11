@@ -713,6 +713,10 @@ export function workflowInputLabelKey(
   return inputLabelKey(inputKind);
 }
 
+export function workflowGoLiveLabelKey(workflow: FeatureWorkflow | undefined): AppStringKey {
+  return workflowUsesAndroidHmsRealTimeButton(workflow) ? 'feature_runtime_go_live_android_hms' : 'feature_runtime_go_live';
+}
+
 function workflowUsesAndroidHmsStillButton(workflow: FeatureWorkflow | undefined): boolean {
   const routeName = workflow?.routeName ?? '';
   return routeName === AppRoute.POSENET.name ||
@@ -721,6 +725,14 @@ function workflowUsesAndroidHmsStillButton(workflow: FeatureWorkflow | undefined
     routeName === AppRoute.SCENE_STILL.name ||
     routeName === AppRoute.TEXT_RECOGNITION.name ||
     routeName === AppRoute.TEXT_TRANSLATION.name;
+}
+
+function workflowUsesAndroidHmsRealTimeButton(workflow: FeatureWorkflow | undefined): boolean {
+  const routeName = workflow?.routeName ?? '';
+  return routeName === AppRoute.POSENET.name ||
+    routeName === AppRoute.SEGMENTATION_STILL.name ||
+    routeName === AppRoute.GESTURE_STILL.name ||
+    routeName === AppRoute.SCENE_STILL.name;
 }
 
 export function permissionLabelKey(permissionKind: FeaturePermissionKind): AppStringKey {

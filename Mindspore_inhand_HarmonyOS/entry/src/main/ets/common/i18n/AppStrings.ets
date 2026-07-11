@@ -205,6 +205,7 @@ export type AppStringKey =
   'feature_runtime_style_recovery' |
   'feature_runtime_style_recovered' |
   'feature_runtime_go_live' |
+  'feature_runtime_go_live_android_hms' |
   'feature_runtime_preview_title' |
   'feature_runtime_preview_image' |
   'feature_runtime_preview_background' |
@@ -492,6 +493,7 @@ const APP_STRING_KEYS: AppStringKey[] = [
   'feature_runtime_style_recovery',
   'feature_runtime_style_recovered',
   'feature_runtime_go_live',
+  'feature_runtime_go_live_android_hms',
   'feature_runtime_preview_title',
   'feature_runtime_preview_image',
   'feature_runtime_preview_background',
@@ -989,6 +991,8 @@ export function appString(key: AppStringKey): ResourceStr {
       return $r('app.string.feature_runtime_style_recovered');
     case 'feature_runtime_go_live':
       return $r('app.string.feature_runtime_go_live');
+    case 'feature_runtime_go_live_android_hms':
+      return $r('app.string.feature_runtime_go_live_android_hms');
     case 'feature_runtime_preview_title':
       return $r('app.string.feature_runtime_preview_title');
     case 'feature_runtime_preview_image':

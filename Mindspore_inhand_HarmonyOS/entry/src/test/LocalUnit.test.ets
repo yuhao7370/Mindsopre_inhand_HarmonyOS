@@ -363,6 +363,7 @@ import {
   workflowInputReadyAction,
   workflowInitialStatusKey,
   workflowInputLabelKey,
+  workflowGoLiveLabelKey,
   workflowResultTitleKey,
   workflowRunActionKey,
   workflowForRoute
@@ -2130,6 +2131,7 @@ export default function localUnitTest() {
       expect(hasAppStringKey('feature_runtime_save_image_missing')).assertTrue();
       expect(hasAppStringKey('feature_runtime_style_recovery')).assertTrue();
       expect(hasAppStringKey('feature_runtime_style_recovered')).assertTrue();
+      expect(hasAppStringKey('feature_runtime_go_live_android_hms')).assertTrue();
       expect(hasAppStringKey('feature_runtime_help')).assertTrue();
       expect(hasAppStringKey('feature_runtime_help_image_classification')).assertTrue();
       expect(hasAppStringKey('feature_runtime_help_object_photo')).assertTrue();
@@ -5442,6 +5444,22 @@ export default function localUnitTest() {
       expect(workflowInputLabelKey(objectPhoto, 'camera')).assertEqual('feature_input_camera');
       expect(workflowInputLabelKey(customModel, 'photo')).assertEqual('feature_runtime_custom_model_select_photo');
       expect(workflowInputLabelKey(customModel, 'camera')).assertEqual('feature_runtime_custom_model_take_photo');
+    });
+
+    it('hmsStillLinkedLiveWorkflowsUseAndroidRealTimeButtonCopy', 0, () => {
+      const poseNet = workflowForRoute(AppRoute.POSENET.name);
+      const segmentationStill = workflowForRoute(AppRoute.SEGMENTATION_STILL.name);
+      const gestureStill = workflowForRoute(AppRoute.GESTURE_STILL.name);
+      const sceneStill = workflowForRoute(AppRoute.SCENE_STILL.name);
+      const textRecognition = workflowForRoute(AppRoute.TEXT_RECOGNITION.name);
+      const imageClassification = workflowForRoute(AppRoute.IMAGE_CAMERA.name);
+
+      expect(workflowGoLiveLabelKey(poseNet)).assertEqual('feature_runtime_go_live_android_hms');
+      expect(workflowGoLiveLabelKey(segmentationStill)).assertEqual('feature_runtime_go_live_android_hms');
+      expect(workflowGoLiveLabelKey(gestureStill)).assertEqual('feature_runtime_go_live_android_hms');
+      expect(workflowGoLiveLabelKey(sceneStill)).assertEqual('feature_runtime_go_live_android_hms');
+      expect(workflowGoLiveLabelKey(textRecognition)).assertEqual('feature_runtime_go_live');
+      expect(workflowGoLiveLabelKey(imageClassification)).assertEqual('feature_runtime_go_live');
     });
 
     it('customModelRequiresNativeRunnerInsteadOfSimulatedOutput', 0, async () => {

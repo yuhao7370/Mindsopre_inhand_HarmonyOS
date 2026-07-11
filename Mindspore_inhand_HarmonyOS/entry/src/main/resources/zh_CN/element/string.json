@@ -206,6 +206,7 @@
     { "name": "feature_runtime_style_recovery", "value": "恢复原图" },
     { "name": "feature_runtime_style_recovered", "value": "已恢复原图。" },
     { "name": "feature_runtime_go_live", "value": "实时" },
+    { "name": "feature_runtime_go_live_android_hms", "value": "实时" },
     { "name": "feature_runtime_preview_title", "value": "预览" },
     { "name": "feature_runtime_preview_image", "value": "图片" },
     { "name": "feature_runtime_preview_background", "value": "背景图" },

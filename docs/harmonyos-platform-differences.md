@@ -104,6 +104,9 @@ Current HarmonyOS behavior:
 - HMS still-image workflows that used Android's `btn_photo`/`btn_camera` now
   keep dedicated Photo and Camera button labels in HarmonyOS instead of falling
   back to the generic image/camera input labels.
+- HMS still-image workflows that used Android's `btn_real_time` now keep a
+  dedicated Real-time linked-route label in HarmonyOS instead of falling back to
+  the generic live-route action label.
 - The default HarmonyOS runtime reuses the bundled MobileNetV2 image
   classification model as a conservative local approximation. With the bundled
   ImageNet labels this currently only treats the exact `mitten` class as a

@@ -206,6 +206,7 @@
     { "name": "feature_runtime_style_recovery", "value": "Recovery" },
     { "name": "feature_runtime_style_recovered", "value": "Original image restored." },
     { "name": "feature_runtime_go_live", "value": "Real-time" },
+    { "name": "feature_runtime_go_live_android_hms", "value": "real time" },
     { "name": "feature_runtime_preview_title", "value": "Preview" },
     { "name": "feature_runtime_preview_image", "value": "Image" },
     { "name": "feature_runtime_preview_background", "value": "Background" },
