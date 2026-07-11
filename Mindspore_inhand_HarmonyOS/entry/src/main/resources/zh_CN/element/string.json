@@ -161,6 +161,7 @@
     { "name": "feature_runtime_object_detection_failed", "value": "对象检测未产生有效检测框。" },
     { "name": "feature_runtime_style_transfer_done", "value": "风格迁移执行完成。" },
     { "name": "feature_runtime_style_transfer_failed", "value": "风格迁移执行失败。" },
+    { "name": "feature_runtime_style_original_required", "value": "请先选择原始图片" },
     { "name": "feature_runtime_text_recognition_done", "value": "文本提取已完成。" },
     { "name": "feature_runtime_text_recognition_failed", "value": "文本提取失败。" },
     { "name": "feature_runtime_text_translation_done", "value": "文本翻译已完成。" },

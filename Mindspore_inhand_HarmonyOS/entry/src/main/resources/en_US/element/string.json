@@ -161,6 +161,7 @@
     { "name": "feature_runtime_object_detection_failed", "value": "Object detection did not produce valid boxes." },
     { "name": "feature_runtime_style_transfer_done", "value": "Style transfer completed." },
     { "name": "feature_runtime_style_transfer_failed", "value": "Style transfer failed." },
+    { "name": "feature_runtime_style_original_required", "value": "Please select an original picture first" },
     { "name": "feature_runtime_text_recognition_done", "value": "Text extraction completed." },
     { "name": "feature_runtime_text_recognition_failed", "value": "Text extraction failed." },
     { "name": "feature_runtime_text_translation_done", "value": "Text translation completed." },

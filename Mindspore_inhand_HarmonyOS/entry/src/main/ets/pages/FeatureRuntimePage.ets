@@ -23,6 +23,7 @@ import {
   shouldShowStyleRecoveryControl,
   shouldUseLongTextInput,
   shouldUseLongTextResultRow,
+  styleTransferStyleReadyStatusKey,
   textInputPlaceholderKeyForWorkflow,
   workflowRunActionKey,
   workflowInputReadyAction,
@@ -543,7 +544,10 @@ struct FeatureRuntimePage {
       return;
     }
     this.clearRuntimeResultState();
-    this.statusKey = readyKey;
+    const workflow = workflowForRoute(this.routeName);
+    this.statusKey = workflow ?
+      styleTransferStyleReadyStatusKey(workflow, inputKind, this.styleTransferContentInputReady(), readyKey) :
+      readyKey;
     this.selectedInputSummary = result.uri;
     if (inputKind === 'modelFile') {
       this.modelInputUri = result.uri;
@@ -561,7 +565,6 @@ struct FeatureRuntimePage {
     } else {
       this.imageInputUri = result.uri;
     }
-    const workflow = workflowForRoute(this.routeName);
     if (workflow && shouldRunReadyWorkflow) {
       const inputReadyAction = workflowInputReadyAction(workflow, inputKind, this.userText);
       this.userText = inputReadyAction.userText;
@@ -1081,8 +1084,11 @@ struct FeatureRuntimePage {
   private selectBuiltInStyle(style: BuiltInStyleTransferStyle): void {
     this.styleImageUri = builtInStyleTransferUri(style);
     this.selectedInputSummary = style.rawfilePath;
-    this.statusKey = 'feature_runtime_image_ready';
     const workflow = workflowForRoute(this.routeName);
+    this.statusKey = workflow ?
+      styleTransferStyleReadyStatusKey(workflow, 'styleImage', this.styleTransferContentInputReady(),
+        'feature_runtime_image_ready') :
+      'feature_runtime_image_ready';
     if (workflow && this.shouldRunStyleTransferAfterStyleReady(workflow, 'styleImage')) {
       this.runWorkflow();
     }

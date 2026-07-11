@@ -274,6 +274,7 @@ import {
   sampleImageUriForWorkflow,
   shouldAutoRunWorkflowAfterInputReady,
   shouldAutoRunStyleTransferAfterStyleReady,
+  styleTransferStyleReadyStatusKey,
   shouldClearTextInputAfterInputReady,
   shouldLeaveRuntimeAfterCancelledInitialPick,
   shouldStartWorkflowRun,
@@ -6047,6 +6048,21 @@ export default function localUnitTest() {
       expect(shouldAutoRunStyleTransferAfterStyleReady(styleTransfer, 'contentImage', true)).assertFalse();
       expect(shouldAutoRunStyleTransferAfterStyleReady(styleTransfer, 'camera', true)).assertFalse();
       expect(shouldAutoRunStyleTransferAfterStyleReady(textRecognition, 'styleImage', true)).assertFalse();
+    });
+
+    it('usesAndroidStyleTransferOriginalImagePromptWhenStyleIsSelectedFirst', 0, () => {
+      const styleTransfer: FeatureWorkflow = workflowForRoute(AppRoute.STYLE_TRANSFER.name)!;
+      const textRecognition: FeatureWorkflow = workflowForRoute(AppRoute.TEXT_RECOGNITION.name)!;
+
+      expect(styleTransferStyleReadyStatusKey(styleTransfer, 'styleImage', false, 'feature_runtime_image_ready'))
+        .assertEqual('feature_runtime_style_original_required');
+      expect(styleTransferStyleReadyStatusKey(styleTransfer, 'styleImage', true, 'feature_runtime_image_ready'))
+        .assertEqual('feature_runtime_image_ready');
+      expect(styleTransferStyleReadyStatusKey(styleTransfer, 'contentImage', false, 'feature_runtime_image_ready'))
+        .assertEqual('feature_runtime_image_ready');
+      expect(styleTransferStyleReadyStatusKey(textRecognition, 'styleImage', false, 'feature_runtime_image_ready'))
+        .assertEqual('feature_runtime_image_ready');
+      expect(hasAppStringKey('feature_runtime_style_original_required')).assertTrue();
     });
 
     it('blocksRepeatedAsyncWorkflowRunsWhileKeepingLiveLoopRunnable', 0, () => {

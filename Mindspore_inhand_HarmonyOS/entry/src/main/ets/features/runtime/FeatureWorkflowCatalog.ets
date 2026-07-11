@@ -406,6 +406,20 @@ export function shouldAutoRunStyleTransferAfterStyleReady(
     contentInputReady;
 }
 
+export function styleTransferStyleReadyStatusKey(
+  workflow: FeatureWorkflow,
+  inputKind: FeatureInputKind,
+  contentInputReady: boolean,
+  readyKey: AppStringKey
+): AppStringKey {
+  if (workflow.routeName === AppRoute.STYLE_TRANSFER.name &&
+    inputKind === 'styleImage' &&
+    !contentInputReady) {
+    return 'feature_runtime_style_original_required';
+  }
+  return readyKey;
+}
+
 export function shouldClearTextInputAfterInputReady(workflow: FeatureWorkflow, inputKind: FeatureInputKind): boolean {
   return workflow.routeName === AppRoute.TEXT_TRANSLATION.name &&
     (inputKind === 'photo' || inputKind === 'camera');

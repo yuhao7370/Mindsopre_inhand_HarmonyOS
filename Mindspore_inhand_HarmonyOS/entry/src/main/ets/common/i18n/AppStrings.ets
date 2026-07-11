@@ -160,6 +160,7 @@ export type AppStringKey =
   'feature_runtime_object_detection_failed' |
   'feature_runtime_style_transfer_done' |
   'feature_runtime_style_transfer_failed' |
+  'feature_runtime_style_original_required' |
   'feature_runtime_text_recognition_done' |
   'feature_runtime_text_recognition_failed' |
   'feature_runtime_text_translation_done' |
@@ -418,6 +419,7 @@ const APP_STRING_KEYS: AppStringKey[] = [
   'feature_runtime_object_detection_failed',
   'feature_runtime_style_transfer_done',
   'feature_runtime_style_transfer_failed',
+  'feature_runtime_style_original_required',
   'feature_runtime_text_recognition_done',
   'feature_runtime_text_recognition_failed',
   'feature_runtime_text_translation_done',
@@ -841,6 +843,8 @@ export function appString(key: AppStringKey): ResourceStr {
       return $r('app.string.feature_runtime_style_transfer_done');
     case 'feature_runtime_style_transfer_failed':
       return $r('app.string.feature_runtime_style_transfer_failed');
+    case 'feature_runtime_style_original_required':
+      return $r('app.string.feature_runtime_style_original_required');
     case 'feature_runtime_text_recognition_done':
       return $r('app.string.feature_runtime_text_recognition_done');
     case 'feature_runtime_text_recognition_failed':
