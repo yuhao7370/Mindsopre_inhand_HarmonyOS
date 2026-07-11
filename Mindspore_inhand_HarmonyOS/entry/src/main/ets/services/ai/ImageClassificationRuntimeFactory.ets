@@ -1,6 +1,6 @@
 import { i18n, resourceManager } from '@kit.LocalizationKit';
 import { AppRoute } from '../../app/AppRoutes';
-import { FeatureWorkflow } from '../../features/runtime/FeatureWorkflowCatalog';
+import { FeatureWorkflow, poseModeForWorkflow } from '../../features/runtime/FeatureWorkflowCatalog';
 import { DefaultAiService } from './AiService';
 import {
   CustomModelDefaultOrSelectedRunner,
@@ -311,7 +311,7 @@ export async function createRuntimeAiServiceForWorkflow(
   }
   if (workflow.aiMethod === 'detectPose') {
     return new DefaultAiService({
-      poseService: createHarmonyPoseService(options)
+      poseService: createHarmonyPoseService(options, workflow)
     });
   }
   if (workflow.aiMethod === 'detectGesture') {
@@ -467,9 +467,11 @@ export function segmentationAndroidSceneForWorkflow(workflow: FeatureWorkflow): 
 }
 
 export function createHarmonyPoseService(
-  options: HarmonyImageClassificationRuntimeOptions
+  options: HarmonyImageClassificationRuntimeOptions,
+  workflow?: FeatureWorkflow
 ): PoseService {
   return new PoseService({
+    mode: workflow === undefined ? 'normal' : poseModeForWorkflow(workflow),
     runner: options.poseRunner ?? new HarmonySkeletonDetectionRunner({
       resourceManager: options.resourceManager
     })

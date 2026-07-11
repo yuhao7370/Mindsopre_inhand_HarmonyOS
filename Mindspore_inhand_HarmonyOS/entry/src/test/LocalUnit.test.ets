@@ -42,6 +42,7 @@ import {
   PosePoint,
   PoseLine,
   PoseLinePercent,
+  PoseDetectionMode,
   PoseResult,
   PoseRunner,
   PoseService,
@@ -305,6 +306,7 @@ import {
   shouldUseLongTextResultRow,
   textInputPlaceholderKeyForWorkflow,
   shouldShowStyleRecoveryControl,
+  poseModeForWorkflow,
   workflowInputReadyAction,
   workflowRunActionKey,
   workflowForRoute
@@ -1020,14 +1022,16 @@ class RejectingSegmentationRunner implements SegmentationRunner {
 
 class FixedPoseRunner implements PoseRunner {
   readonly seenImageUris: Array<string> = [];
+  readonly seenModes: Array<PoseDetectionMode | undefined> = [];
   private readonly result: PoseResult;
 
   constructor(result: PoseResult) {
     this.result = result;
   }
 
-  async detectPose(imageUri: string): Promise<PoseResult> {
+  async detectPose(imageUri: string, mode?: PoseDetectionMode): Promise<PoseResult> {
     this.seenImageUris.push(imageUri);
+    this.seenModes.push(mode);
     return this.result;
   }
 }
@@ -5622,6 +5626,11 @@ export default function localUnitTest() {
       expect(gestureCategoryForImageClassificationLabel('Victory')).assertEqual(1);
       expect(gestureCategoryForImageClassificationLabel('OK sign')).assertEqual(13);
       expect(gestureCategoryForImageClassificationLabel('finger heart gesture')).assertEqual(12);
+      expect(gestureCategoryForImageClassificationLabel('DISS')).assertEqual(9);
+      expect(gestureCategoryForImageClassificationLabel('thumb_down_gesture')).assertEqual(9);
+      expect(gestureCategoryForImageClassificationLabel('like_gesture')).assertEqual(11);
+      expect(gestureCategoryForImageClassificationLabel('heart_gesture')).assertEqual(12);
+      expect(gestureCategoryForImageClassificationLabel('like')).assertEqual(-1);
       expect(gestureCategoryForImageClassificationLabel('nail')).assertEqual(-1);
       expect(gestureCategoryForImageClassificationLabel('hand-held_computer')).assertEqual(-1);
       expect(gestureCategoryForImageClassificationLabel('three-toed_sloth')).assertEqual(-1);
@@ -6353,6 +6362,36 @@ export default function localUnitTest() {
       expect(result.ok).assertTrue();
       expect(result.code).assertEqual('POSE_DETECTION_DONE');
       expect(runner.seenImageUris[0]).assertEqual('file://selected/pose.jpg');
+      expect(runner.seenModes[0]).assertEqual('normal');
+    });
+
+    it('runtimeFactoryPassesAndroidYogaModeForLiveSkeletonWorkflow', 0, async () => {
+      const stillWorkflow = workflowForRoute(AppRoute.POSENET.name);
+      const liveWorkflow = workflowForRoute(AppRoute.LIVE_SKELETON.name);
+      expect(stillWorkflow !== undefined).assertTrue();
+      expect(liveWorkflow !== undefined).assertTrue();
+      expect(poseModeForWorkflow(stillWorkflow!)).assertEqual('normal');
+      expect(poseModeForWorkflow(liveWorkflow!)).assertEqual('yoga');
+      const runner: FixedPoseRunner = new FixedPoseRunner({
+        ok: true,
+        skeletonCount: 1,
+        pointCount: 0,
+        points: [],
+        executionMs: 6
+      });
+      const service = await createRuntimeAiServiceForWorkflow(liveWorkflow!, {
+        resourceManager: new ThrowingRawfileContentReader(),
+        poseRunner: runner
+      });
+
+      const result: AiRunResult = await service.run(liveWorkflow!, {
+        imageUri: 'file://selected/live-pose.jpg'
+      });
+
+      expect(result.ok).assertTrue();
+      expect(result.code).assertEqual('POSE_DETECTION_DONE');
+      expect(runner.seenImageUris[0]).assertEqual('file://selected/live-pose.jpg');
+      expect(runner.seenModes[0]).assertEqual('yoga');
     });
 
     it('mapsWorkflowPermissionsToHarmonyPermissionNames', 0, () => {

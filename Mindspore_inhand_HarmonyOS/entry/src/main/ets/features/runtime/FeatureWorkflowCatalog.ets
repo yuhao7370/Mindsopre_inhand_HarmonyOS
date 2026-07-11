@@ -1,6 +1,7 @@
 import { AppRoute } from '../../app/AppRoutes';
 import { AppStringKey } from '../../common/i18n/AppStrings';
 import { LiveCameraPosition } from '../../services/camera/LiveCameraService';
+import { PoseDetectionMode } from '../../services/ai/PoseService';
 import {
   customModelMoreUrl,
   helpImageClassificationUrl,
@@ -313,6 +314,13 @@ export function initialLiveCameraPositionForWorkflow(
     return 'front';
   }
   return 'back';
+}
+
+export function poseModeForWorkflow(workflow: FeatureWorkflow): PoseDetectionMode {
+  if (workflow.routeName === AppRoute.LIVE_SKELETON.name) {
+    return 'yoga';
+  }
+  return 'normal';
 }
 
 export function sampleImageUriForWorkflow(workflow: FeatureWorkflow): string {

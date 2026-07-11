@@ -88,10 +88,10 @@ const localGestureCategoryMaps: Array<LocalGestureCategoryMap> = [
   { category: 6, keywords: ['seven', 'number_seven', 'digit_seven'] },
   { category: 7, keywords: ['eight', 'number_eight', 'digit_eight'] },
   { category: 8, keywords: ['nine', 'number_nine', 'digit_nine'] },
-  { category: 9, keywords: ['dislike', 'thumb_down', 'thumbs_down'] },
+  { category: 9, keywords: ['diss', 'dislike', 'thumb_down', 'thumb_down_gesture', 'thumbs_down'] },
   { category: 10, keywords: ['fist', 'closed_fist', 'boxing_glove'] },
-  { category: 11, keywords: ['good', 'thumb_up', 'thumbs_up'] },
-  { category: 12, keywords: ['heart', 'finger_heart', 'finger_heart_gesture', 'hand_heart'] },
+  { category: 11, keywords: ['good', 'like_gesture', 'thumb_up', 'thumbs_up'] },
+  { category: 12, keywords: ['heart', 'heart_gesture', 'finger_heart', 'finger_heart_gesture', 'hand_heart'] },
   { category: 13, keywords: ['ok', 'okay', 'ok_sign', 'ok_gesture'] },
   { category: localOtherGestureCategory, keywords: ['mitten'] }
 ];

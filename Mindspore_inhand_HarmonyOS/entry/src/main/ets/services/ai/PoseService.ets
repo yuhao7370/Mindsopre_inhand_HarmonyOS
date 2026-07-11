@@ -65,12 +65,15 @@ interface NormalizedPosePoint {
   readonly y: number;
 }
 
+export type PoseDetectionMode = 'normal' | 'yoga';
+
 export interface PoseRunner {
-  detectPose(imageUri: string): Promise<PoseResult>;
+  detectPose(imageUri: string, mode?: PoseDetectionMode): Promise<PoseResult>;
 }
 
 export interface PoseServiceOptions {
   readonly runner: PoseRunner;
+  readonly mode?: PoseDetectionMode;
 }
 
 export interface HarmonySkeletonDetectionRunnerOptions {
@@ -171,15 +174,17 @@ const poseSkeletonLineTypePairs: Array<PoseLineTypePair> = [
 
 export class PoseService {
   private readonly runner: PoseRunner;
+  private readonly mode: PoseDetectionMode;
 
   constructor(options: PoseServiceOptions) {
     this.runner = options.runner;
+    this.mode = options.mode ?? 'normal';
   }
 
   async detectPose(imageUri: string): Promise<PoseResult> {
     const startMs = Date.now();
     try {
-      return poseResultWithAndroidTemplateSimilarity(await this.runner.detectPose(imageUri));
+      return poseResultWithAndroidTemplateSimilarity(await this.runner.detectPose(imageUri, this.mode));
     } catch (_) {
       return {
         ok: false,
@@ -199,7 +204,7 @@ export class HarmonySkeletonDetectionRunner implements PoseRunner {
     this.resourceManager = options?.resourceManager;
   }
 
-  async detectPose(imageUri: string): Promise<PoseResult> {
+  async detectPose(imageUri: string, _mode?: PoseDetectionMode): Promise<PoseResult> {
     let imageFile: fileIo.File | undefined = undefined;
     let imageSource: image.ImageSource | undefined = undefined;
     let pixelMap: image.PixelMap | undefined = undefined;

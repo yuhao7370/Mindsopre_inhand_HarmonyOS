@@ -69,6 +69,11 @@ Current HarmonyOS behavior:
 - `/posenet/LiveSkeletonAnalyseActivity` remains the camera-only live route,
   auto-starts preview when the HarmonyOS surface is ready, and keeps the
   Android template similarity display.
+- The live skeleton workflow now carries Android's default Yoga skeleton mode
+  through the runtime factory into `PoseService`/`PoseRunner`, while the still
+  PoseNet route remains in normal pose mode. The current CoreVision fallback
+  still uses the platform's generic skeleton detector unless a Yoga-specific
+  runner/model is injected.
 - Live Skeleton detections draw the same skeleton lines and points directly on
   the HarmonyOS camera preview, matching Android `SkeletonGraphic` overlay
   behavior while still reusing the shared captured-frame result state.
@@ -93,9 +98,10 @@ Current HarmonyOS behavior:
   `boxing_glove`, `thumb_up`, `fist`, `heart`, and `ok_gesture` are also mapped
   when provided by an injected or future score runner.
 - The same mapper also accepts common local gesture-model aliases such as
-  `Closed_Fist`, `Open_Palm`, `Thumb_Up`, `Thumb_Down`, `Victory`,
-  `Pointing_Up`, `OK sign`, and `finger heart gesture`, mapping them back onto
-  the Android `MLGesture` category set.
+  `Closed_Fist`, `Open_Palm`, `Thumb_Up`, `Thumb_Down`, `DISS`,
+  `like_gesture`, `thumb_down_gesture`, `Victory`, `Pointing_Up`, `OK sign`,
+  `heart_gesture`, and `finger heart gesture`, mapping them back onto the
+  Android `MLGesture` category set.
 - The gesture fallback intentionally keeps English ImageNet labels internally
   even on Chinese devices, because its conservative matching depends on stable
   model label names.
