@@ -277,6 +277,7 @@ import {
   shouldClearTextInputAfterInputReady,
   shouldLeaveRuntimeAfterCancelledInitialPick,
   shouldStartWorkflowRun,
+  shouldShowCopyTextAction,
   shouldUseLongTextInput,
   shouldUseLongTextResultRow,
   textInputPlaceholderKeyForWorkflow,
@@ -2782,6 +2783,16 @@ export default function localUnitTest() {
       expect(shouldUseLongTextResultRow(textTranslation.aiMethod, 'feature_runtime_result_translated_text')).assertTrue();
       expect(shouldUseLongTextResultRow(textTranslation.aiMethod, 'feature_runtime_result_target_language')).assertFalse();
       expect(shouldUseLongTextResultRow(styleTransfer.aiMethod, 'feature_runtime_result_output')).assertFalse();
+    });
+
+    it('showsAndroidCopyButtonForTextWorkflowsEvenWhenContentIsEmpty', 0, () => {
+      const textRecognition: FeatureWorkflow = workflowForRoute(AppRoute.TEXT_RECOGNITION.name)!;
+      const textTranslation: FeatureWorkflow = workflowForRoute(AppRoute.TEXT_TRANSLATION.name)!;
+      const styleTransfer: FeatureWorkflow = workflowForRoute(AppRoute.STYLE_TRANSFER.name)!;
+
+      expect(shouldShowCopyTextAction(textRecognition.aiMethod)).assertTrue();
+      expect(shouldShowCopyTextAction(textTranslation.aiMethod)).assertTrue();
+      expect(shouldShowCopyTextAction(styleTransfer.aiMethod)).assertFalse();
     });
 
     it('usesAndroidTextTranslationInputHint', 0, () => {

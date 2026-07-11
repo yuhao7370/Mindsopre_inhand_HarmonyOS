@@ -346,6 +346,10 @@ export function shouldUseLongTextResultRow(aiMethod: string, labelKey: AppString
   return false;
 }
 
+export function shouldShowCopyTextAction(aiMethod: string): boolean {
+  return aiMethod === 'recognizeText' || aiMethod === 'translateText';
+}
+
 export function inputKindReplacesPrimaryInput(inputKind: FeatureInputKind): boolean {
   return inputKind !== 'modelFile' &&
     inputKind !== 'backgroundImage' &&

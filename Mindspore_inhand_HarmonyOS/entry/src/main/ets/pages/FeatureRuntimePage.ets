@@ -18,6 +18,7 @@ import {
   shouldDeferRuntimeResultClearUntilPickResult,
   shouldLeaveRuntimeAfterCancelledInitialPick,
   shouldStartWorkflowRun,
+  shouldShowCopyTextAction,
   shouldShowStyleRecoveryControl,
   shouldUseLongTextInput,
   shouldUseLongTextResultRow,
@@ -2127,7 +2128,7 @@ struct FeatureRuntimePage {
               this.poseTemplatePreview()
             }
           }
-          if (this.recognizedTextForCopy().length > 0) {
+          if (shouldShowCopyTextAction(this.aiMethod)) {
             Button(appString('feature_runtime_copy_text'))
               .height(36)
               .margin({ top: AppSpacing.md })
