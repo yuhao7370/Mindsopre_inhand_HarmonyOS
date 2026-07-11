@@ -8,6 +8,7 @@ import { PermissionRequestSummary, PermissionService } from '../services/permiss
 import {
   canFinishSplashForStartupPermissionState,
   finishSplashActionForStartupPermissionState,
+  splashOpenAppSettingsAction,
   splashRetryPermissionAction,
   SplashStartupPermissionState,
   SplashStartupTransition,
@@ -161,6 +162,19 @@ export struct SplashPage {
     }
   }
 
+  private openAppPermissionSettings(): void {
+    const context = this.uiAbilityContext();
+    if (context === undefined) {
+      return;
+    }
+    try {
+      const action = splashOpenAppSettingsAction(context.applicationInfo.name);
+      context.startAbility(action.want).catch(() => {
+      });
+    } catch (_) {
+    }
+  }
+
   private exitAfterPermissionDenied(): void {
     const context = this.uiAbilityContext();
     if (context !== undefined) {
@@ -263,6 +277,11 @@ export struct SplashPage {
           .lineHeight(20)
           .width('100%')
           .margin({ top: AppSpacing.md })
+        Button(appString('app_permission_by_hand'))
+          .height(38)
+          .width('100%')
+          .margin({ top: AppSpacing.lg })
+          .onClick(() => this.openAppPermissionSettings())
         Row() {
           Button(appString('splash_permission_exit'))
             .height(38)
@@ -275,7 +294,7 @@ export struct SplashPage {
             .onClick(() => this.retryStartupPermissions())
         }
         .width('100%')
-        .margin({ top: AppSpacing.lg })
+        .margin({ top: AppSpacing.md })
       }
       .width('86%')
       .padding(AppSpacing.lg)

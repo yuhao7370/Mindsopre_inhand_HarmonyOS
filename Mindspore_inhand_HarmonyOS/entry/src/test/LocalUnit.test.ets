@@ -375,6 +375,9 @@ import {
   SplashFinishAction,
   shouldConsumeSplashBackPress,
   shouldConsumeIndexBackPress,
+  appDetailsSettingsWantForBundle,
+  splashOpenAppSettingsAction,
+  SplashOpenAppSettingsAction,
   splashRetryPermissionAction,
   SplashRetryPermissionAction,
   splashStartupTransitionForMissingContext,
@@ -1853,11 +1856,18 @@ export default function localUnitTest() {
       const blockedFinish: SplashFinishAction = finishSplashActionForStartupPermissionState('blocked');
       const readyFinish: SplashFinishAction = finishSplashActionForStartupPermissionState('ready');
       const retryAction: SplashRetryPermissionAction = splashRetryPermissionAction();
+      const settingsAction: SplashOpenAppSettingsAction = splashOpenAppSettingsAction('com.example.mindspore');
+      const settingsWant = appDetailsSettingsWantForBundle('com.example.mindspore');
       expect(blockedFinish.finishSplash).assertFalse();
       expect(readyFinish.finishSplash).assertTrue();
       expect(retryAction.requestPermissions).assertTrue();
       expect(retryAction.showPermissionDialog).assertFalse();
+      expect(settingsAction.openSettings).assertTrue();
+      expect(settingsAction.want.action).assertEqual('action.settings.app.info');
+      expect(settingsWant.action).assertEqual('action.settings.app.info');
+      expect(JSON.stringify(settingsWant.parameters)).assertEqual('{"settingsParamBundleName":"com.example.mindspore"}');
       expect(hasAppStringKey('app_need_permission')).assertTrue();
+      expect(hasAppStringKey('app_permission_by_hand')).assertTrue();
       expect(hasAppStringKey('splash_permission_retry')).assertTrue();
       expect(hasAppStringKey('splash_permission_exit')).assertTrue();
     });

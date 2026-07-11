@@ -17,6 +17,7 @@ export type AppStringKey =
   'title_share_commend' |
   'splash_count_down' |
   'app_need_permission' |
+  'app_permission_by_hand' |
   'splash_permission_retry' |
   'splash_permission_exit' |
   'college_head_title' |
@@ -291,6 +292,7 @@ const APP_STRING_KEYS: AppStringKey[] = [
   'title_share_commend',
   'splash_count_down',
   'app_need_permission',
+  'app_permission_by_hand',
   'splash_permission_retry',
   'splash_permission_exit',
   'college_head_title',
@@ -587,6 +589,8 @@ export function appString(key: AppStringKey): ResourceStr {
       return $r('app.string.splash_count_down');
     case 'app_need_permission':
       return $r('app.string.app_need_permission');
+    case 'app_permission_by_hand':
+      return $r('app.string.app_permission_by_hand');
     case 'splash_permission_retry':
       return $r('app.string.splash_permission_retry');
     case 'splash_permission_exit':

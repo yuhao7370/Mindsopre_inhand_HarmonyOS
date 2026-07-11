@@ -18,6 +18,7 @@
     { "name": "title_share_commend", "value": "MindSpore 掌中宝：AI 爱好者的一站式协同学习、演示、体验平台。" },
     { "name": "splash_count_down", "value": "秒" },
     { "name": "app_need_permission", "value": "MindSpore 需要相机和媒体访问权限，授权后才能继续使用。" },
+    { "name": "app_permission_by_hand", "value": "去手动授权" },
     { "name": "splash_permission_retry", "value": "重新授权" },
     { "name": "splash_permission_exit", "value": "退出" },
     { "name": "college_head_title", "value": "学院" },

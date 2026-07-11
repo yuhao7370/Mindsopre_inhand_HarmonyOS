@@ -1,4 +1,7 @@
+import { Want } from '@kit.AbilityKit';
 import { PermissionRequestSummary } from '../permissions/PermissionService';
+
+export const appDetailsSettingsAction = 'action.settings.app.info';
 
 export type SplashStartupPermissionState = 'ready' | 'blocked';
 
@@ -16,6 +19,27 @@ export interface SplashFinishAction {
 export interface SplashRetryPermissionAction {
   readonly showPermissionDialog: boolean;
   readonly requestPermissions: boolean;
+}
+
+export interface SplashOpenAppSettingsAction {
+  readonly openSettings: boolean;
+  readonly want: Want;
+}
+
+export function appDetailsSettingsWantForBundle(bundleName: string): Want {
+  return {
+    action: appDetailsSettingsAction,
+    parameters: {
+      settingsParamBundleName: bundleName
+    }
+  };
+}
+
+export function splashOpenAppSettingsAction(bundleName: string): SplashOpenAppSettingsAction {
+  return {
+    openSettings: true,
+    want: appDetailsSettingsWantForBundle(bundleName)
+  };
 }
 
 export function splashStartupPermissionStateForRequest(
