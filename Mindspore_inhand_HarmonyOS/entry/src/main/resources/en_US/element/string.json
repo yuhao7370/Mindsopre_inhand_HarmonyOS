@@ -286,8 +286,11 @@
     { "name": "workflow_summary_segmentation", "value": "Portrait segmentation path for still or live camera frames." },
     { "name": "workflow_summary_pose", "value": "Pose analysis path for still images and live camera frames." },
     { "name": "workflow_summary_gesture", "value": "Hand gesture recognition path for still images or live camera frames." },
+    { "name": "workflow_summary_gesture_still_android_prompt", "value": "Please click on the picture below, camera, and real-time recognition" },
     { "name": "workflow_summary_scene", "value": "Scene detection path for still images and live camera frames." },
+    { "name": "workflow_summary_scene_still_android_prompt", "value": "Please click on the picture below, camera, and real-time recognition" },
     { "name": "workflow_summary_text_recognition", "value": "Text extraction path for selected or captured images." },
+    { "name": "workflow_summary_text_recognition_android_prompt", "value": "Please click on the picture below and the camera to extract" },
     { "name": "workflow_summary_text_translation", "value": "Text translation path for user input or recognized text." },
     { "name": "title_source", "value": "Source" }
   ]

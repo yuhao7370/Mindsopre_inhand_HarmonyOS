@@ -286,8 +286,11 @@
     { "name": "workflow_summary_segmentation", "value": "人像分割路径，支持静态图片或实时相机帧。" },
     { "name": "workflow_summary_pose", "value": "姿态分析路径，支持静态图片和实时相机帧。" },
     { "name": "workflow_summary_gesture", "value": "手势识别路径，支持静态图片或实时相机帧。" },
+    { "name": "workflow_summary_gesture_still_android_prompt", "value": "请点击下方图片、相机、实时进行识别" },
     { "name": "workflow_summary_scene", "value": "场景识别路径，支持静态图片或实时相机帧。" },
+    { "name": "workflow_summary_scene_still_android_prompt", "value": "请点击下方图片、相机、实时进行识别" },
     { "name": "workflow_summary_text_recognition", "value": "文本提取路径，面向选择或拍摄的图片。" },
+    { "name": "workflow_summary_text_recognition_android_prompt", "value": "请点击下方图片、相机进行提取" },
     { "name": "workflow_summary_text_translation", "value": "文本翻译路径，面向用户输入或识别后的文本。" },
     { "name": "title_source", "value": "来源" }
   ]

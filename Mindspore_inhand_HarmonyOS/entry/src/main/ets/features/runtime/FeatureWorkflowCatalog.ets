@@ -160,7 +160,7 @@ export const featureWorkflows: Array<FeatureWorkflow> = [
   {
     routeName: AppRoute.GESTURE_STILL.name,
     titleKey: 'title_gesture_recognition',
-    summaryKey: 'workflow_summary_gesture',
+    summaryKey: 'workflow_summary_gesture_still_android_prompt',
     aiMethod: 'detectGesture',
     inputKinds: ['photo', 'camera'],
     requiredPermissions: ['camera', 'media'],
@@ -181,7 +181,7 @@ export const featureWorkflows: Array<FeatureWorkflow> = [
   {
     routeName: AppRoute.SCENE_STILL.name,
     titleKey: 'title_scene_detection',
-    summaryKey: 'workflow_summary_scene',
+    summaryKey: 'workflow_summary_scene_still_android_prompt',
     aiMethod: 'detectScene',
     inputKinds: ['photo', 'camera'],
     requiredPermissions: ['camera', 'media'],
@@ -206,7 +206,7 @@ export const featureWorkflows: Array<FeatureWorkflow> = [
   {
     routeName: AppRoute.TEXT_RECOGNITION.name,
     titleKey: 'title_text_extraction',
-    summaryKey: 'workflow_summary_text_recognition',
+    summaryKey: 'workflow_summary_text_recognition_android_prompt',
     aiMethod: 'recognizeText',
     inputKinds: ['photo', 'camera'],
     requiredPermissions: ['camera', 'media'],

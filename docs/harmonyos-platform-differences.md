@@ -107,6 +107,9 @@ Current HarmonyOS behavior:
 - HMS still-image workflows that used Android's `btn_real_time` now keep a
   dedicated Real-time linked-route label in HarmonyOS instead of falling back to
   the generic live-route action label.
+- The still Gesture and still Scene pages use Android's original image/camera/
+  real-time prompt as their top runtime summary, while their live routes keep
+  the generic feature summary.
 - The default HarmonyOS runtime reuses the bundled MobileNetV2 image
   classification model as a conservative local approximation. With the bundled
   ImageNet labels this currently only treats the exact `mitten` class as a
@@ -164,6 +167,8 @@ Current HarmonyOS behavior:
 - HarmonyOS therefore relies on platform OCR language auto-detection instead
   of hard-coding Chinese recognition. Text Translation still applies the
   Android default target-language rule after OCR text is produced.
+- Text Recognition uses Android's image-or-camera extraction prompt as its top
+  runtime summary instead of the generic feature explanation.
 
 ## Image Orientation
 

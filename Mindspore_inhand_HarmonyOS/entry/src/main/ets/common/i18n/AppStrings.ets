@@ -285,8 +285,11 @@ export type AppStringKey =
   'workflow_summary_segmentation' |
   'workflow_summary_pose' |
   'workflow_summary_gesture' |
+  'workflow_summary_gesture_still_android_prompt' |
   'workflow_summary_scene' |
+  'workflow_summary_scene_still_android_prompt' |
   'workflow_summary_text_recognition' |
+  'workflow_summary_text_recognition_android_prompt' |
   'workflow_summary_text_translation' |
   'title_source';
 
@@ -577,8 +580,11 @@ const APP_STRING_KEYS: AppStringKey[] = [
   'workflow_summary_segmentation',
   'workflow_summary_pose',
   'workflow_summary_gesture',
+  'workflow_summary_gesture_still_android_prompt',
   'workflow_summary_scene',
+  'workflow_summary_scene_still_android_prompt',
   'workflow_summary_text_recognition',
+  'workflow_summary_text_recognition_android_prompt',
   'workflow_summary_text_translation',
   'title_source'
 ];
@@ -1159,10 +1165,16 @@ export function appString(key: AppStringKey): ResourceStr {
       return $r('app.string.workflow_summary_pose');
     case 'workflow_summary_gesture':
       return $r('app.string.workflow_summary_gesture');
+    case 'workflow_summary_gesture_still_android_prompt':
+      return $r('app.string.workflow_summary_gesture_still_android_prompt');
     case 'workflow_summary_scene':
       return $r('app.string.workflow_summary_scene');
+    case 'workflow_summary_scene_still_android_prompt':
+      return $r('app.string.workflow_summary_scene_still_android_prompt');
     case 'workflow_summary_text_recognition':
       return $r('app.string.workflow_summary_text_recognition');
+    case 'workflow_summary_text_recognition_android_prompt':
+      return $r('app.string.workflow_summary_text_recognition_android_prompt');
     case 'workflow_summary_text_translation':
       return $r('app.string.workflow_summary_text_translation');
     case 'title_source':

@@ -2145,6 +2145,9 @@ export default function localUnitTest() {
       expect(hasAppStringKey('feature_runtime_help_scene_detection')).assertTrue();
       expect(hasAppStringKey('feature_runtime_help_style_transfer')).assertTrue();
       expect(hasAppStringKey('feature_runtime_custom_model_help')).assertTrue();
+      expect(hasAppStringKey('workflow_summary_gesture_still_android_prompt')).assertTrue();
+      expect(hasAppStringKey('workflow_summary_scene_still_android_prompt')).assertTrue();
+      expect(hasAppStringKey('workflow_summary_text_recognition_android_prompt')).assertTrue();
       expect(hasAppStringKey('feature_runtime_custom_model_model_required')).assertTrue();
       expect(hasAppStringKey('feature_runtime_custom_model_image_required')).assertTrue();
       expect(hasAppStringKey('feature_runtime_custom_model_select_model')).assertTrue();
@@ -3264,6 +3267,24 @@ export default function localUnitTest() {
       expect(portraitSegmentation.requiredPermissions.indexOf('camera') >= 0).assertTrue();
       expect(portraitSegmentation.requiredPermissions.indexOf('media') >= 0).assertTrue();
       expect(portraitSegmentation.liveMode).assertTrue();
+    });
+
+    it('usesAndroidStillImagePromptSummariesWhereAndroidLayoutsShowPrompts', 0, () => {
+      const gestureStill: FeatureWorkflow = workflowForRoute(AppRoute.GESTURE_STILL.name)!;
+      const gestureLive: FeatureWorkflow = workflowForRoute(AppRoute.GESTURE_LIVE.name)!;
+      const sceneStill: FeatureWorkflow = workflowForRoute(AppRoute.SCENE_STILL.name)!;
+      const sceneLive: FeatureWorkflow = workflowForRoute(AppRoute.SCENE_LIVE.name)!;
+      const textRecognition: FeatureWorkflow = workflowForRoute(AppRoute.TEXT_RECOGNITION.name)!;
+      const poseNet: FeatureWorkflow = workflowForRoute(AppRoute.POSENET.name)!;
+      const segmentationStill: FeatureWorkflow = workflowForRoute(AppRoute.SEGMENTATION_STILL.name)!;
+
+      expect(gestureStill.summaryKey).assertEqual('workflow_summary_gesture_still_android_prompt');
+      expect(sceneStill.summaryKey).assertEqual('workflow_summary_scene_still_android_prompt');
+      expect(textRecognition.summaryKey).assertEqual('workflow_summary_text_recognition_android_prompt');
+      expect(gestureLive.summaryKey).assertEqual('workflow_summary_gesture');
+      expect(sceneLive.summaryKey).assertEqual('workflow_summary_scene');
+      expect(poseNet.summaryKey).assertEqual('workflow_summary_pose');
+      expect(segmentationStill.summaryKey).assertEqual('workflow_summary_segmentation');
     });
 
     it('usesAndroidSpecificPrimaryActionCopyForTextTranslation', 0, () => {
