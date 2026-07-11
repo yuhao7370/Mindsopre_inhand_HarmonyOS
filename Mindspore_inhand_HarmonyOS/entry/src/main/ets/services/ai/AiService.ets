@@ -5,7 +5,7 @@ import {
   ImageClassificationRunResult,
   ImageClassificationService
 } from './ImageClassificationService';
-import { customModelDefaultModelUri, CustomModelRunResult, CustomModelService } from './CustomModelService';
+import { CustomModelRunResult, CustomModelService } from './CustomModelService';
 import {
   ObjectDetection,
   ObjectDetectionRunResult,
@@ -711,7 +711,6 @@ export class DefaultAiService {
 
   private async runCustomModel(inputs: AiRunInputs): Promise<AiRunResult> {
     const selectedModelUri = inputs.modelUri ?? '';
-    const modelUri = selectedModelUri.length > 0 ? selectedModelUri : customModelDefaultModelUri;
     const imageUri = inputs.imageUri ?? '';
     if (imageUri.length === 0) {
       return {
@@ -722,8 +721,17 @@ export class DefaultAiService {
         detailText: ''
       };
     }
+    if (selectedModelUri.length === 0) {
+      return {
+        ok: false,
+        code: 'MISSING_INPUT',
+        aiMethod: 'runCustomModel',
+        messageKey: 'feature_runtime_custom_model_model_required',
+        detailText: ''
+      };
+    }
     if (this.customModelService !== undefined) {
-      return this.runCustomModelWithService(this.customModelService, modelUri, imageUri);
+      return this.runCustomModelWithService(this.customModelService, selectedModelUri, imageUri);
     }
     return this.pendingAdapterResult('runCustomModel');
   }

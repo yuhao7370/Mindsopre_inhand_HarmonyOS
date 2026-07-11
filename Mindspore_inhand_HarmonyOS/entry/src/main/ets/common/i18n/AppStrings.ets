@@ -157,6 +157,7 @@ export type AppStringKey =
   'feature_runtime_custom_model_help' |
   'feature_runtime_custom_model_done' |
   'feature_runtime_custom_model_failed' |
+  'feature_runtime_custom_model_model_required' |
   'feature_runtime_classification_runner_unavailable' |
   'feature_runtime_classification_done' |
   'feature_runtime_classification_failed' |
@@ -427,6 +428,7 @@ const APP_STRING_KEYS: AppStringKey[] = [
   'feature_runtime_custom_model_help',
   'feature_runtime_custom_model_done',
   'feature_runtime_custom_model_failed',
+  'feature_runtime_custom_model_model_required',
   'feature_runtime_classification_runner_unavailable',
   'feature_runtime_classification_done',
   'feature_runtime_classification_failed',
@@ -859,6 +861,8 @@ export function appString(key: AppStringKey): ResourceStr {
       return $r('app.string.feature_runtime_custom_model_done');
     case 'feature_runtime_custom_model_failed':
       return $r('app.string.feature_runtime_custom_model_failed');
+    case 'feature_runtime_custom_model_model_required':
+      return $r('app.string.feature_runtime_custom_model_model_required');
     case 'feature_runtime_classification_runner_unavailable':
       return $r('app.string.feature_runtime_classification_runner_unavailable');
     case 'feature_runtime_classification_done':

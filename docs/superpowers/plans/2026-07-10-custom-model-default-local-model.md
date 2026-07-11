@@ -1,5 +1,12 @@
 # Custom Model Default Local Model Plan
 
+## 2026-07-12 Parity Correction
+
+This earlier plan was superseded by Android-parity work. Android Custom Model
+requires the user to select a model before execution, so HarmonyOS now also
+blocks image-only execution with a "select a model first" status instead of
+using the bundled MobileNetV2 model as a default custom-model fallback.
+
 ## Goal
 
 Make Custom Model runnable without requiring the user to pick a model first,

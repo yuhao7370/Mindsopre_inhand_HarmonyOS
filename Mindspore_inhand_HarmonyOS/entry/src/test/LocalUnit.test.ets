@@ -1963,6 +1963,7 @@ export default function localUnitTest() {
       expect(hasAppStringKey('feature_runtime_help_scene_detection')).assertTrue();
       expect(hasAppStringKey('feature_runtime_help_style_transfer')).assertTrue();
       expect(hasAppStringKey('feature_runtime_custom_model_help')).assertTrue();
+      expect(hasAppStringKey('feature_runtime_custom_model_model_required')).assertTrue();
       expect(hasAppStringKey('qr_code_save_done')).assertTrue();
       expect(hasAppStringKey('qr_code_save_failed')).assertTrue();
       expect(hasAppStringKey('app_cancel')).assertTrue();
@@ -3330,8 +3331,8 @@ export default function localUnitTest() {
       const customModel: FeatureWorkflow = workflowForRoute(AppRoute.CUSTOM_MODEL.name)!;
       expect(customModel.inputKinds.indexOf('camera') >= 0).assertTrue();
       expect(customModel.inputKinds.indexOf('photo') >= 0).assertTrue();
-      expect(customModel.inputKinds.indexOf('modelFile')).assertEqual(-1);
-      expect((customModel.optionalInputKinds ?? []).indexOf('modelFile') >= 0).assertTrue();
+      expect(customModel.inputKinds.indexOf('modelFile') >= 0).assertTrue();
+      expect((customModel.optionalInputKinds ?? []).indexOf('modelFile')).assertEqual(-1);
     });
 
     it('mapsAndroidHelpUrlsForRuntimeWorkflows', 0, () => {
@@ -4891,7 +4892,8 @@ export default function localUnitTest() {
         imageUri: 'file://selected/input.png'
       });
       expect(imageOnlyResult.ok).assertFalse();
-      expect(imageOnlyResult.code).assertEqual('NATIVE_ADAPTER_PENDING');
+      expect(imageOnlyResult.code).assertEqual('MISSING_INPUT');
+      expect(imageOnlyResult.messageKey).assertEqual('feature_runtime_custom_model_model_required');
 
       const modelOnlyResult = await new DefaultAiService().run(workflow!, {
         modelUri: 'file://selected/custom_model.ms'
@@ -5011,7 +5013,7 @@ export default function localUnitTest() {
       expect(outputRows[0].value.indexOf('... (showing first 10 values)') >= 0).assertTrue();
     });
 
-    it('aiServiceUsesBundledCustomModelWhenNoModelFileSelected', 0, async () => {
+    it('aiServiceRequiresCustomModelFileBeforeRunningAndroidCustomModel', 0, async () => {
       const workflow = workflowForRoute(AppRoute.CUSTOM_MODEL.name);
       expect(workflow !== undefined).assertTrue();
       const tensorRunner: FixedCustomModelTensorRunner =
@@ -5026,13 +5028,10 @@ export default function localUnitTest() {
         modelUri: ''
       });
 
-      expect(result.ok).assertTrue();
-      expect(result.code).assertEqual('CUSTOM_MODEL_DONE');
-      expect(tensorRunner.seenModelUris[0]).assertEqual(customModelDefaultModelUri);
-      expect(result.data?.kind).assertEqual('customModel');
-      if (result.data?.kind === 'customModel') {
-        expect(result.data.modelUri).assertEqual(customModelDefaultModelUri);
-      }
+      expect(result.ok).assertFalse();
+      expect(result.code).assertEqual('MISSING_INPUT');
+      expect(result.messageKey).assertEqual('feature_runtime_custom_model_model_required');
+      expect(tensorRunner.seenModelUris.length).assertEqual(0);
     });
 
     it('customModelDefaultOrSelectedRunnerKeepsPickedModelOverride', 0, async () => {
