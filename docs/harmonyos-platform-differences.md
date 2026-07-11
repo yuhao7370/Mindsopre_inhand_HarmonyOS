@@ -292,6 +292,10 @@ Current HarmonyOS behavior:
   them ahead of useful scene labels. This makes the still/live scene workflows
   runnable offline, but it is a local approximation rather than HMS ML Kit
   equivalent output.
+- The local fallback keeps up to five distinct Android-mapped scene labels per
+  run. This is broader than the earlier three-candidate proxy and closer to
+  Android's multi-candidate result text while still avoiding the Places365
+  softmax tail overwhelming result rows and live overlays.
 - The Places365-to-Android mapper includes exact aliases for common indoor,
   outdoor, transport, food, office, school, retail, and water scenes such as
   `coffee_shop`, `bookstore`, `lecture_room`, `sky`, `river`, `runway`,

@@ -25,7 +25,7 @@ export interface SceneDetectionServiceOptions {
 export const sceneDetectionLabelRawfilePath: string = 'labels/places365.txt';
 export const sceneDetectionModelRawfilePath: string = 'model/resnet18-place365.ms';
 export const places365SceneLabelCount: number = 365;
-export const localSceneDetectionMaxSceneCount: number = 3;
+export const localSceneDetectionMaxSceneCount: number = 5;
 export const androidSceneDetectionLabels: Array<string> = [
   'stage', 'beach', 'bluesky', 'sunset', 'food', 'flower', 'greenplant', 'snow', 'night', 'Text',
   'cat', 'dog', 'fireworks', 'overcast', 'fallen', 'panda', 'car', 'oldbuildings', 'bicycle',

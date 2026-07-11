@@ -136,6 +136,7 @@ import {
   androidSceneDetectionLabels,
   androidSceneDetectionLabelsZh,
   ImageClassificationSceneDetectionRunner,
+  localSceneDetectionMaxSceneCount,
   parseSceneDetectionLabels,
   places365SceneLabelCount,
   SceneDetection,
@@ -4472,6 +4473,23 @@ export default function localUnitTest() {
       expect(result.scenes[0].score).assertEqual(0.91);
       expect(result.scenes[1].label).assertEqual('beach');
       expect(result.scenes[1].score).assertEqual(0.82);
+    });
+
+    it('localSceneDetectionRunnerKeepsMoreAndroidSceneCandidatesByDefault', 0, async () => {
+      const runner = new ImageClassificationSceneDetectionRunner({
+        labels: ['espresso', 'seashore', 'sports_car', 'bathroom', 'lecture_room', 'runway'],
+        scoreRunner: new FixedScoreRunner([0.91, 0.82, 0.77, 0.66, 0.55, 0.44])
+      });
+
+      const result = await runner.detectScenes('file://selected/multi-scene.jpg');
+
+      expect(localSceneDetectionMaxSceneCount).assertEqual(5);
+      expect(result.scenes.length).assertEqual(5);
+      expect(result.scenes[0].label).assertEqual('food');
+      expect(result.scenes[1].label).assertEqual('beach');
+      expect(result.scenes[2].label).assertEqual('car');
+      expect(result.scenes[3].label).assertEqual('washroom');
+      expect(result.scenes[4].label).assertEqual('classroom');
     });
 
     it('parseSceneDetectionLabelsReadsPlaces365List', 0, () => {
