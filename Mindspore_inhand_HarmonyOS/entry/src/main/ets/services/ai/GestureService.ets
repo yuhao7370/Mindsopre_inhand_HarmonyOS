@@ -211,18 +211,18 @@ export class HarmonyGestureRegionEstimator implements GestureRegionEstimator {
 
 export function gestureDetectionLabel(gesture: GestureDetection): string {
   const runnerLabel = gesture.label.trim();
-  if (runnerLabel.length > 0) {
-    return runnerLabel;
+  if (usesAndroidGestureLabel(gesture, runnerLabel)) {
+    return androidGestureLabel(gesture.category);
   }
-  return androidGestureLabel(gesture.category);
+  return runnerLabel;
 }
 
 export function gestureDetectionLabelKey(gesture: GestureDetection): AppStringKey | undefined {
   const runnerLabel = gesture.label.trim();
-  if (runnerLabel.length > 0 && runnerLabel !== androidGestureLabel(gesture.category)) {
-    return undefined;
+  if (usesAndroidGestureLabel(gesture, runnerLabel)) {
+    return androidGestureLabelKey(gesture.category);
   }
-  return androidGestureLabelKey(gesture.category);
+  return undefined;
 }
 
 export function androidGestureLabelKey(category: number): AppStringKey {
@@ -439,6 +439,13 @@ function normalizeGestureLabel(label: string): string {
 
 function gestureLabelEqualsKeyword(label: string, keyword: string): boolean {
   return label === keyword;
+}
+
+function usesAndroidGestureLabel(gesture: GestureDetection, runnerLabel: string): boolean {
+  if (runnerLabel.length === 0 || runnerLabel === androidGestureLabel(gesture.category)) {
+    return true;
+  }
+  return gestureCategoryForImageClassificationLabel(runnerLabel) === gesture.category;
 }
 
 function hasGestureCategory(gestures: Array<GestureDetection>, category: number): boolean {

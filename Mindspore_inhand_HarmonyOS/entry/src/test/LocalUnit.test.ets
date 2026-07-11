@@ -69,6 +69,8 @@ import {
   GestureRunner,
   GestureService,
   androidGestureLabelKey,
+  gestureDetectionLabel,
+  gestureDetectionLabelKey,
   gestureCategoryForImageClassificationLabel,
   gestureRectangleFromRgbaForeground,
   gestureRectanglePercent
@@ -4215,6 +4217,31 @@ export default function localUnitTest() {
       expect(androidGestureLabelKey(12)).assertEqual('gesture_label_heart');
       expect(androidGestureLabelKey(13)).assertEqual('gesture_label_ok');
       expect(androidGestureLabelKey(999)).assertEqual('gesture_label_other');
+    });
+
+    it('localizesInjectedGestureAliasLabelsToAndroidCategories', 0, () => {
+      const fist: GestureDetection = {
+        category: 10,
+        label: 'Closed_Fist',
+        score: 0.91
+      };
+      const custom: GestureDetection = {
+        category: 10,
+        label: 'custom fist result',
+        score: 0.88
+      };
+      const mismatchedAlias: GestureDetection = {
+        category: 11,
+        label: 'Closed_Fist',
+        score: 0.9
+      };
+
+      expect(gestureDetectionLabel(fist)).assertEqual('Fist');
+      expect(gestureDetectionLabelKey(fist)).assertEqual('gesture_label_fist');
+      expect(gestureDetectionLabel(custom)).assertEqual('custom fist result');
+      expect(gestureDetectionLabelKey(custom) === undefined).assertTrue();
+      expect(gestureDetectionLabel(mismatchedAlias)).assertEqual('Closed_Fist');
+      expect(gestureDetectionLabelKey(mismatchedAlias) === undefined).assertTrue();
     });
 
     it('mapsGestureRectangleToPercentOverlay', 0, () => {

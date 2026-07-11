@@ -107,7 +107,9 @@ Current HarmonyOS behavior:
   `Closed_Fist`, `Open_Palm`, `Thumb_Up`, `Thumb_Down`, `DISS`,
   `like_gesture`, `thumb_down_gesture`, `Victory`, `Pointing_Up`, `OK sign`,
   `heart_gesture`, and `finger heart gesture`, mapping them back onto the
-  Android `MLGesture` category set.
+  Android `MLGesture` category set. Injected or future gesture runners that
+  return those aliases are canonicalized to the Android labels so result rows
+  and live overlays use the same localized strings as the Android app.
 - The gesture fallback intentionally keeps English ImageNet labels internally
   even on Chinese devices, because its conservative matching depends on stable
   model label names.
