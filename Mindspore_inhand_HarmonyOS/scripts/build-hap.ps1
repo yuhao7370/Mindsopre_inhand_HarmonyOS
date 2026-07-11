@@ -5,6 +5,7 @@ $env:PATH = 'C:\Program Files\Huawei\DevEco Studio\jbr\bin;' + $env:PATH
 & (Join-Path $PSScriptRoot 'check-runtime-debug-ui.ps1')
 & (Join-Path $PSScriptRoot 'check-text-translation-input-mode.ps1')
 & (Join-Path $PSScriptRoot 'check-feature-runtime-view-ids.ps1')
+& (Join-Path $PSScriptRoot 'check-model-label-guards.ps1')
 & (Join-Path $PSScriptRoot 'ensure-mindspore-models.ps1')
 $hvigor = 'C:\Program Files\Huawei\DevEco Studio\tools\hvigor\bin\hvigorw.bat'
 & cmd.exe /d /c "`"$hvigor`" assembleHap --no-daemon 2>&1"
