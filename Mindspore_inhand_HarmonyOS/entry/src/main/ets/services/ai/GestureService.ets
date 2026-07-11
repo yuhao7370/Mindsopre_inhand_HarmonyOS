@@ -80,17 +80,17 @@ const localGestureDetectionBox: GestureRectangle = {
 
 const localGestureCategoryMaps: Array<LocalGestureCategoryMap> = [
   { category: 0, keywords: ['one', 'number_one', 'digit_one', 'pointing_up', 'pointing_up_gesture'] },
-  { category: 1, keywords: ['two', 'second', 'number_two', 'digit_two', 'victory', 'peace', 'v_sign'] },
+  { category: 1, keywords: ['two', 'second', 'number_two', 'digit_two', 'victory', 'peace', 'peace_sign', 'v_sign'] },
   { category: 2, keywords: ['three', 'number_three', 'digit_three'] },
   { category: 3, keywords: ['four', 'number_four', 'digit_four'] },
-  { category: 4, keywords: ['five', 'number_five', 'digit_five', 'open_palm', 'raised_hand'] },
+  { category: 4, keywords: ['five', 'number_five', 'digit_five', 'open_palm', 'palm', 'raised_hand', 'high_five'] },
   { category: 5, keywords: ['six', 'number_six', 'digit_six'] },
   { category: 6, keywords: ['seven', 'number_seven', 'digit_seven'] },
   { category: 7, keywords: ['eight', 'number_eight', 'digit_eight'] },
   { category: 8, keywords: ['nine', 'number_nine', 'digit_nine'] },
   { category: 9, keywords: ['diss', 'dislike', 'thumb_down', 'thumb_down_gesture', 'thumbs_down'] },
   { category: 10, keywords: ['fist', 'closed_fist', 'boxing_glove'] },
-  { category: 11, keywords: ['good', 'like_gesture', 'thumb_up', 'thumbs_up'] },
+  { category: 11, keywords: ['good', 'like_gesture', 'thumb_up', 'thumbs_up', 'thumbs_up_gesture'] },
   { category: 12, keywords: ['heart', 'heart_gesture', 'finger_heart', 'finger_heart_gesture', 'hand_heart'] },
   { category: 13, keywords: ['ok', 'okay', 'ok_sign', 'ok_gesture'] },
   { category: localOtherGestureCategory, keywords: ['mitten'] }

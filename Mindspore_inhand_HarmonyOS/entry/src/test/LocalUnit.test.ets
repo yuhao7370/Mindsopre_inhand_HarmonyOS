@@ -6057,13 +6057,17 @@ export default function localUnitTest() {
       expect(gestureCategoryForImageClassificationLabel('Thumb_Up')).assertEqual(11);
       expect(gestureCategoryForImageClassificationLabel('Thumb_Down')).assertEqual(9);
       expect(gestureCategoryForImageClassificationLabel('Open_Palm')).assertEqual(4);
+      expect(gestureCategoryForImageClassificationLabel('palm')).assertEqual(4);
+      expect(gestureCategoryForImageClassificationLabel('high_five')).assertEqual(4);
       expect(gestureCategoryForImageClassificationLabel('Pointing_Up')).assertEqual(0);
       expect(gestureCategoryForImageClassificationLabel('Victory')).assertEqual(1);
+      expect(gestureCategoryForImageClassificationLabel('peace_sign')).assertEqual(1);
       expect(gestureCategoryForImageClassificationLabel('OK sign')).assertEqual(13);
       expect(gestureCategoryForImageClassificationLabel('finger heart gesture')).assertEqual(12);
       expect(gestureCategoryForImageClassificationLabel('DISS')).assertEqual(9);
       expect(gestureCategoryForImageClassificationLabel('thumb_down_gesture')).assertEqual(9);
       expect(gestureCategoryForImageClassificationLabel('like_gesture')).assertEqual(11);
+      expect(gestureCategoryForImageClassificationLabel('thumbs_up_gesture')).assertEqual(11);
       expect(gestureCategoryForImageClassificationLabel('heart_gesture')).assertEqual(12);
       expect(gestureCategoryForImageClassificationLabel('like')).assertEqual(-1);
       expect(gestureCategoryForImageClassificationLabel('nail')).assertEqual(-1);
