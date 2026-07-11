@@ -20,7 +20,7 @@ export const styleTransferChannels: number = 3;
 export const styleTransferMindSporeCpuThreadNum: number = 4;
 export const styleTransferOutputFloatCount: number =
   styleTransferContentImageSize * styleTransferContentImageSize * styleTransferChannels;
-export const builtInStyleTransferStyleCount: number = 21;
+export const builtInStyleTransferStyleCount: number = 19;
 export const builtInStyleTransferRawfileUriPrefix: string = 'rawfile://';
 
 export interface BuiltInStyleTransferStyle {
@@ -47,9 +47,7 @@ export const builtInStyleTransferStyles: Array<BuiltInStyleTransferStyle> = [
   { id: 15, rawfilePath: 'styletransfer/style15.jpg' },
   { id: 16, rawfilePath: 'styletransfer/style16.jpg' },
   { id: 17, rawfilePath: 'styletransfer/style17.jpg' },
-  { id: 18, rawfilePath: 'styletransfer/style18.jpg' },
-  { id: 19, rawfilePath: 'styletransfer/style19.jpg' },
-  { id: 20, rawfilePath: 'styletransfer/style20.jpg' }
+  { id: 18, rawfilePath: 'styletransfer/style18.jpg' }
 ];
 
 export interface StyleTransferResult {

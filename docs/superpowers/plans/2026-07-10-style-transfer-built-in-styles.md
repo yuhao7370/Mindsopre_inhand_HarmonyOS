@@ -1,5 +1,10 @@
 # Style Transfer Built-In Styles Plan
 
+> Correction (2026-07-12): Android ships `style19.jpg` and `style20.jpg`,
+> but `StyleMainActivity.IMAGES` exposes only `style0` through `style18` plus
+> `icon_default` as the add/custom-style tile. HarmonyOS was realigned to that
+> visible Android preset list after this historical plan.
+
 ## Goal
 
 Restore Android's full built-in style image set in the HarmonyOS Style Transfer flow. The Android `styletransfer` module ships `style0.jpg` through `style20.jpg`; HarmonyOS currently exposes only `style0.jpg` through `style18.jpg`.
