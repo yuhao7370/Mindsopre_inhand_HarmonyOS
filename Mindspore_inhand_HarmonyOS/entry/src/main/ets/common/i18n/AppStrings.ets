@@ -207,6 +207,9 @@ export type AppStringKey =
   'feature_runtime_result_score' |
   'feature_runtime_result_count' |
   'feature_runtime_result_scenes' |
+  'feature_runtime_scene_overlay_count' |
+  'feature_runtime_scene_overlay_scene' |
+  'feature_runtime_scene_overlay_score' |
   'feature_runtime_result_top_detection' |
   'feature_runtime_result_lines' |
   'feature_runtime_result_text' |
@@ -467,6 +470,9 @@ const APP_STRING_KEYS: AppStringKey[] = [
   'feature_runtime_result_score',
   'feature_runtime_result_count',
   'feature_runtime_result_scenes',
+  'feature_runtime_scene_overlay_count',
+  'feature_runtime_scene_overlay_scene',
+  'feature_runtime_scene_overlay_score',
   'feature_runtime_result_top_detection',
   'feature_runtime_result_lines',
   'feature_runtime_result_text',
@@ -939,6 +945,12 @@ export function appString(key: AppStringKey): ResourceStr {
       return $r('app.string.feature_runtime_result_count');
     case 'feature_runtime_result_scenes':
       return $r('app.string.feature_runtime_result_scenes');
+    case 'feature_runtime_scene_overlay_count':
+      return $r('app.string.feature_runtime_scene_overlay_count');
+    case 'feature_runtime_scene_overlay_scene':
+      return $r('app.string.feature_runtime_scene_overlay_scene');
+    case 'feature_runtime_scene_overlay_score':
+      return $r('app.string.feature_runtime_scene_overlay_score');
     case 'feature_runtime_result_top_detection':
       return $r('app.string.feature_runtime_result_top_detection');
     case 'feature_runtime_result_lines':

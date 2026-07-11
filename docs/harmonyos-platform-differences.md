@@ -273,6 +273,10 @@ Current HarmonyOS behavior:
   English/Places365 labels stable for mapping.
 - Scene result rows list every returned scene candidate with its confidence,
   matching Android's visible result text instead of showing only the top scene.
+- The live scene route also overlays the localized scene count, each scene
+  label, and its confidence on the camera preview, mirroring Android's
+  `MLSenceDetectionGraphic` behavior while keeping the HarmonyOS overlay
+  readable on top of live frames.
 - A real scene detection runner can still be injected; if no service exists at
   all, the app reports the localized
   `feature_runtime_scene_runner_unavailable` adapter status.

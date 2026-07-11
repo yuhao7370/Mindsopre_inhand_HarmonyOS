@@ -41,8 +41,10 @@ import {
   AiRunResult,
   AiRunResultRow,
   DefaultAiService,
+  SceneDetectionOverlayRow,
   aiRunResultRows,
-  copyableTextForAiResult
+  copyableTextForAiResult,
+  sceneDetectionOverlayRows
 } from '../services/ai/AiService';
 import { cachedRuntimeAiServiceForHarmonyResourceManager } from '../services/ai/ImageClassificationRuntimeFactory';
 import {
@@ -238,6 +240,7 @@ struct FeatureRuntimePage {
   @State gestureDetections: Array<GestureDetection> = [];
   @State gestureImageWidth: number = 0;
   @State gestureImageHeight: number = 0;
+  @State sceneOverlayRows: Array<SceneDetectionOverlayRow> = [];
   @State helpUrl: string = '';
   @State helpContentKey: AppStringKey | undefined = undefined;
   @State inputKinds: Array<FeatureInputKind> = [];
@@ -740,6 +743,7 @@ struct FeatureRuntimePage {
     this.updateSegmentationPreview(result);
     this.updatePosePreview(result);
     this.updateGesturePreview(result);
+    this.updateSceneOverlay(result);
     this.updateStyledImagePreview(result);
   }
 
@@ -774,6 +778,7 @@ struct FeatureRuntimePage {
     this.gestureDetections = [];
     this.gestureImageWidth = 0;
     this.gestureImageHeight = 0;
+    this.sceneOverlayRows = [];
   }
 
   private updateObjectDetectionPreview(result: AiRunResult): void {
@@ -844,6 +849,19 @@ struct FeatureRuntimePage {
     this.gestureDetections = data.result.gestures;
     this.gestureImageWidth = data.result.imageWidth ?? this.gestureSourceWidth(data.result.gestures);
     this.gestureImageHeight = data.result.imageHeight ?? this.gestureSourceHeight(data.result.gestures);
+  }
+
+  private updateSceneOverlay(result: AiRunResult): void {
+    const data = result.data;
+    if (data === undefined || data.kind !== 'scenes' || !this.shouldShowLiveSceneOverlay()) {
+      return;
+    }
+    this.sceneOverlayRows = sceneDetectionOverlayRows(data.result);
+  }
+
+  private shouldShowLiveSceneOverlay(): boolean {
+    const workflow = workflowForRoute(this.routeName);
+    return workflow?.aiMethod === 'detectScene' && workflow.liveMode;
   }
 
   private gestureSourceWidth(gestures: Array<GestureDetection>): number {
@@ -1383,22 +1401,29 @@ struct FeatureRuntimePage {
         .fontSize(12)
         .fontColor(AppColor.textSecondary)
         .width('100%')
-      XComponent({
-        id: liveCameraXComponentId,
-        type: XComponentType.SURFACE,
-        controller: this.liveCameraController
-      })
+      Stack({ alignContent: Alignment.TopStart }) {
+        XComponent({
+          id: liveCameraXComponentId,
+          type: XComponentType.SURFACE,
+          controller: this.liveCameraController
+        })
+          .width('100%')
+          .height('100%')
+          .onLoad(() => {
+            this.liveCameraSurfaceId = this.liveCameraController.getXComponentSurfaceId();
+            this.autoStartLiveCameraIfNeeded();
+          })
+          .onDestroy(() => this.stopLiveCameraPreview())
+        if (this.sceneOverlayRows.length > 0 && this.shouldShowLiveSceneOverlay()) {
+          this.liveSceneOverlay()
+        }
+      }
         .width('100%')
         .height(260)
         .backgroundColor('#111827')
         .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
         .clip(true)
         .margin({ top: AppSpacing.xs })
-        .onLoad(() => {
-          this.liveCameraSurfaceId = this.liveCameraController.getXComponentSurfaceId();
-          this.autoStartLiveCameraIfNeeded();
-        })
-        .onDestroy(() => this.stopLiveCameraPreview())
       if (this.liveCameraSwitchAvailable) {
         Button(appString('feature_runtime_switch_camera'))
           .height(32)
@@ -1408,6 +1433,30 @@ struct FeatureRuntimePage {
     }
     .width('100%')
     .margin({ top: AppSpacing.md })
+  }
+
+  @Builder
+  liveSceneOverlay() {
+    Column() {
+      ForEach(this.sceneOverlayRows, (row: SceneDetectionOverlayRow) => {
+        Row() {
+          Text(appString(row.labelKey))
+            .fontSize(13)
+            .fontColor('#FCA5A5')
+            .fontWeight(FontWeight.Medium)
+          Text(`: ${row.value}`)
+            .fontSize(13)
+            .fontColor('#FFFFFF')
+            .fontWeight(FontWeight.Medium)
+        }
+        .width('100%')
+      }, (row: SceneDetectionOverlayRow) => row.id)
+    }
+    .padding({ left: 10, right: 10, top: 8, bottom: 8 })
+    .backgroundColor('#66000000')
+    .border({ radius: 6 })
+    .margin({ left: 10, top: 10 })
+    .width(190)
   }
 
   @Builder

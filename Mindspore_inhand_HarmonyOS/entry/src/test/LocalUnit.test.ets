@@ -6,7 +6,14 @@ import { AppRoute, findRouteByName } from '../main/ets/app/AppRoutes';
 import { MainTab, mainTabs } from '../main/ets/app/AppState';
 import { hasAppStringKey } from '../main/ets/common/i18n/AppStrings';
 import { iconLabel } from '../main/ets/common/icons/IconSymbols';
-import { AiRunResult, AiRunResultRow, DefaultAiService, aiRunResultRows, copyableTextForAiResult } from '../main/ets/services/ai/AiService';
+import {
+  AiRunResult,
+  AiRunResultRow,
+  DefaultAiService,
+  aiRunResultRows,
+  copyableTextForAiResult,
+  sceneDetectionOverlayRows
+} from '../main/ets/services/ai/AiService';
 import { ClipboardService, TextClipboardWriter } from '../main/ets/services/clipboard/ClipboardService';
 import {
   androidDefaultTranslationTargetLanguage,
@@ -4207,6 +4214,32 @@ export default function localUnitTest() {
       expect(rows[1].value).assertEqual('1. beach 96.00%\n2. mountain 82.00%\n3. restaurant 70.00%');
       expect(rows[2].labelKey).assertEqual('feature_runtime_result_image');
       expect(rows[3].labelKey).assertEqual('feature_runtime_result_execution_time');
+    });
+
+    it('sceneDetectionOverlayRowsMirrorAndroidLiveGraphicLabels', 0, () => {
+      const rows = sceneDetectionOverlayRows({
+        ok: true,
+        scenes: [
+          { label: 'beach', score: 0.96 },
+          { label: 'mountain', score: 0.82 }
+        ],
+        executionMs: 9
+      });
+
+      expect(rows.length).assertEqual(5);
+      expect(rows[0].id).assertEqual('count');
+      expect(rows[0].labelKey).assertEqual('feature_runtime_scene_overlay_count');
+      expect(rows[0].value).assertEqual('2');
+      expect(rows[1].id).assertEqual('scene-0');
+      expect(rows[1].labelKey).assertEqual('feature_runtime_scene_overlay_scene');
+      expect(rows[1].value).assertEqual('beach');
+      expect(rows[2].id).assertEqual('score-0');
+      expect(rows[2].labelKey).assertEqual('feature_runtime_scene_overlay_score');
+      expect(rows[2].value).assertEqual('96.00%');
+      expect(rows[3].id).assertEqual('scene-1');
+      expect(rows[3].value).assertEqual('mountain');
+      expect(rows[4].id).assertEqual('score-1');
+      expect(rows[4].value).assertEqual('82.00%');
     });
 
     it('aiServiceReportsSceneDetectionFailureWithI18nKey', 0, async () => {

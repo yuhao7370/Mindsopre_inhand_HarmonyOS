@@ -165,6 +165,12 @@ export interface AiRunResultRow {
   readonly valueKey?: AppStringKey;
 }
 
+export interface SceneDetectionOverlayRow {
+  readonly id: string;
+  readonly labelKey: AppStringKey;
+  readonly value: string;
+}
+
 export interface AiRunResult {
   readonly ok: boolean;
   readonly code: AiRunCode;
@@ -1066,6 +1072,33 @@ function sceneDetectionListText(scenes: Array<SceneDetection>): string {
     lines.push(`${index + 1}. ${scene.label} ${(scene.score * 100).toFixed(2)}%`);
   });
   return lines.join('\n');
+}
+
+export function sceneDetectionOverlayRows(result: SceneDetectionResult): Array<SceneDetectionOverlayRow> {
+  const rows: Array<SceneDetectionOverlayRow> = [
+    sceneDetectionOverlayRow('count', 'feature_runtime_scene_overlay_count', `${result.scenes.length}`)
+  ];
+  result.scenes.forEach((scene: SceneDetection, index: number) => {
+    rows.push(sceneDetectionOverlayRow(`scene-${index}`, 'feature_runtime_scene_overlay_scene', scene.label));
+    rows.push(sceneDetectionOverlayRow(
+      `score-${index}`,
+      'feature_runtime_scene_overlay_score',
+      `${(scene.score * 100).toFixed(2)}%`
+    ));
+  });
+  return rows;
+}
+
+function sceneDetectionOverlayRow(
+  id: string,
+  labelKey: AppStringKey,
+  value: string
+): SceneDetectionOverlayRow {
+  return {
+    id: id,
+    labelKey: labelKey,
+    value: value
+  };
 }
 
 function resultRow(labelKey: AppStringKey, value: string, valueKey?: AppStringKey): AiRunResultRow {
