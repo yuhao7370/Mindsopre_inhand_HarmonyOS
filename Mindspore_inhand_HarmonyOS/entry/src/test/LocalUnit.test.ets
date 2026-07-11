@@ -1731,12 +1731,12 @@ export default function localUnitTest() {
       expect(workflowForRoute(AppRoute.VISION_FRAGMENT.name) === undefined).assertTrue();
     });
 
-    it('keepsAndroidSceneDetectionRoutesHiddenButRuntimeReady', 0, () => {
+    it('exposesAndroidSceneDetectionStillRouteAndKeepsLiveRouteRuntimeReady', 0, () => {
       expect(AppRoute.SCENE_STILL.name).assertEqual('/hms/SenceDetectionStillAnalyseActivity');
       expect(AppRoute.SCENE_LIVE.name).assertEqual('/hms/SenceDetectionLiveAnalyseActivity');
       expect(findRouteByName(AppRoute.SCENE_STILL.name)?.page).assertEqual('pages/FeatureRuntimePage');
       expect(findRouteByName(AppRoute.SCENE_LIVE.name)?.page).assertEqual('pages/FeatureRuntimePage');
-      expect(findFeatureByRoute(AppRoute.SCENE_STILL.name) === undefined).assertTrue();
+      expect(findFeatureByRoute(AppRoute.SCENE_STILL.name)?.visibleByDefault).assertTrue();
       expect(findFeatureByRoute(AppRoute.SCENE_LIVE.name) === undefined).assertTrue();
       expect(workflowForRoute(AppRoute.SCENE_STILL.name)?.aiMethod).assertEqual('detectScene');
       expect(workflowForRoute(AppRoute.SCENE_LIVE.name)?.liveMode).assertTrue();
@@ -1753,8 +1753,8 @@ export default function localUnitTest() {
       const visibleCount = visibleExperienceSections
         .map((section) => section.items.length)
         .reduce((sum, count) => sum + count, 0);
-      expect(visibleCount).assertEqual(10);
-      expect(allExperienceFeatures.length).assertEqual(12);
+      expect(visibleCount).assertEqual(11);
+      expect(allExperienceFeatures.length).assertEqual(13);
     });
 
     it('definesCollegeAndMeRows', 0, () => {
@@ -2050,6 +2050,22 @@ export default function localUnitTest() {
       expect(visibleExperienceSections[1].groupTitleKey).assertUndefined();
       expect(visibleExperienceSections[2].id).assertEqual('advanced-vision');
       expect(visibleExperienceSections[2].groupTitleKey).assertEqual('experience_group_advanced');
+    });
+
+    it('exposesSceneDetectionEntryInExperienceCatalog', 0, () => {
+      const sceneFeature = findFeatureByRoute(AppRoute.SCENE_STILL.name);
+      expect(sceneFeature?.id).assertEqual('scene');
+      expect(sceneFeature?.titleKey).assertEqual('title_scene_detection');
+      expect(sceneFeature?.routeName).assertEqual(AppRoute.SCENE_STILL.name);
+      expect(sceneFeature?.visibleByDefault).assertTrue();
+
+      const advancedVisionSection = visibleExperienceSections.find((section: FeatureSection) => {
+        return section.id === 'advanced-vision';
+      });
+      const visibleSceneFeature = advancedVisionSection?.items.find((item: FeatureItem) => {
+        return item.id === 'scene';
+      });
+      expect(visibleSceneFeature?.routeName).assertEqual(AppRoute.SCENE_STILL.name);
     });
 
     it('usesAndroidNoticeDialogTreatmentForCollegeSummary', 0, () => {
