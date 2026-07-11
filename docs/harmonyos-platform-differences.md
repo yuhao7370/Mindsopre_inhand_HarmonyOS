@@ -346,7 +346,7 @@ Current HarmonyOS behavior:
 - The shared runtime keeps the existing content image, style image, built-in
   preset, and optional `.ms` model inputs intact.
 - The built-in preset strip matches Android's visible `style0` through
-  `style18` entries. Android's final add tile is represented by the localized
+  `style20` entries. Android's final add tile is represented by the localized
   custom style-image input instead of another built-in preset.
 - After the content/original image is ready, selecting a built-in or album
   style image immediately runs style transfer, matching Android's style-list
