@@ -177,6 +177,7 @@ export type AppStringKey =
   'feature_runtime_style_transfer_done' |
   'feature_runtime_style_transfer_failed' |
   'feature_runtime_style_original_required' |
+  'feature_runtime_style_choose_image' |
   'feature_runtime_style_album' |
   'feature_runtime_style_take_photo' |
   'feature_runtime_style_select_predict_model' |
@@ -472,6 +473,7 @@ const APP_STRING_KEYS: AppStringKey[] = [
   'feature_runtime_style_transfer_done',
   'feature_runtime_style_transfer_failed',
   'feature_runtime_style_original_required',
+  'feature_runtime_style_choose_image',
   'feature_runtime_style_album',
   'feature_runtime_style_take_photo',
   'feature_runtime_style_select_predict_model',
@@ -949,6 +951,8 @@ export function appString(key: AppStringKey): ResourceStr {
       return $r('app.string.feature_runtime_style_transfer_failed');
     case 'feature_runtime_style_original_required':
       return $r('app.string.feature_runtime_style_original_required');
+    case 'feature_runtime_style_choose_image':
+      return $r('app.string.feature_runtime_style_choose_image');
     case 'feature_runtime_style_album':
       return $r('app.string.feature_runtime_style_album');
     case 'feature_runtime_style_take_photo':

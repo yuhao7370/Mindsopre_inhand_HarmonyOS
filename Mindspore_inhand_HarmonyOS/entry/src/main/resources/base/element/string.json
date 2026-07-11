@@ -178,6 +178,7 @@
     { "name": "feature_runtime_style_transfer_done", "value": "风格迁移执行完成。" },
     { "name": "feature_runtime_style_transfer_failed", "value": "风格迁移执行失败。" },
     { "name": "feature_runtime_style_original_required", "value": "请先选择原始图片" },
+    { "name": "feature_runtime_style_choose_image", "value": "点击下方图片或相机选择照片" },
     { "name": "feature_runtime_style_album", "value": "相册" },
     { "name": "feature_runtime_style_take_photo", "value": "拍照" },
     { "name": "feature_runtime_style_select_predict_model", "value": "选择预测模型" },

@@ -3296,6 +3296,15 @@ export default function localUnitTest() {
       expect(workflowRunActionKey(styleTransfer)).assertEqual('feature_runtime_run');
     });
 
+    it('usesAndroidStyleTransferInitialChooseImagePrompt', 0, () => {
+      const styleTransfer: FeatureWorkflow = workflowForRoute(AppRoute.STYLE_TRANSFER.name)!;
+      const customModel: FeatureWorkflow = workflowForRoute(AppRoute.CUSTOM_MODEL.name)!;
+
+      expect(workflowInitialStatusKey(styleTransfer)).assertEqual('feature_runtime_style_choose_image');
+      expect(hasAppStringKey(workflowInitialStatusKey(styleTransfer))).assertTrue();
+      expect(workflowInitialStatusKey(customModel)).assertEqual('feature_runtime_custom_model_output_placeholder');
+    });
+
     it('usesAndroidLongTextPresentationForTextWorkflows', 0, () => {
       const textRecognition: FeatureWorkflow = workflowForRoute(AppRoute.TEXT_RECOGNITION.name)!;
       const textTranslation: FeatureWorkflow = workflowForRoute(AppRoute.TEXT_TRANSLATION.name)!;

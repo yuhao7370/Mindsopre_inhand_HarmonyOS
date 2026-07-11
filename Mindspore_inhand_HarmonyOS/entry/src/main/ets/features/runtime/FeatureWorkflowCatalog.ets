@@ -373,9 +373,13 @@ export function workflowRunActionKey(workflow: FeatureWorkflow | undefined): App
 }
 
 export function workflowInitialStatusKey(workflow: FeatureWorkflow | undefined): AppStringKey {
-  return workflow?.routeName === AppRoute.CUSTOM_MODEL.name ?
-    'feature_runtime_custom_model_output_placeholder' :
-    'feature_runtime_status_idle';
+  if (workflow?.routeName === AppRoute.CUSTOM_MODEL.name) {
+    return 'feature_runtime_custom_model_output_placeholder';
+  }
+  if (workflow?.routeName === AppRoute.STYLE_TRANSFER.name) {
+    return 'feature_runtime_style_choose_image';
+  }
+  return 'feature_runtime_status_idle';
 }
 
 export function workflowResultTitleKey(workflow: FeatureWorkflow | undefined): AppStringKey {

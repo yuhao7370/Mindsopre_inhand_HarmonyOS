@@ -178,6 +178,7 @@
     { "name": "feature_runtime_style_transfer_done", "value": "Style transfer completed." },
     { "name": "feature_runtime_style_transfer_failed", "value": "Style transfer failed." },
     { "name": "feature_runtime_style_original_required", "value": "Please select an original picture first" },
+    { "name": "feature_runtime_style_choose_image", "value": "Please click a picture below or choose a photo from your album" },
     { "name": "feature_runtime_style_album", "value": "Album" },
     { "name": "feature_runtime_style_take_photo", "value": "Take Photo" },
     { "name": "feature_runtime_style_select_predict_model", "value": "Select Predict Model" },
