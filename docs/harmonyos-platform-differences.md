@@ -86,9 +86,13 @@ Current HarmonyOS behavior:
 - The default HarmonyOS runtime reuses the bundled MobileNetV2 image
   classification model as a conservative local approximation. With the bundled
   ImageNet labels this currently only treats the exact `mitten` class as a
-  hand-adjacent positive; exact gesture labels such as `boxing_glove`,
-  `thumb_up`, `fist`, `heart`, and `ok_gesture` are also mapped when provided
-  by an injected or future score runner.
+  hand-adjacent positive; hand-adjacent or gesture labels such as
+  `boxing_glove`, `thumb_up`, `fist`, `heart`, and `ok_gesture` are also mapped
+  when provided by an injected or future score runner.
+- The same mapper also accepts common local gesture-model aliases such as
+  `Closed_Fist`, `Open_Palm`, `Thumb_Up`, `Thumb_Down`, `Victory`,
+  `Pointing_Up`, `OK sign`, and `finger heart gesture`, mapping them back onto
+  the Android `MLGesture` category set.
 - The gesture fallback intentionally keeps English ImageNet labels internally
   even on Chinese devices, because its conservative matching depends on stable
   model label names.

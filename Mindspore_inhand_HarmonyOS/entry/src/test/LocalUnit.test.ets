@@ -5419,6 +5419,14 @@ export default function localUnitTest() {
       expect(gestureCategoryForImageClassificationLabel('mitten')).assertEqual(14);
       expect(gestureCategoryForImageClassificationLabel('boxing_glove')).assertEqual(10);
       expect(gestureCategoryForImageClassificationLabel('thumb_up')).assertEqual(11);
+      expect(gestureCategoryForImageClassificationLabel('Closed_Fist')).assertEqual(10);
+      expect(gestureCategoryForImageClassificationLabel('Thumb_Up')).assertEqual(11);
+      expect(gestureCategoryForImageClassificationLabel('Thumb_Down')).assertEqual(9);
+      expect(gestureCategoryForImageClassificationLabel('Open_Palm')).assertEqual(4);
+      expect(gestureCategoryForImageClassificationLabel('Pointing_Up')).assertEqual(0);
+      expect(gestureCategoryForImageClassificationLabel('Victory')).assertEqual(1);
+      expect(gestureCategoryForImageClassificationLabel('OK sign')).assertEqual(13);
+      expect(gestureCategoryForImageClassificationLabel('finger heart gesture')).assertEqual(12);
       expect(gestureCategoryForImageClassificationLabel('nail')).assertEqual(-1);
       expect(gestureCategoryForImageClassificationLabel('hand-held_computer')).assertEqual(-1);
       expect(gestureCategoryForImageClassificationLabel('three-toed_sloth')).assertEqual(-1);
@@ -5489,6 +5497,23 @@ export default function localUnitTest() {
       expect(result.gestures[0].rect?.left).assertEqual(25);
       expect(result.imageWidth).assertEqual(100);
       expect(result.imageHeight).assertEqual(100);
+    });
+
+    it('imageClassificationGestureRunnerAcceptsCommonLocalModelGestureLabels', 0, async () => {
+      const runner = new ImageClassificationGestureRunner({
+        labels: ['none', 'Victory', 'Thumb_Up'],
+        scoreRunner: new FixedScoreRunner([0.95, 0.82, 0.81]),
+        maxGestures: 2
+      });
+
+      const result = await runner.detectGesture('file://selected/gesture-model.jpg');
+
+      expect(result.ok).assertTrue();
+      expect(result.gestures.length).assertEqual(2);
+      expect(result.gestures[0].category).assertEqual(1);
+      expect(result.gestures[0].label).assertEqual('Two');
+      expect(result.gestures[1].category).assertEqual(11);
+      expect(result.gestures[1].label).assertEqual('Thumb up');
     });
 
     it('imageClassificationGestureRunnerUsesEstimatedForegroundRegion', 0, async () => {
