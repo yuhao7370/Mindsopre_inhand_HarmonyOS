@@ -357,6 +357,8 @@ import {
   shouldUseLongTextResultRow,
   textInputPlaceholderKeyForWorkflow,
   shouldShowStyleRecoveryControl,
+  shouldShowStyleTransferStyledPreview,
+  styleTransferRecoveryStatusKey,
   poseModeForWorkflow,
   workflowInputReadyAction,
   workflowRunActionKey,
@@ -3682,10 +3684,23 @@ export default function localUnitTest() {
         .assertEqual('feature_runtime_custom_model_help');
     });
 
-    it('showsAndroidStyleTransferRecoveryOnlyAfterStyledResult', 0, () => {
+    it('showsAndroidStyleTransferRecoveryWheneverStyleTransferPageIsOpen', 0, () => {
       expect(shouldShowStyleRecoveryControl('runStyleTransfer', true)).assertTrue();
-      expect(shouldShowStyleRecoveryControl('runStyleTransfer', false)).assertFalse();
+      expect(shouldShowStyleRecoveryControl('runStyleTransfer', false)).assertTrue();
       expect(shouldShowStyleRecoveryControl('classifyImage', true)).assertFalse();
+    });
+
+    it('usesAndroidStyleTransferRecoveryPromptUntilOriginalImageExists', 0, () => {
+      expect(styleTransferRecoveryStatusKey(false)).assertEqual('feature_runtime_style_original_required');
+      expect(styleTransferRecoveryStatusKey(true)).assertEqual('feature_runtime_style_recovered');
+    });
+
+    it('styleTransferRecoveryKeepsLastStyledImageSaveableLikeAndroid', 0, () => {
+      const styleTransfer: FeatureWorkflow = workflowForRoute(AppRoute.STYLE_TRANSFER.name)!;
+
+      expect(shouldShowStyleTransferStyledPreview(true, false)).assertTrue();
+      expect(shouldShowStyleTransferStyledPreview(true, true)).assertFalse();
+      expect(shouldShowResultSaveAction(styleTransfer, true)).assertTrue();
     });
 
     it('definesRuntimeWorkflowForEveryRuntimeRoute', 0, () => {

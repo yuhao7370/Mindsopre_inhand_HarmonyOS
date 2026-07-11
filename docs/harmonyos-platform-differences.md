@@ -402,9 +402,13 @@ Current HarmonyOS behavior:
 - Cached custom predict/transfer `.ms` model files are restored from the app
   cache when the runtime page is recreated, matching Android's static
   custom-model path behavior after `recreate()`.
-- After a styled output is produced, HarmonyOS now shows a localized Recovery
-  control that clears only the styled preview and restores the original/content
-  preview state.
+- HarmonyOS shows the localized Recovery control whenever the Style Transfer
+  page is open, matching Android's always-visible button. If no original image
+  has been selected yet, the action reports the Android-style original-image
+  prompt.
+- After a styled output is produced, Recovery switches the visible preview back
+  to the original/content image while keeping the last styled result saveable,
+  matching Android's `originBitmap`/`resultBitmap` split.
 - Android APK update/download-new-version behavior is intentionally not
   migrated.
 

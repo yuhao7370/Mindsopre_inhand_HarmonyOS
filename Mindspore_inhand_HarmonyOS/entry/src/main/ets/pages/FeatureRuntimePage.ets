@@ -39,8 +39,10 @@ import {
   shouldShowResultSaveAction,
   shouldShowTranslationSnapshotSaveAction,
   shouldShowStyleRecoveryControl,
+  shouldShowStyleTransferStyledPreview,
   shouldUseLongTextInput,
   shouldUseLongTextResultRow,
+  styleTransferRecoveryStatusKey,
   styleTransferStyleReadyStatusKey,
   textInputPlaceholderKeyForWorkflow,
   workflowRunActionKey,
@@ -243,6 +245,7 @@ struct FeatureRuntimePage {
   @State userText: string = '';
   @State textInputVisible: boolean = true;
   @State styledImagePixelMap: image.PixelMap | undefined = undefined;
+  @State styleOriginalPreviewRecovered: boolean = false;
   @State objectDetectionImageUri: string = '';
   @State objectDetectionImageOrientation: ImageRotateOrientation = ImageRotateOrientation.UP;
   @State objectDetections: Array<ObjectDetection> = [];
@@ -849,6 +852,7 @@ struct FeatureRuntimePage {
 
   private clearVisualResults(): void {
     this.styledImagePixelMap = undefined;
+    this.styleOriginalPreviewRecovered = false;
     this.objectDetectionImageUri = '';
     this.objectDetectionImageOrientation = ImageRotateOrientation.UP;
     this.objectDetections = [];
@@ -1050,8 +1054,10 @@ struct FeatureRuntimePage {
 
     styleTransferPixelMapFromRgbaOutput(rgba, width, height).then((pixelMap: image.PixelMap) => {
       this.styledImagePixelMap = pixelMap;
+      this.styleOriginalPreviewRecovered = false;
     }).catch(() => {
       this.styledImagePixelMap = undefined;
+      this.styleOriginalPreviewRecovered = false;
     });
   }
 
@@ -1257,8 +1263,12 @@ struct FeatureRuntimePage {
   }
 
   private recoverStyleOriginalPreview(): void {
-    this.styledImagePixelMap = undefined;
-    this.statusKey = 'feature_runtime_style_recovered';
+    if (!this.styleTransferContentInputReady()) {
+      this.statusKey = styleTransferRecoveryStatusKey(false);
+      return;
+    }
+    this.styleOriginalPreviewRecovered = true;
+    this.statusKey = styleTransferRecoveryStatusKey(true);
   }
 
   private selectPortraitBackgroundPreset(preset: PortraitSegmentationBackgroundPreset): void {
@@ -2521,7 +2531,10 @@ struct FeatureRuntimePage {
               this.resultRow(row)
             }, (row: AiRunResultRow) => row.labelKey)
           }
-          if (this.styledImagePixelMap !== undefined) {
+          if (this.styledImagePixelMap !== undefined && shouldShowStyleTransferStyledPreview(
+            true,
+            this.styleOriginalPreviewRecovered
+          )) {
             this.pixelMapPreview('feature_runtime_result_styled_image', this.styledImagePixelMap)
           }
           if (shouldShowResultSaveAction(workflowForRoute(this.routeName), this.styledImagePixelMap !== undefined) &&

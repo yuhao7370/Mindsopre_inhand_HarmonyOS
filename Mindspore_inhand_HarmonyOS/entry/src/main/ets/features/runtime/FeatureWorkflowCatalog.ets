@@ -609,7 +609,18 @@ export function textInputVisibleAfterCancelledPick(
 }
 
 export function shouldShowStyleRecoveryControl(aiMethod: string, styledImageReady: boolean): boolean {
-  return aiMethod === 'runStyleTransfer' && styledImageReady;
+  return aiMethod === 'runStyleTransfer';
+}
+
+export function shouldShowStyleTransferStyledPreview(
+  styledImageReady: boolean,
+  originalPreviewRecovered: boolean
+): boolean {
+  return styledImageReady && !originalPreviewRecovered;
+}
+
+export function styleTransferRecoveryStatusKey(contentInputReady: boolean): AppStringKey {
+  return contentInputReady ? 'feature_runtime_style_recovered' : 'feature_runtime_style_original_required';
 }
 
 export function shouldStartWorkflowRun(workflow: FeatureWorkflow, workflowRunning: boolean,
