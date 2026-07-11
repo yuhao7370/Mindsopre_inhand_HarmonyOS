@@ -7254,6 +7254,30 @@ export default function localUnitTest() {
       expect(saved.translatedText).assertEqual('Save success');
     });
 
+    it('localTextTranslationCoversAndroidTextTranslationPageCopy', 0, async () => {
+      const runner = new LocalTextTranslationRunner();
+
+      const inputHint = await runner.translate('\u8BF7\u8F93\u5165\u9700\u8981\u7FFB\u8BD1\u7684\u5185\u5BB9', 'en');
+      expect(inputHint.ok).assertTrue();
+      expect(inputHint.translatedText).assertEqual('Please enter the content to be translated');
+
+      const englishInputHint = await runner.translate('Please enter the content to be translated...', 'zh');
+      expect(englishInputHint.ok).assertTrue();
+      expect(englishInputHint.translatedText).assertEqual('\u8BF7\u8F93\u5165\u9700\u8981\u7FFB\u8BD1\u7684\u5185\u5BB9');
+
+      const emptyText = await runner.translate('\u5F53\u524D\u5185\u5BB9\u4E3A\u7A7A', 'en');
+      expect(emptyText.ok).assertTrue();
+      expect(emptyText.translatedText).assertEqual('The current content is empty');
+
+      const textActions = await runner.translate('Offline Translation\nDetection language', 'zh');
+      expect(textActions.ok).assertTrue();
+      expect(textActions.translatedText).assertEqual('\u79BB\u7EBF\u7FFB\u8BD1\n\u68C0\u6D4B\u8BED\u8A00');
+
+      const saveFailures = await runner.translate('Null Image needed to save\nSave Failure', 'zh');
+      expect(saveFailures.ok).assertTrue();
+      expect(saveFailures.translatedText).assertEqual('\u6CA1\u6709\u9700\u8981\u4FDD\u5B58\u7684\u56FE\u7247\n\u4FDD\u5B58\u5931\u8D25');
+    });
+
     it('runtimeFactoryLocalFallbackFailsUnknownTranslationHonestly', 0, async () => {
       const workflow = workflowForRoute(AppRoute.TEXT_TRANSLATION.name);
       expect(workflow !== undefined).assertTrue();
