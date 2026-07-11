@@ -310,7 +310,9 @@ Current HarmonyOS behavior:
   `coffee_shop`, `bookstore`, `lecture_room`, `sky`, `river`, `runway`,
   `subway_station`, `alley`, `apartment_building`, `aquarium`/`fishpond`,
   `snowfield`/`ski_slope`/`mountain_snowy`, and
-  `market`/`bazaar`/`flea_market`.
+  `market`/`bazaar`/`flea_market`. It also covers direct Places365 scene
+  aliases such as `heliport`, `boat_deck`, `lighthouse`, `glacier`/`iceberg`,
+  `canyon`, and `lobby`.
 - Scene result display labels now use a recovered/readable Android-equivalent
   Chinese scene label table on Chinese locales while keeping the internal
   English/Places365 labels stable for mapping.

@@ -4877,6 +4877,13 @@ export default function localUnitTest() {
       expect(sceneLabelForImageClassificationLabel('market')).assertEqual('supermarket');
       expect(sceneLabelForImageClassificationLabel('bazaar')).assertEqual('supermarket');
       expect(sceneLabelForImageClassificationLabel('flea_market')).assertEqual('supermarket');
+      expect(sceneLabelForImageClassificationLabel('heliport')).assertEqual('helicopter');
+      expect(sceneLabelForImageClassificationLabel('boat_deck')).assertEqual('ship');
+      expect(sceneLabelForImageClassificationLabel('lighthouse')).assertEqual('waterside');
+      expect(sceneLabelForImageClassificationLabel('glacier')).assertEqual('snow');
+      expect(sceneLabelForImageClassificationLabel('iceberg')).assertEqual('snow');
+      expect(sceneLabelForImageClassificationLabel('canyon')).assertEqual('mountain');
+      expect(sceneLabelForImageClassificationLabel('lobby')).assertEqual('corridor');
       expect(sceneLabelForImageClassificationLabel('tiger_beetle')).assertEqual('other');
       expect(sceneLabelForImageClassificationLabel('sea_lion')).assertEqual('other');
       expect(sceneLabelForImageClassificationLabel('crane')).assertEqual('other');
