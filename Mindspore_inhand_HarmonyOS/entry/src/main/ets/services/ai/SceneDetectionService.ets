@@ -17,6 +17,22 @@ export interface SceneDetectionRunner {
   detectScenes(imageUri: string): Promise<SceneDetectionResult>;
 }
 
+export interface AndroidSceneModelDetection {
+  readonly result: string;
+  readonly confidence: number;
+}
+
+export interface AndroidSceneModelResult {
+  readonly scenes: Array<AndroidSceneModelDetection>;
+  readonly imageWidth?: number;
+  readonly imageHeight?: number;
+  readonly executionMs?: number;
+}
+
+export interface AndroidSceneModelDetector {
+  detectAndroidScenes(imageUri: string): Promise<AndroidSceneModelResult>;
+}
+
 export interface SceneDetectionServiceOptions {
   readonly runner: SceneDetectionRunner;
   readonly labelLocale?: string;
@@ -193,6 +209,35 @@ export class SceneDetectionService {
   }
 }
 
+export class AndroidSceneModelRunner implements SceneDetectionRunner {
+  private readonly detector: AndroidSceneModelDetector;
+
+  constructor(detector: AndroidSceneModelDetector) {
+    this.detector = detector;
+  }
+
+  async detectScenes(imageUri: string): Promise<SceneDetectionResult> {
+    const startMs = Date.now();
+    try {
+      const modelResult = await this.detector.detectAndroidScenes(imageUri);
+      const scenes = androidSceneModelDetections(modelResult.scenes);
+      return {
+        ok: scenes.length > 0,
+        scenes: scenes,
+        imageWidth: modelResult.imageWidth,
+        imageHeight: modelResult.imageHeight,
+        executionMs: modelResult.executionMs ?? Date.now() - startMs
+      };
+    } catch (_) {
+      return {
+        ok: false,
+        scenes: [],
+        executionMs: Date.now() - startMs
+      };
+    }
+  }
+}
+
 export class ImageClassificationSceneDetectionRunner implements SceneDetectionRunner {
   private readonly labels: Array<string>;
   private readonly scoreRunner: ImageClassificationScoreRunner;
@@ -253,6 +298,20 @@ export function topLocalSceneDetections(
     if (scenes.length >= limit) {
       break;
     }
+  }
+  return scenes;
+}
+
+function androidSceneModelDetections(
+  detections: Array<AndroidSceneModelDetection>
+): Array<SceneDetection> {
+  const scenes: Array<SceneDetection> = [];
+  for (let index = 0; index < detections.length; index++) {
+    const detection = detections[index];
+    scenes.push({
+      label: sceneLabelForImageClassificationLabel(detection.result),
+      score: detection.confidence
+    });
   }
   return scenes;
 }

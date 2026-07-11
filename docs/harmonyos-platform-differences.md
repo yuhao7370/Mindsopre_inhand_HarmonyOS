@@ -331,6 +331,10 @@ Current HarmonyOS behavior:
 - Scene result display labels now use a recovered/readable Android-equivalent
   Chinese scene label table on Chinese locales while keeping the internal
   English/Places365 labels stable for mapping.
+- A dedicated `AndroidSceneModelRunner` adapter now defines the future local
+  model contract for Android `MLSceneDetection`-style result/confidence
+  output. This lets a later HarmonyOS scene model plug into the current
+  still/live runtime boundary without changing the UI result contract.
 - The still and live scene routes expose a usable MindSpore Lite
   `scene_detection_lite.html` help entry and a localized local Help dialog.
 - Scene result rows list every returned scene candidate with its confidence,

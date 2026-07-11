@@ -160,6 +160,10 @@ import {
   danceSkeletonPointsFromPose
 } from '../main/ets/services/dance/DanceSamplingService';
 import {
+  AndroidSceneModelDetection,
+  AndroidSceneModelDetector,
+  AndroidSceneModelResult,
+  AndroidSceneModelRunner,
   androidSceneDetectionLabels,
   androidSceneDetectionLabelsZh,
   ImageClassificationSceneDetectionRunner,
@@ -1491,6 +1495,26 @@ class FixedSceneDetectionRunner implements SceneDetectionRunner {
 class RejectingSceneDetectionRunner implements SceneDetectionRunner {
   async detectScenes(_imageUri: string): Promise<SceneDetectionResult> {
     throw new Error('scene detection failed');
+  }
+}
+
+class FixedAndroidSceneModelDetector implements AndroidSceneModelDetector {
+  readonly seenImageUris: Array<string> = [];
+  private readonly result: AndroidSceneModelResult;
+
+  constructor(result: AndroidSceneModelResult) {
+    this.result = result;
+  }
+
+  async detectAndroidScenes(imageUri: string): Promise<AndroidSceneModelResult> {
+    this.seenImageUris.push(imageUri);
+    return this.result;
+  }
+}
+
+class RejectingAndroidSceneModelDetector implements AndroidSceneModelDetector {
+  async detectAndroidScenes(_imageUri: string): Promise<AndroidSceneModelResult> {
+    throw new Error('android scene model failed');
   }
 }
 
@@ -5052,6 +5076,45 @@ export default function localUnitTest() {
       expect(result.ok).assertFalse();
       expect(result.code).assertEqual('SCENE_DETECTION_FAILED');
       expect(result.messageKey).assertEqual('feature_runtime_scene_failed');
+    });
+
+    it('androidSceneModelRunnerNormalizesRawModelOutputToSceneDetections', 0, async () => {
+      const diningRoom: AndroidSceneModelDetection = {
+        result: 'Dining room',
+        confidence: 0.87
+      };
+      const unknownScene: AndroidSceneModelDetection = {
+        result: 'unknown scene',
+        confidence: 0.35
+      };
+      const detector = new FixedAndroidSceneModelDetector({
+        scenes: [diningRoom, unknownScene],
+        imageWidth: 160,
+        imageHeight: 120,
+        executionMs: 21
+      });
+
+      const result = await new AndroidSceneModelRunner(detector).detectScenes('file://selected/scene.jpg');
+
+      expect(result.ok).assertTrue();
+      expect(result.imageWidth).assertEqual(160);
+      expect(result.imageHeight).assertEqual(120);
+      expect(result.executionMs).assertEqual(21);
+      expect(result.scenes.length).assertEqual(2);
+      expect(result.scenes[0].label).assertEqual('diningroom');
+      expect(result.scenes[0].score.toFixed(2)).assertEqual('0.87');
+      expect(result.scenes[1].label).assertEqual('other');
+      expect(result.scenes[1].score.toFixed(2)).assertEqual('0.35');
+      expect(detector.seenImageUris[0]).assertEqual('file://selected/scene.jpg');
+    });
+
+    it('androidSceneModelRunnerFailsSafelyWhenDetectorThrows', 0, async () => {
+      const result = await new AndroidSceneModelRunner(
+        new RejectingAndroidSceneModelDetector()
+      ).detectScenes('file://selected/scene.jpg');
+
+      expect(result.ok).assertFalse();
+      expect(result.scenes.length).assertEqual(0);
     });
 
     it('localSceneDetectionRunnerMapsClassificationLabelsToScenes', 0, async () => {
