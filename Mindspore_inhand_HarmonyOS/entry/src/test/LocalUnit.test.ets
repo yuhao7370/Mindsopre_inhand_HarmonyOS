@@ -3635,6 +3635,24 @@ export default function localUnitTest() {
     it('localTextTranslationRunnerCoversCommonAppIntroCopyOffline', 0, async () => {
       const runner = new LocalTextTranslationRunner();
 
+      const appNameResult = await runner.translate('MindSpore Inhand', 'zh');
+      expect(appNameResult.ok).assertTrue();
+      expect(appNameResult.translatedText).assertEqual('MindSpore \u638C\u4E2D\u5B9D');
+
+      const chineseAppNameResult = await runner.translate('MindSpore \u638C\u4E2D\u5B9D', 'en');
+      expect(chineseAppNameResult.ok).assertTrue();
+      expect(chineseAppNameResult.translatedText).assertEqual('MindSpore Inhand');
+
+      const experienceSubtitleResult = await runner.translate('AI demos ready for the HarmonyOS shell', 'zh');
+      expect(experienceSubtitleResult.ok).assertTrue();
+      expect(experienceSubtitleResult.translatedText)
+        .assertEqual('HarmonyOS \u7248 AI \u793A\u4F8B\u5DF2\u5C31\u7EEA');
+
+      const chineseExperienceSubtitleResult =
+        await runner.translate('HarmonyOS \u7248 AI \u793A\u4F8B\u5DF2\u5C31\u7EEA', 'en');
+      expect(chineseExperienceSubtitleResult.ok).assertTrue();
+      expect(chineseExperienceSubtitleResult.translatedText).assertEqual('AI demos ready for the HarmonyOS shell');
+
       const introResult = await runner.translate(
         'A one-stop platform of collaborative learning, demonstrating, and experiencing for AI users.',
         'zh'
@@ -4179,6 +4197,18 @@ export default function localUnitTest() {
       expect(sceneLabelForImageClassificationLabel('conference_room')).assertEqual('meetingroom');
       expect(sceneLabelForImageClassificationLabel('tiger_cat')).assertEqual('cat');
       expect(sceneLabelForImageClassificationLabel('tiger_shark')).assertEqual('ornamentalfish');
+      expect(sceneLabelForImageClassificationLabel('coffee_shop')).assertEqual('restaurant');
+      expect(sceneLabelForImageClassificationLabel('bookstore')).assertEqual('library');
+      expect(sceneLabelForImageClassificationLabel('lecture_room')).assertEqual('classroom');
+      expect(sceneLabelForImageClassificationLabel('sky')).assertEqual('bluesky');
+      expect(sceneLabelForImageClassificationLabel('river')).assertEqual('watersurface');
+      expect(sceneLabelForImageClassificationLabel('runway')).assertEqual('aircraft');
+      expect(sceneLabelForImageClassificationLabel('subway_station')).assertEqual('train');
+      expect(sceneLabelForImageClassificationLabel('florist_shop')).assertEqual('flower');
+      expect(sceneLabelForImageClassificationLabel('pizzeria')).assertEqual('restaurant');
+      expect(sceneLabelForImageClassificationLabel('apartment_building')).assertEqual('widebuildings');
+      expect(sceneLabelForImageClassificationLabel('hotel_room')).assertEqual('bedroom');
+      expect(sceneLabelForImageClassificationLabel('pub')).assertEqual('bar');
       expect(sceneLabelForImageClassificationLabel('tiger_beetle')).assertEqual('other');
       expect(sceneLabelForImageClassificationLabel('sea_lion')).assertEqual('other');
       expect(sceneLabelForImageClassificationLabel('crane')).assertEqual('other');

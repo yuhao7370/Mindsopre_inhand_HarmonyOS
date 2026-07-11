@@ -162,10 +162,10 @@ Current HarmonyOS behavior:
 - Text translation keeps the Android route and entry available.
 - The default HarmonyOS runtime and low-level `DefaultAiService` include a
   small offline dictionary fallback for common demo phrases in Chinese and
-  English, including the app intro and College summary copy. It can compose
-  known adjacent phrases such as `Hello, MindSpore!` and preserves Android's
-  default target-language rule (`zh` text translates to `en`, other text
-  translates to `zh`).
+  English, including the app name, Experience subtitle, app intro, and College
+  summary copy. It can compose known adjacent phrases such as
+  `Hello, MindSpore!` and preserves Android's default target-language rule
+  (`zh` text translates to `en`, other text translates to `zh`).
 - This fallback is not equivalent to HMS cloud translation. Unknown phrases
   fail with the localized text-translation failure status instead of inventing
   output.
@@ -264,6 +264,10 @@ Current HarmonyOS behavior:
   them ahead of useful scene labels. This makes the still/live scene workflows
   runnable offline, but it is a local approximation rather than HMS ML Kit
   equivalent output.
+- The Places365-to-Android mapper includes exact aliases for common indoor,
+  outdoor, transport, food, office, school, retail, and water scenes such as
+  `coffee_shop`, `bookstore`, `lecture_room`, `sky`, `river`, `runway`,
+  `subway_station`, and `apartment_building`.
 - Scene result display labels now use a recovered/readable Android-equivalent
   Chinese scene label table on Chinese locales while keeping the internal
   English/Places365 labels stable for mapping.

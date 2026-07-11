@@ -112,6 +112,11 @@ interface LocalTranslationPhrase {
 }
 
 const localChineseToEnglishPhrases: Array<LocalTranslationPhrase> = [
+  { source: 'MindSpore \u638C\u4E2D\u5B9D', target: 'MindSpore Inhand' },
+  {
+    source: 'HarmonyOS \u7248 AI \u793A\u4F8B\u5DF2\u5C31\u7EEA',
+    target: 'AI demos ready for the HarmonyOS shell'
+  },
   {
     source: 'AI \u7231\u597D\u8005\u7684\u4E00\u7AD9\u5F0F\u534F\u540C\u5B66\u4E60\u3001\u6F14\u793A\u3001\u4F53\u9A8C\u5E73\u53F0',
     target: 'a one-stop platform of collaborative learning, demonstrating, and experiencing for AI users'
@@ -160,6 +165,11 @@ const localChineseToEnglishPhrases: Array<LocalTranslationPhrase> = [
 ];
 
 const localEnglishToChinesePhrases: Array<LocalTranslationPhrase> = [
+  { source: 'mindspore inhand', target: 'MindSpore \u638C\u4E2D\u5B9D' },
+  {
+    source: 'ai demos ready for the harmonyos shell',
+    target: 'HarmonyOS \u7248 AI \u793A\u4F8B\u5DF2\u5C31\u7EEA'
+  },
   {
     source: 'a one-stop platform of collaborative learning, demonstrating, and experiencing for AI users',
     target: 'AI \u7231\u597D\u8005\u7684\u4E00\u7AD9\u5F0F\u534F\u540C\u5B66\u4E60\u3001\u6F14\u793A\u3001\u4F53\u9A8C\u5E73\u53F0'
