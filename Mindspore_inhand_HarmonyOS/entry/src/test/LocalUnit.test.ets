@@ -3120,7 +3120,7 @@ export default function localUnitTest() {
 
       expect(posenet.liveMode).assertFalse();
       expect(runtimeInputActionForWorkflowInput(posenet, 'camera')).assertEqual('captureImage');
-      expect(shouldAutoRunWorkflowAfterInputReady(posenet, 'sampleImage')).assertTrue();
+      expect(shouldAutoRunWorkflowAfterInputReady(posenet, 'sampleImage')).assertFalse();
       expect(shouldAutoRunWorkflowAfterInputReady(posenet, 'photo')).assertTrue();
       expect(shouldAutoRunWorkflowAfterInputReady(posenet, 'camera')).assertTrue();
       expect(inputLabelKey('sampleImage')).assertEqual('feature_input_sample_image');

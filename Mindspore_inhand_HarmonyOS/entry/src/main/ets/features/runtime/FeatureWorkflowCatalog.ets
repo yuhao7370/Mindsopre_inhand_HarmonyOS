@@ -388,7 +388,7 @@ export function shouldAutoRunWorkflowAfterInputReady(workflow: FeatureWorkflow, 
     return true;
   }
   if (workflow.routeName === AppRoute.POSENET.name &&
-    (inputKind === 'sampleImage' || inputKind === 'photo' || inputKind === 'camera')) {
+    (inputKind === 'photo' || inputKind === 'camera')) {
     return true;
   }
   return (workflow.routeName === AppRoute.TEXT_RECOGNITION.name ||
