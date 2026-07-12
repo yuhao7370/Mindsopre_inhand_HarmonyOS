@@ -184,6 +184,19 @@ struct DancePage {
     this.countdownText = '';
   }
 
+  private countdownMediaResource(): Resource {
+    if (this.countdownText === '3') {
+      return $r('app.media.dance_countdown_three');
+    }
+    if (this.countdownText === '2') {
+      return $r('app.media.dance_countdown_two');
+    }
+    if (this.countdownText === '1') {
+      return $r('app.media.dance_countdown_one');
+    }
+    return $r('app.media.dance_countdown_three');
+  }
+
   private startReferenceVideoFromBeginning(): boolean {
     if (!danceReferenceVideoCanStartLive({
       cached: this.referenceVideoReady,
@@ -572,10 +585,10 @@ struct DancePage {
               .fontSize(15)
               .fontColor(Color.White)
               .fontWeight(FontWeight.Medium)
-            Text(this.countdownText)
-              .fontSize(54)
-              .fontColor(Color.White)
-              .fontWeight(FontWeight.Bold)
+            Image(this.countdownMediaResource())
+              .width('100%')
+              .height('82%')
+              .objectFit(ImageFit.Contain)
               .margin({ top: AppSpacing.xs })
           }
           .width('100%')

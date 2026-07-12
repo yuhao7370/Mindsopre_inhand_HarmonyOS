@@ -16,6 +16,7 @@ $env:PATH = 'C:\Program Files\Huawei\DevEco Studio\jbr\bin;' + $env:PATH
 & (Join-Path $PSScriptRoot 'check-toolbar-back-icon.ps1')
 & (Join-Path $PSScriptRoot 'check-dance-back-icon.ps1')
 & (Join-Path $PSScriptRoot 'check-default-picker-icon.ps1')
+& (Join-Path $PSScriptRoot 'check-dance-countdown-assets.ps1')
 & (Join-Path $PSScriptRoot 'ensure-mindspore-models.ps1')
 $hvigor = 'C:\Program Files\Huawei\DevEco Studio\tools\hvigor\bin\hvigorw.bat'
 & cmd.exe /d /c "`"$hvigor`" assembleHap --no-daemon 2>&1"
