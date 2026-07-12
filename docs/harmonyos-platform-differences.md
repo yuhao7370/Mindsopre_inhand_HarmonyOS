@@ -218,9 +218,10 @@ Current HarmonyOS behavior:
   action/status labels such as `detect`, `video`, `copy`, `SAVE`, and
   `Copied successfully`, Text Translation page hint/status copy such as
   `Please enter the content to be translated` and `Offline Translation`, the
-  main shell tab and Experience section labels, and Android title strings that
-  use parenthesized or hyphenated separators such as `Object Detection(Photo)`
-  and `Real-time translation`. It can compose known
+  main shell tab, Experience section labels, hidden Me action labels, College
+  navigation labels, and Android title strings that use parenthesized or
+  hyphenated separators such as `Object Detection(Photo)` and
+  `Real-time translation`. It can compose known
   adjacent phrases such as `Hello, MindSpore!` and preserves Android's default
   target-language rule (`zh` text translates to `en`, other text translates to
   `zh`).

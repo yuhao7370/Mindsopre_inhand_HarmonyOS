@@ -4365,6 +4365,34 @@ export default function localUnitTest() {
           '\u672C\u9875\u63D0\u4F9B\u672C\u5730\u5B66\u4E60\u5165\u53E3\uFF0C\u5E76\u901A\u8FC7\u7F51\u9875\u6253\u5F00\u5916\u90E8\u8D44\u6E90');
     });
 
+    it('localTextTranslationCoversAndroidMeAndCollegeNavigationCopy', 0, async () => {
+      const runner = new LocalTextTranslationRunner();
+
+      const englishNavigation = await runner.translate(
+        'My QR Code\nOfficial Website\nOfficial Code\nFeedback\nUser Agreement and Privacy Policy\n' +
+          'Quick Start\nTrain\nInference\nApplications\nAsk on forum\nReference video',
+        'zh'
+      );
+      expect(englishNavigation.ok).assertTrue();
+      expect(englishNavigation.translatedText)
+        .assertEqual('\u6211\u7684\u4E8C\u7EF4\u7801\n\u5B98\u65B9\u7F51\u7AD9\n\u5B98\u65B9\u4EE3\u7801\u4ED3\n' +
+          '\u95EE\u9898\u53CD\u9988\n\u7528\u6237\u534F\u8BAE\u548C\u9690\u79C1\u653F\u7B56\n' +
+          '\u5FEB\u901F\u5165\u95E8\n\u8BAD\u7EC3\u6A21\u578B\n\u6267\u884C\u63A8\u7406\n' +
+          '\u7AEF\u4FA7\u5E94\u7528\n\u8BBA\u575B\u63D0\u95EE\n\u53C2\u8003\u89C6\u9891');
+
+      const chineseNavigation = await runner.translate(
+        '\u6211\u7684\u4E8C\u7EF4\u7801\n\u5B98\u65B9\u7F51\u7AD9\n\u5B98\u65B9\u4EE3\u7801\u4ED3\n' +
+          '\u95EE\u9898\u53CD\u9988\n\u7528\u6237\u534F\u8BAE\u548C\u9690\u79C1\u653F\u7B56\n' +
+          '\u5FEB\u901F\u5165\u95E8\n\u8BAD\u7EC3\u6A21\u578B\n\u6267\u884C\u63A8\u7406\n' +
+          '\u7AEF\u4FA7\u5E94\u7528\n\u8BBA\u575B\u63D0\u95EE\n\u53C2\u8003\u89C6\u9891',
+        'en'
+      );
+      expect(chineseNavigation.ok).assertTrue();
+      expect(chineseNavigation.translatedText)
+        .assertEqual('My QR Code\nOfficial Website\nOfficial Code\nFeedback\nUser Agreement and Privacy Policy\n' +
+          'Quick Start\nTrain\nInference\nApplications\nAsk on forum\nReference video');
+    });
+
     it('localTextTranslationRunnerCoversMainShellAndSectionCopyOffline', 0, async () => {
       const runner = new LocalTextTranslationRunner();
 
