@@ -100,6 +100,31 @@ capabilities for OCR, face, object detection, subject segmentation, and
 skeleton detection, but it does not expose an equivalent hand gesture or hand
 landmark API.
 
+Local verification on 2026-07-12:
+
+- `C:\Program Files\Huawei\DevEco Studio\sdk\default\hms\ets\kits\@kit.CoreVisionKit.d.ts`
+  exports `textRecognition`, `faceDetector`, `faceComparator`,
+  `subjectSegmentation`, `visionBase`, `objectDetection`, and
+  `skeletonDetection`; no hand gesture export is present.
+- Exact SDK searches for `handgesture`, `handGesture`, `MLGesture`,
+  `gestureRecognition`, `hand gesture`, and `gesture recogn` under the local
+  HMS SDK did not find a usable ArkTS or native hand gesture recognition API.
+  The only local `hand*` SDK hits are stylus handwrite and network handover
+  APIs, which are unrelated to camera hand gesture recognition.
+- The HarmonyOS project currently bundles `mobilenetv2.ms`,
+  `resnet18-place365.ms`, `ssd.ms`, `style_predict_quant.ms`, and
+  `style_transfer_quant.ms`. None is a hand gesture detector/classifier. The
+  cloned Android source does not include a `.ms`, `.om`, `.tflite`, `.task`, or
+  `.mindir` gesture model asset to copy across.
+- Huawei's current public Core Vision Kit guide lists OCR, face detection,
+  face verification, subject segmentation, multi-object detection, and skeleton
+  detection. Huawei ML Kit still documents hand gesture recognition on the
+  Android HMS path, so a future equivalent HarmonyOS implementation needs
+  either a Harmony SDK hand gesture export or a separately supplied/converted
+  local model. MindSpore Lite can run `.ms` models and convert some
+  third-party framework models to `.ms`, but no trustworthy ready-made
+  Android-`MLGesture`-compatible `.ms` model is bundled with this project.
+
 Current HarmonyOS behavior:
 
 - `Gesture Recognition` keeps the Android route and entry available.
