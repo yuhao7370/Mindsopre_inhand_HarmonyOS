@@ -2401,6 +2401,22 @@ struct FeatureRuntimePage {
             .fontColor(AppColor.textPrimary)
             .layoutWeight(1)
             .maxLines(1)
+          if (this.helpUrl.length > 0) {
+            Button(appString('title_source'))
+              .width(56)
+              .height(32)
+              .fontSize(12)
+              .margin({ left: AppSpacing.xs })
+              .onClick(() => this.openHelpPage())
+          }
+          if (this.helpContentKey !== undefined) {
+            Button(appString('feature_runtime_help'))
+              .width(56)
+              .height(32)
+              .fontSize(12)
+              .margin({ left: AppSpacing.xs })
+              .onClick(() => this.showLocalHelpDialog())
+          }
         }
         .width('100%')
         .height(56)
@@ -2411,18 +2427,6 @@ struct FeatureRuntimePage {
             .fontSize(15)
             .fontColor(AppColor.textPrimary)
             .lineHeight(22)
-          if (this.helpUrl.length > 0) {
-            Button(appString('title_source'))
-              .height(32)
-              .margin({ top: AppSpacing.md })
-              .onClick(() => this.openHelpPage())
-          }
-          if (this.helpContentKey !== undefined) {
-            Button(appString('feature_runtime_help'))
-              .height(32)
-              .margin({ top: AppSpacing.md })
-              .onClick(() => this.showLocalHelpDialog())
-          }
         }
         .width('100%')
         .padding(AppSpacing.md)
