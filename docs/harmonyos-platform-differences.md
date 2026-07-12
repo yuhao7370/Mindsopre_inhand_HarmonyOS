@@ -2,6 +2,25 @@
 
 Verified on 2026-07-09 with DevEco Studio SDK `6.1.1(24)`.
 
+## Android-Reachable Default Surface
+
+The parity target follows the UI that is reachable in the current Android
+source, rather than every page that remains in that repository.
+
+Current HarmonyOS behavior:
+
+- The default bottom navigation contains two tabs, in Android order:
+  `Experience` and `Me`.
+- College code, resources, state handling, and routes are retained, but College
+  is deliberately omitted from the default tab list because the current
+  Android source does not expose that tab.
+- Scene Detection still has its still/live implementations, route aliases,
+  local runner, and tests, but its Experience card is deliberately hidden by
+  default because the current Android source does not expose that entry.
+- Hidden capabilities were not deleted, so a later product decision can expose
+  them without rebuilding their implementation. They are not part of the
+  current default UI acceptance surface.
+
 ## Experience Route
 
 Android registers `/app/VisionFragment` for the Experience feature list even
@@ -139,12 +158,13 @@ Current HarmonyOS behavior:
 - The still Gesture and still Scene pages use Android's original image/camera/
   real-time prompt as their top runtime summary, while their live routes keep
   the generic feature summary.
-- The default HarmonyOS runtime reuses the bundled MobileNetV2 image
-  classification model as a conservative local approximation. With the bundled
-  ImageNet labels this currently only treats the exact `mitten` class as a
-  hand-adjacent positive; hand-adjacent or gesture labels such as
-  `boxing_glove`, `thumb_up`, `fist`, `heart`, and `ok_gesture` are also mapped
-  when provided by an injected or future score runner.
+- The bundled MobileNetV2/ImageNet fallback no longer treats `mitten` as a
+  hand-gesture success. `mitten` was an ImageNet classification false positive,
+  not evidence of a detected hand, so selecting that score now yields no
+  gesture detection.
+- Explicit hand/gesture aliases such as `boxing_glove`, `thumb_up`, `fist`,
+  `heart`, and `ok_gesture` remain available only for an injected or future
+  score runner whose model is actually trained and authorized for gestures.
 - The same mapper also accepts common local gesture-model aliases such as
   `Closed_Fist`, `Open_Palm`, `Thumb_Up`, `Thumb_Down`, `DISS`,
   `like_gesture`, `thumb_down_gesture`, `Victory`, `Pointing_Up`, `OK sign`,
@@ -155,20 +175,20 @@ Current HarmonyOS behavior:
   onto the Android `MLGesture` category set. Injected or future gesture runners
   that return those aliases are canonicalized to the Android labels so result
   rows and live overlays use the same localized strings as the Android app.
-- The local image-classification fallback keeps up to three distinct mapped
+- An injected gesture score runner can return up to three distinct mapped
   Android gesture categories per run, preserving the score threshold and
-  category de-duplication while moving closer to Android's multi-gesture
-  overlay behavior.
+  category de-duplication.
 - A dedicated `AndroidGestureModelRunner` adapter now defines the future local
   model contract for Android `MLGesture`-style category, score, and optional
   rectangle output. This keeps the service/UI boundary ready for a real
   HarmonyOS gesture model without changing the current fallback behavior.
-- The gesture fallback intentionally keeps English ImageNet labels internally
-  even on Chinese devices, because its conservative matching depends on stable
-  model label names.
-- This fallback is not equivalent to HMS hand gesture recognition. Non-hand
-  images and labels outside the conservative map fail with the localized
-  gesture failure status instead of inventing output.
+- Gesture label matching intentionally uses stable English model labels
+  internally even on Chinese devices.
+- API 24's phone-capable `CoreVisionKit` surface has no hand gesture or hand
+  landmark detector. Real gesture parity is therefore blocked on an externally
+  supplied and authorized gesture model/runner plus validation on a HarmonyOS
+  phone; host tests can verify the adapter and false-positive rejection, but
+  cannot establish camera inference parity.
 - A real gesture runner can still be injected; if no gesture service exists at
   all, the app reports the localized
   `feature_runtime_gesture_runner_unavailable` adapter status.
@@ -235,6 +255,9 @@ Current HarmonyOS behavior:
 
 - Text extraction uses HarmonyOS OCR.
 - Text translation keeps the Android route and entry available.
+- The page exposes exactly the three Android inputs: typed text, camera capture,
+  and album photo. It does not expose the generic shared live-camera translation
+  input.
 - The default HarmonyOS runtime and low-level `DefaultAiService` include a
   small offline dictionary fallback for common demo phrases in Chinese and
   English, including the app name, Experience subtitle, app intro, College
@@ -266,6 +289,13 @@ Current HarmonyOS behavior:
   translated-text row exists. Unknown local-fallback phrases still preserve the
   OCR source text for copying, but no longer create a misleading translated
   snapshot.
+- In the API 24 phone SDK, `CoreVisionKit` can supply OCR but not translation;
+  `NaturalLanguageKit` does not expose a general typed/OCR text translation API;
+  and `DataAugmentationKit`'s available capability is not a replacement for the
+  Android `MLRemoteTranslator` flow. General translation beyond the small,
+  explicitly documented offline dictionary remains blocked on an external
+  translation service or an authorized on-device translation model, followed
+  by phone validation.
 
 ## Model File Overrides
 
@@ -360,9 +390,10 @@ not ship a standalone HMS scene model that can be copied into HarmonyOS.
 Current HarmonyOS behavior:
 
 - Scene detection keeps the Android still and live route names available.
-- The still route is visible from the default Experience grid. The live route
-  remains runtime-only and is reached from the still route's Android-style
-  Real-time action.
+- The still route implementation is retained but hidden from the default
+  Experience grid, matching the currently reachable Android UI. The live route
+  remains retained and can be reached from the still route's Android-style
+  Real-time action when that hidden capability is opened explicitly.
 - The still scene route exposes the Android-style Real-time action and
   auto-runs scene analysis after album or camera image input is ready.
 - The default HarmonyOS runtime now uses the bundled
@@ -411,6 +442,17 @@ Current HarmonyOS behavior:
 - The live scene route now participates in the shared HarmonyOS live camera
   loop, so the local scene proxy or injected runner refreshes continuously at
   the 500ms fast-live cadence used for lightweight classification-style demos.
+
+## Build, Signing, And Device Verification Boundary
+
+- Host-side dependency resolution, Hypium tests, static/model guards, and HAP
+  assembly are verifiable with the checked-in toolchain configuration.
+- The current build artifact is an unsigned HAP. It cannot be used as evidence
+  of successful phone installation or launch until DevEco-supported signing is
+  configured without committing private keys.
+- `hdc list targets` reports no connected device in the current environment.
+  Camera, permission, installation, launch, and real gesture/translation device
+  behavior therefore remain pending a signed build and a HarmonyOS phone.
 
 ## Custom Model
 

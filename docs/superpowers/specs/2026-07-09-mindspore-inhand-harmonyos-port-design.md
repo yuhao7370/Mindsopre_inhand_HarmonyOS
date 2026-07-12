@@ -43,9 +43,12 @@ the default Experience grid unless product requirements change.
 The final port must preserve:
 
 - Splash and permission onboarding flow.
-- Main bottom navigation with Experience, College, and Me.
-- Experience feature grouping and feature entry cards.
-- College list, local summary dialog, checked-state persistence, and web links.
+- Main bottom navigation with the currently reachable Android tabs: Experience
+  and Me.
+- Experience feature grouping and currently visible feature entry cards.
+- College list, local summary dialog, checked-state persistence, web links, and
+  routes in code, while keeping College hidden from the default tab list to
+  match the current Android source.
 - Me page version display and retained hidden actions from the Android source.
 - Privacy policy display from the local HTML asset.
 - Camera, album/file picker, web, sharing, storage, and permission behavior.
@@ -53,6 +56,11 @@ The final port must preserve:
   and custom model flows.
 - HMS ML inspired feature entries: PoseNet, body segmentation, hand gesture,
   OCR/text extraction, translation, and related still/live camera modes.
+
+The current parity completion boundary is narrower than the full retained code
+surface: Scene Detection stays implemented and route-ready but hidden from the
+default Experience grid, and Text Translation exposes only typed text, camera
+capture, and album photo inputs.
 
 ## Recommended Approach
 
@@ -215,6 +223,8 @@ be verified independently.
 
 Map Android `SplashActivity`, `MainActivity`, `ExperienceFragment`,
 `CollegeFragment`, and `MeFragment` to HarmonyOS pages and shared components.
+The default tab catalog exposes only Experience and Me. College remains a
+retained hidden page/route rather than a visible default tab.
 
 ### Computer Vision
 
@@ -229,16 +239,33 @@ Map Android feature entries to HarmonyOS feature pages:
 - PoseNet: still and live pose detection modes.
 - Portrait Segmentation: still/live segmentation preview.
 - Gesture Recognition: still/live gesture recognition modes.
+- Scene Detection: retain the implemented still/live pages and routes, but hide
+  the Experience entry by default to match the reachable Android source.
+
+API 24's phone-capable `CoreVisionKit` supports capabilities such as OCR,
+object/face analysis, subject segmentation, and skeleton detection, but does
+not expose hand gesture or hand landmark recognition. The bundled ImageNet
+`mitten` class is not a gesture detector and must not produce a successful
+gesture result. Real gesture parity requires an externally supplied and
+authorized gesture model/runner and validation on a HarmonyOS phone.
 
 ### Speech Semantic Technology
 
 Map Android text features:
 
 - Text Extraction: pick/capture image, show recognized text.
-- Text Translation: input or recognized text, source/target language choices,
-  show translated output.
+- Text Translation: typed text, camera capture, or album photo input, then show
+  translated output. Do not expose a generic live-camera translation input.
 - Intelligent Poetry: keep page and route available but hidden by default,
   matching current Android source behavior.
+
+For API 24 phone targets, `CoreVisionKit` supplies the OCR portion but not text
+translation. `NaturalLanguageKit` has no general Android-equivalent typed/OCR
+translation API, and the available `DataAugmentationKit` capability is not a
+replacement for `MLRemoteTranslator`. General translation is therefore blocked
+on an external service or an authorized on-device translation model; the small
+bundled offline dictionary remains a limited demo fallback, not parity with HMS
+cloud translation.
 
 ### College
 
@@ -275,7 +302,11 @@ The existing baseline Hello World project builds with this command. Final
 implementation must keep this command green.
 
 Debug signing must be configured through DevEco-supported local signing. The
-repository must not commit private signing keys or local machine secrets.
+repository must not commit private signing keys or local machine secrets. The
+currently produced HAP is unsigned, and the current host has no target reported
+by `hdc list targets`; host tests and assembly can be verified now, but device
+installation and runtime acceptance require signing plus a connected HarmonyOS
+phone.
 
 ## Implementation Phases
 
@@ -330,7 +361,8 @@ Completion requires evidence for every item:
 - `assembleHap --no-daemon` succeeds from the local DevEco toolchain.
 - DevEco Studio can open the HarmonyOS project without missing SDK errors.
 - App starts on a HarmonyOS phone target.
-- Main navigation works across Experience, College, and Me.
+- Main navigation works across the default Experience and Me tabs; retained
+  College code/routes remain hidden.
 - Every preserved Android route has a HarmonyOS page or explicit feature entry.
 - Every visible feature entry opens and completes its original flow. A
   documented platform difference is acceptable only after verifying that
@@ -340,6 +372,13 @@ Completion requires evidence for every item:
 - Camera and picker flows handle permission denial and success.
 - Generated folders, local properties, cloned Android source, and build outputs
   remain ignored by Git.
+
+At the current host-only checkpoint, dependency resolution, Hypium tests,
+static/model guards, and unsigned HAP assembly can satisfy their corresponding
+items above. Installation, launch, camera/permission behavior, real gesture
+inference, and general translation still require a signed HAP, a connected
+HarmonyOS phone, and the external authorized model/service noted above; they
+must not be reported as device-verified from host evidence alone.
 
 ## External References
 
