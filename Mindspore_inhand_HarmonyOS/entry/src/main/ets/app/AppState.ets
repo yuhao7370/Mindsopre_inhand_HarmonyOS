@@ -25,14 +25,6 @@ export const mainTabs: TabItem[] = [
     unselectedIconMediaName: 'experience_uncheck'
   },
   {
-    id: MainTab.COLLEGE,
-    title: 'College',
-    titleKey: 'main_tab_title_two',
-    icon: 'college',
-    selectedIconMediaName: 'college_checked_icon',
-    unselectedIconMediaName: 'college_uncheck'
-  },
-  {
     id: MainTab.ME,
     title: 'Me',
     titleKey: 'main_tab_title_three',

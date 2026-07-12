@@ -1876,7 +1876,7 @@ export default function localUnitTest() {
       expect(AppRoute.SCENE_LIVE.name).assertEqual('/hms/SenceDetectionLiveAnalyseActivity');
       expect(findRouteByName(AppRoute.SCENE_STILL.name)?.page).assertEqual('pages/FeatureRuntimePage');
       expect(findRouteByName(AppRoute.SCENE_LIVE.name)?.page).assertEqual('pages/FeatureRuntimePage');
-      expect(findFeatureByRoute(AppRoute.SCENE_STILL.name)?.visibleByDefault).assertTrue();
+      expect(findFeatureByRoute(AppRoute.SCENE_STILL.name)?.visibleByDefault).assertFalse();
       expect(findFeatureByRoute(AppRoute.SCENE_LIVE.name) === undefined).assertTrue();
       expect(workflowForRoute(AppRoute.SCENE_STILL.name)?.aiMethod).assertEqual('detectScene');
       expect(workflowForRoute(AppRoute.SCENE_LIVE.name)?.liveMode).assertTrue();
@@ -1893,8 +1893,15 @@ export default function localUnitTest() {
       const visibleCount = visibleExperienceSections
         .map((section) => section.items.length)
         .reduce((sum, count) => sum + count, 0);
-      expect(visibleCount).assertEqual(11);
+      const scene = allExperienceFeatures.find((item: FeatureItem) => item.id === 'scene');
+      const visibleSceneCount = visibleExperienceSections
+        .map((section) => section.items.filter((item: FeatureItem) => item.id === 'scene').length)
+        .reduce((sum, count) => sum + count, 0);
+      expect(visibleCount).assertEqual(10);
       expect(allExperienceFeatures.length).assertEqual(13);
+      expect(scene === undefined).assertFalse();
+      expect(scene?.visibleByDefault).assertFalse();
+      expect(visibleSceneCount).assertEqual(0);
     });
 
     it('mapsExperienceFeatureIconsToAndroidDrawableMedia', 0, () => {
@@ -2108,11 +2115,10 @@ export default function localUnitTest() {
       expect(new AppVersionService(new ThrowingAppVersionReader()).currentVersionLabel()).assertEqual('V1.0.0');
     });
 
-    it('definesThreeMainTabsInAndroidOrder', 0, () => {
-      expect(mainTabs.length).assertEqual(3);
+    it('definesDefaultMainTabsInAndroidOrder', 0, () => {
+      expect(mainTabs.length).assertEqual(2);
       expect(mainTabs[0].id).assertEqual(MainTab.EXPERIENCE);
-      expect(mainTabs[1].title).assertEqual('College');
-      expect(mainTabs[2].title).assertEqual('Me');
+      expect(mainTabs[1].id).assertEqual(MainTab.ME);
     });
 
     it('mapsSemanticIconTokensToCompactLabels', 0, () => {
@@ -2230,12 +2236,12 @@ export default function localUnitTest() {
       expect(visibleExperienceSections[2].groupTitleKey).assertEqual('experience_group_advanced');
     });
 
-    it('exposesSceneDetectionEntryInExperienceCatalog', 0, () => {
+    it('keepsSceneDetectionEntryRouteReadyButHiddenByDefault', 0, () => {
       const sceneFeature = findFeatureByRoute(AppRoute.SCENE_STILL.name);
       expect(sceneFeature?.id).assertEqual('scene');
       expect(sceneFeature?.titleKey).assertEqual('title_scene_detection');
       expect(sceneFeature?.routeName).assertEqual(AppRoute.SCENE_STILL.name);
-      expect(sceneFeature?.visibleByDefault).assertTrue();
+      expect(sceneFeature?.visibleByDefault).assertFalse();
 
       const advancedVisionSection = visibleExperienceSections.find((section: FeatureSection) => {
         return section.id === 'advanced-vision';
@@ -2243,7 +2249,7 @@ export default function localUnitTest() {
       const visibleSceneFeature = advancedVisionSection?.items.find((item: FeatureItem) => {
         return item.id === 'scene';
       });
-      expect(visibleSceneFeature?.routeName).assertEqual(AppRoute.SCENE_STILL.name);
+      expect(visibleSceneFeature).assertUndefined();
     });
 
     it('usesAndroidNoticeDialogTreatmentForCollegeSummary', 0, () => {
