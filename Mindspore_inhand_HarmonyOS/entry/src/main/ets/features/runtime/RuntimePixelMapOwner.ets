@@ -2,6 +2,13 @@ export interface RuntimeReleasablePixelMap {
   release(): Promise<void>;
 }
 
+export function clearRuntimePixelMapState<T extends RuntimeReleasablePixelMap>(
+  owner: RuntimePixelMapOwner<T>
+): T | undefined {
+  owner.clear();
+  return owner.current();
+}
+
 export class RuntimePixelMapOwner<T extends RuntimeReleasablePixelMap> {
   private generation: number = 0;
   private value: T | undefined = undefined;
@@ -16,7 +23,9 @@ export class RuntimePixelMapOwner<T extends RuntimeReleasablePixelMap> {
 
   accept(requestId: number, next: T): boolean {
     if (!this.isCurrent(requestId)) {
-      this.release(next);
+      if (this.value !== next) {
+        this.release(next);
+      }
       return false;
     }
     const previous = this.value;

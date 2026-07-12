@@ -66,7 +66,10 @@ import {
   runtimePickedInputStateAfterModelCacheFailure,
   runtimePickedInputStateAfterCancelledPick
 } from '../features/runtime/FeatureRuntimeInputState';
-import { RuntimePixelMapOwner } from '../features/runtime/RuntimePixelMapOwner';
+import {
+  RuntimePixelMapOwner,
+  clearRuntimePixelMapState
+} from '../features/runtime/RuntimePixelMapOwner';
 import {
   AiRunInputs,
   AiRunResult,
@@ -336,8 +339,8 @@ struct FeatureRuntimePage {
   aboutToDisappear() {
     this.inputPreparationRequestId++;
     this.runtimeAiServiceSession.invalidate();
-    this.styledImagePixelMapOwner.clear();
-    this.segmentationForegroundPixelMapOwner.clear();
+    this.styledImagePixelMap = clearRuntimePixelMapState(this.styledImagePixelMapOwner);
+    this.segmentationForegroundPixelMap = clearRuntimePixelMapState(this.segmentationForegroundPixelMapOwner);
     this.setRuntimeKeepScreenOn(false);
     this.stopLiveCameraPreview();
   }

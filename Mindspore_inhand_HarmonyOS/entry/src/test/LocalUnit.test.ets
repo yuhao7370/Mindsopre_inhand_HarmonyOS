@@ -259,7 +259,10 @@ import {
   setHarmonyRuntimeLabelLocaleForTests
 } from '../main/ets/services/ai/ImageClassificationRuntimeFactory';
 import { RuntimeAiServiceSession } from '../main/ets/services/ai/RuntimeAiServiceSession';
-import { RuntimePixelMapOwner } from '../main/ets/features/runtime/RuntimePixelMapOwner';
+import {
+  RuntimePixelMapOwner,
+  clearRuntimePixelMapState
+} from '../main/ets/features/runtime/RuntimePixelMapOwner';
 import {
   floatScoresFromOutputBuffer,
   mindSporeLiteCpuContext,
@@ -7037,6 +7040,21 @@ export default function localUnitTest() {
       expect(owner.current()).assertUndefined();
     });
 
+    it('runtimePixelMapOwnerDoesNotReleaseStaleAliasOfCurrentValue', 0, () => {
+      const owner = new RuntimePixelMapOwner<FakeReleasablePixelMap>();
+      const value = new FakeReleasablePixelMap();
+      owner.accept(owner.beginReplacement(), value);
+      const staleRequestId = owner.beginReplacement();
+      owner.beginReplacement();
+
+      const accepted = owner.accept(staleRequestId, value);
+
+      expect(accepted).assertFalse();
+      expect(value.releaseCount).assertEqual(0);
+      owner.clear();
+      expect(value.releaseCount).assertEqual(1);
+    });
+
     it('runtimePixelMapOwnerDoesNotReleaseSameCurrentValueTwice', 0, () => {
       const owner = new RuntimePixelMapOwner<FakeReleasablePixelMap>();
       const value = new FakeReleasablePixelMap();
@@ -7059,6 +7077,18 @@ export default function localUnitTest() {
 
       expect(rejecting.releaseCount).assertEqual(1);
       expect(owner.current()).assertUndefined();
+    });
+
+    it('clearRuntimePixelMapStateReleasesOwnerAndReturnsUndefined', 0, () => {
+      const owner = new RuntimePixelMapOwner<FakeReleasablePixelMap>();
+      const value = new FakeReleasablePixelMap();
+      owner.accept(owner.beginReplacement(), value);
+
+      const state = clearRuntimePixelMapState(owner);
+
+      expect(state).assertUndefined();
+      expect(owner.current()).assertUndefined();
+      expect(value.releaseCount).assertEqual(1);
     });
 
     it('mapsImageClassificationLabelsToLocalGestureCategories', 0, () => {
