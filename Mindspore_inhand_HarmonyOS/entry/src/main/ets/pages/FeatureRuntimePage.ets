@@ -2417,21 +2417,33 @@ struct FeatureRuntimePage {
             .fontColor(AppColor.textPrimary)
             .layoutWeight(1)
             .maxLines(1)
-          if (this.helpUrl.length > 0) {
-            Button(appString('title_source'))
-              .width(56)
-              .height(32)
-              .fontSize(12)
-              .margin({ left: AppSpacing.xs })
-              .onClick(() => this.openHelpPage())
-          }
           if (this.helpContentKey !== undefined) {
-            Button(appString('feature_runtime_help'))
-              .width(56)
-              .height(32)
-              .fontSize(12)
+            Row() {
+              Image($r('app.media.icon_help'))
+                .width(24)
+                .height(24)
+                .objectFit(ImageFit.Contain)
+            }
+              .width(40)
+              .height(40)
+              .justifyContent(FlexAlign.Center)
+              .alignItems(VerticalAlign.Center)
               .margin({ left: AppSpacing.xs })
               .onClick(() => this.showLocalHelpDialog())
+          }
+          if (this.helpUrl.length > 0) {
+            Row() {
+              Image($r('app.media.icon_more'))
+                .width(24)
+                .height(24)
+                .objectFit(ImageFit.Contain)
+            }
+              .width(40)
+              .height(40)
+              .justifyContent(FlexAlign.Center)
+              .alignItems(VerticalAlign.Center)
+              .margin({ left: AppSpacing.xs })
+              .onClick(() => this.openHelpPage())
           }
         }
         .width('100%')
