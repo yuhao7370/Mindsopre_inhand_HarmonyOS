@@ -8406,6 +8406,85 @@ export default function localUnitTest() {
       expect(writer.writtenBytes[0]).assertEqual(4);
     });
 
+    it('reportsAndroidStyleModelSlotLoadStatusForStyleTransferModelPicks', 0, async () => {
+      expect(hasAppStringKey('feature_runtime_style_predict_model_loaded')).assertTrue();
+      expect(hasAppStringKey('feature_runtime_style_predict_model_load_failed')).assertTrue();
+      expect(hasAppStringKey('feature_runtime_style_transfer_model_loaded')).assertTrue();
+      expect(hasAppStringKey('feature_runtime_style_transfer_model_load_failed')).assertTrue();
+
+      const predictReader = new FileUriContentReader(new FixedFileUriContentBackend(new Uint8Array([1, 2, 3, 4])));
+      const predictWriter = new RecordingModelFileCacheWriter('/cache/custom_predict.ms');
+      const predictService = new RuntimeModelFileCacheService(
+        predictReader,
+        predictWriter,
+        new RecordingModelFileCompatibilityChecker(true)
+      );
+
+      const predictResult = await predictService.cachePickedModelFile(
+        'file://selected/predict.ms',
+        '/cache',
+        AppRoute.STYLE_TRANSFER.name,
+        'stylePredictModelFile'
+      );
+
+      expect(predictResult.ok).assertTrue();
+      expect(predictResult.messageKey).assertEqual('feature_runtime_style_predict_model_loaded');
+      expect(predictWriter.seenFileNames[0]).assertEqual('custom_predict.ms');
+
+      const failedPredictService = new RuntimeModelFileCacheService(
+        new FileUriContentReader(new FixedFileUriContentBackend(new Uint8Array([1, 2, 3, 4]))),
+        new RecordingModelFileCacheWriter('/cache/custom_predict.ms'),
+        new RecordingModelFileCompatibilityChecker(false)
+      );
+
+      const failedPredictResult = await failedPredictService.cachePickedModelFile(
+        'file://selected/bad-predict.ms',
+        '/cache',
+        AppRoute.STYLE_TRANSFER.name,
+        'stylePredictModelFile'
+      );
+
+      expect(failedPredictResult.ok).assertFalse();
+      expect(failedPredictResult.messageKey).assertEqual('feature_runtime_style_predict_model_load_failed');
+
+      const loadedTransferWriter = new RecordingModelFileCacheWriter('/cache/custom_transfer.ms');
+      const loadedTransferService = new RuntimeModelFileCacheService(
+        new FileUriContentReader(new FixedFileUriContentBackend(new Uint8Array([5, 6, 7, 8]))),
+        loadedTransferWriter,
+        new RecordingModelFileCompatibilityChecker(true)
+      );
+
+      const loadedTransferResult = await loadedTransferService.cachePickedModelFile(
+        'file://selected/transfer.ms',
+        '/cache',
+        AppRoute.STYLE_TRANSFER.name,
+        'styleTransferModelFile'
+      );
+
+      expect(loadedTransferResult.ok).assertTrue();
+      expect(loadedTransferResult.messageKey).assertEqual('feature_runtime_style_transfer_model_loaded');
+      expect(loadedTransferWriter.seenFileNames[0]).assertEqual('custom_transfer.ms');
+
+      const transferReader = new FileUriContentReader(new FixedFileUriContentBackend(new Uint8Array([5, 6, 7, 8])));
+      const transferWriter = new RecordingModelFileCacheWriter('/cache/custom_transfer.ms');
+      const transferService = new RuntimeModelFileCacheService(
+        transferReader,
+        transferWriter,
+        new RecordingModelFileCompatibilityChecker(false)
+      );
+
+      const transferResult = await transferService.cachePickedModelFile(
+        'file://selected/transfer.ms',
+        '/cache',
+        AppRoute.STYLE_TRANSFER.name,
+        'styleTransferModelFile'
+      );
+
+      expect(transferResult.ok).assertFalse();
+      expect(transferResult.messageKey).assertEqual('feature_runtime_style_transfer_model_load_failed');
+      expect(transferWriter.writtenBytes.length).assertEqual(0);
+    });
+
     it('preflightsCachedPickedModelFileCompatibilityBeforeMarkingReady', 0, async () => {
       const reader = new FileUriContentReader(new FixedFileUriContentBackend(new Uint8Array([5, 6, 7, 8])));
       const writer = new RecordingModelFileCacheWriter('/cache/object_detection_model.ms');
@@ -8437,7 +8516,7 @@ export default function localUnitTest() {
 
       expect(result.ok).assertFalse();
       expect(result.uri).assertEqual('');
-      expect(result.messageKey).assertEqual('feature_runtime_model_incompatible');
+      expect(result.messageKey).assertEqual('feature_runtime_style_transfer_model_load_failed');
       expect(writer.writtenBytes.length).assertEqual(0);
     });
 

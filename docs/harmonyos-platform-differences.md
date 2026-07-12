@@ -424,6 +424,10 @@ Current HarmonyOS behavior:
   prompt as its idle status so the first-run page asks the user to choose a
   picture from the lower controls or album instead of showing a generic runtime
   message.
+- Picking custom predict/transfer `.ms` models now reports the Android slot
+  specific load feedback (`loaded predict`, `failed predict`, `loaded
+  transfer`, `failed transfer`) instead of the shared generic model-ready or
+  incompatible messages used by other model-based routes.
 - HarmonyOS shows the localized Recovery control whenever the Style Transfer
   page is open, matching Android's always-visible button. If no original image
   has been selected yet, the action reports the Android-style original-image

@@ -92,31 +92,31 @@ export class RuntimeModelFileCacheService {
     inputKind: FeatureInputKind
   ): Promise<ModelFileCacheResult> {
     if (sourceUri.length === 0 || cacheDir.length === 0) {
-      return modelFileCacheFailedResult();
+      return modelFileCacheFailedResult(routeName, inputKind);
     }
 
     try {
       const content = await this.reader.readFileContent(sourceUri);
       const fileName = cachedModelFileNameForInputKind(routeName, inputKind);
       if (fileName.length === 0) {
-        return modelFileCacheFailedResult();
+        return modelFileCacheFailedResult(routeName, inputKind);
       }
       const targetUri = modelFileCachePath(cacheDir, fileName);
       const compatible = await this.isCompatibleModelFile(routeName, inputKind, targetUri, content);
       if (!compatible) {
-        return modelFileIncompatibleResult();
+        return modelFileIncompatibleResult(routeName, inputKind);
       }
       const uri = await this.writer.writeModelFile(cacheDir, fileName, content);
       if (uri.length === 0) {
-        return modelFileCacheFailedResult();
+        return modelFileCacheFailedResult(routeName, inputKind);
       }
       return {
         ok: true,
         uri: uri,
-        messageKey: 'feature_runtime_model_ready'
+        messageKey: modelFileReadyMessageKey(routeName, inputKind)
       };
     } catch (_) {
-      return modelFileCacheFailedResult();
+      return modelFileCacheFailedResult(routeName, inputKind);
     }
   }
 
@@ -236,18 +236,41 @@ async function cachedModelFileUriForInputKind(
   return await existenceChecker.modelFileExists(uri) ? uri : '';
 }
 
-function modelFileCacheFailedResult(): ModelFileCacheResult {
+function modelFileReadyMessageKey(routeName: string, inputKind: FeatureInputKind): AppStringKey {
+  if (routeName === AppRoute.STYLE_TRANSFER.name && inputKind === 'stylePredictModelFile') {
+    return 'feature_runtime_style_predict_model_loaded';
+  }
+  if (routeName === AppRoute.STYLE_TRANSFER.name && inputKind === 'styleTransferModelFile') {
+    return 'feature_runtime_style_transfer_model_loaded';
+  }
+  return 'feature_runtime_model_ready';
+}
+
+function modelFileFailureMessageKey(routeName: string, inputKind: FeatureInputKind): AppStringKey {
+  if (routeName === AppRoute.STYLE_TRANSFER.name && inputKind === 'stylePredictModelFile') {
+    return 'feature_runtime_style_predict_model_load_failed';
+  }
+  if (routeName === AppRoute.STYLE_TRANSFER.name && inputKind === 'styleTransferModelFile') {
+    return 'feature_runtime_style_transfer_model_load_failed';
+  }
+  return 'feature_runtime_model_cache_failed';
+}
+
+function modelFileCacheFailedResult(routeName: string, inputKind: FeatureInputKind): ModelFileCacheResult {
   return {
     ok: false,
     uri: '',
-    messageKey: 'feature_runtime_model_cache_failed'
+    messageKey: modelFileFailureMessageKey(routeName, inputKind)
   };
 }
 
-function modelFileIncompatibleResult(): ModelFileCacheResult {
+function modelFileIncompatibleResult(routeName: string, inputKind: FeatureInputKind): ModelFileCacheResult {
+  const styleModelFailureKey = modelFileFailureMessageKey(routeName, inputKind);
   return {
     ok: false,
     uri: '',
-    messageKey: 'feature_runtime_model_incompatible'
+    messageKey: styleModelFailureKey === 'feature_runtime_model_cache_failed' ?
+      'feature_runtime_model_incompatible' :
+      styleModelFailureKey
   };
 }

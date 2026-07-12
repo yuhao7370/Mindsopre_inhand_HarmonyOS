@@ -182,6 +182,10 @@ export type AppStringKey =
   'feature_runtime_style_take_photo' |
   'feature_runtime_style_select_predict_model' |
   'feature_runtime_style_select_transfer_model' |
+  'feature_runtime_style_predict_model_loaded' |
+  'feature_runtime_style_predict_model_load_failed' |
+  'feature_runtime_style_transfer_model_loaded' |
+  'feature_runtime_style_transfer_model_load_failed' |
   'feature_runtime_text_recognition_done' |
   'feature_runtime_text_recognition_failed' |
   'feature_runtime_text_translation_done' |
@@ -478,6 +482,10 @@ const APP_STRING_KEYS: AppStringKey[] = [
   'feature_runtime_style_take_photo',
   'feature_runtime_style_select_predict_model',
   'feature_runtime_style_select_transfer_model',
+  'feature_runtime_style_predict_model_loaded',
+  'feature_runtime_style_predict_model_load_failed',
+  'feature_runtime_style_transfer_model_loaded',
+  'feature_runtime_style_transfer_model_load_failed',
   'feature_runtime_text_recognition_done',
   'feature_runtime_text_recognition_failed',
   'feature_runtime_text_translation_done',
@@ -961,6 +969,14 @@ export function appString(key: AppStringKey): ResourceStr {
       return $r('app.string.feature_runtime_style_select_predict_model');
     case 'feature_runtime_style_select_transfer_model':
       return $r('app.string.feature_runtime_style_select_transfer_model');
+    case 'feature_runtime_style_predict_model_loaded':
+      return $r('app.string.feature_runtime_style_predict_model_loaded');
+    case 'feature_runtime_style_predict_model_load_failed':
+      return $r('app.string.feature_runtime_style_predict_model_load_failed');
+    case 'feature_runtime_style_transfer_model_loaded':
+      return $r('app.string.feature_runtime_style_transfer_model_loaded');
+    case 'feature_runtime_style_transfer_model_load_failed':
+      return $r('app.string.feature_runtime_style_transfer_model_load_failed');
     case 'feature_runtime_text_recognition_done':
       return $r('app.string.feature_runtime_text_recognition_done');
     case 'feature_runtime_text_recognition_failed':
