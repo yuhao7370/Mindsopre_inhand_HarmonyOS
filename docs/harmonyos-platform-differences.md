@@ -104,6 +104,12 @@ Current HarmonyOS behavior:
 - Pose results that report success without any skeleton or points are
   normalized to the localized pose failure state, matching Android's empty
   skeleton-list failure path.
+- Devices without `SystemCapability.AI.Vision.SkeletonDetection` can expose an
+  undefined native skeleton module. Shared pose and Dance modules therefore use
+  the SDK-stable numeric point identifiers without reading the optional native
+  enum during module initialization. Their pages still load; an unavailable
+  detector is handled by the existing async pose failure path instead of
+  terminating the shared runtime page.
 - Live Skeleton detections draw the same skeleton lines and points directly on
   the HarmonyOS camera preview, matching Android `SkeletonGraphic` overlay
   behavior while still reusing the shared captured-frame result state.

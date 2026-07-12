@@ -62,6 +62,7 @@ import {
   poseSimilarityToAndroidTemplate,
   poseSkeletonLines
 } from '../main/ets/services/ai/PoseService';
+import { PosePointType } from '../main/ets/services/ai/PosePointType';
 import {
   GestureDetection,
   AndroidGestureModelDetection,
@@ -4974,6 +4975,50 @@ export default function localUnitTest() {
       expect(isPosePointVisible(visible)).assertTrue();
       expect(isPosePointVisible(lowScore)).assertFalse();
       expect(isPosePointVisible(zeroPoint)).assertFalse();
+    });
+
+    it('exposesSdkStablePosePointTypeValuesWithoutNativeEnumReads', 0, () => {
+      expect(PosePointType.NOSE).assertEqual(0);
+      expect(PosePointType.LEFT_SHOULDER).assertEqual(5);
+      expect(PosePointType.RIGHT_SHOULDER).assertEqual(6);
+      expect(PosePointType.LEFT_ELBOW).assertEqual(7);
+      expect(PosePointType.RIGHT_ELBOW).assertEqual(8);
+      expect(PosePointType.LEFT_WRIST).assertEqual(9);
+      expect(PosePointType.RIGHT_WRIST).assertEqual(10);
+      expect(PosePointType.LEFT_HIP).assertEqual(11);
+      expect(PosePointType.RIGHT_HIP).assertEqual(12);
+      expect(PosePointType.LEFT_KNEE).assertEqual(13);
+      expect(PosePointType.RIGHT_KNEE).assertEqual(14);
+      expect(PosePointType.LEFT_ANKLE).assertEqual(15);
+      expect(PosePointType.RIGHT_ANKLE).assertEqual(16);
+    });
+
+    it('usesStablePosePointTypesForLineAndDanceMappings', 0, () => {
+      const points: Array<PosePoint> = [
+        { type: PosePointType.NOSE, score: 0.9, x: 100, y: 20 },
+        { type: PosePointType.LEFT_SHOULDER, score: 0.9, x: 60, y: 80 },
+        { type: PosePointType.RIGHT_SHOULDER, score: 0.9, x: 140, y: 80 },
+        { type: PosePointType.LEFT_ELBOW, score: 0.9, x: 40, y: 130 },
+        { type: PosePointType.RIGHT_ELBOW, score: 0.9, x: 160, y: 130 },
+        { type: PosePointType.LEFT_WRIST, score: 0.9, x: 20, y: 180 },
+        { type: PosePointType.RIGHT_WRIST, score: 0.9, x: 180, y: 180 },
+        { type: PosePointType.LEFT_HIP, score: 0.9, x: 70, y: 180 },
+        { type: PosePointType.RIGHT_HIP, score: 0.9, x: 130, y: 180 },
+        { type: PosePointType.LEFT_KNEE, score: 0.9, x: 70, y: 250 },
+        { type: PosePointType.RIGHT_KNEE, score: 0.9, x: 130, y: 250 },
+        { type: PosePointType.LEFT_ANKLE, score: 0.9, x: 70, y: 310 },
+        { type: PosePointType.RIGHT_ANKLE, score: 0.9, x: 130, y: 310 }
+      ];
+
+      expect(poseSkeletonLines(points).length).assertEqual(12);
+      expect(dancePosePointType.LEFT_SHOULDER).assertEqual(PosePointType.LEFT_SHOULDER);
+      expect(dancePosePointType.RIGHT_SHOULDER).assertEqual(PosePointType.RIGHT_SHOULDER);
+      expect(dancePosePointType.RIGHT_ELBOW).assertEqual(PosePointType.RIGHT_ELBOW);
+      expect(dancePosePointType.RIGHT_WRIST).assertEqual(PosePointType.RIGHT_WRIST);
+      expect(dancePosePointType.LEFT_ELBOW).assertEqual(PosePointType.LEFT_ELBOW);
+      expect(dancePosePointType.LEFT_WRIST).assertEqual(PosePointType.LEFT_WRIST);
+      expect(dancePosePointType.LEFT_KNEE).assertEqual(PosePointType.LEFT_KNEE);
+      expect(dancePosePointType.LEFT_ANKLE).assertEqual(PosePointType.LEFT_ANKLE);
     });
 
     it('mapsPosePointsToSkeletonLineOverlay', 0, () => {

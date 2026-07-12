@@ -10,6 +10,7 @@ import {
   imageRotationDegreesFromImageSource,
   rotatedImageSize
 } from './ImageDecodeOrientation';
+import { PosePointType } from './PosePointType';
 
 export interface PosePoint {
   readonly type: number;
@@ -123,52 +124,52 @@ export const androidLiveSkeletonTemplatePoints: Array<PosePoint> = [
 
 const poseSkeletonLineTypePairs: Array<PoseLineTypePair> = [
   {
-    startType: skeletonDetection.SkeletonPointType.NOSE,
-    endType: skeletonDetection.SkeletonPointType.LEFT_SHOULDER
+    startType: PosePointType.NOSE,
+    endType: PosePointType.LEFT_SHOULDER
   },
   {
-    startType: skeletonDetection.SkeletonPointType.NOSE,
-    endType: skeletonDetection.SkeletonPointType.RIGHT_SHOULDER
+    startType: PosePointType.NOSE,
+    endType: PosePointType.RIGHT_SHOULDER
   },
   {
-    startType: skeletonDetection.SkeletonPointType.LEFT_SHOULDER,
-    endType: skeletonDetection.SkeletonPointType.LEFT_ELBOW
+    startType: PosePointType.LEFT_SHOULDER,
+    endType: PosePointType.LEFT_ELBOW
   },
   {
-    startType: skeletonDetection.SkeletonPointType.LEFT_ELBOW,
-    endType: skeletonDetection.SkeletonPointType.LEFT_WRIST
+    startType: PosePointType.LEFT_ELBOW,
+    endType: PosePointType.LEFT_WRIST
   },
   {
-    startType: skeletonDetection.SkeletonPointType.LEFT_SHOULDER,
-    endType: skeletonDetection.SkeletonPointType.LEFT_HIP
+    startType: PosePointType.LEFT_SHOULDER,
+    endType: PosePointType.LEFT_HIP
   },
   {
-    startType: skeletonDetection.SkeletonPointType.LEFT_HIP,
-    endType: skeletonDetection.SkeletonPointType.LEFT_KNEE
+    startType: PosePointType.LEFT_HIP,
+    endType: PosePointType.LEFT_KNEE
   },
   {
-    startType: skeletonDetection.SkeletonPointType.LEFT_KNEE,
-    endType: skeletonDetection.SkeletonPointType.LEFT_ANKLE
+    startType: PosePointType.LEFT_KNEE,
+    endType: PosePointType.LEFT_ANKLE
   },
   {
-    startType: skeletonDetection.SkeletonPointType.RIGHT_SHOULDER,
-    endType: skeletonDetection.SkeletonPointType.RIGHT_ELBOW
+    startType: PosePointType.RIGHT_SHOULDER,
+    endType: PosePointType.RIGHT_ELBOW
   },
   {
-    startType: skeletonDetection.SkeletonPointType.RIGHT_ELBOW,
-    endType: skeletonDetection.SkeletonPointType.RIGHT_WRIST
+    startType: PosePointType.RIGHT_ELBOW,
+    endType: PosePointType.RIGHT_WRIST
   },
   {
-    startType: skeletonDetection.SkeletonPointType.RIGHT_SHOULDER,
-    endType: skeletonDetection.SkeletonPointType.RIGHT_HIP
+    startType: PosePointType.RIGHT_SHOULDER,
+    endType: PosePointType.RIGHT_HIP
   },
   {
-    startType: skeletonDetection.SkeletonPointType.RIGHT_HIP,
-    endType: skeletonDetection.SkeletonPointType.RIGHT_KNEE
+    startType: PosePointType.RIGHT_HIP,
+    endType: PosePointType.RIGHT_KNEE
   },
   {
-    startType: skeletonDetection.SkeletonPointType.RIGHT_KNEE,
-    endType: skeletonDetection.SkeletonPointType.RIGHT_ANKLE
+    startType: PosePointType.RIGHT_KNEE,
+    endType: PosePointType.RIGHT_ANKLE
   }
 ];
 
@@ -481,29 +482,29 @@ function coreVisionPosePointsAsAndroidYogaPoints(points: Array<PosePoint>): Arra
 
 function androidYogaPointTypeForCoreVisionPointType(type: number): number | undefined {
   switch (type) {
-    case skeletonDetection.SkeletonPointType.LEFT_SHOULDER:
+    case PosePointType.LEFT_SHOULDER:
       return 101;
-    case skeletonDetection.SkeletonPointType.LEFT_ELBOW:
+    case PosePointType.LEFT_ELBOW:
       return 102;
-    case skeletonDetection.SkeletonPointType.LEFT_WRIST:
+    case PosePointType.LEFT_WRIST:
       return 103;
-    case skeletonDetection.SkeletonPointType.RIGHT_SHOULDER:
+    case PosePointType.RIGHT_SHOULDER:
       return 104;
-    case skeletonDetection.SkeletonPointType.RIGHT_ELBOW:
+    case PosePointType.RIGHT_ELBOW:
       return 105;
-    case skeletonDetection.SkeletonPointType.RIGHT_WRIST:
+    case PosePointType.RIGHT_WRIST:
       return 106;
-    case skeletonDetection.SkeletonPointType.LEFT_HIP:
+    case PosePointType.LEFT_HIP:
       return 107;
-    case skeletonDetection.SkeletonPointType.LEFT_KNEE:
+    case PosePointType.LEFT_KNEE:
       return 108;
-    case skeletonDetection.SkeletonPointType.LEFT_ANKLE:
+    case PosePointType.LEFT_ANKLE:
       return 109;
-    case skeletonDetection.SkeletonPointType.RIGHT_HIP:
+    case PosePointType.RIGHT_HIP:
       return 110;
-    case skeletonDetection.SkeletonPointType.RIGHT_KNEE:
+    case PosePointType.RIGHT_KNEE:
       return 111;
-    case skeletonDetection.SkeletonPointType.RIGHT_ANKLE:
+    case PosePointType.RIGHT_ANKLE:
       return 112;
     default:
       return undefined;

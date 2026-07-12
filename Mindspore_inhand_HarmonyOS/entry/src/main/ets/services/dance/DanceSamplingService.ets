@@ -1,4 +1,3 @@
-import { skeletonDetection } from '@kit.CoreVisionKit';
 import {
   DanceFrameData,
   DancePoint,
@@ -7,6 +6,7 @@ import {
   danceScoreFromFrames
 } from '../ai/DanceScoreService';
 import { PosePoint, PoseResult, PoseService, isPosePointVisible } from '../ai/PoseService';
+import { PosePointType } from '../ai/PosePointType';
 import { LiveFrameImageResult, LiveFrameImageService } from '../camera/LiveCameraService';
 
 export const danceDefaultSampleFrameCount = 70;
@@ -24,14 +24,14 @@ export interface DancePosePointTypes {
 }
 
 export const dancePosePointType: DancePosePointTypes = {
-  LEFT_SHOULDER: skeletonDetection.SkeletonPointType.LEFT_SHOULDER,
-  RIGHT_SHOULDER: skeletonDetection.SkeletonPointType.RIGHT_SHOULDER,
-  RIGHT_ELBOW: skeletonDetection.SkeletonPointType.RIGHT_ELBOW,
-  RIGHT_WRIST: skeletonDetection.SkeletonPointType.RIGHT_WRIST,
-  LEFT_ELBOW: skeletonDetection.SkeletonPointType.LEFT_ELBOW,
-  LEFT_WRIST: skeletonDetection.SkeletonPointType.LEFT_WRIST,
-  LEFT_KNEE: skeletonDetection.SkeletonPointType.LEFT_KNEE,
-  LEFT_ANKLE: skeletonDetection.SkeletonPointType.LEFT_ANKLE
+  LEFT_SHOULDER: PosePointType.LEFT_SHOULDER,
+  RIGHT_SHOULDER: PosePointType.RIGHT_SHOULDER,
+  RIGHT_ELBOW: PosePointType.RIGHT_ELBOW,
+  RIGHT_WRIST: PosePointType.RIGHT_WRIST,
+  LEFT_ELBOW: PosePointType.LEFT_ELBOW,
+  LEFT_WRIST: PosePointType.LEFT_WRIST,
+  LEFT_KNEE: PosePointType.LEFT_KNEE,
+  LEFT_ANKLE: PosePointType.LEFT_ANKLE
 };
 
 export interface DancePoseFrameSource {
