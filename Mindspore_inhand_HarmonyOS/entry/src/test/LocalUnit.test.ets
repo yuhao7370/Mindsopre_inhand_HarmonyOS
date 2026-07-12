@@ -5,7 +5,7 @@ import request from '@ohos.request';
 import { AppRoute, findRouteByName } from '../main/ets/app/AppRoutes';
 import { MainTab, mainTabs } from '../main/ets/app/AppState';
 import { hasAppStringKey } from '../main/ets/common/i18n/AppStrings';
-import { iconLabel } from '../main/ets/common/icons/IconSymbols';
+import { iconLabel, iconMediaName } from '../main/ets/common/icons/IconSymbols';
 import {
   AiRunResult,
   AiRunResultRow,
@@ -1884,6 +1884,27 @@ export default function localUnitTest() {
         .reduce((sum, count) => sum + count, 0);
       expect(visibleCount).assertEqual(11);
       expect(allExperienceFeatures.length).assertEqual(13);
+    });
+
+    it('mapsExperienceFeatureIconsToAndroidDrawableMedia', 0, () => {
+      const missingIconFeatures = allExperienceFeatures
+        .filter((item: FeatureItem) => iconMediaName(item.icon).length === 0)
+        .map((item: FeatureItem) => item.id)
+        .join(',');
+      expect(missingIconFeatures).assertEqual('');
+      expect(iconMediaName('people')).assertEqual('btn_posenet');
+      expect(iconMediaName('image')).assertEqual('btn_segment');
+      expect(iconMediaName('grid')).assertEqual('btn_classification');
+      expect(iconMediaName('hand')).assertEqual('btn_gesture_recognition');
+      expect(iconMediaName('dance')).assertEqual('btn_scene');
+      expect(iconMediaName('poetry')).assertEqual('btn_intelligent_poetry');
+      expect(iconMediaName('text')).assertEqual('btn_text_extraction');
+      expect(iconMediaName('translate')).assertEqual('btn_text_translation');
+      expect(iconMediaName('scene')).assertEqual('btn_scene');
+      expect(iconMediaName('photo')).assertEqual('btn_test');
+      expect(iconMediaName('camera')).assertEqual('btn_video');
+      expect(iconMediaName('style')).assertEqual('btn_style');
+      expect(iconMediaName('model')).assertEqual('btn_test');
     });
 
     it('definesCollegeAndMeRows', 0, () => {

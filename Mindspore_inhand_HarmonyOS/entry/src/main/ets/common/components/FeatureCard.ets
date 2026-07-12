@@ -1,5 +1,5 @@
 import { FeatureItem } from '../data/FeatureCatalog';
-import { iconLabel } from '../icons/IconSymbols';
+import { iconLabel, iconMediaResource } from '../icons/IconSymbols';
 import { appString } from '../i18n/AppStrings';
 import { AppColor, AppRadius } from '../theme/AppTheme';
 
@@ -17,8 +17,15 @@ export struct FeatureCard {
   item: FeatureItem = DEFAULT_FEATURE_ITEM;
   action: (item: FeatureItem) => void = () => {};
 
-  build() {
-    Row() {
+  @Builder
+  private iconView() {
+    if (iconMediaResource(this.item.icon) !== undefined) {
+      Image(iconMediaResource(this.item.icon) as Resource)
+        .width(32)
+        .height(32)
+        .objectFit(ImageFit.Contain)
+        .margin({ right: 8 })
+    } else {
       Text(iconLabel(this.item.icon))
         .fontSize(13)
         .fontWeight(FontWeight.Bold)
@@ -30,6 +37,12 @@ export struct FeatureCard {
         .textAlign(TextAlign.Center)
         .maxLines(1)
         .margin({ right: 8 })
+    }
+  }
+
+  build() {
+    Row() {
+      this.iconView()
       Text(appString(this.item.titleKey))
         .fontSize(14)
         .fontColor(AppColor.textPrimary)

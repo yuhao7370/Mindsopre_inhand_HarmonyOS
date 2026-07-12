@@ -68,3 +68,69 @@ export function iconLabel(token: string): string {
       return token.length <= 2 ? token : token.substring(0, 2).toUpperCase();
   }
 }
+
+export function iconMediaName(token: string): string {
+  switch (token) {
+    case 'people':
+      return 'btn_posenet';
+    case 'image':
+      return 'btn_segment';
+    case 'grid':
+      return 'btn_classification';
+    case 'hand':
+      return 'btn_gesture_recognition';
+    case 'dance':
+      return 'btn_scene';
+    case 'poetry':
+      return 'btn_intelligent_poetry';
+    case 'text':
+      return 'btn_text_extraction';
+    case 'translate':
+      return 'btn_text_translation';
+    case 'scene':
+      return 'btn_scene';
+    case 'photo':
+      return 'btn_test';
+    case 'camera':
+      return 'btn_video';
+    case 'style':
+      return 'btn_style';
+    case 'model':
+      return 'btn_test';
+    default:
+      return '';
+  }
+}
+
+export function iconMediaResource(token: string): Resource | undefined {
+  switch (token) {
+    case 'people':
+      return $r('app.media.btn_posenet');
+    case 'image':
+      return $r('app.media.btn_segment');
+    case 'grid':
+      return $r('app.media.btn_classification');
+    case 'hand':
+      return $r('app.media.btn_gesture_recognition');
+    case 'dance':
+      return $r('app.media.btn_scene');
+    case 'poetry':
+      return $r('app.media.btn_intelligent_poetry');
+    case 'text':
+      return $r('app.media.btn_text_extraction');
+    case 'translate':
+      return $r('app.media.btn_text_translation');
+    case 'scene':
+      return $r('app.media.btn_scene');
+    case 'photo':
+      return $r('app.media.btn_test');
+    case 'camera':
+      return $r('app.media.btn_video');
+    case 'style':
+      return $r('app.media.btn_style');
+    case 'model':
+      return $r('app.media.btn_test');
+    default:
+      return undefined;
+  }
+}

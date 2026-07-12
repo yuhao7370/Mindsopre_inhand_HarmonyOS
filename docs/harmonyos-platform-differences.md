@@ -13,6 +13,10 @@ Current HarmonyOS behavior:
   Experience feature catalog through a thin page wrapper.
 - The main tab shell still uses the same reusable Experience component; no
   duplicate catalog data is introduced.
+- Experience feature cards reuse the Android `fragment_vision.xml` drawable
+  icons (`btn_posenet`, `btn_segment`, `btn_classification`, and peers) as
+  HarmonyOS media resources, with the existing text fallback kept for
+  non-feature icon tokens.
 
 ## Live Camera Startup
 
