@@ -2419,16 +2419,16 @@ export default function localUnitTest() {
     it('shareServiceSharesSavedPosterImagesByUri', 0, async () => {
       const writer = new RecordingImageShareWriter();
       const payload: ImageSharePayload = {
-        title: 'Intelligent Poetry',
+        title: 'Intelligent poetry',
         uri: 'file://media/poemshare.jpg',
         description: 'MindSpore AI'
       };
       const result = await new ShareService(new RecordingShareWriter(), writer).shareImage(payload);
 
       expect(result.ok).assertTrue();
-      expect(result.messageKey).assertEqual('poem_share_done');
+      expect(result.messageKey).assertEqual('empty');
       expect(result.sharedUri).assertEqual('file://media/poemshare.jpg');
-      expect(writer.payloads[0].title).assertEqual('Intelligent Poetry');
+      expect(writer.payloads[0].title).assertEqual('Intelligent poetry');
       expect(writer.payloads[0].uri).assertEqual('file://media/poemshare.jpg');
     });
 
@@ -2566,7 +2566,6 @@ export default function localUnitTest() {
       expect(hasAppStringKey('poem_share_poster')).assertTrue();
       expect(hasAppStringKey('poem_save_success')).assertTrue();
       expect(hasAppStringKey('poem_save_failed')).assertTrue();
-      expect(hasAppStringKey('poem_share_done')).assertTrue();
       expect(hasAppStringKey('poem_share_failed')).assertTrue();
       expect(hasAppStringKey('poem_ai_credit')).assertTrue();
     });

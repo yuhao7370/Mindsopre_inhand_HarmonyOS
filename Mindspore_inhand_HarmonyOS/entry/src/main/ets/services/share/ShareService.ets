@@ -106,7 +106,7 @@ export class ShareService {
       await this.imageWriter.shareImage(payload);
       return {
         ok: true,
-        messageKey: 'poem_share_done',
+        messageKey: 'empty',
         sharedUri: payload.uri
       };
     } catch (_) {

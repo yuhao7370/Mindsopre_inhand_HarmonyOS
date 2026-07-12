@@ -63,6 +63,11 @@ $visibleAndroidZhStringExpectations = @{
   college_execute_title = (Decode-Utf8Base64 '5omn6KGM5o6o55CG')
   college_app_title = (Decode-Utf8Base64 '56uv5L6n5bqU55So')
   college_video_title = (Decode-Utf8Base64 '5Y+C6ICD6KeG6aKR')
+  title_intelligent_poetry = (Decode-Utf8Base64 '5pm66IO95YaZ6K+X')
+  poem_save_poster = (Decode-Utf8Base64 '5L+d5a2Y5Zu+54mH')
+  poem_share_poster = (Decode-Utf8Base64 '5YiG5Lqr5Zu+54mH')
+  poem_save_success = (Decode-Utf8Base64 '5L+d5a2Y5oiQ5Yqf')
+  poem_save_failed = (Decode-Utf8Base64 '5L+d5a2Y5aSx6LSl')
 }
 
 $visibleAndroidStringExpectations = @{
@@ -77,6 +82,11 @@ $visibleAndroidStringExpectations = @{
     college_execute_title = 'Inference'
     college_app_title = 'Applications'
     college_video_title = 'Video'
+    title_intelligent_poetry = 'Intelligent poetry'
+    poem_save_poster = 'save the picture'
+    poem_share_poster = 'share the picture'
+    poem_save_success = 'save successfully'
+    poem_save_failed = 'Save failure'
   }
 }
 
