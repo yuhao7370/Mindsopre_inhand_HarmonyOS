@@ -29,6 +29,8 @@
     { "name": "account_title", "value": "账号" },
     { "name": "action_back", "value": "返回" },
     { "name": "app_cancel", "value": "取消" },
+    { "name": "image_save_success", "value": "保存成功" },
+    { "name": "image_save_failed", "value": "保存失败" },
     { "name": "confirm", "value": "确定" },
     { "name": "dialog_btn_confirm", "value": "我知道了" },
     { "name": "title_button_text_angle", "value": "HOT" },

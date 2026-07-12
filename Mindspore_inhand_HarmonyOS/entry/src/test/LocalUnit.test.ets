@@ -117,6 +117,7 @@ import {
   danceResultSaveMediaName,
   danceResultScoreLabelKey,
   danceResultMessageKey,
+  danceSaveStatusKey,
   danceSamplingCompletionStatusKey,
   danceSamplingPageState,
   danceSamplingResultStopsLiveCameraPreview,
@@ -3077,8 +3078,10 @@ export default function localUnitTest() {
       expect(hasAppStringKey('dance_result_title')).assertTrue();
       expect(hasAppStringKey('dance_platform_note')).assertTrue();
       expect(hasAppStringKey('feature_runtime_save_image')).assertTrue();
-      expect(hasAppStringKey('feature_runtime_save_image_done')).assertTrue();
-      expect(hasAppStringKey('feature_runtime_save_image_failed')).assertTrue();
+      expect(danceSaveStatusKey(true)).assertEqual('image_save_success');
+      expect(danceSaveStatusKey(false)).assertEqual('image_save_failed');
+      expect(hasAppStringKey('image_save_success')).assertTrue();
+      expect(hasAppStringKey('image_save_failed')).assertTrue();
       expect(hasAppStringKey('feature_runtime_save_image_missing')).assertTrue();
     });
 

@@ -38,6 +38,7 @@ import {
   danceSamplingCompletionStatusKey,
   danceSamplingPageState,
   danceResultMessageKey,
+  danceSaveStatusKey,
   danceSamplingResultStopsLiveCameraPreview,
   danceScoreText,
   danceTemplateDemoScore
@@ -526,10 +527,10 @@ struct DancePage {
   private saveDanceResult(): void {
     this.saveDanceResultImage()
       .then((result: ResultImageSaveResult) => {
-        this.statusKey = result.messageKey;
+        this.statusKey = danceSaveStatusKey(result.ok);
       })
       .catch(() => {
-        this.statusKey = 'feature_runtime_save_image_failed';
+        this.statusKey = danceSaveStatusKey(false);
       });
   }
 
@@ -816,7 +817,7 @@ struct DancePage {
           this.saveDanceResult();
           return;
         }
-        this.statusKey = 'feature_runtime_save_image_failed';
+        this.statusKey = danceSaveStatusKey(false);
       })
   }
 

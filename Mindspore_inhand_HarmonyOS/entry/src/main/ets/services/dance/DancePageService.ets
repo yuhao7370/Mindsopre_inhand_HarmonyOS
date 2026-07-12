@@ -27,6 +27,10 @@ export const danceResultBackButtonWidthPx: number = 140;
 export const danceResultBackButtonHeightPx: number = 140;
 export const danceResultPlayAgainLabelKey: AppStringKey = 'dance_reset';
 
+export function danceSaveStatusKey(ok: boolean): AppStringKey {
+  return ok ? 'image_save_success' : 'image_save_failed';
+}
+
 export function danceResultBackgroundAspectRatio(): number {
   return danceResultBackgroundWidthPx / danceResultBackgroundHeightPx;
 }
