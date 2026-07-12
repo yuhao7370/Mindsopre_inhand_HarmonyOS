@@ -1703,8 +1703,10 @@ struct FeatureRuntimePage {
         .clip(true)
         .margin({ top: AppSpacing.xs })
       if (this.liveCameraSwitchAvailable) {
-        Button(appString('feature_runtime_switch_camera'))
-          .height(32)
+        Image($r('app.media.front_back_switch'))
+          .width(35)
+          .height(35)
+          .objectFit(ImageFit.Contain)
           .margin({ top: AppSpacing.sm })
           .onClick(() => this.switchLiveCamera())
       }
