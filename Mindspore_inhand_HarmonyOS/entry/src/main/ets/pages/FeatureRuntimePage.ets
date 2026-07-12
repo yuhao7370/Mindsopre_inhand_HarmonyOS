@@ -27,6 +27,7 @@ import {
   shouldHideTextInputWhenPreparingInput,
   textInputVisibleAfterCancelledPick,
   shouldClearRuntimeResultAtWorkflowStart,
+  shouldKeepScreenOnForWorkflow,
   shouldMirrorSegmentationForeground,
   shouldShowCopyTextAction,
   shouldShowLiveClassificationCameraOverlay,
@@ -170,6 +171,10 @@ import {
 } from '../features/runtime/FeatureRuntimeViewIds';
 import { AppStringKey, appString } from '../common/i18n/AppStrings';
 import { AppColor, AppRadius, AppSpacing } from '../common/theme/AppTheme';
+import {
+  HarmonyKeepScreenOnWindowProvider,
+  KeepScreenOnService
+} from '../services/window/KeepScreenOnService';
 import { common, OpenLinkOptions } from '@kit.AbilityKit';
 import { image } from '@kit.ImageKit';
 import {
@@ -304,6 +309,7 @@ struct FeatureRuntimePage {
     this.inputKinds = workflow ? runtimeInputKindsForWorkflow(workflow) : [];
     this.permissionKinds = workflow?.requiredPermissions ?? [];
     this.liveCameraPosition = rememberedLiveCameraPositionForWorkflow(workflow);
+    this.setRuntimeKeepScreenOn(true);
     this.refreshLiveCameraSwitchAvailability();
     this.applyDefaultPortraitBackgroundIfNeeded();
     this.restoreCachedModelFileInputsIfNeeded();
@@ -311,6 +317,7 @@ struct FeatureRuntimePage {
   }
 
   aboutToDisappear() {
+    this.setRuntimeKeepScreenOn(false);
     this.stopLiveCameraPreview();
   }
 
@@ -320,6 +327,19 @@ struct FeatureRuntimePage {
       return undefined;
     }
     return context as common.UIAbilityContext;
+  }
+
+  private setRuntimeKeepScreenOn(isKeepScreenOn: boolean): void {
+    if (!shouldKeepScreenOnForWorkflow(workflowForRoute(this.routeName))) {
+      return;
+    }
+    const context = this.uiAbilityContext();
+    if (context === undefined) {
+      return;
+    }
+    new KeepScreenOnService(
+      new HarmonyKeepScreenOnWindowProvider(context)
+    ).setKeepScreenOn(isKeepScreenOn);
   }
 
   private prepareInput(inputKind: FeatureInputKind, initialPick: boolean = false): void {

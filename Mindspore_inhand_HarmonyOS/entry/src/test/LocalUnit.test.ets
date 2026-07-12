@@ -343,6 +343,7 @@ import {
   textInputVisibleAfterCancelledPick,
   shouldAllowRuntimeInputChange,
   shouldClearRuntimeResultAtWorkflowStart,
+  shouldKeepScreenOnForWorkflow,
   shouldShowCopyTextAction,
   shouldShowResultSaveAction,
   shouldShowLiveClassificationCameraOverlay,
@@ -8130,6 +8131,17 @@ export default function localUnitTest() {
       expect(initialInputKindForWorkflow(workflowForRoute(AppRoute.OBJECT_CAMERA.name)!)).assertUndefined();
       expect(initialInputKindForWorkflow(workflowForRoute(AppRoute.POSENET.name)!)).assertUndefined();
       expect(initialInputKindForWorkflow(workflowForRoute(AppRoute.TEXT_RECOGNITION.name)!)).assertUndefined();
+    });
+
+    it('keepsObjectPhotoScreenOnLikeAndroidLayout', 0, () => {
+      expect(shouldKeepScreenOnForWorkflow(workflowForRoute(AppRoute.OBJECT_PHOTO.name)))
+        .assertTrue();
+      expect(shouldKeepScreenOnForWorkflow(workflowForRoute(AppRoute.OBJECT_CAMERA.name)))
+        .assertFalse();
+      expect(shouldKeepScreenOnForWorkflow(workflowForRoute(AppRoute.IMAGE_CAMERA.name)))
+        .assertFalse();
+      expect(shouldKeepScreenOnForWorkflow(undefined))
+        .assertFalse();
     });
 
     it('leavesRuntimeOnlyWhenObjectPhotoInitialPickIsCancelledLikeAndroid', 0, () => {

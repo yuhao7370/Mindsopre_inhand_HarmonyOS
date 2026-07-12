@@ -1,47 +1,14 @@
-import { common } from '@kit.AbilityKit';
+import {
+  HarmonyKeepScreenOnWindowProvider,
+  KeepScreenOnService,
+  KeepScreenOnWindow,
+  KeepScreenOnWindowProvider
+} from '../window/KeepScreenOnService';
 
-export interface DanceKeepScreenOnWindow {
-  setWindowKeepScreenOn(isKeepScreenOn: boolean): Promise<void>;
-}
+export interface DanceKeepScreenOnWindow extends KeepScreenOnWindow {}
 
-export interface DanceKeepScreenOnWindowProvider {
-  mainWindow(): Promise<DanceKeepScreenOnWindow | undefined>;
-}
+export interface DanceKeepScreenOnWindowProvider extends KeepScreenOnWindowProvider {}
 
-export class HarmonyDanceKeepScreenOnWindowProvider implements DanceKeepScreenOnWindowProvider {
-  private readonly context: common.UIAbilityContext;
+export class HarmonyDanceKeepScreenOnWindowProvider extends HarmonyKeepScreenOnWindowProvider {}
 
-  constructor(context: common.UIAbilityContext) {
-    this.context = context;
-  }
-
-  async mainWindow(): Promise<DanceKeepScreenOnWindow | undefined> {
-    try {
-      const mainWindow = await this.context.windowStage.getMainWindow();
-      return mainWindow as DanceKeepScreenOnWindow;
-    } catch (_) {
-      return undefined;
-    }
-  }
-}
-
-export class DanceKeepScreenOnService {
-  private readonly provider: DanceKeepScreenOnWindowProvider;
-
-  constructor(provider: DanceKeepScreenOnWindowProvider) {
-    this.provider = provider;
-  }
-
-  async setKeepScreenOn(isKeepScreenOn: boolean): Promise<boolean> {
-    const mainWindow = await this.provider.mainWindow();
-    if (mainWindow === undefined) {
-      return false;
-    }
-    try {
-      await mainWindow.setWindowKeepScreenOn(isKeepScreenOn);
-      return true;
-    } catch (_) {
-      return false;
-    }
-  }
-}
+export class DanceKeepScreenOnService extends KeepScreenOnService {}

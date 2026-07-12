@@ -473,6 +473,10 @@ export function shouldClearRuntimeResultAtWorkflowStart(workflow: FeatureWorkflo
     workflow?.routeName !== AppRoute.PORTRAIT_SEGMENTATION.name;
 }
 
+export function shouldKeepScreenOnForWorkflow(workflow: FeatureWorkflow | undefined): boolean {
+  return workflow?.routeName === AppRoute.OBJECT_PHOTO.name;
+}
+
 export function shouldMirrorSegmentationForeground(
   workflow: FeatureWorkflow | undefined,
   liveCameraPosition: LiveCameraPosition
