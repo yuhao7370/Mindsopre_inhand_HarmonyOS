@@ -68,6 +68,26 @@ struct WebPage {
     });
   }
 
+  private shouldUsePoetryBackIcon(): boolean {
+    return shouldInstallPoetryJavascriptBridge(this.routeName, this.webUrl);
+  }
+
+  @Builder
+  private backButton() {
+    if (this.shouldUsePoetryBackIcon()) {
+      Image($r('app.media.back'))
+        .width(11)
+        .height(22)
+        .objectFit(ImageFit.Contain)
+    } else {
+      Text('<')
+        .fontSize(24)
+        .fontColor(AppColor.textPrimary)
+        .fontWeight(FontWeight.Bold)
+        .textAlign(TextAlign.Center)
+    }
+  }
+
   @Builder
   webContent() {
     if (this.localRawfile.length > 0) {
@@ -112,13 +132,13 @@ struct WebPage {
   build() {
     Column() {
       Row() {
-        Text('<')
-          .fontSize(24)
-          .fontColor(AppColor.textPrimary)
-          .fontWeight(FontWeight.Bold)
+        Row() {
+          this.backButton()
+        }
+          .justifyContent(FlexAlign.Center)
+          .alignItems(VerticalAlign.Center)
           .width(40)
           .height(40)
-          .textAlign(TextAlign.Center)
           .onClick(() => router.back())
         Text(appString(this.titleKey))
           .fontSize(20)

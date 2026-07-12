@@ -158,16 +158,24 @@ struct PoetryPosterPage {
     .backgroundImageSize(ImageSize.FILL)
   }
 
+  @Builder
+  private backButton() {
+    Image($r('app.media.back'))
+      .width(11)
+      .height(22)
+      .objectFit(ImageFit.Contain)
+  }
+
   build() {
     Column() {
       Row() {
-        Text('<')
-          .fontSize(24)
-          .fontColor(AppColor.textPrimary)
-          .fontWeight(FontWeight.Bold)
+        Row() {
+          this.backButton()
+        }
+          .justifyContent(FlexAlign.Center)
+          .alignItems(VerticalAlign.Center)
           .width(40)
           .height(40)
-          .textAlign(TextAlign.Center)
           .onClick(() => router.back())
         Text(appString('title_intelligent_poetry'))
           .fontSize(20)
