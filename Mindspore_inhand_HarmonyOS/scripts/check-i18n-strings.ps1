@@ -57,6 +57,9 @@ function Decode-Utf8Base64([string] $encoded) {
 $visibleAndroidZhStringExpectations = @{
   experience_head_title = (Decode-Utf8Base64 '5L2T6aqM5Lit5b+D')
   experience_head_subtitle = (Decode-Utf8Base64 '5paw5LiA5Luj5YWo5Zy65pmvQUnorqHnrpfmoYbmnrbvvIzpgoDmgqjpqazkuIrkvZPpqow=')
+  title_share_commend = (Decode-Utf8Base64 'TWluZFNwb3Jl5o6M5Lit5a6d77yaQUnniLHlpb3ogIXnmoTkuIDnq5nlvI/ljY/lkIzlrabkuaDjgIHmvJTnpLrjgIHkvZPpqozlubPlj7AJ')
+  me_share_title = (Decode-Utf8Base64 '5LiA6ZSu5YiG5Lqr')
+  me_version_title = (Decode-Utf8Base64 '54mI5pys5Y+3')
   title_pose_net = (Decode-Utf8Base64 '6aqo6aq85qOA5rWL')
   college_cloud_title = (Decode-Utf8Base64 'MeWwj+aXtuS9k+mqjOerr+S6keWNj+WQjOWFqOa1geeoi+W8gOWPkQ==')
   college_train_title = (Decode-Utf8Base64 '6K6t57uD5qih5Z6L')
