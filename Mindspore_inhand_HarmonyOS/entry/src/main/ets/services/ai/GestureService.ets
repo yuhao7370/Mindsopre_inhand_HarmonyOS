@@ -71,6 +71,7 @@ export interface GestureServiceOptions {
 export interface ImageClassificationGestureRunnerOptions {
   readonly labels: Array<string>;
   readonly scoreRunner: ImageClassificationScoreRunner;
+  readonly trustedGestureModelLabels?: boolean;
   readonly regionEstimator?: GestureRegionEstimator;
   readonly maxGestures?: number;
   readonly minScore?: number;
@@ -136,6 +137,7 @@ export class GestureService {
 export class ImageClassificationGestureRunner implements GestureRunner {
   private readonly labels: Array<string>;
   private readonly scoreRunner: ImageClassificationScoreRunner;
+  private readonly trustedGestureModelLabels: boolean;
   private readonly regionEstimator?: GestureRegionEstimator;
   private readonly maxGestures: number;
   private readonly minScore: number;
@@ -143,6 +145,7 @@ export class ImageClassificationGestureRunner implements GestureRunner {
   constructor(options: ImageClassificationGestureRunnerOptions) {
     this.labels = options.labels;
     this.scoreRunner = options.scoreRunner;
+    this.trustedGestureModelLabels = options.trustedGestureModelLabels ?? false;
     this.regionEstimator = options.regionEstimator;
     this.maxGestures = options.maxGestures ?? localGestureDetectionMaxGestureCount;
     this.minScore = options.minScore ?? localGestureDetectionScoreThreshold;
@@ -150,6 +153,13 @@ export class ImageClassificationGestureRunner implements GestureRunner {
 
   async detectGesture(imageUri: string): Promise<GestureResult> {
     const startMs = Date.now();
+    if (!this.trustedGestureModelLabels) {
+      return {
+        ok: false,
+        gestures: [],
+        executionMs: Date.now() - startMs
+      };
+    }
     try {
       const scores = await this.scoreRunner.predictScores(imageUri);
       let region: GestureRegionEstimate | undefined = undefined;

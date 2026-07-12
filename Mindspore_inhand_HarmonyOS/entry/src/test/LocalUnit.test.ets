@@ -7010,14 +7010,27 @@ export default function localUnitTest() {
 
       expect(result.ok).assertFalse();
       expect(result.gestures.length).assertEqual(0);
-      expect(result.imageWidth).assertEqual(100);
-      expect(result.imageHeight).assertEqual(100);
+      expect(result.imageWidth === undefined).assertTrue();
+      expect(result.imageHeight === undefined).assertTrue();
+    });
+
+    it('imageClassificationGestureRunnerRejectsAliasesWithoutTrustedGestureModelLabels', 0, async () => {
+      const runner = new ImageClassificationGestureRunner({
+        labels: ['goldfish', 'boxing_glove'],
+        scoreRunner: new FixedScoreRunner([0.1, 0.91])
+      });
+
+      const result = await runner.detectGesture('file://selected/glove.jpg');
+
+      expect(result.ok).assertFalse();
+      expect(result.gestures.length).assertEqual(0);
     });
 
     it('imageClassificationGestureRunnerAcceptsCommonLocalModelGestureLabels', 0, async () => {
       const runner = new ImageClassificationGestureRunner({
         labels: ['none', 'Victory', 'Thumb_Up'],
         scoreRunner: new FixedScoreRunner([0.95, 0.82, 0.81]),
+        trustedGestureModelLabels: true,
         maxGestures: 2
       });
 
@@ -7034,7 +7047,8 @@ export default function localUnitTest() {
     it('imageClassificationGestureRunnerKeepsMultipleAndroidGestureResultsByDefault', 0, async () => {
       const runner = new ImageClassificationGestureRunner({
         labels: ['thumb_up', 'boxing_glove', 'heart_gesture', 'ok_sign'],
-        scoreRunner: new FixedScoreRunner([0.86, 0.92, 0.79, 0.95])
+        scoreRunner: new FixedScoreRunner([0.86, 0.92, 0.79, 0.95]),
+        trustedGestureModelLabels: true
       });
 
       const result = await runner.detectGesture('file://selected/multiple-hands.jpg');
@@ -7058,6 +7072,7 @@ export default function localUnitTest() {
       const runner = new ImageClassificationGestureRunner({
         labels: ['goldfish', 'Thumb_Up'],
         scoreRunner: new FixedScoreRunner([0.1, 0.82]),
+        trustedGestureModelLabels: true,
         regionEstimator: estimator
       });
 
@@ -7077,6 +7092,7 @@ export default function localUnitTest() {
       const runner = new ImageClassificationGestureRunner({
         labels: ['goldfish', 'Thumb_Up'],
         scoreRunner: new FixedScoreRunner([0.1, 0.82]),
+        trustedGestureModelLabels: true,
         regionEstimator: new RejectingGestureRegionEstimator()
       });
 
@@ -7096,6 +7112,7 @@ export default function localUnitTest() {
       const runner = new ImageClassificationGestureRunner({
         labels: ['goldfish', 'hand-held_computer'],
         scoreRunner: new FixedScoreRunner([0.95, 0.93]),
+        trustedGestureModelLabels: true,
         regionEstimator: estimator
       });
 
@@ -7106,7 +7123,7 @@ export default function localUnitTest() {
       expect(estimator.seenImageUris.length).assertEqual(0);
     });
 
-    it('runtimeFactoryInjectsLocalGestureServiceByDefault', 0, async () => {
+    it('runtimeFactoryRejectsUntrustedClassificationLabelsAsGesturesByDefault', 0, async () => {
       const workflow = workflowForRoute(AppRoute.GESTURE_STILL.name);
       expect(workflow !== undefined).assertTrue();
       const labelContent: Uint8Array = new Uint8Array([
@@ -7123,10 +7140,9 @@ export default function localUnitTest() {
         imageUri: 'file://selected/hand.jpg'
       });
 
-      expect(result.ok).assertTrue();
-      expect(result.code).assertEqual('GESTURE_DETECTION_DONE');
-      expect(result.messageKey).assertEqual('feature_runtime_gesture_done');
-      expect(result.detailText.indexOf('Fist 91.00% [25,10,50,70]') >= 0).assertTrue();
+      expect(result.ok).assertFalse();
+      expect(result.code).assertEqual('GESTURE_DETECTION_FAILED');
+      expect(result.messageKey).assertEqual('feature_runtime_gesture_failed');
     });
 
     it('runtimeFactoryPassesGestureRegionEstimatorToLocalGestureService', 0, async () => {
@@ -7147,6 +7163,7 @@ export default function localUnitTest() {
         resourceManager: new FixedRawfileContentReader(labelContent),
         inputPreprocessor: new FixedInputPreprocessor(new ArrayBuffer(12)),
         tensorRunner: new FixedTensorRunner([0.1, 0.91]),
+        trustedGestureModelLabels: true,
         gestureRegionEstimator: estimator
       });
 

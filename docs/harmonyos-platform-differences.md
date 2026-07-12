@@ -158,13 +158,13 @@ Current HarmonyOS behavior:
 - The still Gesture and still Scene pages use Android's original image/camera/
   real-time prompt as their top runtime summary, while their live routes keep
   the generic feature summary.
-- The bundled MobileNetV2/ImageNet fallback no longer treats `mitten` as a
-  hand-gesture success. `mitten` was an ImageNet classification false positive,
-  not evidence of a detected hand, so selecting that score now yields no
-  gesture detection.
+- The bundled MobileNetV2/ImageNet fallback is not trusted as a gesture model,
+  so it cannot turn any ImageNet class into a hand-gesture success and exits
+  before inference. This also removes the former `mitten` false positive.
 - Explicit hand/gesture aliases such as `boxing_glove`, `thumb_up`, `fist`,
-  `heart`, and `ok_gesture` remain available only for an injected or future
-  score runner whose model is actually trained and authorized for gestures.
+  `heart`, and `ok_gesture` remain available only when an injected or future
+  score runner is explicitly opted in through `trustedGestureModelLabels`
+  after its model is verified as trained and authorized for gestures.
 - The same mapper also accepts common local gesture-model aliases such as
   `Closed_Fist`, `Open_Palm`, `Thumb_Up`, `Thumb_Down`, `DISS`,
   `like_gesture`, `thumb_down_gesture`, `Victory`, `Pointing_Up`, `OK sign`,
