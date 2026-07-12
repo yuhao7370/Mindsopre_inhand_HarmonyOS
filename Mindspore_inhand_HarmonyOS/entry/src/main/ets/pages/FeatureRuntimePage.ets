@@ -1467,12 +1467,10 @@ struct FeatureRuntimePage {
           .height('72%')
           .objectFit(ImageFit.Cover)
       } else {
-        Text('+')
-          .fontSize(28)
-          .fontColor(AppColor.accent)
+        Image($r('app.media.icon_default'))
           .width('100%')
           .height('72%')
-          .textAlign(TextAlign.Center)
+          .objectFit(ImageFit.Contain)
       }
       Text(appString('feature_runtime_style_custom'))
         .fontSize(9)
@@ -1604,11 +1602,10 @@ struct FeatureRuntimePage {
   @Builder
   portraitSegmentationCustomBackgroundItem() {
     Column() {
-      Text('+')
-        .fontSize(24)
-        .fontColor(AppColor.accent)
+      Image($r('app.media.icon_default'))
+        .width('100%')
         .height(64)
-        .textAlign(TextAlign.Center)
+        .objectFit(ImageFit.Contain)
       Text(appString('feature_runtime_portrait_background_custom'))
         .fontSize(10)
         .fontColor(AppColor.textSecondary)
