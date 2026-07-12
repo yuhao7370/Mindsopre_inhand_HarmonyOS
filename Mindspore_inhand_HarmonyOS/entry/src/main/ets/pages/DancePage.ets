@@ -31,16 +31,11 @@ import {
   danceResultBackButtonWidthPx,
   danceResultComponentId,
   danceResultPlayAgainLabelKey,
-  danceResultScoreLabelKey,
   danceResultBackgroundHeightPx,
   danceSamplingCompletionStatusKey,
   danceSamplingPageState,
-  danceResultMessageKey,
   danceSaveStatusKey,
-  danceSamplingResultStopsLiveCameraPreview,
-  danceScoreText,
-  danceTemplateDemoActionVisible,
-  danceTemplateDemoScore
+  danceSamplingResultStopsLiveCameraPreview
 } from '../services/dance/DancePageService';
 import {
   DanceReferenceVideoCacheService,
@@ -111,19 +106,6 @@ struct DancePage {
     this.cancelLiveSampling();
     this.stopReferenceVideo();
     this.stopLiveCameraPreview();
-  }
-
-  private runTemplateDemo(): void {
-    this.cancelLiveSampling();
-    this.stopReferenceVideo();
-    const score = danceTemplateDemoScore();
-    this.scoreLabelKey = danceResultScoreLabelKey(score);
-    this.scoreText = danceScoreText(score);
-    this.resultMessageKey = danceResultMessageKey(score);
-    this.hasResult = true;
-    this.flowStage = 'result';
-    this.statusKey = 'empty';
-    this.samplingSummaryText = '';
   }
 
   private reset(): void {
@@ -646,14 +628,6 @@ struct DancePage {
         .textAlign(TextAlign.Center)
         .lineHeight(22)
         .margin({ top: AppSpacing.lg })
-
-      if (danceTemplateDemoActionVisible()) {
-        Button(appString('dance_start_demo'))
-          .width('100%')
-          .height(44)
-          .margin({ top: AppSpacing.lg })
-          .onClick(() => this.runTemplateDemo())
-      }
 
       this.liveCameraPreview()
 

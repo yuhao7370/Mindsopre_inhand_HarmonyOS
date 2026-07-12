@@ -124,7 +124,6 @@ import {
   danceSamplingPageState,
   danceSamplingResultStopsLiveCameraPreview,
   danceScoreText,
-  danceTemplateDemoActionVisible,
   danceTemplateDemoScore
 } from '../main/ets/services/dance/DancePageService';
 import {
@@ -340,7 +339,6 @@ import {
   rememberLiveCameraPositionForRoute,
   resetRememberedLiveCameraPositionsForTests,
   runtimeInputKindsForWorkflow,
-  runtimeTextInputForWorkflow,
   sampleImageUriForWorkflow,
   shouldAutoRunWorkflowAfterInputReady,
   shouldAutoRunStyleTransferAfterStyleReady,
@@ -3112,7 +3110,6 @@ export default function localUnitTest() {
       expect(danceResultBackButtonWidthPx).assertEqual(140);
       expect(danceResultBackButtonHeightPx).assertEqual(140);
       expect(danceResultPlayAgainLabelKey).assertEqual('dance_reset');
-      expect(danceTemplateDemoActionVisible()).assertFalse();
       expect(hasAppStringKey('dance_prepare_summary')).assertTrue();
       expect(hasAppStringKey('dance_reference_video')).assertTrue();
       expect(hasAppStringKey('dance_countdown')).assertTrue();
@@ -3370,14 +3367,10 @@ export default function localUnitTest() {
       expect(translation.inputKinds[2]).assertEqual('photo');
       expect(translation.liveMode).assertFalse();
       expect(runtimeInputActionForWorkflowInput(translation, 'camera')).assertEqual('captureImage');
-      expect(runtimeInputActionForWorkflowInput(translation, 'liveCamera')).assertEqual('startLiveCamera');
-      expect(liveRuntimeModeForWorkflow(translation, false)).assertFalse();
-      expect(liveRuntimeModeForWorkflow(translation, true)).assertTrue();
-      expect(runtimeTextInputForWorkflow(translation, false, 'typed first')).assertEqual('typed first');
-      expect(runtimeTextInputForWorkflow(translation, true, 'typed first')).assertEqual('');
-      expect(shouldRenderLiveCameraPreview(translation, false, false)).assertFalse();
-      expect(shouldRenderLiveCameraPreview(translation, true, false)).assertTrue();
-      expect(shouldRenderLiveCameraPreview(translation, false, true)).assertTrue();
+      expect(runtimeInputActionsForWorkflow(translation).join(',')).assertEqual('enterText,captureImage,pickImage');
+      expect(liveRuntimeModeForWorkflow(translation)).assertFalse();
+      expect(shouldRenderLiveCameraPreview(translation, false)).assertFalse();
+      expect(shouldRenderLiveCameraPreview(translation, true)).assertTrue();
       expect(isInputPreparationRequestCurrent(7, 7)).assertTrue();
       expect(isInputPreparationRequestCurrent(6, 7)).assertFalse();
       expect(hasAppStringKey('feature_input_live_translation')).assertTrue();
@@ -3391,8 +3384,8 @@ export default function localUnitTest() {
       expect(portraitSegmentation.requiredPermissions.indexOf('camera') >= 0).assertTrue();
       expect(portraitSegmentation.requiredPermissions.indexOf('media') >= 0).assertTrue();
       expect(portraitSegmentation.liveMode).assertTrue();
-      expect(liveRuntimeModeForWorkflow(portraitSegmentation, false)).assertTrue();
-      expect(shouldRenderLiveCameraPreview(portraitSegmentation, false, false)).assertTrue();
+      expect(liveRuntimeModeForWorkflow(portraitSegmentation)).assertTrue();
+      expect(shouldRenderLiveCameraPreview(portraitSegmentation, false)).assertTrue();
     });
 
     it('usesAndroidStillImagePromptSummariesWhereAndroidLayoutsShowPrompts', 0, () => {
@@ -5639,6 +5632,19 @@ export default function localUnitTest() {
       expect(sceneDetectionDisplayLabel('other', 'zh-CN')).assertEqual('其他');
       expect(sceneDetectionDisplayLabel('stage', 'en-US')).assertEqual('stage');
       expect(sceneDetectionDisplayLabel('unknown_scene', 'zh-CN')).assertEqual('unknown_scene');
+    });
+
+    it('keepsEveryAndroidSceneChineseLabelReadable', 0, () => {
+      expect(androidSceneDetectionLabels.length).assertEqual(androidSceneDetectionLabelsZh.length);
+      for (let index = 0; index < androidSceneDetectionLabelsZh.length; index++) {
+        const label = androidSceneDetectionLabelsZh[index];
+        expect(label.length > 0).assertTrue();
+        expect(label.indexOf('?')).assertEqual(-1);
+        expect(label.indexOf('\uFFFD')).assertEqual(-1);
+        expect(label.indexOf('閸')).assertEqual(-1);
+        expect(label.indexOf('缁')).assertEqual(-1);
+        expect(label.indexOf('閻')).assertEqual(-1);
+      }
     });
 
     it('sceneDetectionServiceLocalizesAndroidSceneLabelsForChineseResultDisplay', 0, async () => {

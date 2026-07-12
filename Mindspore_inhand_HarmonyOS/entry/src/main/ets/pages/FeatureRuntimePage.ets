@@ -16,7 +16,6 @@ import {
   rememberLiveCameraPositionForRoute,
   permissionLabelKey,
   runtimeInputKindsForWorkflow,
-  runtimeTextInputForWorkflow,
   sampleImageUriForWorkflow,
   shouldAutoRunStyleTransferAfterStyleReady,
   shouldDeferRuntimeResultClearUntilPickResult,
@@ -667,12 +666,6 @@ struct FeatureRuntimePage {
     this.selectedInputSummary = result.surfaceId;
     const workflow = workflowForRoute(this.routeName);
     if (!result.ok) {
-      this.textInputVisible = textInputVisibleAfterCancelledPick(
-        workflow,
-        'liveCamera',
-        this.textInputVisible,
-        this.pendingPickTextInputVisible
-      );
       this.pendingPickTextInputVisible = undefined;
       this.liveCameraInputSelected = false;
       this.stopLiveRuntimeLoop();
@@ -681,7 +674,7 @@ struct FeatureRuntimePage {
     this.pendingPickTextInputVisible = undefined;
     if (workflow && shouldAutoRunLiveRuntimeAfterPreview(
       this.aiMethod,
-      liveRuntimeModeForWorkflow(workflow, this.liveCameraInputSelected),
+      liveRuntimeModeForWorkflow(workflow),
       result.ok
     )) {
       this.startLiveRuntimeLoop(workflow);
@@ -806,7 +799,7 @@ struct FeatureRuntimePage {
       stylePredictModelUri: this.stylePredictModelInputUri,
       styleTransferModelUri: this.styleTransferModelInputUri,
       modelUri: this.modelInputUri,
-      text: runtimeTextInputForWorkflow(workflow, this.liveCameraInputSelected, this.userText)
+      text: this.userText
     };
   }
 
@@ -871,7 +864,7 @@ struct FeatureRuntimePage {
     }
     const liveRuntimeLoopReady = shouldRunLiveRuntimeLoop(
       workflow.aiMethod,
-      liveRuntimeModeForWorkflow(workflow, this.liveCameraInputSelected),
+      liveRuntimeModeForWorkflow(workflow),
       this.liveCameraInputSelected, this.liveCameraActive);
     if (liveRuntimeLoopReady) {
       this.startLiveRuntimeLoop(workflow);
@@ -1389,7 +1382,7 @@ struct FeatureRuntimePage {
     }
     const liveRuntimeLoopReady = shouldRunLiveRuntimeLoop(
       workflow.aiMethod,
-      liveRuntimeModeForWorkflow(workflow, this.liveCameraInputSelected),
+      liveRuntimeModeForWorkflow(workflow),
       this.liveCameraInputSelected, this.liveCameraActive);
     return shouldStartWorkflowRun(workflow, this.workflowRunning, liveRuntimeLoopReady);
   }
@@ -2653,7 +2646,6 @@ struct FeatureRuntimePage {
           }
           if (shouldRenderLiveCameraPreview(
             workflowForRoute(this.routeName),
-            this.liveCameraInputSelected,
             this.liveCameraActive
           )) {
             this.liveCameraPreview()

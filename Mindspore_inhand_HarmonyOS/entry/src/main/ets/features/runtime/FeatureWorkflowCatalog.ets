@@ -14,7 +14,6 @@ import {
 
 export type FeatureInputKind =
   'camera' |
-  'liveCamera' |
   'photo' |
   'sampleImage' |
   'contentImage' |
@@ -528,31 +527,16 @@ export function inputKindReplacesPrimaryInput(inputKind: FeatureInputKind): bool
 }
 
 export function liveRuntimeModeForWorkflow(
-  workflow: FeatureWorkflow | undefined,
-  liveCameraInputSelected: boolean
+  workflow: FeatureWorkflow | undefined
 ): boolean {
-  return workflow?.liveMode === true ||
-    (workflow?.aiMethod === 'translateText' && liveCameraInputSelected);
-}
-
-export function runtimeTextInputForWorkflow(
-  workflow: FeatureWorkflow | undefined,
-  liveCameraInputSelected: boolean,
-  userText: string
-): string {
-  if (workflow?.aiMethod === 'translateText' &&
-    liveRuntimeModeForWorkflow(workflow, liveCameraInputSelected)) {
-    return '';
-  }
-  return userText;
+  return workflow?.liveMode === true;
 }
 
 export function shouldRenderLiveCameraPreview(
   workflow: FeatureWorkflow | undefined,
-  liveCameraInputSelected: boolean,
   liveCameraActive: boolean
 ): boolean {
-  return workflow?.liveMode === true || liveCameraInputSelected || liveCameraActive;
+  return workflow?.liveMode === true || liveCameraActive;
 }
 
 export function isInputPreparationRequestCurrent(requestId: number, currentRequestId: number): boolean {
@@ -682,7 +666,7 @@ export function shouldClearTextInputAfterInputReady(workflow: FeatureWorkflow, i
 
 export function shouldHideTextInputWhenPreparingInput(workflow: FeatureWorkflow, inputKind: FeatureInputKind): boolean {
   return workflow.routeName === AppRoute.TEXT_TRANSLATION.name &&
-    (inputKind === 'photo' || inputKind === 'camera' || inputKind === 'liveCamera');
+    (inputKind === 'photo' || inputKind === 'camera');
 }
 
 export function textInputVisibleAfterCancelledPick(
@@ -747,8 +731,6 @@ export function inputLabelKey(inputKind: FeatureInputKind): AppStringKey {
   switch (inputKind) {
     case 'camera':
       return 'feature_input_camera';
-    case 'liveCamera':
-      return 'feature_input_live_translation';
     case 'photo':
       return 'feature_input_photo';
     case 'sampleImage':

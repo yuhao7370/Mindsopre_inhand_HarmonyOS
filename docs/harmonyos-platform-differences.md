@@ -257,7 +257,9 @@ Current HarmonyOS behavior:
 - Text translation keeps the Android route and entry available.
 - The page exposes exactly the three Android inputs: typed text, camera capture,
   and album photo. It does not expose the generic shared live-camera translation
-  input.
+  input; the obsolete `liveCamera` input kind and its translation-only runtime
+  branches have been removed, so Camera always follows the normal still-image
+  OCR flow on this page.
 - The default HarmonyOS runtime and low-level `DefaultAiService` include a
   small offline dictionary fallback for common demo phrases in Chinese and
   English, including the app name, Experience subtitle, app intro, College
@@ -421,9 +423,11 @@ Current HarmonyOS behavior:
   `house`/`cottage`/`mansion`, and Android/Places365 slash variants such as
   `basketball_court/indoor`, `bakery/shop`, `bazaar/indoor`,
   `bazaar/outdoor`, `cabin/outdoor`, and `apartment_building/outdoor`.
-- Scene result display labels now use a recovered/readable Android-equivalent
+- Scene result display labels use a 104-entry readable Android-equivalent
   Chinese scene label table on Chinese locales while keeping the internal
-  English/Places365 labels stable for mapping.
+  English/Places365 labels stable for mapping. Unit coverage checks equal table
+  lengths, representative mappings, and common Unicode/mojibake corruption
+  markers.
 - A dedicated `AndroidSceneModelRunner` adapter now defines the future local
   model contract for Android `MLSceneDetection`-style result/confidence
   output. This lets a later HarmonyOS scene model plug into the current
@@ -643,8 +647,9 @@ Current HarmonyOS behavior:
 - `/dance/DanceMainActivity` now opens a dedicated HarmonyOS Dance page with
   live camera preview, 70-frame live skeleton sampling, the original MindSpore
   reference video, 3/2/1 synchronized run start, Android-style result messages,
-  and album save for the rendered result card. The old Harmony-only template
-  scoring demo action is kept out of the normal UI.
+  and album save for the rendered result card. The unreachable Harmony-only
+  template demo button and page branch have been removed; its pure scoring
+  fixture remains only in unit coverage for the ported Android score contract.
 - The Dance page keeps the HarmonyOS window awake while it is visible, matching
   Android's `FLAG_KEEP_SCREEN_ON` behavior without changing the app-wide screen
   policy.

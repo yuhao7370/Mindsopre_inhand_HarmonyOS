@@ -85,10 +85,6 @@ export function danceTemplateDemoScore(): number {
   return danceScoreFromFrames(danceTemplateFrames());
 }
 
-export function danceTemplateDemoActionVisible(): boolean {
-  return false;
-}
-
 export function danceResultScoreLabelKey(score: number): AppStringKey {
   if (score === danceNoActScore) {
     return 'dance_score_level_no_action';
