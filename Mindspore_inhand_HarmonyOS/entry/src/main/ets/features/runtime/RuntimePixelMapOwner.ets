@@ -17,6 +17,10 @@ export class RuntimePixelMapOwner<T extends RuntimeReleasablePixelMap> {
     return ++this.generation;
   }
 
+  invalidatePendingReplacement(): void {
+    this.generation++;
+  }
+
   isCurrent(requestId: number): boolean {
     return requestId === this.generation;
   }

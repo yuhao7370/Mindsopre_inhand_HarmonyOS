@@ -8,7 +8,8 @@ import {
   HarmonyResultImageAssetWriter,
   HarmonyResultImagePixelMapEncoder,
   ResultImageSaveResult,
-  ResultImageSaveService
+  ResultImageSaveService,
+  withCallerOwnedPixelMap
 } from '../services/media/ResultImageSaveService';
 import {
   HarmonySystemShareImageWriter,
@@ -60,10 +61,11 @@ struct PoetryPosterPage {
       return { ok: false, uri: '', messageKey: 'poem_save_failed' };
     }
     const poster = await this.posterPixelMap();
-    return new ResultImageSaveService(
-      new HarmonyResultImagePixelMapEncoder(),
-      new HarmonyResultImageAssetWriter(context)
-    ).save(poster);
+    return withCallerOwnedPixelMap(poster, async (snapshot: image.PixelMap | undefined) =>
+      new ResultImageSaveService(
+        new HarmonyResultImagePixelMapEncoder(),
+        new HarmonyResultImageAssetWriter(context)
+      ).save(snapshot));
   }
 
   private savePoster(): void {

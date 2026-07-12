@@ -260,6 +260,7 @@ import {
   setHarmonyRuntimeLabelLocaleForTests
 } from '../main/ets/services/ai/ImageClassificationRuntimeFactory';
 import { RuntimeAiServiceSession } from '../main/ets/services/ai/RuntimeAiServiceSession';
+import { RuntimeRequestGeneration } from '../main/ets/features/runtime/RuntimeRequestGeneration';
 import {
   RuntimePixelMapOwner,
   clearRuntimePixelMapState
@@ -569,6 +570,7 @@ import {
   ResultImageAssetWriter,
   ResultImagePixelMapEncoder,
   ResultImageSaveService,
+  withCallerOwnedPixelMap,
   resultImagePackingOption,
   isFullResultImageWrite
 } from '../main/ets/services/media/ResultImageSaveService';
@@ -4175,6 +4177,42 @@ export default function localUnitTest() {
       expect(copyableTextForAiResult('translateText', aiRunResultRows(result))).assertEqual('\u4F60\u597D\u6607\u601D');
     });
 
+    it('callerOwnedPixelMapReleasesExactlyOnceAfterSuccessfulUse', 0, async () => {
+      const pixelMap = new FakeReleasablePixelMap();
+      const result = await withCallerOwnedPixelMap(pixelMap, async (value: FakeReleasablePixelMap | undefined) => {
+        expect(value === pixelMap).assertTrue();
+        return 'saved';
+      });
+
+      expect(result).assertEqual('saved');
+      expect(pixelMap.releaseCount).assertEqual(1);
+    });
+
+    it('callerOwnedPixelMapReleasesAfterFailedUseWithoutMaskingFailure', 0, async () => {
+      const pixelMap = new FakeReleasablePixelMap(true);
+      const saveError = new Error('save failed');
+      const preserved = await withCallerOwnedPixelMap(
+        pixelMap,
+        async (_value: FakeReleasablePixelMap | undefined): Promise<number> => {
+          throw saveError;
+        }
+      ).then(
+        (_value: number): boolean => false,
+        (error: Error): boolean => error === saveError
+      );
+
+      expect(preserved).assertTrue();
+      expect(pixelMap.releaseCount).assertEqual(1);
+    });
+
+    it('callerOwnedPixelMapSwallowsReleaseFailureAfterSuccessfulUse', 0, async () => {
+      const pixelMap = new FakeReleasablePixelMap(true);
+      const result = await withCallerOwnedPixelMap(pixelMap, async (_value: FakeReleasablePixelMap | undefined) => 7);
+
+      expect(result).assertEqual(7);
+      expect(pixelMap.releaseCount).assertEqual(1);
+    });
+
     it('defaultAiServiceReportsUnknownLocalTranslationAsOfflineUnsupported', 0, async () => {
       const workflow = workflowForRoute(AppRoute.TEXT_TRANSLATION.name);
       expect(workflow !== undefined).assertTrue();
@@ -6985,6 +7023,29 @@ export default function localUnitTest() {
       }
     });
 
+    it('cachedRuntimeFactoryRetriesDefaultClassificationServiceAfterLoadFailure', 0, async () => {
+      resetHarmonyRuntimeAiServiceCachesForTests();
+      const workflow = workflowForRoute(AppRoute.IMAGE_CAMERA.name)!;
+      let rejected = false;
+      try {
+        await cachedRuntimeAiServiceForWorkflow(workflow, new ThrowingRawfileContentReader());
+      } catch (_) {
+        rejected = true;
+      }
+      expect(rejected).assertTrue();
+
+      const labels: Uint8Array = new Uint8Array([
+        116, 101, 110, 99, 104, 10,
+        103, 111, 108, 100, 102, 105, 115, 104
+      ]);
+      const reader = new FixedRawfileContentReader(labels);
+      const service = await cachedRuntimeAiServiceForWorkflow(workflow, reader);
+
+      expect(service !== undefined).assertTrue();
+      expect(reader.seenPaths.length).assertEqual(1);
+      resetHarmonyRuntimeAiServiceCachesForTests();
+    });
+
     it('runtimeAiServiceSessionReusesServiceForSameRoute', 0, async () => {
       const session = new RuntimeAiServiceSession();
       const workflow: FeatureWorkflow = workflowForRoute(AppRoute.OBJECT_CAMERA.name)!;
@@ -7001,6 +7062,31 @@ export default function localUnitTest() {
 
       expect(first === second).assertTrue();
       expect(creates).assertEqual(1);
+    });
+
+    it('runtimeAiServiceSessionReusesOverlappingInFlightCreation', 0, async () => {
+      const session = new RuntimeAiServiceSession();
+      const workflow: FeatureWorkflow = workflowForRoute(AppRoute.OBJECT_CAMERA.name)!;
+      let creates = 0;
+      let resolveCreation: ((service: DefaultAiService) => void) | undefined = undefined;
+      const pending = new Promise<DefaultAiService>((resolve: (service: DefaultAiService) => void) => {
+        resolveCreation = resolve;
+      });
+      const creator = (): Promise<DefaultAiService> => {
+        creates++;
+        return pending;
+      };
+
+      const firstPromise = session.getOrCreate(workflow, creator);
+      const secondPromise = session.getOrCreate(workflow, creator);
+
+      expect(creates).assertEqual(1);
+      const service = new DefaultAiService();
+      resolveCreation!(service);
+      const first = await firstPromise;
+      const second = await secondPromise;
+      expect(first === service).assertTrue();
+      expect(second === service).assertTrue();
     });
 
     it('runtimeAiServiceSessionCreatesAgainAfterInvalidation', 0, async () => {
@@ -7061,6 +7147,19 @@ export default function localUnitTest() {
       expect(creates).assertEqual(2);
     });
 
+    it('runtimeRequestGenerationInvalidatesOlderAndDisappearedPageRequests', 0, () => {
+      const generation = new RuntimeRequestGeneration();
+      const first = generation.begin();
+      expect(generation.isCurrent(first)).assertTrue();
+
+      const second = generation.begin();
+      expect(generation.isCurrent(first)).assertFalse();
+      expect(generation.isCurrent(second)).assertTrue();
+
+      generation.invalidate();
+      expect(generation.isCurrent(second)).assertFalse();
+    });
+
     it('runtimePixelMapOwnerReleasesReplacedAndClearedValuesOnce', 0, () => {
       const owner = new RuntimePixelMapOwner<FakeReleasablePixelMap>();
       const first = new FakeReleasablePixelMap();
@@ -7088,6 +7187,22 @@ export default function localUnitTest() {
       expect(accepted).assertFalse();
       expect(stale.releaseCount).assertEqual(1);
       expect(owner.current()).assertUndefined();
+    });
+
+    it('runtimePixelMapOwnerInvalidatesPendingReplacementWithoutReleasingCurrentValue', 0, () => {
+      const owner = new RuntimePixelMapOwner<FakeReleasablePixelMap>();
+      const current = new FakeReleasablePixelMap();
+      owner.accept(owner.beginReplacement(), current);
+      const pendingRequestId = owner.beginReplacement();
+      const stale = new FakeReleasablePixelMap();
+
+      owner.invalidatePendingReplacement();
+      const accepted = owner.accept(pendingRequestId, stale);
+
+      expect(accepted).assertFalse();
+      expect(stale.releaseCount).assertEqual(1);
+      expect(owner.current() === current).assertTrue();
+      expect(current.releaseCount).assertEqual(0);
     });
 
     it('runtimePixelMapOwnerDoesNotReleaseStaleAliasOfCurrentValue', 0, () => {

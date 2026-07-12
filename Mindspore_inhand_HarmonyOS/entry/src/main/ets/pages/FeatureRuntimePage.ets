@@ -69,6 +69,7 @@ import {
   RuntimePixelMapOwner,
   clearRuntimePixelMapState
 } from '../features/runtime/RuntimePixelMapOwner';
+import { RuntimeRequestGeneration } from '../features/runtime/RuntimeRequestGeneration';
 import {
   AiRunInputs,
   AiRunResult,
@@ -127,7 +128,8 @@ import {
   HarmonyResultImageAssetWriter,
   HarmonyResultImagePixelMapEncoder,
   ResultImageSaveResult,
-  ResultImageSaveService
+  ResultImageSaveService,
+  withCallerOwnedPixelMap
 } from '../services/media/ResultImageSaveService';
 import {
   ObjectDetection,
@@ -305,6 +307,7 @@ struct FeatureRuntimePage {
   private liveCameraInputSelected: boolean = false;
   private liveCameraPreviewRequestId: number = 0;
   private liveRuntimeGeneration: number = 0;
+  private runtimeRequestGeneration: RuntimeRequestGeneration = new RuntimeRequestGeneration();
   private inputPreparationRequestId: number = 0;
   private liveRuntimeLoopService: LiveRuntimeLoopService = new LiveRuntimeLoopService();
   private runtimeAiServiceSession: RuntimeAiServiceSession = new RuntimeAiServiceSession();
@@ -337,6 +340,7 @@ struct FeatureRuntimePage {
 
   aboutToDisappear() {
     this.inputPreparationRequestId++;
+    this.runtimeRequestGeneration.invalidate();
     this.runtimeAiServiceSession.invalidate();
     this.styledImagePixelMap = clearRuntimePixelMapState(this.styledImagePixelMapOwner);
     this.segmentationForegroundPixelMap = clearRuntimePixelMapState(this.segmentationForegroundPixelMapOwner);
@@ -874,7 +878,8 @@ struct FeatureRuntimePage {
     }
     this.stopLiveRuntimeLoop();
     this.workflowRunning = true;
-    this.runWorkflowAsync()
+    const runtimeRequestId = this.beginRuntimeRequest();
+    this.runWorkflowAsync(runtimeRequestId)
       .then(() => {
         this.workflowRunning = false;
       })
@@ -889,17 +894,31 @@ struct FeatureRuntimePage {
     }
     const liveGeneration = ++this.liveRuntimeGeneration;
     const runner = new PageLiveRuntimeFrameRunner(async (): Promise<void> => {
-      await this.runWorkflowAsync(liveGeneration);
+      await this.runWorkflowAsync(this.beginRuntimeRequest(), liveGeneration);
     });
     this.liveRuntimeLoopService.start(liveRuntimeIntervalForAiMethod(workflow.aiMethod), runner);
   }
 
   private stopLiveRuntimeLoop(): void {
     this.liveRuntimeGeneration++;
+    this.runtimeRequestGeneration.invalidate();
+    this.styledImagePixelMapOwner.invalidatePendingReplacement();
+    this.segmentationForegroundPixelMapOwner.invalidatePendingReplacement();
     this.liveRuntimeLoopService.stop();
   }
 
-  private async runWorkflowAsync(liveGeneration?: number): Promise<void> {
+  private beginRuntimeRequest(): number {
+    this.styledImagePixelMapOwner.invalidatePendingReplacement();
+    this.segmentationForegroundPixelMapOwner.invalidatePendingReplacement();
+    return this.runtimeRequestGeneration.begin();
+  }
+
+  private isRuntimeRequestCurrent(runtimeRequestId: number, liveGeneration?: number): boolean {
+    return this.runtimeRequestGeneration.isCurrent(runtimeRequestId) &&
+      isLiveRuntimeGenerationCurrent(liveGeneration, this.liveRuntimeGeneration);
+  }
+
+  private async runWorkflowAsync(runtimeRequestId: number, liveGeneration?: number): Promise<void> {
     const workflow = workflowForRoute(this.routeName);
     if (!workflow) {
       this.statusKey = 'feature_runtime_unknown_route';
@@ -918,7 +937,7 @@ struct FeatureRuntimePage {
     }
     try {
       const permission: PermissionRequestSummary = await new PermissionService().requestForWorkflow(context, workflow);
-      if (!isLiveRuntimeGenerationCurrent(liveGeneration, this.liveRuntimeGeneration)) {
+      if (!this.isRuntimeRequestCurrent(runtimeRequestId, liveGeneration)) {
         return;
       }
       if (!permission.ok) {
@@ -928,8 +947,8 @@ struct FeatureRuntimePage {
         this.clearVisualResults();
         return;
       }
-      const frameInputReady = await this.prepareLiveFrameImageInput(context, liveGeneration);
-      if (!isLiveRuntimeGenerationCurrent(liveGeneration, this.liveRuntimeGeneration)) {
+      const frameInputReady = await this.prepareLiveFrameImageInput(context, runtimeRequestId, liveGeneration);
+      if (!this.isRuntimeRequestCurrent(runtimeRequestId, liveGeneration)) {
         return;
       }
       if (!frameInputReady) {
@@ -938,16 +957,16 @@ struct FeatureRuntimePage {
       const aiService: DefaultAiService =
         await this.runtimeAiServiceSession.getOrCreate(workflow, () =>
           cachedRuntimeAiServiceForHarmonyResourceManager(workflow, context.resourceManager));
-      if (!isLiveRuntimeGenerationCurrent(liveGeneration, this.liveRuntimeGeneration)) {
+      if (!this.isRuntimeRequestCurrent(runtimeRequestId, liveGeneration)) {
         return;
       }
       const result: AiRunResult = await aiService.run(workflow, this.aiRunInputs());
-      if (!isLiveRuntimeGenerationCurrent(liveGeneration, this.liveRuntimeGeneration)) {
+      if (!this.isRuntimeRequestCurrent(runtimeRequestId, liveGeneration)) {
         return;
       }
-      this.applyAiResult(result);
+      this.applyAiResult(result, runtimeRequestId);
     } catch (_) {
-      if (isLiveRuntimeGenerationCurrent(liveGeneration, this.liveRuntimeGeneration)) {
+      if (this.isRuntimeRequestCurrent(runtimeRequestId, liveGeneration)) {
         this.applyRuntimeFailure();
       }
     }
@@ -962,6 +981,7 @@ struct FeatureRuntimePage {
 
   private async prepareLiveFrameImageInput(
     context: common.UIAbilityContext,
+    runtimeRequestId: number,
     liveGeneration?: number
   ): Promise<boolean> {
     if (!shouldCaptureLiveFrameImage(this.liveCameraInputSelected, this.imageInputUri, this.liveCameraActive)) {
@@ -970,7 +990,7 @@ struct FeatureRuntimePage {
 
     if (!this.liveCameraActive) {
       await this.startLiveCameraPreviewAsync();
-      if (!isLiveRuntimeGenerationCurrent(liveGeneration, this.liveRuntimeGeneration)) {
+      if (!this.isRuntimeRequestCurrent(runtimeRequestId, liveGeneration)) {
         return false;
       }
       if (!this.liveCameraActive) {
@@ -985,7 +1005,7 @@ struct FeatureRuntimePage {
       new HarmonyLiveFrameImageEncoder(),
       new HarmonyLiveFrameImageStore()
     ).captureToCacheImage(surfaceId, context.cacheDir);
-    if (!isLiveRuntimeGenerationCurrent(liveGeneration, this.liveRuntimeGeneration)) {
+    if (!this.isRuntimeRequestCurrent(runtimeRequestId, liveGeneration)) {
       return false;
     }
     if (!result.ok) {
@@ -1001,7 +1021,7 @@ struct FeatureRuntimePage {
     return true;
   }
 
-  private applyAiResult(result: AiRunResult): void {
+  private applyAiResult(result: AiRunResult, runtimeRequestId: number): void {
     this.statusKey = result.messageKey;
     this.resultText = result.detailText;
     this.resultRows = aiRunResultRows(result);
@@ -1009,11 +1029,11 @@ struct FeatureRuntimePage {
       this.clearVisualResults();
     }
     this.updateObjectDetectionPreview(result);
-    this.updateSegmentationPreview(result);
+    this.updateSegmentationPreview(result, runtimeRequestId);
     this.updatePosePreview(result);
     this.updateGesturePreview(result);
     this.updateSceneOverlay(result);
-    this.updateStyledImagePreview(result);
+    this.updateStyledImagePreview(result, runtimeRequestId);
   }
 
   private clearRuntimeResultState(): void {
@@ -1071,7 +1091,7 @@ struct FeatureRuntimePage {
     this.objectDetectionImageHeight = this.objectDetectionSourceHeight(data.detections);
   }
 
-  private updateSegmentationPreview(result: AiRunResult): void {
+  private updateSegmentationPreview(result: AiRunResult, runtimeRequestId: number): void {
     const data = result.data;
     if (data === undefined || data.kind !== 'segmentation' || data.result.rectangles.length === 0) {
       return;
@@ -1093,10 +1113,10 @@ struct FeatureRuntimePage {
     this.segmentationRectangles = data.result.rectangles;
     this.segmentationImageWidth = data.result.imageWidth ?? this.segmentationSourceWidth(data.result.rectangles);
     this.segmentationImageHeight = data.result.imageHeight ?? this.segmentationSourceHeight(data.result.rectangles);
-    this.updateSegmentationForegroundPreview(data.result);
+    this.updateSegmentationForegroundPreview(data.result, runtimeRequestId);
   }
 
-  private updateSegmentationForegroundPreview(result: SegmentationResult): void {
+  private updateSegmentationForegroundPreview(result: SegmentationResult, runtimeRequestId: number): void {
     const rgba = result.foregroundImageRgba;
     const width = result.foregroundImageWidth ?? 0;
     const height = result.foregroundImageHeight ?? 0;
@@ -1106,11 +1126,16 @@ struct FeatureRuntimePage {
 
     const requestId = this.segmentationForegroundPixelMapOwner.beginReplacement();
     styleTransferPixelMapFromRgbaOutput(rgba, width, height).then((pixelMap: image.PixelMap) => {
+      if (!this.runtimeRequestGeneration.isCurrent(runtimeRequestId)) {
+        this.segmentationForegroundPixelMapOwner.accept(requestId, pixelMap);
+        return;
+      }
       if (this.segmentationForegroundPixelMapOwner.accept(requestId, pixelMap)) {
         this.segmentationForegroundPixelMap = pixelMap;
       }
     }).catch(() => {
-      if (this.segmentationForegroundPixelMapOwner.isCurrent(requestId)) {
+      if (this.runtimeRequestGeneration.isCurrent(runtimeRequestId) &&
+        this.segmentationForegroundPixelMapOwner.isCurrent(requestId)) {
         this.segmentationForegroundPixelMapOwner.clear();
         this.segmentationForegroundPixelMap = undefined;
       }
@@ -1224,7 +1249,7 @@ struct FeatureRuntimePage {
     return height;
   }
 
-  private updateStyledImagePreview(result: AiRunResult): void {
+  private updateStyledImagePreview(result: AiRunResult, runtimeRequestId: number): void {
     const data = result.data;
     if (data === undefined || data.kind !== 'styleTransfer') {
       return;
@@ -1239,12 +1264,17 @@ struct FeatureRuntimePage {
 
     const requestId = this.styledImagePixelMapOwner.beginReplacement();
     styleTransferPixelMapFromRgbaOutput(rgba, width, height).then((pixelMap: image.PixelMap) => {
+      if (!this.runtimeRequestGeneration.isCurrent(runtimeRequestId)) {
+        this.styledImagePixelMapOwner.accept(requestId, pixelMap);
+        return;
+      }
       if (this.styledImagePixelMapOwner.accept(requestId, pixelMap)) {
         this.styledImagePixelMap = pixelMap;
         this.styleOriginalPreviewRecovered = false;
       }
     }).catch(() => {
-      if (this.styledImagePixelMapOwner.isCurrent(requestId)) {
+      if (this.runtimeRequestGeneration.isCurrent(runtimeRequestId) &&
+        this.styledImagePixelMapOwner.isCurrent(requestId)) {
         this.styledImagePixelMapOwner.clear();
         this.styledImagePixelMap = undefined;
         this.styleOriginalPreviewRecovered = false;
@@ -1520,30 +1550,38 @@ struct FeatureRuntimePage {
   }
 
   private saveResultComponentImage(componentId: string): void {
-    componentSnapshot.get(componentId, { waitUntilRenderFinished: true })
-      .then((pixelMap: image.PixelMap) => this.saveResultPixelMap(pixelMap))
-      .catch(() => {
-        this.statusKey = 'feature_runtime_save_image_failed';
-      });
+    this.saveResultComponentImageAsync(componentId).catch(() => {
+      this.statusKey = 'feature_runtime_save_image_failed';
+    });
   }
 
   private saveResultPixelMap(pixelMap: image.PixelMap | undefined): void {
+    this.saveResultPixelMapAsync(pixelMap).catch(() => {
+      this.statusKey = 'feature_runtime_save_image_failed';
+    });
+  }
+
+  private async saveResultComponentImageAsync(componentId: string): Promise<void> {
+    const pixelMap = await componentSnapshot.get(componentId, { waitUntilRenderFinished: true });
+    await withCallerOwnedPixelMap(pixelMap, async (snapshot: image.PixelMap | undefined): Promise<void> => {
+      await this.saveResultPixelMapAsync(snapshot);
+    });
+  }
+
+  private async saveResultPixelMapAsync(pixelMap: image.PixelMap | undefined): Promise<void> {
     const context = this.uiAbilityContext();
     if (!context) {
       this.statusKey = 'feature_runtime_save_image_failed';
       return;
     }
-    new ResultImageSaveService(
+    const result: ResultImageSaveResult = await new ResultImageSaveService(
       new HarmonyResultImagePixelMapEncoder(),
       new HarmonyResultImageAssetWriter(context)
-    ).save(pixelMap).then((result: ResultImageSaveResult) => {
-      this.statusKey = result.messageKey;
-      if (result.ok) {
-        this.selectedInputSummary = result.uri;
-      }
-    }).catch(() => {
-      this.statusKey = 'feature_runtime_save_image_failed';
-    });
+    ).save(pixelMap);
+    this.statusKey = result.messageKey;
+    if (result.ok) {
+      this.selectedInputSummary = result.uri;
+    }
   }
 
   @Builder

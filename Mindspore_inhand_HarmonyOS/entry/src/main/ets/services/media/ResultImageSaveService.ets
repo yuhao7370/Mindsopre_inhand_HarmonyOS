@@ -24,6 +24,29 @@ export interface ResultImageAssetWriter {
   writeJpeg(bytes: ArrayBuffer): Promise<string>;
 }
 
+export interface CallerOwnedPixelMap {
+  release(): Promise<void>;
+}
+
+export type CallerOwnedPixelMapOperation<T extends CallerOwnedPixelMap, R> =
+  (pixelMap: T | undefined) => Promise<R>;
+
+export async function withCallerOwnedPixelMap<T extends CallerOwnedPixelMap, R>(
+  pixelMap: T | undefined,
+  operation: CallerOwnedPixelMapOperation<T, R>
+): Promise<R> {
+  try {
+    return await operation(pixelMap);
+  } finally {
+    if (pixelMap !== undefined) {
+      try {
+        await pixelMap.release();
+      } catch (_) {
+      }
+    }
+  }
+}
+
 export function isFullResultImageWrite(bytes: ArrayBuffer, writtenByteCount: number): boolean {
   return writtenByteCount === bytes.byteLength;
 }

@@ -143,11 +143,18 @@ export function cachedHarmonyDefaultAiServiceForResourceManager(
 ): Promise<DefaultAiService> {
   const labelLocale = currentLabelLocale();
   if (cachedHarmonyDefaultAiService === undefined || cachedHarmonyDefaultAiServiceLocale !== labelLocale) {
-    cachedHarmonyDefaultAiService = createHarmonyDefaultAiService({
+    const servicePromise = createHarmonyDefaultAiService({
       resourceManager: resourceManager,
       labelLocale: labelLocale
     });
+    cachedHarmonyDefaultAiService = servicePromise;
     cachedHarmonyDefaultAiServiceLocale = labelLocale;
+    servicePromise.catch(() => {
+      if (cachedHarmonyDefaultAiService === servicePromise) {
+        cachedHarmonyDefaultAiService = undefined;
+        cachedHarmonyDefaultAiServiceLocale = '';
+      }
+    });
   }
   return cachedHarmonyDefaultAiService;
 }

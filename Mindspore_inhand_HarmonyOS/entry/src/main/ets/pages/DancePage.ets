@@ -60,7 +60,8 @@ import {
   HarmonyResultImageAssetWriter,
   HarmonyResultImagePixelMapEncoder,
   ResultImageSaveResult,
-  ResultImageSaveService
+  ResultImageSaveService,
+  withCallerOwnedPixelMap
 } from '../services/media/ResultImageSaveService';
 import { PermissionRequestSummary, PermissionService } from '../services/permissions/PermissionService';
 
@@ -489,10 +490,11 @@ struct DancePage {
       return { ok: false, uri: '', messageKey: 'feature_runtime_save_image_failed' };
     }
     const resultImage = await this.danceResultPixelMap();
-    return new ResultImageSaveService(
-      new HarmonyResultImagePixelMapEncoder(),
-      new HarmonyResultImageAssetWriter(context)
-    ).save(resultImage);
+    return withCallerOwnedPixelMap(resultImage, async (snapshot: image.PixelMap | undefined) =>
+      new ResultImageSaveService(
+        new HarmonyResultImagePixelMapEncoder(),
+        new HarmonyResultImageAssetWriter(context)
+      ).save(snapshot));
   }
 
   private saveDanceResult(): void {
