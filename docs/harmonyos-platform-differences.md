@@ -341,8 +341,9 @@ Current HarmonyOS behavior:
 - The default HarmonyOS runtime now uses the bundled
   `model/resnet18-place365.ms` Places365 scene model with
   `labels/places365.txt`, then maps top Places365 labels into Android-style
-  scene labels and skips unmapped `other` candidates instead of displaying
-  them ahead of useful scene labels. This makes the still/live scene workflows
+  scene labels. It skips unmapped `other` candidates when useful scene labels
+  are available, but keeps the highest-scoring Android `other` candidate when
+  no more specific scene remains. This makes the still/live scene workflows
   runnable offline, but it is a local approximation rather than HMS ML Kit
   equivalent output.
 - The local fallback keeps up to five distinct Android-mapped scene labels per

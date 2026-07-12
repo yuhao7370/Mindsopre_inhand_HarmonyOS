@@ -275,18 +275,26 @@ export function topLocalSceneDetections(
   maxScenes: number = localSceneDetectionMaxSceneCount
 ): Array<SceneDetection> {
   const candidates: Array<SceneDetection> = [];
+  const otherCandidates: Array<SceneDetection> = [];
   const scanLimit = Math.min(scores.length, labels.length);
   for (let index = 0; index < scanLimit; index++) {
     const score = scores[index];
     const label = sceneLabelForImageClassificationLabel(labels[index]);
-    if (score > 0 && label !== 'other') {
-      candidates.push({
-        label: label,
-        score: score
-      });
+    if (!(score > 0)) {
+      continue;
+    }
+    const candidate: SceneDetection = {
+      label: label,
+      score: score
+    };
+    if (label === 'other') {
+      otherCandidates.push(candidate);
+    } else {
+      candidates.push(candidate);
     }
   }
   candidates.sort((left: SceneDetection, right: SceneDetection) => right.score - left.score);
+  otherCandidates.sort((left: SceneDetection, right: SceneDetection) => right.score - left.score);
 
   const limit = maxScenes > 0 ? maxScenes : localSceneDetectionMaxSceneCount;
   const scenes: Array<SceneDetection> = [];
@@ -298,6 +306,9 @@ export function topLocalSceneDetections(
     if (scenes.length >= limit) {
       break;
     }
+  }
+  if (scenes.length === 0 && otherCandidates.length > 0) {
+    scenes.push(otherCandidates[0]);
   }
   return scenes;
 }

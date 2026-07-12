@@ -5463,9 +5463,30 @@ export default function localUnitTest() {
       expect(scenes[1].score).assertEqual(0.7);
     });
 
-    it('sceneDetectionFailsWhenOnlyOtherCandidatesRemain', 0, async () => {
+    it('topLocalSceneDetectionsIgnoresNanScores', 0, () => {
+      const scenes = topLocalSceneDetections(
+        [Number.NaN, 0.64],
+        ['accordion', 'beach'],
+        2
+      );
+
+      expect(scenes.length).assertEqual(1);
+      expect(scenes[0].label).assertEqual('beach');
+      expect(scenes[0].score).assertEqual(0.64);
+
+      const onlyNanOtherScenes = topLocalSceneDetections(
+        [Number.NaN],
+        ['accordion'],
+        1
+      );
+      expect(onlyNanOtherScenes.length).assertEqual(0);
+    });
+
+    it('sceneDetectionKeepsAndroidOtherWhenOnlyOtherCandidatesRemain', 0, async () => {
       const scenes = topLocalSceneDetections([0.99, 0.88], ['accordion', 'unknown_scene'], 2);
-      expect(scenes.length).assertEqual(0);
+      expect(scenes.length).assertEqual(1);
+      expect(scenes[0].label).assertEqual('other');
+      expect(scenes[0].score).assertEqual(0.99);
 
       const workflow = workflowForRoute(AppRoute.SCENE_STILL.name);
       expect(workflow !== undefined).assertTrue();
@@ -5481,9 +5502,14 @@ export default function localUnitTest() {
         imageUri: 'file://selected/unknown.jpg'
       });
 
-      expect(result.ok).assertFalse();
-      expect(result.code).assertEqual('SCENE_DETECTION_FAILED');
-      expect(result.messageKey).assertEqual('feature_runtime_scene_failed');
+      expect(result.ok).assertTrue();
+      expect(result.code).assertEqual('SCENE_DETECTION_DONE');
+      expect(result.messageKey).assertEqual('feature_runtime_scene_done');
+      const rows = aiRunResultRows(result);
+      expect(rows[0].labelKey).assertEqual('feature_runtime_result_scene_count');
+      expect(rows[0].value).assertEqual('1');
+      expect(rows[1].labelKey).assertEqual('feature_runtime_result_scenes');
+      expect(rows[1].value).assertEqual('1. other 99.00%');
     });
 
     it('mapsAndroidSceneLabelsToChineseDisplayLabelsWithoutChangingUnknownLabels', 0, () => {
