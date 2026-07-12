@@ -1285,6 +1285,26 @@ class RejectingDanceKeepScreenOnWindow implements DanceKeepScreenOnWindow {
   }
 }
 
+class DelayedEnableDanceKeepScreenOnWindow implements DanceKeepScreenOnWindow {
+  readonly completedValues: Array<string> = [];
+  private enableResolver: (() => void) | undefined = undefined;
+
+  async setWindowKeepScreenOn(isKeepScreenOn: boolean): Promise<void> {
+    if (isKeepScreenOn) {
+      await new Promise<void>((resolve: () => void) => {
+        this.enableResolver = resolve;
+      });
+    }
+    this.completedValues.push(isKeepScreenOn ? 'true' : 'false');
+  }
+
+  releaseEnable(): void {
+    if (this.enableResolver !== undefined) {
+      this.enableResolver();
+    }
+  }
+}
+
 class FixedDanceKeepScreenOnWindowProvider implements DanceKeepScreenOnWindowProvider {
   private readonly mainWindowValue: DanceKeepScreenOnWindow | undefined;
 
@@ -2982,6 +3002,23 @@ export default function localUnitTest() {
 
       expect(missingWindowResult).assertFalse();
       expect(rejectingWindowResult).assertFalse();
+    });
+
+    it('danceKeepScreenOnServiceSerializesRapidLifecycleUpdates', 0, async () => {
+      const mainWindow = new DelayedEnableDanceKeepScreenOnWindow();
+      const provider = new FixedDanceKeepScreenOnWindowProvider(mainWindow);
+
+      const enableResult = new DanceKeepScreenOnService(provider).setKeepScreenOn(true);
+      await Promise.resolve();
+      await Promise.resolve();
+      const disableResult = new DanceKeepScreenOnService(provider).setKeepScreenOn(false);
+      await Promise.resolve();
+      await Promise.resolve();
+      mainWindow.releaseEnable();
+
+      expect(await enableResult).assertTrue();
+      expect(await disableResult).assertTrue();
+      expect(mainWindow.completedValues.join(',')).assertEqual('true,false');
     });
 
     it('routesDanceToDedicatedHarmonyPage', 0, () => {

@@ -26,6 +26,7 @@ export class HarmonyKeepScreenOnWindowProvider implements KeepScreenOnWindowProv
 }
 
 export class KeepScreenOnService {
+  private static pendingUpdate: Promise<void> = Promise.resolve();
   private readonly provider: KeepScreenOnWindowProvider;
 
   constructor(provider: KeepScreenOnWindowProvider) {
@@ -33,6 +34,20 @@ export class KeepScreenOnService {
   }
 
   async setKeepScreenOn(isKeepScreenOn: boolean): Promise<boolean> {
+    let result = false;
+    const update = KeepScreenOnService.pendingUpdate
+      .then(async () => {
+        result = await this.setKeepScreenOnNow(isKeepScreenOn);
+      })
+      .catch(() => {
+        result = false;
+      });
+    KeepScreenOnService.pendingUpdate = update.catch(() => {});
+    await update;
+    return result;
+  }
+
+  private async setKeepScreenOnNow(isKeepScreenOn: boolean): Promise<boolean> {
     const mainWindow = await this.provider.mainWindow();
     if (mainWindow === undefined) {
       return false;
