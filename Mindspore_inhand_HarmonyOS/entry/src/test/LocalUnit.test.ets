@@ -7508,6 +7508,97 @@ export default function localUnitTest() {
       expect(saveFailures.translatedText).assertEqual('\u6CA1\u6709\u9700\u8981\u4FDD\u5B58\u7684\u56FE\u7247\n\u4FDD\u5B58\u5931\u8D25');
     });
 
+    it('localTextTranslationCoversAndroidCustomModelPageCopy', 0, async () => {
+      const runner = new LocalTextTranslationRunner();
+
+      const englishCopy = await runner.translate(
+        'Select Model\nSelect Photo\nTake Photo\nExecute\nSelect Image\nOutput Result\n' +
+          'Model output will appear here...\nHelp\nMore\n' +
+          'This is a custom model module where you can implement your own AI model functionality.',
+        'zh'
+      );
+      expect(englishCopy.ok).assertTrue();
+      expect(englishCopy.translatedText)
+        .assertEqual('\u9009\u62E9\u6A21\u578B\n\u9009\u62E9\u56FE\u7247\n\u62CD\u7167\n\u6267\u884C\n' +
+          '\u9009\u62E9\u56FE\u7247\n\u8F93\u51FA\u7ED3\u679C\n\u6A21\u578B\u8F93\u51FA\u5C06\u663E\u793A\u5728\u8FD9\u91CC...\n' +
+          '\u5E2E\u52A9\n\u66F4\u591A\n' +
+          '\u8FD9\u662F\u4E00\u4E2A\u81EA\u5B9A\u4E49\u6A21\u578B\u6A21\u5757\uFF0C' +
+          '\u60A8\u53EF\u4EE5\u5728\u8FD9\u91CC\u5B9E\u73B0\u81EA\u5DF1\u7684AI\u6A21\u578B\u529F\u80FD\u3002');
+
+      const chineseCopy = await runner.translate(
+        '\u9009\u62E9\u6A21\u578B\n\u9009\u62E9\u56FE\u7247\n\u62CD\u7167\n\u6267\u884C\n' +
+          '\u8F93\u51FA\u7ED3\u679C\n\u6A21\u578B\u8F93\u51FA\u5C06\u663E\u793A\u5728\u8FD9\u91CC...\n' +
+          '\u5E2E\u52A9\n\u66F4\u591A\n' +
+          '\u8FD9\u662F\u4E00\u4E2A\u81EA\u5B9A\u4E49\u6A21\u578B\u6A21\u5757\uFF0C' +
+          '\u60A8\u53EF\u4EE5\u5728\u8FD9\u91CC\u5B9E\u73B0\u81EA\u5DF1\u7684AI\u6A21\u578B\u529F\u80FD\u3002',
+        'en'
+      );
+      expect(chineseCopy.ok).assertTrue();
+      expect(chineseCopy.translatedText)
+        .assertEqual('Select Model\nSelect Photo\nTake Photo\nExecute\nOutput Result\n' +
+          'Model output will appear here...\nHelp\nMore\n' +
+          'This is a custom model module where you can implement your own AI model functionality.');
+    });
+
+    it('localTextTranslationCoversAndroidStyleTransferPageCopy', 0, async () => {
+      const runner = new LocalTextTranslationRunner();
+
+      const englishCopy = await runner.translate(
+        'Please select an original picture first\nPrevious Model still running\n' +
+          'Please click a picture below or choose a photo from your album\nPHOTO\nCAMERA\nRECOVERY\nSAVE\n' +
+          'Choose a Style\nModelExecute failed',
+        'zh'
+      );
+      expect(englishCopy.ok).assertTrue();
+      expect(englishCopy.translatedText)
+        .assertEqual('\u8BF7\u5148\u9009\u62E9\u539F\u59CB\u56FE\u7247\n\u5148\u524D\u7684\u6A21\u578B\u4ECD\u5728\u8FD0\u884C\n' +
+          '\u70B9\u51FB\u4E0B\u65B9\u56FE\u7247\u6216\u76F8\u673A\u9009\u62E9\u7167\u7247\n' +
+          '\u56FE\u7247\n\u76F8\u673A\n\u6062\u590D\n\u4FDD\u5B58\n\u9009\u62E9\u98CE\u683C\n\u89E3\u6790\u5931\u8D25');
+
+      const chineseCopy = await runner.translate(
+        '\u8BF7\u5148\u9009\u62E9\u539F\u59CB\u56FE\u7247\n\u5148\u524D\u7684\u6A21\u578B\u4ECD\u5728\u8FD0\u884C\n' +
+          '\u70B9\u51FB\u4E0B\u65B9\u56FE\u7247\u6216\u76F8\u673A\u9009\u62E9\u7167\u7247\n' +
+          '\u6062\u590D\n\u9009\u62E9\u98CE\u683C\n\u89E3\u6790\u5931\u8D25',
+        'en'
+      );
+      expect(chineseCopy.ok).assertTrue();
+      expect(chineseCopy.translatedText)
+        .assertEqual('Please select an original picture first\nPrevious Model still running\n' +
+          'Please click a picture below or choose a photo from your album\nRECOVERY\nChoose a Style\nModelExecute failed');
+    });
+
+    it('localTextTranslationCoversAndroidSceneAndObjectResultCopy', 0, async () => {
+      const runner = new LocalTextTranslationRunner();
+
+      const englishCopy = await runner.translate(
+        'Scene Count\nScene\nScore\nInference Time:\nContinue to identify\n' +
+          'The image path you selected is not valid. Please choose again\n' +
+          'Sorry, there is no object identified in this picture. Try another picture\n' +
+          'human\nautomobile\ntraffic signal',
+        'zh'
+      );
+      expect(englishCopy.ok).assertTrue();
+      expect(englishCopy.translatedText)
+        .assertEqual('\u573A\u666F\u8BA1\u6570\n\u573A\u666F\n\u5F97\u5206\n\u63A8\u7406\u65F6\u95F4\uFF1A\n' +
+          '\u6B63\u5728\u8BC6\u522B\n\u60A8\u9009\u62E9\u7684\u56FE\u50CF\u8DEF\u5F84\u65E0\u6548\u3002\u8BF7\u518D\u6B21\u9009\u62E9\n' +
+          '\u5BF9\u4E0D\u8D77\uFF0C\u6B64\u56FE\u7247\u4E2D\u6CA1\u6709\u4EFB\u4F55\u7269\u4F53\u3002' +
+          '\u8BF7\u5C1D\u8BD5\u53E6\u4E00\u5F20\u56FE\u7247\n\u4EBA\n\u6C7D\u8F66\n\u4EA4\u901A\u706F');
+
+      const chineseCopy = await runner.translate(
+        '\u573A\u666F\u8BA1\u6570\n\u573A\u666F\n\u5F97\u5206\n\u63A8\u7406\u65F6\u95F4\uFF1A\n' +
+          '\u6B63\u5728\u8BC6\u522B\n\u60A8\u9009\u62E9\u7684\u56FE\u50CF\u8DEF\u5F84\u65E0\u6548\u3002\u8BF7\u518D\u6B21\u9009\u62E9\n' +
+          '\u5BF9\u4E0D\u8D77\uFF0C\u6B64\u56FE\u7247\u4E2D\u6CA1\u6709\u4EFB\u4F55\u7269\u4F53\u3002' +
+          '\u8BF7\u5C1D\u8BD5\u53E6\u4E00\u5F20\u56FE\u7247\n\u4EBA\n\u6C7D\u8F66\n\u4EA4\u901A\u706F',
+        'en'
+      );
+      expect(chineseCopy.ok).assertTrue();
+      expect(chineseCopy.translatedText)
+        .assertEqual('Scene Count\nScene\nScore\nInference Time:\nContinue to identify\n' +
+          'The image path you selected is not valid. Please choose again\n' +
+          'Sorry, there is no object identified in this picture. Try another picture\n' +
+          'human\nautomobile\ntraffic signal');
+    });
+
     it('runtimeFactoryLocalFallbackFailsUnknownTranslationHonestly', 0, async () => {
       const workflow = workflowForRoute(AppRoute.TEXT_TRANSLATION.name);
       expect(workflow !== undefined).assertTrue();

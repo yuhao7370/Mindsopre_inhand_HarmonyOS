@@ -201,6 +201,45 @@ const localChineseToEnglishPhrases: Array<LocalTranslationPhrase> = [
     source: '\u56FE\u50CF\u5206\u5272\u5931\u8D25\uFF0C\u518D\u6362\u4E00\u5F20\u56FE\u7247\u8BD5\u8BD5',
     target: 'Image segmentation failed, try another image'
   },
+  { source: '\u9009\u62E9\u6A21\u578B', target: 'Select Model' },
+  { source: '\u9009\u62E9\u56FE\u7247', target: 'Select Photo' },
+  { source: '\u62CD\u7167', target: 'Take Photo' },
+  { source: '\u6267\u884C', target: 'Execute' },
+  { source: '\u8F93\u51FA\u7ED3\u679C', target: 'Output Result' },
+  { source: '\u6A21\u578B\u8F93\u51FA\u5C06\u663E\u793A\u5728\u8FD9\u91CC...', target: 'Model output will appear here...' },
+  { source: '\u5E2E\u52A9', target: 'Help' },
+  { source: '\u66F4\u591A', target: 'More' },
+  {
+    source: '\u8FD9\u662F\u4E00\u4E2A\u81EA\u5B9A\u4E49\u6A21\u578B\u6A21\u5757\uFF0C' +
+      '\u60A8\u53EF\u4EE5\u5728\u8FD9\u91CC\u5B9E\u73B0\u81EA\u5DF1\u7684AI\u6A21\u578B\u529F\u80FD\u3002',
+    target: 'This is a custom model module where you can implement your own AI model functionality.'
+  },
+  { source: '\u8BF7\u5148\u9009\u62E9\u539F\u59CB\u56FE\u7247', target: 'Please select an original picture first' },
+  { source: '\u5148\u524D\u7684\u6A21\u578B\u4ECD\u5728\u8FD0\u884C', target: 'Previous Model still running' },
+  {
+    source: '\u70B9\u51FB\u4E0B\u65B9\u56FE\u7247\u6216\u76F8\u673A\u9009\u62E9\u7167\u7247',
+    target: 'Please click a picture below or choose a photo from your album'
+  },
+  { source: '\u6062\u590D', target: 'RECOVERY' },
+  { source: '\u9009\u62E9\u98CE\u683C', target: 'Choose a Style' },
+  { source: '\u89E3\u6790\u5931\u8D25', target: 'ModelExecute failed' },
+  { source: '\u573A\u666F\u8BA1\u6570', target: 'Scene Count' },
+  { source: '\u573A\u666F', target: 'Scene' },
+  { source: '\u5F97\u5206', target: 'Score' },
+  { source: '\u63A8\u7406\u65F6\u95F4\uFF1A', target: 'Inference Time:' },
+  { source: '\u6B63\u5728\u8BC6\u522B', target: 'Continue to identify' },
+  {
+    source: '\u60A8\u9009\u62E9\u7684\u56FE\u50CF\u8DEF\u5F84\u65E0\u6548\u3002\u8BF7\u518D\u6B21\u9009\u62E9',
+    target: 'The image path you selected is not valid. Please choose again'
+  },
+  {
+    source: '\u5BF9\u4E0D\u8D77\uFF0C\u6B64\u56FE\u7247\u4E2D\u6CA1\u6709\u4EFB\u4F55\u7269\u4F53\u3002' +
+      '\u8BF7\u5C1D\u8BD5\u53E6\u4E00\u5F20\u56FE\u7247',
+    target: 'Sorry, there is no object identified in this picture. Try another picture'
+  },
+  { source: '\u4EBA', target: 'human' },
+  { source: '\u6C7D\u8F66', target: 'automobile' },
+  { source: '\u4EA4\u901A\u706F', target: 'traffic signal' },
   { source: '\u8FD9\u662F\u4E00\u4E2A', target: 'this is a' },
   { source: '\u4F60\u597D\u4E16\u754C', target: 'hello world' },
   { source: '\u4F60\u597D', target: 'hello' },
@@ -344,6 +383,47 @@ const localEnglishToChinesePhrases: Array<LocalTranslationPhrase> = [
     source: 'image segmentation failed try another image',
     target: '\u56FE\u50CF\u5206\u5272\u5931\u8D25\uFF0C\u518D\u6362\u4E00\u5F20\u56FE\u7247\u8BD5\u8BD5'
   },
+  { source: 'select model', target: '\u9009\u62E9\u6A21\u578B' },
+  { source: 'select photo', target: '\u9009\u62E9\u56FE\u7247' },
+  { source: 'take photo', target: '\u62CD\u7167' },
+  { source: 'execute', target: '\u6267\u884C' },
+  { source: 'select image', target: '\u9009\u62E9\u56FE\u7247' },
+  { source: 'output result', target: '\u8F93\u51FA\u7ED3\u679C' },
+  { source: 'model output will appear here', target: '\u6A21\u578B\u8F93\u51FA\u5C06\u663E\u793A\u5728\u8FD9\u91CC...' },
+  { source: 'help', target: '\u5E2E\u52A9' },
+  { source: 'more', target: '\u66F4\u591A' },
+  {
+    source: 'this is a custom model module where you can implement your own ai model functionality',
+    target: '\u8FD9\u662F\u4E00\u4E2A\u81EA\u5B9A\u4E49\u6A21\u578B\u6A21\u5757\uFF0C' +
+      '\u60A8\u53EF\u4EE5\u5728\u8FD9\u91CC\u5B9E\u73B0\u81EA\u5DF1\u7684AI\u6A21\u578B\u529F\u80FD\u3002'
+  },
+  { source: 'please select an original picture first', target: '\u8BF7\u5148\u9009\u62E9\u539F\u59CB\u56FE\u7247' },
+  { source: 'previous model still running', target: '\u5148\u524D\u7684\u6A21\u578B\u4ECD\u5728\u8FD0\u884C' },
+  {
+    source: 'please click a picture below or choose a photo from your album',
+    target: '\u70B9\u51FB\u4E0B\u65B9\u56FE\u7247\u6216\u76F8\u673A\u9009\u62E9\u7167\u7247'
+  },
+  { source: 'recovery', target: '\u6062\u590D' },
+  { source: 'choose a style', target: '\u9009\u62E9\u98CE\u683C' },
+  { source: 'modelexecute failed', target: '\u89E3\u6790\u5931\u8D25' },
+  { source: 'scene count', target: '\u573A\u666F\u8BA1\u6570' },
+  { source: 'scenes', target: '\u573A\u666F' },
+  { source: 'scene', target: '\u573A\u666F' },
+  { source: 'score', target: '\u5F97\u5206' },
+  { source: 'inference time', target: '\u63A8\u7406\u65F6\u95F4\uFF1A' },
+  { source: 'continue to identify', target: '\u6B63\u5728\u8BC6\u522B' },
+  {
+    source: 'the image path you selected is not valid please choose again',
+    target: '\u60A8\u9009\u62E9\u7684\u56FE\u50CF\u8DEF\u5F84\u65E0\u6548\u3002\u8BF7\u518D\u6B21\u9009\u62E9'
+  },
+  {
+    source: 'sorry there is no object identified in this picture try another picture',
+    target: '\u5BF9\u4E0D\u8D77\uFF0C\u6B64\u56FE\u7247\u4E2D\u6CA1\u6709\u4EFB\u4F55\u7269\u4F53\u3002' +
+      '\u8BF7\u5C1D\u8BD5\u53E6\u4E00\u5F20\u56FE\u7247'
+  },
+  { source: 'human', target: '\u4EBA' },
+  { source: 'automobile', target: '\u6C7D\u8F66' },
+  { source: 'traffic signal', target: '\u4EA4\u901A\u706F' },
   { source: 'this is a', target: '\u8FD9\u662F\u4E00\u4E2A' },
   { source: 'this is an', target: '\u8FD9\u662F\u4E00\u4E2A' },
   { source: 'hello world', target: '\u4F60\u597D\u4E16\u754C' },
@@ -411,7 +491,7 @@ const localEnglishToChinesePhrases: Array<LocalTranslationPhrase> = [
   { source: 'on phone', target: '\u5728\u624B\u673A\u4E0A' },
   { source: 'real time', target: '\u5B9E\u65F6' },
   { source: 'camera', target: '\u76F8\u673A' },
-  { source: 'photo', target: '\u7167\u7247' }
+  { source: 'photo', target: '\u56FE\u7247' }
 ];
 
 export interface TextTranslationServiceOptions {
