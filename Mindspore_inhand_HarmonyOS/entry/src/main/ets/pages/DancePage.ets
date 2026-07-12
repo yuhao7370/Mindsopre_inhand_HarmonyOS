@@ -513,13 +513,10 @@ struct DancePage {
   @Builder
   header() {
     Row() {
-      Text('<')
-        .fontSize(24)
-        .fontColor(AppColor.textPrimary)
-        .fontWeight(FontWeight.Bold)
+      Image($r('app.media.dance_back'))
         .width(40)
         .height(40)
-        .textAlign(TextAlign.Center)
+        .objectFit(ImageFit.Contain)
         .onClick(() => router.back())
       Text(appString('title_dance'))
         .fontSize(20)
