@@ -80,6 +80,7 @@ import {
   translationSnapshotTranslatedTextReady
 } from '../services/ai/AiService';
 import { cachedRuntimeAiServiceForHarmonyResourceManager } from '../services/ai/ImageClassificationRuntimeFactory';
+import { RuntimeAiServiceSession } from '../services/ai/RuntimeAiServiceSession';
 import {
   PermissionRequestSummary,
   PermissionService,
@@ -303,6 +304,7 @@ struct FeatureRuntimePage {
   private liveRuntimeGeneration: number = 0;
   private inputPreparationRequestId: number = 0;
   private liveRuntimeLoopService: LiveRuntimeLoopService = new LiveRuntimeLoopService();
+  private runtimeAiServiceSession: RuntimeAiServiceSession = new RuntimeAiServiceSession();
   private initialInputPrepared: boolean = false;
   private pendingPickTextInputVisible: boolean | undefined = undefined;
 
@@ -330,6 +332,7 @@ struct FeatureRuntimePage {
 
   aboutToDisappear() {
     this.inputPreparationRequestId++;
+    this.runtimeAiServiceSession.invalidate();
     this.setRuntimeKeepScreenOn(false);
     this.stopLiveCameraPreview();
   }
@@ -491,6 +494,7 @@ struct FeatureRuntimePage {
       this.applyPickedInputState(runtimePickedInputStateAfterModelCacheFailure(inputKind, this.pickedInputState()));
       return;
     }
+    this.runtimeAiServiceSession.invalidate();
     this.applyPickResult({
       ok: true,
       uri: result.uri
@@ -932,7 +936,8 @@ struct FeatureRuntimePage {
         return;
       }
       const aiService: DefaultAiService =
-        await cachedRuntimeAiServiceForHarmonyResourceManager(workflow, context.resourceManager);
+        await this.runtimeAiServiceSession.getOrCreate(workflow, () =>
+          cachedRuntimeAiServiceForHarmonyResourceManager(workflow, context.resourceManager));
       if (!isLiveRuntimeGenerationCurrent(liveGeneration, this.liveRuntimeGeneration)) {
         return;
       }

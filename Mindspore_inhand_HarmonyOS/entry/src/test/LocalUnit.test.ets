@@ -258,6 +258,7 @@ import {
   segmentationAndroidSceneForWorkflow,
   setHarmonyRuntimeLabelLocaleForTests
 } from '../main/ets/services/ai/ImageClassificationRuntimeFactory';
+import { RuntimeAiServiceSession } from '../main/ets/services/ai/RuntimeAiServiceSession';
 import {
   floatScoresFromOutputBuffer,
   mindSporeLiteCpuContext,
@@ -6912,6 +6913,82 @@ export default function localUnitTest() {
       } finally {
         resetHarmonyRuntimeAiServiceCachesForTests();
       }
+    });
+
+    it('runtimeAiServiceSessionReusesServiceForSameRoute', 0, async () => {
+      const session = new RuntimeAiServiceSession();
+      const workflow: FeatureWorkflow = workflowForRoute(AppRoute.OBJECT_CAMERA.name)!;
+      let creates = 0;
+
+      const first = await session.getOrCreate(workflow, async () => {
+        creates++;
+        return new DefaultAiService();
+      });
+      const second = await session.getOrCreate(workflow, async () => {
+        creates++;
+        return new DefaultAiService();
+      });
+
+      expect(first === second).assertTrue();
+      expect(creates).assertEqual(1);
+    });
+
+    it('runtimeAiServiceSessionCreatesAgainAfterInvalidation', 0, async () => {
+      const session = new RuntimeAiServiceSession();
+      const workflow: FeatureWorkflow = workflowForRoute(AppRoute.OBJECT_CAMERA.name)!;
+      let creates = 0;
+      const creator = async (): Promise<DefaultAiService> => {
+        creates++;
+        return new DefaultAiService();
+      };
+
+      const first = await session.getOrCreate(workflow, creator);
+      session.invalidate();
+      const second = await session.getOrCreate(workflow, creator);
+
+      expect(first === second).assertFalse();
+      expect(creates).assertEqual(2);
+    });
+
+    it('runtimeAiServiceSessionCreatesAgainForDifferentRoute', 0, async () => {
+      const session = new RuntimeAiServiceSession();
+      const firstWorkflow: FeatureWorkflow = workflowForRoute(AppRoute.OBJECT_CAMERA.name)!;
+      const secondWorkflow: FeatureWorkflow = workflowForRoute(AppRoute.CUSTOM_MODEL.name)!;
+      let creates = 0;
+      const creator = async (): Promise<DefaultAiService> => {
+        creates++;
+        return new DefaultAiService();
+      };
+
+      const first = await session.getOrCreate(firstWorkflow, creator);
+      const second = await session.getOrCreate(secondWorkflow, creator);
+
+      expect(first === second).assertFalse();
+      expect(creates).assertEqual(2);
+    });
+
+    it('runtimeAiServiceSessionRetriesRejectedCreation', 0, async () => {
+      const session = new RuntimeAiServiceSession();
+      const workflow: FeatureWorkflow = workflowForRoute(AppRoute.OBJECT_CAMERA.name)!;
+      let creates = 0;
+      let failed = false;
+
+      try {
+        await session.getOrCreate(workflow, async () => {
+          creates++;
+          throw new Error('create failed');
+        });
+      } catch (_) {
+        failed = true;
+      }
+      const service = await session.getOrCreate(workflow, async () => {
+        creates++;
+        return new DefaultAiService();
+      });
+
+      expect(failed).assertTrue();
+      expect(service !== undefined).assertTrue();
+      expect(creates).assertEqual(2);
     });
 
     it('mapsImageClassificationLabelsToLocalGestureCategories', 0, () => {
