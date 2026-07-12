@@ -335,11 +335,28 @@ export function initialLiveCameraPositionForWorkflow(
   return 'back';
 }
 
+export function fixedLiveCameraPositionForWorkflow(
+  workflow: FeatureWorkflow | undefined
+): LiveCameraPosition | undefined {
+  if (workflow === undefined) {
+    return undefined;
+  }
+  if (workflow.routeName === AppRoute.IMAGE_CAMERA.name ||
+    workflow.routeName === AppRoute.OBJECT_CAMERA.name) {
+    return 'back';
+  }
+  return undefined;
+}
+
 const rememberedLiveCameraPositions: Map<string, LiveCameraPosition> = new Map<string, LiveCameraPosition>();
 
 export function rememberedLiveCameraPositionForWorkflow(
   workflow: FeatureWorkflow | undefined
 ): LiveCameraPosition {
+  const fixedPosition = fixedLiveCameraPositionForWorkflow(workflow);
+  if (fixedPosition !== undefined) {
+    return fixedPosition;
+  }
   const routeName = workflow?.routeName ?? '';
   const rememberedPosition = routeName.length > 0 ? rememberedLiveCameraPositions.get(routeName) : undefined;
   return rememberedPosition ?? initialLiveCameraPositionForWorkflow(workflow);
@@ -347,6 +364,9 @@ export function rememberedLiveCameraPositionForWorkflow(
 
 export function rememberLiveCameraPositionForRoute(routeName: string, position: LiveCameraPosition): void {
   if (routeName.length === 0) {
+    return;
+  }
+  if (fixedLiveCameraPositionForWorkflow(workflowForRoute(routeName)) !== undefined) {
     return;
   }
   rememberedLiveCameraPositions.set(routeName, position);

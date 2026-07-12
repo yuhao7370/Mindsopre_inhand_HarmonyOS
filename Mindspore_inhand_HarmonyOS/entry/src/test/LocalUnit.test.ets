@@ -318,6 +318,7 @@ import {
 import {
   FeatureInputKind,
   FeatureWorkflow,
+  fixedLiveCameraPositionForWorkflow,
   shouldDeferRuntimeResultClearUntilPickResult,
   WorkflowInputReadyAction,
   autoStartInputKindForWorkflow,
@@ -8397,6 +8398,14 @@ export default function localUnitTest() {
       expect(initialLiveCameraPositionForWorkflow(undefined)).assertEqual('back');
     });
 
+    it('fixesAndroidImageObjectLiveCameraWorkflowsToBackCamera', 0, () => {
+      expect(fixedLiveCameraPositionForWorkflow(workflowForRoute(AppRoute.IMAGE_CAMERA.name)!)).assertEqual('back');
+      expect(fixedLiveCameraPositionForWorkflow(workflowForRoute(AppRoute.OBJECT_CAMERA.name)!)).assertEqual('back');
+      expect(fixedLiveCameraPositionForWorkflow(workflowForRoute(AppRoute.SEGMENTATION_LIVE.name)!)).assertUndefined();
+      expect(fixedLiveCameraPositionForWorkflow(workflowForRoute(AppRoute.PORTRAIT_SEGMENTATION.name)!)).assertUndefined();
+      expect(fixedLiveCameraPositionForWorkflow(undefined)).assertUndefined();
+    });
+
     it('remembersLiveCameraPositionPerRouteAfterSwitches', 0, () => {
       resetRememberedLiveCameraPositionsForTests();
       const segmentationLive: FeatureWorkflow = workflowForRoute(AppRoute.SEGMENTATION_LIVE.name)!;
@@ -8410,6 +8419,19 @@ export default function localUnitTest() {
       expect(rememberedLiveCameraPositionForWorkflow(segmentationLive)).assertEqual('back');
       expect(rememberedLiveCameraPositionForWorkflow(sceneLive)).assertEqual('front');
       expect(rememberedLiveCameraPositionForWorkflow(undefined)).assertEqual('back');
+      resetRememberedLiveCameraPositionsForTests();
+    });
+
+    it('doesNotRememberManualSwitchesForAndroidFixedCameraWorkflows', 0, () => {
+      resetRememberedLiveCameraPositionsForTests();
+      const imageCamera: FeatureWorkflow = workflowForRoute(AppRoute.IMAGE_CAMERA.name)!;
+      const objectCamera: FeatureWorkflow = workflowForRoute(AppRoute.OBJECT_CAMERA.name)!;
+
+      rememberLiveCameraPositionForRoute(imageCamera.routeName, 'front');
+      rememberLiveCameraPositionForRoute(objectCamera.routeName, 'front');
+
+      expect(rememberedLiveCameraPositionForWorkflow(imageCamera)).assertEqual('back');
+      expect(rememberedLiveCameraPositionForWorkflow(objectCamera)).assertEqual('back');
       resetRememberedLiveCameraPositionsForTests();
     });
 

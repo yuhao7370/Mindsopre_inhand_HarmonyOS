@@ -6,6 +6,7 @@ import {
   FeaturePermissionKind,
   FeatureWorkflow,
   autoStartInputKindForWorkflow,
+  fixedLiveCameraPositionForWorkflow,
   inputKindReplacesPrimaryInput,
   initialInputKindForWorkflow,
   initialPreviewActionForWorkflow,
@@ -466,6 +467,12 @@ struct FeatureRuntimePage {
       this.liveCameraSwitchAvailable = false;
       return;
     }
+    const fixedPosition = fixedLiveCameraPositionForWorkflow(workflowForRoute(this.routeName));
+    if (fixedPosition !== undefined) {
+      this.liveCameraPosition = fixedPosition;
+      this.liveCameraSwitchAvailable = false;
+      return;
+    }
     const context = this.uiAbilityContext();
     if (!context) {
       this.liveCameraSwitchAvailable = true;
@@ -593,6 +600,9 @@ struct FeatureRuntimePage {
   }
 
   private switchLiveCamera(): void {
+    if (fixedLiveCameraPositionForWorkflow(workflowForRoute(this.routeName)) !== undefined) {
+      return;
+    }
     this.liveCameraPosition = nextLiveCameraPosition(this.liveCameraPosition);
     rememberLiveCameraPositionForRoute(this.routeName, this.liveCameraPosition);
     if (this.liveCameraInputSelected || this.liveCameraActive) {

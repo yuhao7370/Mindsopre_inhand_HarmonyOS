@@ -10,16 +10,13 @@ import {
 } from '../services/ai/PoseService';
 import {
   HarmonyLiveCameraPreviewDriver,
-  HarmonyLiveCameraDevicePositionProvider,
   HarmonyLiveFrameImageEncoder,
   HarmonyLiveFrameImageStore,
   LiveCameraPosition,
   LiveCameraPreviewResult,
   LiveCameraPreviewService,
-  LiveCameraSwitchCapabilityService,
   LiveFrameImageService,
-  liveCameraXComponentId,
-  nextLiveCameraPosition
+  liveCameraXComponentId
 } from '../services/camera/LiveCameraService';
 import {
   DanceSamplingPageState,
@@ -87,7 +84,6 @@ struct DancePage {
   @State liveCameraSurfaceId: string = '';
   @State liveCameraActive: boolean = false;
   @State liveCameraPosition: LiveCameraPosition = 'front';
-  @State liveCameraSwitchAvailable: boolean = true;
   @State flowStage: DanceFlowStage = 'prepare';
   @State countdownText: string = '';
   @State referenceVideoFailed: boolean = false;
@@ -106,7 +102,6 @@ struct DancePage {
 
   aboutToAppear() {
     this.setDanceKeepScreenOn(true);
-    this.refreshLiveCameraSwitchAvailability();
     this.prepareReferenceVideo();
   }
 
@@ -322,19 +317,6 @@ struct DancePage {
     this.liveCameraSurfaceId = result.surfaceId;
   }
 
-  private refreshLiveCameraSwitchAvailability(): void {
-    const context = this.uiAbilityContext();
-    if (context === undefined) {
-      this.liveCameraSwitchAvailable = true;
-      return;
-    }
-    const capability = new LiveCameraSwitchCapabilityService(
-      new HarmonyLiveCameraDevicePositionProvider(context)
-    ).capability(this.liveCameraPosition);
-    this.liveCameraSwitchAvailable = capability.canSwitch;
-    this.liveCameraPosition = capability.preferredPosition;
-  }
-
   private async startLiveCameraPreviewAsync(): Promise<boolean> {
     const context = this.uiAbilityContext();
     if (context === undefined) {
@@ -378,14 +360,6 @@ struct DancePage {
     this.liveCameraService = undefined;
     if (service !== undefined) {
       service.stop();
-    }
-  }
-
-  private switchLiveCamera(): void {
-    this.liveCameraPosition = nextLiveCameraPosition(this.liveCameraPosition);
-    if (this.liveCameraActive) {
-      this.liveCameraActive = false;
-      this.startLiveCameraPreviewAsync();
     }
   }
 
@@ -722,13 +696,6 @@ struct DancePage {
           this.cancelLiveSampling();
           this.stopLiveCameraPreview();
         })
-      if (this.liveCameraSwitchAvailable) {
-        Button(appString('feature_runtime_switch_camera'))
-          .height(32)
-          .margin({ top: AppSpacing.sm })
-          .enabled(!this.sampling && this.flowStage !== 'countdown')
-          .onClick(() => this.switchLiveCamera())
-      }
     }
     .width('100%')
     .margin({ top: AppSpacing.lg })
