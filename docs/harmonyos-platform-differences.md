@@ -466,6 +466,11 @@ Current HarmonyOS behavior:
 - HarmonyOS keeps the user-selected `.ms` model override, caches it in the app
   cache, and runs it through MindSpore Lite with the Android 224x224 RGB unit
   input contract.
+- A selected model is accepted only when it exposes exactly one NHWC float32
+  input tensor shaped `[1, 224, 224, 3]` with 150,528 elements and 602,112
+  bytes. The input uses RGB channel order with values normalized to `[0, 1]`.
+  Inference results are decoded only from a non-empty float32 output tensor;
+  incompatible selections are rejected before replacing the last valid cache.
 - If the user has not selected a model file, HarmonyOS now matches Android and
   blocks execution with a "select a model first" status instead of running the
   bundled MobileNetV2 model as a default custom-model fallback.

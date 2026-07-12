@@ -35,16 +35,34 @@ export interface ModelFileCompatibilityChecker {
   ): Promise<boolean>;
 }
 
+export interface ModelFileTensorMetadata {
+  readonly shape: Array<number>;
+  readonly dtype: mindSporeLite.DataType;
+  readonly format: mindSporeLite.Format;
+  readonly elementNum: number;
+  readonly dataSize: number;
+}
+
 export interface ModelFileCompatibilityLoader {
-  loadModel(content: Uint8Array): Promise<void>;
+  loadModel(content: Uint8Array): Promise<Array<ModelFileTensorMetadata>>;
 }
 
 export class MindSporeLiteModelCompatibilityLoader implements ModelFileCompatibilityLoader {
-  async loadModel(content: Uint8Array): Promise<void> {
+  async loadModel(content: Uint8Array): Promise<Array<ModelFileTensorMetadata>> {
     if (!modelFileContentLooksUsable(content)) {
       throw new Error('Empty MindSpore model file.');
     }
-    await mindSporeLite.loadModelFromBuffer(rawfileContentToArrayBuffer(content), mindSporeLiteCpuContext());
+    const model = await mindSporeLite.loadModelFromBuffer(
+      rawfileContentToArrayBuffer(content),
+      mindSporeLiteCpuContext()
+    );
+    return model.getInputs().map((input: mindSporeLite.MSTensor): ModelFileTensorMetadata => ({
+      shape: input.shape.slice(),
+      dtype: input.dtype,
+      format: input.format,
+      elementNum: input.elementNum,
+      dataSize: input.dataSize
+    }));
   }
 }
 
@@ -56,18 +74,37 @@ export class BasicModelFileCompatibilityChecker implements ModelFileCompatibilit
   }
 
   async isCompatible(
-    _routeName: string,
-    _inputKind: FeatureInputKind,
+    routeName: string,
+    inputKind: FeatureInputKind,
     _cachedUri: string,
     content: Uint8Array
   ): Promise<boolean> {
     try {
-      await this.loader.loadModel(content);
+      const inputs = await this.loader.loadModel(content);
+      if (routeName === AppRoute.CUSTOM_MODEL.name && inputKind === 'modelFile') {
+        return customModelInputContractCompatible(inputs);
+      }
       return true;
     } catch (_) {
       return false;
     }
   }
+}
+
+export function customModelInputContractCompatible(inputs: Array<ModelFileTensorMetadata>): boolean {
+  if (inputs.length !== 1) {
+    return false;
+  }
+  const input = inputs[0];
+  return input.shape.length === 4 &&
+    input.shape[0] === 1 &&
+    input.shape[1] === 224 &&
+    input.shape[2] === 224 &&
+    input.shape[3] === 3 &&
+    input.dtype === mindSporeLite.DataType.NUMBER_TYPE_FLOAT32 &&
+    input.format === mindSporeLite.Format.NHWC &&
+    input.elementNum === 150528 &&
+    input.dataSize === 602112;
 }
 
 export class RuntimeModelFileCacheService {

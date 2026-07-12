@@ -103,7 +103,11 @@ export class CustomModelSelectedFileRunner implements CustomModelTensorRunner {
       return [];
     }
 
-    return floatScoresFromOutputBuffer(outputs[0].getData());
+    const outputData = outputs[0].getData();
+    if (!customModelOutputCanDecode(outputs[0].dtype, outputData)) {
+      return [];
+    }
+    return floatScoresFromOutputBuffer(outputData);
   }
 
   private async loadModel(modelUri: string): Promise<mindSporeLite.Model> {
@@ -118,6 +122,10 @@ export class CustomModelSelectedFileRunner implements CustomModelTensorRunner {
     this.cachedModels.set(modelUri, model);
     return model;
   }
+}
+
+export function customModelOutputCanDecode(dtype: mindSporeLite.DataType, data: ArrayBuffer): boolean {
+  return dtype === mindSporeLite.DataType.NUMBER_TYPE_FLOAT32 && data.byteLength > 0;
 }
 
 export class CustomModelRawfileRunner implements CustomModelTensorRunner {

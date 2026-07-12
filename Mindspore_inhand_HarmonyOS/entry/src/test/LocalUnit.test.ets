@@ -1,6 +1,7 @@
 import { describe, it, expect } from '@ohos/hypium';
 import { common } from '@kit.AbilityKit';
 import { fileIo } from '@kit.CoreFileKit';
+import { mindSporeLite } from '@kit.MindSporeLiteKit';
 import request from '@ohos.request';
 import { AppRoute, findRouteByName } from '../main/ets/app/AppRoutes';
 import { MainTab, mainTabs } from '../main/ets/app/AppState';
@@ -244,6 +245,7 @@ import {
   customModelDefaultModelUri,
   customModelInputFloatCount,
   customModelInputSize,
+  customModelOutputCanDecode,
   rgbUnitInputFromResizedRgba
 } from '../main/ets/services/ai/CustomModelService';
 import {
@@ -450,6 +452,7 @@ import {
   CachedModelFileExistenceChecker,
   cachedModelFileInputStateForRoute,
   cachedModelFileNameForInputKind,
+  ModelFileTensorMetadata,
   ModelFileCompatibilityChecker,
   ModelFileCompatibilityLoader,
   modelFileCacheWriteSucceeded,
@@ -852,16 +855,19 @@ class ThrowingModelFileCompatibilityChecker implements ModelFileCompatibilityChe
 class RecordingModelFileCompatibilityLoader implements ModelFileCompatibilityLoader {
   readonly seenByteLengths: Array<number> = [];
   private readonly shouldThrow: boolean;
+  private readonly inputs: Array<ModelFileTensorMetadata>;
 
-  constructor(shouldThrow: boolean) {
+  constructor(shouldThrow: boolean, inputs: Array<ModelFileTensorMetadata> = []) {
     this.shouldThrow = shouldThrow;
+    this.inputs = inputs;
   }
 
-  async loadModel(content: Uint8Array): Promise<void> {
+  async loadModel(content: Uint8Array): Promise<Array<ModelFileTensorMetadata>> {
     this.seenByteLengths.push(content.byteLength);
     if (this.shouldThrow) {
       throw new Error('invalid MindSpore model');
     }
+    return this.inputs;
   }
 }
 
@@ -5781,6 +5787,21 @@ export default function localUnitTest() {
       expect(options.desiredPixelFormat).assertEqual(image.PixelMapFormat.RGBA_8888);
     });
 
+    it('decodesOnlyNonEmptyFloat32CustomModelOutputs', 0, () => {
+      expect(customModelOutputCanDecode(
+        mindSporeLite.DataType.NUMBER_TYPE_FLOAT32,
+        new ArrayBuffer(4)
+      )).assertTrue();
+      expect(customModelOutputCanDecode(
+        mindSporeLite.DataType.NUMBER_TYPE_INT8,
+        new ArrayBuffer(4)
+      )).assertFalse();
+      expect(customModelOutputCanDecode(
+        mindSporeLite.DataType.NUMBER_TYPE_FLOAT32,
+        new ArrayBuffer(0)
+      )).assertFalse();
+    });
+
     it('customModelServiceRunsSelectedModelWithAndroidInputContract', 0, async () => {
       const inputBuffer: ArrayBuffer = new ArrayBuffer(224 * 224 * 3 * 4);
       const preprocessor: FixedCustomModelPreprocessor = new FixedCustomModelPreprocessor(inputBuffer);
@@ -8938,7 +8959,11 @@ export default function localUnitTest() {
     it('cachesPickedModelFileContentBeforeRuntimeUse', 0, async () => {
       const reader = new FileUriContentReader(new FixedFileUriContentBackend(new Uint8Array([1, 2, 3, 4])));
       const writer = new RecordingModelFileCacheWriter('/cache/custom_model.ms');
-      const service = new RuntimeModelFileCacheService(reader, writer);
+      const service = new RuntimeModelFileCacheService(
+        reader,
+        writer,
+        new RecordingModelFileCompatibilityChecker(true)
+      );
 
       const result = await service.cachePickedModelFile('file://selected/custom.ms', '/cache', AppRoute.CUSTOM_MODEL.name, 'modelFile');
 
@@ -9106,6 +9131,91 @@ export default function localUnitTest() {
 
       expect(compatible).assertFalse();
       expect(loader.seenByteLengths[0]).assertEqual(4);
+    });
+
+    it('acceptsOnlyTheFixedCustomModelInputTensorContract', 0, async () => {
+      const compatibleInput: ModelFileTensorMetadata = {
+        shape: [1, 224, 224, 3],
+        dtype: mindSporeLite.DataType.NUMBER_TYPE_FLOAT32,
+        format: mindSporeLite.Format.NHWC,
+        elementNum: 150528,
+        dataSize: 602112
+      };
+      const compatibleChecker = new BasicModelFileCompatibilityChecker(
+        new RecordingModelFileCompatibilityLoader(false, [compatibleInput])
+      );
+
+      expect(await compatibleChecker.isCompatible(
+        AppRoute.CUSTOM_MODEL.name,
+        'modelFile',
+        '/cache/custom_model.ms',
+        new Uint8Array([1])
+      )).assertTrue();
+
+      const incompatibleInputs: Array<Array<ModelFileTensorMetadata>> = [
+        [],
+        [compatibleInput, compatibleInput],
+        [{
+          shape: [1, 224, 224, 3],
+          dtype: mindSporeLite.DataType.NUMBER_TYPE_FLOAT32,
+          format: mindSporeLite.Format.NCHW,
+          elementNum: 150528,
+          dataSize: 602112
+        }],
+        [{
+          shape: [1, 3, 224, 224],
+          dtype: mindSporeLite.DataType.NUMBER_TYPE_FLOAT32,
+          format: mindSporeLite.Format.NHWC,
+          elementNum: 150528,
+          dataSize: 602112
+        }],
+        [{
+          shape: [1, 224, 224, 3],
+          dtype: mindSporeLite.DataType.NUMBER_TYPE_INT8,
+          format: mindSporeLite.Format.NHWC,
+          elementNum: 150528,
+          dataSize: 602112
+        }],
+        [{
+          shape: [1, 224, 224, 3],
+          dtype: mindSporeLite.DataType.NUMBER_TYPE_FLOAT32,
+          format: mindSporeLite.Format.NHWC,
+          elementNum: 150527,
+          dataSize: 602112
+        }],
+        [{
+          shape: [1, 224, 224, 3],
+          dtype: mindSporeLite.DataType.NUMBER_TYPE_FLOAT32,
+          format: mindSporeLite.Format.NHWC,
+          elementNum: 150528,
+          dataSize: 602108
+        }]
+      ];
+
+      for (let index = 0; index < incompatibleInputs.length; index++) {
+        const checker = new BasicModelFileCompatibilityChecker(
+          new RecordingModelFileCompatibilityLoader(false, incompatibleInputs[index])
+        );
+        expect(await checker.isCompatible(
+          AppRoute.CUSTOM_MODEL.name,
+          'modelFile',
+          '/cache/custom_model.ms',
+          new Uint8Array([1])
+        )).assertFalse();
+      }
+    });
+
+    it('keepsNonCustomModelCompatibilityLoadabilityOnly', 0, async () => {
+      const checker = new BasicModelFileCompatibilityChecker(
+        new RecordingModelFileCompatibilityLoader(false, [])
+      );
+
+      expect(await checker.isCompatible(
+        AppRoute.OBJECT_PHOTO.name,
+        'modelFile',
+        '/cache/object_detection_model.ms',
+        new Uint8Array([1])
+      )).assertTrue();
     });
 
     it('reportsPickedModelFileCacheFailureWithI18nKey', 0, async () => {
