@@ -214,9 +214,10 @@ Current HarmonyOS behavior:
   small offline dictionary fallback for common demo phrases in Chinese and
   English, including the app name, Experience subtitle, app intro, College
   summary copy, permission/status copy, Android/HMS feature help sentences for
-  the bundled vision demos, Android/HMS prompt and failure copy, short
-  action/status labels such as `detect`, `video`, `copy`, `SAVE`, and
-  `Copied successfully`, Text Translation page hint/status copy such as
+  the bundled vision demos, HMS short title labels such as `PoseNet` and
+  `Summary`, Android/HMS prompt and failure copy, short action/status labels
+  such as `detect`, `video`, `copy`, `SAVE`, and `Copied successfully`,
+  Text Translation page hint/status copy such as
   `Please enter the content to be translated` and `Offline Translation`, the
   main shell tab, Experience header/section labels, hidden Me action labels,
   College navigation, view action, and footer labels, Custom Model page

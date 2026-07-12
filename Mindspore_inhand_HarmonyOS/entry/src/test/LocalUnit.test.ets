@@ -4460,6 +4460,18 @@ export default function localUnitTest() {
           'View\n~Illuminate your learning trip~');
     });
 
+    it('localTextTranslationRunnerCoversAndroidHmsShortTitleCopyOffline', 0, async () => {
+      const runner = new LocalTextTranslationRunner();
+
+      const englishResult = await runner.translate('PoseNet\nSummary', 'zh');
+      expect(englishResult.ok).assertTrue();
+      expect(englishResult.translatedText).assertEqual('\u9AA8\u9ABC\u68C0\u6D4B\n\u7B80\u8981\u8BF4\u660E');
+
+      const chineseResult = await runner.translate('\u9AA8\u9ABC\u68C0\u6D4B\n\u7B80\u8981\u8BF4\u660E', 'en');
+      expect(chineseResult.ok).assertTrue();
+      expect(chineseResult.translatedText).assertEqual('PoseNet\nSummary');
+    });
+
     it('localTextTranslationRunnerCoversRuntimePermissionAndStatusCopyOffline', 0, async () => {
       const runner = new LocalTextTranslationRunner();
 
