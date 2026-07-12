@@ -97,6 +97,22 @@ export function iconMediaName(token: string): string {
       return 'btn_style';
     case 'model':
       return 'btn_test';
+    case 'share':
+      return 'me_share';
+    case 'qr':
+      return 'me_qr_code';
+    case 'star':
+      return 'me_up';
+    case 'official':
+      return 'me_official';
+    case 'code':
+      return 'me_official_code';
+    case 'feedback':
+      return 'me_qa';
+    case 'version':
+      return 'me_version';
+    case 'go':
+      return 'me_go';
     default:
       return '';
   }
@@ -130,6 +146,22 @@ export function iconMediaResource(token: string): Resource | undefined {
       return $r('app.media.btn_style');
     case 'model':
       return $r('app.media.btn_test');
+    case 'share':
+      return $r('app.media.me_share');
+    case 'qr':
+      return $r('app.media.me_qr_code');
+    case 'star':
+      return $r('app.media.me_up');
+    case 'official':
+      return $r('app.media.me_official');
+    case 'code':
+      return $r('app.media.me_official_code');
+    case 'feedback':
+      return $r('app.media.me_qa');
+    case 'version':
+      return $r('app.media.me_version');
+    case 'go':
+      return $r('app.media.me_go');
     default:
       return undefined;
   }

@@ -4,7 +4,7 @@ import { GradientTitleBar } from '../common/components/GradientTitleBar';
 import { SectionTitle } from '../common/components/SectionTitle';
 import { MeItem, isMeItemPageNavigable, isMeItemUrlNavigable, visibleMeItems } from '../common/data/MeCatalog';
 import { webPagePath } from '../common/data/WebDestination';
-import { iconLabel } from '../common/icons/IconSymbols';
+import { iconLabel, iconMediaResource } from '../common/icons/IconSymbols';
 import { AppStringKey, appString } from '../common/i18n/AppStrings';
 import { AppColor, AppRadius, AppSpacing } from '../common/theme/AppTheme';
 import { AppVersionService } from '../services/app/AppVersionService';
@@ -87,8 +87,14 @@ export struct MePage {
   }
 
   @Builder
-  meRow(item: MeItem) {
-    Row() {
+  private meIcon(item: MeItem) {
+    if (iconMediaResource(item.icon) !== undefined) {
+      Image(iconMediaResource(item.icon) as Resource)
+        .width(32)
+        .height(32)
+        .objectFit(ImageFit.Contain)
+        .margin({ right: 8 })
+    } else {
       Text(iconLabel(item.icon))
         .fontSize(13)
         .fontWeight(FontWeight.Bold)
@@ -100,6 +106,29 @@ export struct MePage {
         .textAlign(TextAlign.Center)
         .maxLines(1)
         .margin({ right: 8 })
+    }
+  }
+
+  @Builder
+  private meChevron() {
+    if (iconMediaResource('go') !== undefined) {
+      Image(iconMediaResource('go') as Resource)
+        .width(7)
+        .height(12)
+        .objectFit(ImageFit.Contain)
+        .margin({ left: AppSpacing.sm })
+    } else {
+      Text('>')
+        .fontSize(14)
+        .fontColor(AppColor.textMuted)
+        .margin({ left: AppSpacing.sm })
+    }
+  }
+
+  @Builder
+  meRow(item: MeItem) {
+    Row() {
+      this.meIcon(item)
       Text(appString(item.titleKey))
         .fontSize(15)
         .fontColor(AppColor.textPrimary)
@@ -109,10 +138,7 @@ export struct MePage {
         .fontSize(13)
         .fontColor(AppColor.textSecondary)
       if (isMeItemUrlNavigable(item) || isMeItemPageNavigable(item)) {
-        Text('>')
-          .fontSize(14)
-          .fontColor(AppColor.textMuted)
-          .margin({ left: AppSpacing.sm })
+        this.meChevron()
       }
     }
     .width('100%')
