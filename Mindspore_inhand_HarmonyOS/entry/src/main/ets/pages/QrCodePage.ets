@@ -50,7 +50,7 @@ struct QrCodePage {
   private saveQrCodeImage(): Promise<QrCodeSaveResult> {
     const context = this.uiAbilityContext();
     if (context === undefined) {
-      const result: QrCodeSaveResult = { ok: false, uri: '', messageKey: 'qr_code_save_failed' };
+      const result: QrCodeSaveResult = { ok: false, uri: '', messageKey: 'image_save_failed' };
       return Promise.resolve(result);
     }
 
@@ -58,7 +58,7 @@ struct QrCodePage {
       new HarmonyQrCodeMediaReader(context.resourceManager, $r('app.media.my_qr_code')),
       new HarmonyQrCodeAssetWriter(context)
     ).save()
-      .catch((): QrCodeSaveResult => ({ ok: false, uri: '', messageKey: 'qr_code_save_failed' }));
+      .catch((): QrCodeSaveResult => ({ ok: false, uri: '', messageKey: 'image_save_failed' }));
   }
 
   private applySaveSheetAction(action: QrCodeSaveSheetAction): void {
@@ -77,7 +77,7 @@ struct QrCodePage {
         this.applySaveSheetAction(action);
       })
       .catch(() => {
-        this.statusKey = 'qr_code_save_failed';
+        this.statusKey = 'image_save_failed';
         this.applySaveSheetAction('saveFailed');
       })
       .finally(() => {
@@ -104,7 +104,7 @@ struct QrCodePage {
                 this.saveFromSheet();
                 return;
               }
-              this.statusKey = 'qr_code_save_failed';
+              this.statusKey = 'image_save_failed';
               this.applySaveSheetAction('saveFailed');
             })
         }

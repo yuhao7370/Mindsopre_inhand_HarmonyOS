@@ -38,11 +38,11 @@ export class QrCodeSaveService {
       const bytes = this.reader.readQrCodeImage();
       const uri = await this.writer.writeJpeg(bytes);
       if (uri.length === 0) {
-        return { ok: false, uri: '', messageKey: 'qr_code_save_failed' };
+        return { ok: false, uri: '', messageKey: 'image_save_failed' };
       }
-      return { ok: true, uri: uri, messageKey: 'qr_code_save_done' };
+      return { ok: true, uri: uri, messageKey: 'image_save_success' };
     } catch (_) {
-      return { ok: false, uri: '', messageKey: 'qr_code_save_failed' };
+      return { ok: false, uri: '', messageKey: 'image_save_failed' };
     }
   }
 }

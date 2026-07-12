@@ -2275,7 +2275,7 @@ export default function localUnitTest() {
 
       expect(result.ok).assertTrue();
       expect(result.uri).assertEqual('file://media/gallery/qr.jpg');
-      expect(result.messageKey).assertEqual('qr_code_save_done');
+      expect(result.messageKey).assertEqual('image_save_success');
       expect(writer.writtenBytes[0][0]).assertEqual(9);
       expect(writer.writtenBytes[0][2]).assertEqual(7);
     });
@@ -2297,9 +2297,9 @@ export default function localUnitTest() {
       expect(rejectedRead.ok).assertFalse();
       expect(rejectedWrite.ok).assertFalse();
       expect(emptyUri.ok).assertFalse();
-      expect(rejectedRead.messageKey).assertEqual('qr_code_save_failed');
-      expect(rejectedWrite.messageKey).assertEqual('qr_code_save_failed');
-      expect(emptyUri.messageKey).assertEqual('qr_code_save_failed');
+      expect(rejectedRead.messageKey).assertEqual('image_save_failed');
+      expect(rejectedWrite.messageKey).assertEqual('image_save_failed');
+      expect(emptyUri.messageKey).assertEqual('image_save_failed');
     });
 
     it('qrCodeWriteCompletesOnlyWhenAllBytesAreWritten', 0, () => {
