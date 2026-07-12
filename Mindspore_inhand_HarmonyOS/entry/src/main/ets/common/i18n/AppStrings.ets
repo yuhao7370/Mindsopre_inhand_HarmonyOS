@@ -44,6 +44,8 @@ export type AppStringKey =
   'title_texttranslation' |
   'title_object' |
   'title_object_camera' |
+  'title_object_photo_detection' |
+  'title_object_camera_detection' |
   'title_style_transfer' |
   'title_custom_model' |
   'title_college_faq' |
@@ -169,6 +171,7 @@ export type AppStringKey =
   'feature_runtime_custom_model_select_model' |
   'feature_runtime_custom_model_select_photo' |
   'feature_runtime_custom_model_take_photo' |
+  'feature_runtime_object_select_model' |
   'feature_runtime_custom_model_output_title' |
   'feature_runtime_custom_model_output_placeholder' |
   'feature_runtime_classification_runner_unavailable' |
@@ -237,6 +240,7 @@ export type AppStringKey =
   'feature_runtime_result_label' |
   'feature_runtime_result_score' |
   'feature_runtime_result_count' |
+  'feature_runtime_result_scene_count' |
   'feature_runtime_result_scenes' |
   'feature_runtime_scene_overlay_count' |
   'feature_runtime_scene_overlay_scene' |
@@ -347,6 +351,8 @@ const APP_STRING_KEYS: AppStringKey[] = [
   'title_texttranslation',
   'title_object',
   'title_object_camera',
+  'title_object_photo_detection',
+  'title_object_camera_detection',
   'title_style_transfer',
   'title_custom_model',
   'title_college_faq',
@@ -472,6 +478,7 @@ const APP_STRING_KEYS: AppStringKey[] = [
   'feature_runtime_custom_model_select_model',
   'feature_runtime_custom_model_select_photo',
   'feature_runtime_custom_model_take_photo',
+  'feature_runtime_object_select_model',
   'feature_runtime_custom_model_output_title',
   'feature_runtime_custom_model_output_placeholder',
   'feature_runtime_classification_runner_unavailable',
@@ -540,6 +547,7 @@ const APP_STRING_KEYS: AppStringKey[] = [
   'feature_runtime_result_label',
   'feature_runtime_result_score',
   'feature_runtime_result_count',
+  'feature_runtime_result_scene_count',
   'feature_runtime_result_scenes',
   'feature_runtime_scene_overlay_count',
   'feature_runtime_scene_overlay_scene',
@@ -699,6 +707,10 @@ export function appString(key: AppStringKey): ResourceStr {
       return $r('app.string.title_object');
     case 'title_object_camera':
       return $r('app.string.title_object_camera');
+    case 'title_object_photo_detection':
+      return $r('app.string.title_object_photo_detection');
+    case 'title_object_camera_detection':
+      return $r('app.string.title_object_camera_detection');
     case 'title_style_transfer':
       return $r('app.string.title_style_transfer');
     case 'title_custom_model':
@@ -949,6 +961,8 @@ export function appString(key: AppStringKey): ResourceStr {
       return $r('app.string.feature_runtime_custom_model_select_photo');
     case 'feature_runtime_custom_model_take_photo':
       return $r('app.string.feature_runtime_custom_model_take_photo');
+    case 'feature_runtime_object_select_model':
+      return $r('app.string.feature_runtime_object_select_model');
     case 'feature_runtime_custom_model_output_title':
       return $r('app.string.feature_runtime_custom_model_output_title');
     case 'feature_runtime_custom_model_output_placeholder':
@@ -1085,6 +1099,8 @@ export function appString(key: AppStringKey): ResourceStr {
       return $r('app.string.feature_runtime_result_score');
     case 'feature_runtime_result_count':
       return $r('app.string.feature_runtime_result_count');
+    case 'feature_runtime_result_scene_count':
+      return $r('app.string.feature_runtime_result_scene_count');
     case 'feature_runtime_result_scenes':
       return $r('app.string.feature_runtime_result_scenes');
     case 'feature_runtime_scene_overlay_count':

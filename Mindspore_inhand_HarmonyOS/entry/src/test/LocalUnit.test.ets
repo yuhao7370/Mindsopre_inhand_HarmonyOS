@@ -99,6 +99,7 @@ import {
   danceReferenceVideoLengthBytes,
   danceReferenceVideoUrl,
   danceReferenceVideoCanStartLive,
+  danceReferenceVideoProgressText,
   danceReferenceVideoPlayerPreparedAfterCacheResult,
   dancePrepareBackgroundMediaName,
   danceResultActionButtonHeightPx,
@@ -122,6 +123,7 @@ import {
   danceSamplingPageState,
   danceSamplingResultStopsLiveCameraPreview,
   danceScoreText,
+  danceTemplateDemoActionVisible,
   danceTemplateDemoScore
 } from '../main/ets/services/dance/DancePageService';
 import {
@@ -352,6 +354,7 @@ import {
   shouldShowLiveObjectDetectionCameraOverlay,
   shouldShowLivePoseCameraOverlay,
   shouldShowLivePoseTemplateOverlay,
+  shouldShowPrimaryRunAction,
   shouldShowLiveSegmentationCameraOverlay,
   liveClassificationEmptyPromptKey,
   shouldMirrorSegmentationForeground,
@@ -368,6 +371,7 @@ import {
   workflowInputLabelKey,
   workflowGoLiveLabelKey,
   workflowResultTitleKey,
+  workflowRuntimeTitleKey,
   workflowRunActionKey,
   workflowForRoute
 } from '../main/ets/features/runtime/FeatureWorkflowCatalog';
@@ -3067,6 +3071,7 @@ export default function localUnitTest() {
       expect(danceResultBackButtonWidthPx).assertEqual(140);
       expect(danceResultBackButtonHeightPx).assertEqual(140);
       expect(danceResultPlayAgainLabelKey).assertEqual('dance_reset');
+      expect(danceTemplateDemoActionVisible()).assertFalse();
       expect(hasAppStringKey('dance_prepare_summary')).assertTrue();
       expect(hasAppStringKey('dance_reference_video')).assertTrue();
       expect(hasAppStringKey('dance_countdown')).assertTrue();
@@ -3164,6 +3169,8 @@ export default function localUnitTest() {
       expect(danceReferenceVideoProgressPercent({ receivedBytes: 250, totalBytes: 200 })).assertEqual(100);
       expect(danceReferenceVideoProgressPercent({ receivedBytes: -10, totalBytes: 200 })).assertEqual(0);
       expect(danceReferenceVideoProgressPercent({ receivedBytes: 10, totalBytes: 0 })).assertEqual(0);
+      expect(danceReferenceVideoProgressText(25)).assertEqual('25%');
+      expect(danceReferenceVideoProgressText(100)).assertEqual('100%');
     });
 
     it('forwardsDanceReferenceVideoDownloadProgressEvents', 0, async () => {
@@ -3356,6 +3363,18 @@ export default function localUnitTest() {
       expect(workflowRunActionKey(translation)).assertEqual('feature_runtime_run_translation');
       expect(hasAppStringKey(workflowRunActionKey(translation))).assertTrue();
       expect(workflowRunActionKey(styleTransfer)).assertEqual('feature_runtime_run');
+    });
+
+    it('usesAndroidObjectDetectionActivityTitlesOnRuntimePages', 0, () => {
+      const objectPhoto: FeatureWorkflow = workflowForRoute(AppRoute.OBJECT_PHOTO.name)!;
+      const objectCamera: FeatureWorkflow = workflowForRoute(AppRoute.OBJECT_CAMERA.name)!;
+      const imageCamera: FeatureWorkflow = workflowForRoute(AppRoute.IMAGE_CAMERA.name)!;
+
+      expect(workflowRuntimeTitleKey(objectPhoto, 'title_object')).assertEqual('title_object_photo_detection');
+      expect(workflowRuntimeTitleKey(objectCamera, 'title_object_camera')).assertEqual('title_object_camera_detection');
+      expect(workflowRuntimeTitleKey(imageCamera, 'title_image')).assertEqual('title_image');
+      expect(hasAppStringKey(workflowRuntimeTitleKey(objectPhoto, 'title_object'))).assertTrue();
+      expect(hasAppStringKey(workflowRuntimeTitleKey(objectCamera, 'title_object_camera'))).assertTrue();
     });
 
     it('usesAndroidStyleTransferInitialChooseImagePrompt', 0, () => {
@@ -5181,7 +5200,7 @@ export default function localUnitTest() {
       expect(result.messageKey).assertEqual('feature_runtime_scene_done');
       expect(result.detailText.indexOf('beach 96.00%') >= 0).assertTrue();
       const rows = aiRunResultRows(result);
-      expect(rows[0].labelKey).assertEqual('feature_runtime_result_count');
+      expect(rows[0].labelKey).assertEqual('feature_runtime_result_scene_count');
       expect(rows[0].value).assertEqual('1');
       expect(rows[1].labelKey).assertEqual('feature_runtime_result_scenes');
       expect(rows[1].value).assertEqual('1. beach 96.00%');
@@ -5210,7 +5229,7 @@ export default function localUnitTest() {
       });
       const rows = aiRunResultRows(result);
 
-      expect(rows[0].labelKey).assertEqual('feature_runtime_result_count');
+      expect(rows[0].labelKey).assertEqual('feature_runtime_result_scene_count');
       expect(rows[0].value).assertEqual('3');
       expect(rows[1].labelKey).assertEqual('feature_runtime_result_scenes');
       expect(rows[1].value).assertEqual('1. beach 96.00%\n2. mountain 82.00%\n3. restaurant 70.00%');
@@ -5566,6 +5585,11 @@ export default function localUnitTest() {
       expect(workflowInputLabelKey(textTranslation, 'camera')).assertEqual('feature_input_camera_android');
       expect(workflowInputLabelKey(objectPhoto, 'photo')).assertEqual('feature_input_photo');
       expect(workflowInputLabelKey(objectPhoto, 'camera')).assertEqual('feature_input_camera');
+      expect(workflowInputLabelKey(objectPhoto, 'modelFile')).assertEqual('feature_runtime_object_select_model');
+      expect(workflowInputLabelKey(workflowForRoute(AppRoute.OBJECT_CAMERA.name), 'modelFile'))
+        .assertEqual('feature_runtime_object_select_model');
+      expect(workflowInputLabelKey(workflowForRoute(AppRoute.IMAGE_CAMERA.name), 'modelFile'))
+        .assertEqual('feature_input_model_file');
       expect(workflowInputLabelKey(customModel, 'photo')).assertEqual('feature_runtime_custom_model_select_photo');
       expect(workflowInputLabelKey(customModel, 'camera')).assertEqual('feature_runtime_custom_model_take_photo');
     });
@@ -8274,6 +8298,18 @@ export default function localUnitTest() {
       expect(autoStartInputKindForWorkflow(workflowForRoute(AppRoute.POSENET.name)!)).assertUndefined();
       expect(autoStartInputKindForWorkflow(workflowForRoute(AppRoute.GESTURE_STILL.name)!)).assertUndefined();
       expect(autoStartInputKindForWorkflow(workflowForRoute(AppRoute.TEXT_RECOGNITION.name)!)).assertUndefined();
+
+      expect(shouldShowPrimaryRunAction(workflowForRoute(AppRoute.IMAGE_CAMERA.name)!)).assertFalse();
+      expect(shouldShowPrimaryRunAction(workflowForRoute(AppRoute.OBJECT_CAMERA.name)!)).assertFalse();
+      expect(shouldShowPrimaryRunAction(workflowForRoute(AppRoute.GESTURE_LIVE.name)!)).assertFalse();
+      expect(shouldShowPrimaryRunAction(workflowForRoute(AppRoute.SCENE_LIVE.name)!)).assertFalse();
+      expect(shouldShowPrimaryRunAction(workflowForRoute(AppRoute.SEGMENTATION_LIVE.name)!)).assertFalse();
+      expect(shouldShowPrimaryRunAction(workflowForRoute(AppRoute.PORTRAIT_SEGMENTATION.name)!)).assertFalse();
+      expect(shouldShowPrimaryRunAction(workflowForRoute(AppRoute.LIVE_SKELETON.name)!)).assertFalse();
+      expect(shouldShowPrimaryRunAction(workflowForRoute(AppRoute.POSENET.name)!)).assertTrue();
+      expect(shouldShowPrimaryRunAction(workflowForRoute(AppRoute.TEXT_TRANSLATION.name)!)).assertTrue();
+      expect(shouldShowPrimaryRunAction(workflowForRoute(AppRoute.STYLE_TRANSFER.name)!)).assertTrue();
+      expect(shouldShowPrimaryRunAction(workflowForRoute(AppRoute.CUSTOM_MODEL.name)!)).assertTrue();
     });
 
     it('usesAndroidFrontCameraDefaultsForSelfieLiveWorkflows', 0, () => {

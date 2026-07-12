@@ -27,6 +27,7 @@ import {
   danceCountdownStepMs,
   danceReferenceVideoCanStartLive,
   danceReferenceVideoPlayerPreparedAfterCacheResult,
+  danceReferenceVideoProgressText,
   danceResultActionButtonHeightPx,
   danceResultActionButtonWidthPx,
   danceResultBackButtonHeightPx,
@@ -41,6 +42,7 @@ import {
   danceSaveStatusKey,
   danceSamplingResultStopsLiveCameraPreview,
   danceScoreText,
+  danceTemplateDemoActionVisible,
   danceTemplateDemoScore
 } from '../services/dance/DancePageService';
 import {
@@ -617,23 +619,24 @@ struct DancePage {
       .margin({ top: AppSpacing.xs })
       .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
       if (this.referenceVideoPreparing) {
-        Text(appString('dance_reference_video_downloading'))
-          .fontSize(12)
-          .fontColor(AppColor.textSecondary)
-          .lineHeight(18)
-          .textAlign(TextAlign.Center)
-          .margin({ top: AppSpacing.sm })
+        Row() {
+          Text(appString('dance_reference_video_downloading'))
+            .fontSize(12)
+            .fontColor(AppColor.textSecondary)
+            .lineHeight(18)
+          Text(danceReferenceVideoProgressText(this.referenceVideoProgressPercent))
+            .fontSize(12)
+            .fontColor(AppColor.textSecondary)
+            .lineHeight(18)
+        }
+        .width('100%')
+        .justifyContent(FlexAlign.Center)
+        .margin({ top: AppSpacing.sm })
         Progress({ value: this.referenceVideoProgressPercent, total: 100, type: ProgressType.Linear })
           .width('100%')
           .height(4)
           .color(AppColor.accent)
           .backgroundColor(AppColor.divider)
-          .margin({ top: AppSpacing.xs })
-        Text(`${this.referenceVideoProgressPercent}%`)
-          .fontSize(12)
-          .fontColor(AppColor.textSecondary)
-          .lineHeight(18)
-          .textAlign(TextAlign.Center)
           .margin({ top: AppSpacing.xs })
       }
       if (this.referenceVideoFailed) {
@@ -660,11 +663,13 @@ struct DancePage {
         .lineHeight(22)
         .margin({ top: AppSpacing.lg })
 
-      Button(appString('dance_start_demo'))
-        .width('100%')
-        .height(44)
-        .margin({ top: AppSpacing.lg })
-        .onClick(() => this.runTemplateDemo())
+      if (danceTemplateDemoActionVisible()) {
+        Button(appString('dance_start_demo'))
+          .width('100%')
+          .height(44)
+          .margin({ top: AppSpacing.lg })
+          .onClick(() => this.runTemplateDemo())
+      }
 
       this.liveCameraPreview()
 

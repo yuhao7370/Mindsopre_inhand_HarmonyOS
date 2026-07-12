@@ -67,8 +67,26 @@ export function danceReferenceVideoPlayerPreparedAfterCacheResult(
   return cacheReady && previousPlayerPrepared && nextUri.length > 0 && nextUri === previousUri;
 }
 
+export function danceReferenceVideoProgressText(percent: number): string {
+  if (percent !== percent) {
+    return '0%';
+  }
+  const roundedPercent = Math.round(percent);
+  if (roundedPercent <= 0) {
+    return '0%';
+  }
+  if (roundedPercent >= 100) {
+    return '100%';
+  }
+  return `${roundedPercent}%`;
+}
+
 export function danceTemplateDemoScore(): number {
   return danceScoreFromFrames(danceTemplateFrames());
+}
+
+export function danceTemplateDemoActionVisible(): boolean {
+  return false;
 }
 
 export function danceResultScoreLabelKey(score: number): AppStringKey {

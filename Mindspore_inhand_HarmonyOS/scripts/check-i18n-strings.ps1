@@ -57,20 +57,29 @@ function Decode-Utf8Base64([string] $encoded) {
 $visibleAndroidZhStringExpectations = @{
   experience_head_title = (Decode-Utf8Base64 '5L2T6aqM5Lit5b+D')
   experience_head_subtitle = (Decode-Utf8Base64 '5paw5LiA5Luj5YWo5Zy65pmvQUnorqHnrpfmoYbmnrbvvIzpgoDmgqjpqazkuIrkvZPpqow=')
+  title_splash_welcome = (Decode-Utf8Base64 'QUnniLHlpb3ogIXnmoTkuIDnq5nlvI/ljY/lkIzlrabkuaDjgIHmvJTnpLrjgIHkvZPpqozlubPlj7A=')
   title_share_commend = (Decode-Utf8Base64 'TWluZFNwb3Jl5o6M5Lit5a6d77yaQUnniLHlpb3ogIXnmoTkuIDnq5nlvI/ljY/lkIzlrabkuaDjgIHmvJTnpLrjgIHkvZPpqozlubPlj7AJ')
   me_share_title = (Decode-Utf8Base64 '5LiA6ZSu5YiG5Lqr')
   me_version_title = (Decode-Utf8Base64 '54mI5pys5Y+3')
   title_pose_net = (Decode-Utf8Base64 '6aqo6aq85qOA5rWL')
+  title_scene_detection = (Decode-Utf8Base64 '5Zy65pmv5qOA5rWL')
+  title_object_photo_detection = (Decode-Utf8Base64 '54Wn54mH5qOA5rWL')
+  title_object_camera_detection = (Decode-Utf8Base64 '6KeG6aKR5qOA5rWL')
+  college_summary_title = (Decode-Utf8Base64 'TWluZFNwb3Jl566A5LuL')
   college_cloud_title = (Decode-Utf8Base64 'MeWwj+aXtuS9k+mqjOerr+S6keWNj+WQjOWFqOa1geeoi+W8gOWPkQ==')
   college_train_title = (Decode-Utf8Base64 '6K6t57uD5qih5Z6L')
   college_execute_title = (Decode-Utf8Base64 '5omn6KGM5o6o55CG')
   college_app_title = (Decode-Utf8Base64 '56uv5L6n5bqU55So')
   college_video_title = (Decode-Utf8Base64 '5Y+C6ICD6KeG6aKR')
+  me_user_agreement = (Decode-Utf8Base64 '44CK55So5oi35Y2P6K6u5ZKM6ZqQ56eB5pS/562W44CL')
   title_intelligent_poetry = (Decode-Utf8Base64 '5pm66IO95YaZ6K+X')
   poem_save_poster = (Decode-Utf8Base64 '5L+d5a2Y5Zu+54mH')
   poem_share_poster = (Decode-Utf8Base64 '5YiG5Lqr5Zu+54mH')
   poem_save_success = (Decode-Utf8Base64 '5L+d5a2Y5oiQ5Yqf')
   poem_save_failed = (Decode-Utf8Base64 '5L+d5a2Y5aSx6LSl')
+  poem_ai_credit = (Decode-Utf8Base64 '55SxTWluZFNwb3JlIEFJ5oqA5pyv55Sf5oiQ')
+  dance_reference_video_downloading = (Decode-Utf8Base64 '6Iie6LmI6KeG6aKR5LiL6L295LitIC4uLg==')
+  dance_reference_video_failed = (Decode-Utf8Base64 '5LiL6L295aSx6LSl')
   dance_score_prefix = (Decode-Utf8Base64 '5oGt5Zac5a6M5oiQ77yM57u85ZCI5b6X5YiG77ya')
   dance_score_level_no_action = (Decode-Utf8Base64 '6K+35Yqo6LW35p2l5ZOm77yB')
   dance_score_level_no_point = (Decode-Utf8Base64 '6K+35YWo6Lqr5Ye66ZWc5bGV56S65L2g55qE6aOO6YeH77yB')
@@ -81,6 +90,14 @@ $visibleAndroidZhStringExpectations = @{
   dance_score_level_excellent = (Decode-Utf8Base64 '6ZqQ6JeP5Zyo5rCR6Ze055qE6auY5omL77yB')
   dance_score_level_perfect = (Decode-Utf8Base64 '57uZ5aSn56We54yu5LiK6Iad55uW77yB')
   dance_score_level_full = (Decode-Utf8Base64 '6L+Z5Liq6Iie5Y+w5bGe5LqO5L2g77yB')
+  feature_runtime_preview_title = (Decode-Utf8Base64 '5Zu+54mH6aKE6KeI')
+  feature_runtime_object_select_model = (Decode-Utf8Base64 '6YCJ5oup5qih5Z6L')
+  feature_runtime_result_score = (Decode-Utf8Base64 '5b6X5YiG')
+  feature_runtime_result_scene_count = (Decode-Utf8Base64 '5Zy65pmv6K6h5pWw')
+  feature_runtime_scene_overlay_count = (Decode-Utf8Base64 '5Zy65pmv6K6h5pWw')
+  feature_runtime_scene_overlay_score = (Decode-Utf8Base64 '5b6X5YiG')
+  feature_runtime_result_execution_time = (Decode-Utf8Base64 '5o6o55CG5pe26Ze077ya')
+  title_source = (Decode-Utf8Base64 '5Luj56CB')
 }
 
 $visibleAndroidStringExpectations = @{
@@ -90,6 +107,8 @@ $visibleAndroidStringExpectations = @{
     experience_head_title = 'Experience Center'
     experience_head_subtitle = 'Invite you to explore a new generation of ALL-Scenario AI Computing Framework'
     title_pose_net = 'PoseNet'
+    title_object_photo_detection = 'Photo Detection'
+    title_object_camera_detection = 'Camera Detection'
     college_cloud_title = 'A One-Hour Trip to MindSpore'
     college_train_title = 'Train'
     college_execute_title = 'Inference'
@@ -100,6 +119,16 @@ $visibleAndroidStringExpectations = @{
     poem_share_poster = 'share the picture'
     poem_save_success = 'save successfully'
     poem_save_failed = 'Save failure'
+    dance_reference_video_failed = 'Download failed'
+    dance_reference_video_downloading = 'Downloading dance video ...'
+    feature_runtime_preview_title = 'Image Preview'
+    feature_runtime_object_select_model = 'Select Model'
+    feature_runtime_result_score = 'Score'
+    feature_runtime_result_scene_count = 'Scene Count'
+    feature_runtime_scene_overlay_count = 'Scene Count'
+    feature_runtime_scene_overlay_score = 'Score'
+    feature_runtime_result_execution_time = 'Inference Time:'
+    title_source = 'Code'
   }
 }
 

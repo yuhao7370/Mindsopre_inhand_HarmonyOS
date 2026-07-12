@@ -1090,7 +1090,7 @@ function gestureResultRows(data: AiGestureData): Array<AiRunResultRow> {
 
 function sceneDetectionResultRows(data: AiSceneData): Array<AiRunResultRow> {
   const rows: Array<AiRunResultRow> = [
-    resultRow('feature_runtime_result_count', `${data.result.scenes.length}`)
+    resultRow('feature_runtime_result_scene_count', `${data.result.scenes.length}`)
   ];
   if (data.result.scenes.length > 0) {
     rows.push(resultRow('feature_runtime_result_scenes', sceneDetectionListText(data.result.scenes)));

@@ -283,6 +283,9 @@ Current HarmonyOS behavior:
   but no longer renders those fields directly in normal UI.
 - Selected images and models remain visible through preview rows that show
   user-facing labels and file names, instead of raw picker paths or surface ids.
+- Camera-only live runtime pages auto-start from the preview and no longer show
+  the generic primary Run button, matching Android live activities that run
+  from camera startup rather than a manual action.
 - The HAP build helper now runs a static guard to catch accidental re-exposure
   of those debug fields in `FeatureRuntimePage`.
 
@@ -370,6 +373,8 @@ Current HarmonyOS behavior:
   label, and its confidence on the camera preview, mirroring Android's
   `MLSenceDetectionGraphic` behavior while keeping the HarmonyOS overlay
   readable on top of live frames.
+- Scene result rows and live overlays use the Android `Scene Count` /
+  `场景计数` label while keeping the generic `Count` label for other workflows.
 - A real scene detection runner can still be injected; if no service exists at
   all, the app reports the localized
   `feature_runtime_scene_runner_unavailable` adapter status.
@@ -462,6 +467,11 @@ Current HarmonyOS behavior:
   Chinese locales while keeping the existing English labels for other locales.
 - Build-time label verification covers both English and Chinese rawfiles and
   rejects UTF-8 BOMs so localized first labels do not receive hidden prefixes.
+- The Experience cards keep Android's `Object Detection(Photo)` /
+  `Object Detection(Real-time)` labels, while the runtime pages use the
+  Android activity titles `Photo Detection` and `Camera Detection`.
+- The optional `.ms` model picker on Object Detection routes uses the Android
+  `Select Model` / `选择模型` action copy.
 - Runtime result rows keep the top-detection summary and also list every
   detected object so the structured result matches the full detection detail.
 - Empty SSD outputs are treated as object-detection failure, matching Android's
@@ -551,10 +561,11 @@ Current HarmonyOS behavior:
   `DanceSamplingService`; it uses the Android 70-frame and 500ms sampling
   constants, reuses pose visibility filtering, and synthesizes the Android neck
   joint from the left/right shoulder midpoint.
-- `/dance/DanceMainActivity` now opens a dedicated HarmonyOS Dance page with a
-  template scoring demo, live camera preview, 70-frame live skeleton sampling,
-  the original MindSpore reference video, 3/2/1 synchronized run start,
-  Android-style result messages, and album save for the rendered result card.
+- `/dance/DanceMainActivity` now opens a dedicated HarmonyOS Dance page with
+  live camera preview, 70-frame live skeleton sampling, the original MindSpore
+  reference video, 3/2/1 synchronized run start, Android-style result messages,
+  and album save for the rendered result card. The old Harmony-only template
+  scoring demo action is kept out of the normal UI.
 - The Dance page keeps the HarmonyOS window awake while it is visible, matching
   Android's `FLAG_KEEP_SCREEN_ON` behavior without changing the app-wide screen
   policy.
@@ -577,7 +588,8 @@ Current HarmonyOS behavior:
   app cache directory instead of public Downloads to fit HarmonyOS scoped
   storage.
 - Reference-video downloads now surface progress in the Dance page while the
-  cache file is being prepared.
+  cache file is being prepared, and download failures use the Android
+  `Download failed` / `下载失败` copy.
 
 ## Intelligent Poetry
 

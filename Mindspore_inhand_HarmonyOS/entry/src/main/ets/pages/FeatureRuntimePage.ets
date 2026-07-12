@@ -36,6 +36,7 @@ import {
   shouldShowLiveObjectDetectionCameraOverlay,
   shouldShowLivePoseCameraOverlay,
   shouldShowLivePoseTemplateOverlay,
+  shouldShowPrimaryRunAction,
   shouldShowLiveSegmentationCameraOverlay,
   shouldShowResultSaveAction,
   shouldShowTranslationSnapshotSaveAction,
@@ -52,6 +53,7 @@ import {
   workflowResultTitleKey,
   workflowRunActionKey,
   workflowInputReadyAction,
+  workflowRuntimeTitleKey,
   workflowForRoute
 } from '../features/runtime/FeatureWorkflowCatalog';
 import {
@@ -298,7 +300,7 @@ struct FeatureRuntimePage {
     const params = router.getParams() as FeatureRuntimeParams;
     this.routeName = params?.routeName ?? '';
     const workflow = workflowForRoute(this.routeName);
-    this.titleKey = params?.titleKey ?? workflow?.titleKey ?? this.titleKey;
+    this.titleKey = workflowRuntimeTitleKey(workflow, params?.titleKey ?? this.titleKey);
     this.summaryKey = workflow?.summaryKey ?? this.summaryKey;
     this.aiMethod = workflow?.aiMethod ?? '';
     this.statusKey = workflowInitialStatusKey(workflow);
@@ -2531,12 +2533,14 @@ struct FeatureRuntimePage {
         .backgroundColor(AppColor.cardBackground)
         .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
 
-        Button(appString(this.runActionKey))
-          .width('100%')
-          .height(44)
-          .margin({ top: AppSpacing.lg })
-          .enabled(this.runActionEnabled())
-          .onClick(() => this.runPrimaryAction())
+        if (shouldShowPrimaryRunAction(workflowForRoute(this.routeName))) {
+          Button(appString(this.runActionKey))
+            .width('100%')
+            .height(44)
+            .margin({ top: AppSpacing.lg })
+            .enabled(this.runActionEnabled())
+            .onClick(() => this.runPrimaryAction())
+        }
 
         Column() {
           Text(appString(workflowResultTitleKey(workflowForRoute(this.routeName))))

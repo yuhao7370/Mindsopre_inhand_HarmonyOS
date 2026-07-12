@@ -53,6 +53,7 @@ export type FeaturePermissionKind = 'camera' | 'media' | 'internet';
 export interface FeatureWorkflow {
   readonly routeName: string;
   readonly titleKey: AppStringKey;
+  readonly runtimeTitleKey?: AppStringKey;
   readonly summaryKey: AppStringKey;
   readonly aiMethod: AiMethodName;
   readonly inputKinds: Array<FeatureInputKind>;
@@ -227,6 +228,7 @@ export const featureWorkflows: Array<FeatureWorkflow> = [
   {
     routeName: AppRoute.OBJECT_PHOTO.name,
     titleKey: 'title_object',
+    runtimeTitleKey: 'title_object_photo_detection',
     summaryKey: 'workflow_summary_object_photo',
     aiMethod: 'detectObjects',
     inputKinds: ['photo'],
@@ -240,6 +242,7 @@ export const featureWorkflows: Array<FeatureWorkflow> = [
   {
     routeName: AppRoute.OBJECT_CAMERA.name,
     titleKey: 'title_object_camera',
+    runtimeTitleKey: 'title_object_camera_detection',
     summaryKey: 'workflow_summary_object_camera',
     aiMethod: 'detectObjects',
     inputKinds: ['camera'],
@@ -370,6 +373,17 @@ export function sampleImageUriForWorkflow(workflow: FeatureWorkflow): string {
 
 export function workflowRunActionKey(workflow: FeatureWorkflow | undefined): AppStringKey {
   return workflow?.runActionKey ?? 'feature_runtime_run';
+}
+
+export function workflowRuntimeTitleKey(
+  workflow: FeatureWorkflow | undefined,
+  fallbackTitleKey?: AppStringKey
+): AppStringKey {
+  return workflow?.runtimeTitleKey ?? fallbackTitleKey ?? workflow?.titleKey ?? 'feature_runtime_unknown_route';
+}
+
+export function shouldShowPrimaryRunAction(workflow: FeatureWorkflow | undefined): boolean {
+  return workflow !== undefined && autoStartInputKindForWorkflow(workflow) === undefined;
 }
 
 export function workflowInitialStatusKey(workflow: FeatureWorkflow | undefined): AppStringKey {
@@ -705,6 +719,10 @@ export function workflowInputLabelKey(
   workflow: FeatureWorkflow | undefined,
   inputKind: FeatureInputKind
 ): AppStringKey {
+  if ((workflow?.routeName === AppRoute.OBJECT_PHOTO.name || workflow?.routeName === AppRoute.OBJECT_CAMERA.name) &&
+    inputKind === 'modelFile') {
+    return 'feature_runtime_object_select_model';
+  }
   if (workflow?.routeName === AppRoute.CUSTOM_MODEL.name) {
     if (inputKind === 'modelFile') {
       return 'feature_runtime_custom_model_select_model';
