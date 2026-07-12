@@ -303,9 +303,10 @@ export struct CollegePage {
               .fontColor(AppColor.accent)
               .maxLines(1)
               .margin({ right: AppSpacing.sm })
-            Text('>')
-              .fontSize(14)
-              .fontColor(AppColor.textMuted)
+            Image($r('app.media.me_go'))
+              .width(6)
+              .height(12)
+              .objectFit(ImageFit.Contain)
           }
         }
         .height(this.timelineVisualForState(item).iconSizeVp)

@@ -10,6 +10,7 @@ $env:PATH = 'C:\Program Files\Huawei\DevEco Studio\jbr\bin;' + $env:PATH
 & (Join-Path $PSScriptRoot 'check-bottom-tab-icons.ps1')
 & (Join-Path $PSScriptRoot 'check-me-row-icons.ps1')
 & (Join-Path $PSScriptRoot 'check-poetry-back-icon.ps1')
+& (Join-Path $PSScriptRoot 'check-college-chevron-icon.ps1')
 & (Join-Path $PSScriptRoot 'ensure-mindspore-models.ps1')
 $hvigor = 'C:\Program Files\Huawei\DevEco Studio\tools\hvigor\bin\hvigorw.bat'
 & cmd.exe /d /c "`"$hvigor`" assembleHap --no-daemon 2>&1"
