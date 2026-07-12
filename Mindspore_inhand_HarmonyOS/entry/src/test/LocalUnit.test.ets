@@ -259,6 +259,7 @@ import {
   setHarmonyRuntimeLabelLocaleForTests
 } from '../main/ets/services/ai/ImageClassificationRuntimeFactory';
 import { RuntimeAiServiceSession } from '../main/ets/services/ai/RuntimeAiServiceSession';
+import { RuntimePixelMapOwner } from '../main/ets/features/runtime/RuntimePixelMapOwner';
 import {
   floatScoresFromOutputBuffer,
   mindSporeLiteCpuContext,
@@ -585,6 +586,22 @@ import {
   poetryPosterVisualSpec,
   shouldInstallPoetryJavascriptBridge
 } from '../main/ets/services/poetry/PoetryPosterService';
+
+class FakeReleasablePixelMap {
+  releaseCount: number = 0;
+  private readonly rejects: boolean;
+
+  constructor(rejects: boolean = false) {
+    this.rejects = rejects;
+  }
+
+  async release(): Promise<void> {
+    this.releaseCount++;
+    if (this.rejects) {
+      throw new Error('release failed');
+    }
+  }
+}
 
 class FixedScoreRunner implements ImageClassificationScoreRunner {
   private readonly scores: Array<number>;
@@ -6989,6 +7006,59 @@ export default function localUnitTest() {
       expect(failed).assertTrue();
       expect(service !== undefined).assertTrue();
       expect(creates).assertEqual(2);
+    });
+
+    it('runtimePixelMapOwnerReleasesReplacedAndClearedValuesOnce', 0, () => {
+      const owner = new RuntimePixelMapOwner<FakeReleasablePixelMap>();
+      const first = new FakeReleasablePixelMap();
+      const second = new FakeReleasablePixelMap();
+
+      owner.accept(owner.beginReplacement(), first);
+      owner.accept(owner.beginReplacement(), second);
+      owner.clear();
+      owner.clear();
+
+      expect(first.releaseCount).assertEqual(1);
+      expect(second.releaseCount).assertEqual(1);
+      expect(owner.current()).assertUndefined();
+    });
+
+    it('runtimePixelMapOwnerRejectsAndReleasesStaleValues', 0, () => {
+      const owner = new RuntimePixelMapOwner<FakeReleasablePixelMap>();
+      const staleRequestId = owner.beginReplacement();
+      const stale = new FakeReleasablePixelMap();
+      owner.beginReplacement();
+
+      const accepted = owner.accept(staleRequestId, stale);
+      owner.clear();
+
+      expect(accepted).assertFalse();
+      expect(stale.releaseCount).assertEqual(1);
+      expect(owner.current()).assertUndefined();
+    });
+
+    it('runtimePixelMapOwnerDoesNotReleaseSameCurrentValueTwice', 0, () => {
+      const owner = new RuntimePixelMapOwner<FakeReleasablePixelMap>();
+      const value = new FakeReleasablePixelMap();
+      const requestId = owner.beginReplacement();
+
+      owner.accept(requestId, value);
+      owner.accept(requestId, value);
+      owner.clear();
+
+      expect(value.releaseCount).assertEqual(1);
+    });
+
+    it('runtimePixelMapOwnerSwallowsReleaseRejections', 0, async () => {
+      const owner = new RuntimePixelMapOwner<FakeReleasablePixelMap>();
+      const rejecting = new FakeReleasablePixelMap(true);
+      owner.accept(owner.beginReplacement(), rejecting);
+
+      owner.clear();
+      await Promise.resolve();
+
+      expect(rejecting.releaseCount).assertEqual(1);
+      expect(owner.current()).assertUndefined();
     });
 
     it('mapsImageClassificationLabelsToLocalGestureCategories', 0, () => {

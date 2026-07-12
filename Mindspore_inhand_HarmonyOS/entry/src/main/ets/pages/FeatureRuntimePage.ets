@@ -66,6 +66,7 @@ import {
   runtimePickedInputStateAfterModelCacheFailure,
   runtimePickedInputStateAfterCancelledPick
 } from '../features/runtime/FeatureRuntimeInputState';
+import { RuntimePixelMapOwner } from '../features/runtime/RuntimePixelMapOwner';
 import {
   AiRunInputs,
   AiRunResult,
@@ -305,6 +306,8 @@ struct FeatureRuntimePage {
   private inputPreparationRequestId: number = 0;
   private liveRuntimeLoopService: LiveRuntimeLoopService = new LiveRuntimeLoopService();
   private runtimeAiServiceSession: RuntimeAiServiceSession = new RuntimeAiServiceSession();
+  private styledImagePixelMapOwner: RuntimePixelMapOwner<image.PixelMap> = new RuntimePixelMapOwner();
+  private segmentationForegroundPixelMapOwner: RuntimePixelMapOwner<image.PixelMap> = new RuntimePixelMapOwner();
   private initialInputPrepared: boolean = false;
   private pendingPickTextInputVisible: boolean | undefined = undefined;
 
@@ -333,6 +336,8 @@ struct FeatureRuntimePage {
   aboutToDisappear() {
     this.inputPreparationRequestId++;
     this.runtimeAiServiceSession.invalidate();
+    this.styledImagePixelMapOwner.clear();
+    this.segmentationForegroundPixelMapOwner.clear();
     this.setRuntimeKeepScreenOn(false);
     this.stopLiveCameraPreview();
   }
@@ -1028,6 +1033,7 @@ struct FeatureRuntimePage {
   }
 
   private clearVisualResults(): void {
+    this.styledImagePixelMapOwner.clear();
     this.styledImagePixelMap = undefined;
     this.styleOriginalPreviewRecovered = false;
     this.objectDetectionImageUri = '';
@@ -1039,6 +1045,7 @@ struct FeatureRuntimePage {
     this.segmentationImageOrientation = ImageRotateOrientation.UP;
     this.segmentationBackgroundImageUri = '';
     this.segmentationBackgroundImageOrientation = ImageRotateOrientation.UP;
+    this.segmentationForegroundPixelMapOwner.clear();
     this.segmentationForegroundPixelMap = undefined;
     this.segmentationRectangles = [];
     this.segmentationImageWidth = 0;
@@ -1102,10 +1109,16 @@ struct FeatureRuntimePage {
       return;
     }
 
+    const requestId = this.segmentationForegroundPixelMapOwner.beginReplacement();
     styleTransferPixelMapFromRgbaOutput(rgba, width, height).then((pixelMap: image.PixelMap) => {
-      this.segmentationForegroundPixelMap = pixelMap;
+      if (this.segmentationForegroundPixelMapOwner.accept(requestId, pixelMap)) {
+        this.segmentationForegroundPixelMap = pixelMap;
+      }
     }).catch(() => {
-      this.segmentationForegroundPixelMap = undefined;
+      if (this.segmentationForegroundPixelMapOwner.isCurrent(requestId)) {
+        this.segmentationForegroundPixelMapOwner.clear();
+        this.segmentationForegroundPixelMap = undefined;
+      }
     });
   }
 
@@ -1229,12 +1242,18 @@ struct FeatureRuntimePage {
       return;
     }
 
+    const requestId = this.styledImagePixelMapOwner.beginReplacement();
     styleTransferPixelMapFromRgbaOutput(rgba, width, height).then((pixelMap: image.PixelMap) => {
-      this.styledImagePixelMap = pixelMap;
-      this.styleOriginalPreviewRecovered = false;
+      if (this.styledImagePixelMapOwner.accept(requestId, pixelMap)) {
+        this.styledImagePixelMap = pixelMap;
+        this.styleOriginalPreviewRecovered = false;
+      }
     }).catch(() => {
-      this.styledImagePixelMap = undefined;
-      this.styleOriginalPreviewRecovered = false;
+      if (this.styledImagePixelMapOwner.isCurrent(requestId)) {
+        this.styledImagePixelMapOwner.clear();
+        this.styledImagePixelMap = undefined;
+        this.styleOriginalPreviewRecovered = false;
+      }
     });
   }
 
