@@ -3,7 +3,7 @@
     { "name": "empty", "value": "" },
     { "name": "module_desc", "value": "MindSpore 掌中宝模块" },
     { "name": "EntryAbility_desc", "value": "MindSpore 掌中宝应用" },
-    { "name": "EntryAbility_label", "value": "MindSpore 掌中宝" },
+    { "name": "EntryAbility_label", "value": "MindSpore掌中宝" },
     { "name": "main_tab_title_one", "value": "体验" },
     { "name": "main_tab_title_two", "value": "学院" },
     { "name": "main_tab_title_three", "value": "我的" },

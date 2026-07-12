@@ -54,6 +54,26 @@ function Decode-Utf8Base64([string] $encoded) {
   return [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($encoded))
 }
 
+$androidAppName = Decode-Utf8Base64 'TWluZFNwb3Jl5o6M5Lit5a6d'
+$androidEnglishShareRecommendation = Decode-Utf8Base64 'TWluZFNwb3Jl5o6M5Lit5a6d77yaQSBvbmUtc3RvcCBwbGF0Zm9ybSBvZiBjb2xsYWJvcmF0aXZlIGxlYXJuaW5nLCBkZW1vbnN0cmF0aW5nLCBhbmQgZXhwZXJpZW5jaW5nIGZvciBBSSB1c2Vycy4J'
+
+$appScopeStringPath = Join-Path $root 'AppScope/resources/base/element/string.json'
+$appScopeJson = Get-Content -Raw -Encoding UTF8 -LiteralPath $appScopeStringPath | ConvertFrom-Json
+$appScopeAppName = @($appScopeJson.string | Where-Object { $_.name -eq 'app_name' })[0].value
+if ($appScopeAppName -ne $androidAppName) {
+  throw "AppScope app_name must match Android app_name '$androidAppName', got '$appScopeAppName'"
+}
+
+foreach ($locale in $locales) {
+  if ($valueTables[$locale]['EntryAbility_label'] -ne $androidAppName) {
+    throw "EntryAbility_label for $locale must match Android app_name '$androidAppName', got '$($valueTables[$locale]['EntryAbility_label'])'"
+  }
+}
+
+if ($enValues['title_share_commend'] -ne $androidEnglishShareRecommendation) {
+  throw "en_US title_share_commend must match Android values-en copy."
+}
+
 $visibleAndroidZhStringExpectations = @{
   experience_head_title = (Decode-Utf8Base64 '5L2T6aqM5Lit5b+D')
   experience_head_subtitle = (Decode-Utf8Base64 '5paw5LiA5Luj5YWo5Zy65pmvQUnorqHnrpfmoYbmnrbvvIzpgoDmgqjpqazkuIrkvZPpqow=')
