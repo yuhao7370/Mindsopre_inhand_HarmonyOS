@@ -555,7 +555,7 @@ struct DancePage {
       Stack() {
         Video({
           src: this.referenceVideoSrc,
-          previewUri: $r('app.media.skeleton_template'),
+          previewUri: $r('app.media.dance_thumbnail'),
           controller: this.referenceVideoController
         })
           .width('100%')
