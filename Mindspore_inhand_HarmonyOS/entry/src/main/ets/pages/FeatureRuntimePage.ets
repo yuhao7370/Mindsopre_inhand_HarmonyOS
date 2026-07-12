@@ -789,7 +789,6 @@ struct FeatureRuntimePage {
   }
 
   private aiRunInputs(): AiRunInputs {
-    const workflow = workflowForRoute(this.routeName);
     const contentImageUri = this.contentImageUri.length > 0 ? this.contentImageUri : this.imageInputUri;
     return {
       imageUri: this.imageInputUri,

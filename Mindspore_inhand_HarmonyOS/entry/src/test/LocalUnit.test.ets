@@ -5629,13 +5629,15 @@ export default function localUnitTest() {
       expect(sceneDetectionDisplayLabel('beach', 'zh-Hans-CN')).assertEqual('沙滩');
       expect(sceneDetectionDisplayLabel('aircraft', 'zh-CN')).assertEqual('飞机');
       expect(sceneDetectionDisplayLabel('fucharacter', 'zh-CN')).assertEqual('福字');
+      expect(sceneDetectionDisplayLabel('transformer', 'zh-CN')).assertEqual('变形金刚');
       expect(sceneDetectionDisplayLabel('other', 'zh-CN')).assertEqual('其他');
       expect(sceneDetectionDisplayLabel('stage', 'en-US')).assertEqual('stage');
       expect(sceneDetectionDisplayLabel('unknown_scene', 'zh-CN')).assertEqual('unknown_scene');
     });
 
     it('keepsEveryAndroidSceneChineseLabelReadable', 0, () => {
-      expect(androidSceneDetectionLabels.length).assertEqual(androidSceneDetectionLabelsZh.length);
+      expect(androidSceneDetectionLabels.length).assertEqual(104);
+      expect(androidSceneDetectionLabelsZh.length).assertEqual(104);
       for (let index = 0; index < androidSceneDetectionLabelsZh.length; index++) {
         const label = androidSceneDetectionLabelsZh[index];
         expect(label.length > 0).assertTrue();
@@ -5644,6 +5646,10 @@ export default function localUnitTest() {
         expect(label.indexOf('閸')).assertEqual(-1);
         expect(label.indexOf('缁')).assertEqual(-1);
         expect(label.indexOf('閻')).assertEqual(-1);
+        expect(label.indexOf('鍦')).assertEqual(-1);
+        expect(label.indexOf('绠')).assertEqual(-1);
+        expect(label.indexOf('鐨')).assertEqual(-1);
+        expect(label.indexOf('鑸')).assertEqual(-1);
       }
     });
 
