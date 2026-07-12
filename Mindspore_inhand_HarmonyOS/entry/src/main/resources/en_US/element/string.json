@@ -196,6 +196,8 @@
     { "name": "feature_runtime_text_recognition_done", "value": "Text extraction completed." },
     { "name": "feature_runtime_text_recognition_failed", "value": "Text extraction failed." },
     { "name": "feature_runtime_text_translation_done", "value": "Text translation completed." },
+    { "name": "feature_runtime_text_translation_offline_done", "value": "Offline demo translation completed." },
+    { "name": "feature_runtime_text_translation_offline_unsupported", "value": "The offline dictionary does not support this text." },
     { "name": "feature_runtime_text_translation_failed", "value": "Text translation failed." },
     { "name": "feature_runtime_segmentation_done", "value": "Portrait segmentation completed." },
     { "name": "feature_runtime_segmentation_failed", "value": "Portrait segmentation failed." },

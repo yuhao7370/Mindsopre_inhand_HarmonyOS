@@ -110,7 +110,6 @@ export interface HarmonyImageClassificationRuntimeOptions {
 
 let cachedHarmonyDefaultAiService: Promise<DefaultAiService> | undefined = undefined;
 let cachedHarmonyDefaultAiServiceLocale: string = '';
-let cachedHarmonyLocalGestureAiService: Promise<DefaultAiService> | undefined = undefined;
 let cachedHarmonyLocalSceneDetectionAiService: Promise<DefaultAiService> | undefined = undefined;
 let cachedHarmonyLocalSceneDetectionAiServiceLocale: string = '';
 let harmonyRuntimeLabelLocaleForTests: string | undefined = undefined;
@@ -118,7 +117,6 @@ let harmonyRuntimeLabelLocaleForTests: string | undefined = undefined;
 export function resetHarmonyRuntimeAiServiceCachesForTests(): void {
   cachedHarmonyDefaultAiService = undefined;
   cachedHarmonyDefaultAiServiceLocale = '';
-  cachedHarmonyLocalGestureAiService = undefined;
   cachedHarmonyLocalSceneDetectionAiService = undefined;
   cachedHarmonyLocalSceneDetectionAiServiceLocale = '';
   harmonyRuntimeLabelLocaleForTests = undefined;
@@ -171,31 +169,6 @@ export function cachedHarmonyLocalSceneDetectionAiServiceForResourceManager(
     });
   }
   return cachedHarmonyLocalSceneDetectionAiService;
-}
-
-export function cachedHarmonyLocalGestureAiServiceForResourceManager(
-  resourceManager: RawfileContentReader
-): Promise<DefaultAiService> {
-  if (cachedHarmonyLocalGestureAiService === undefined) {
-    const servicePromise = createHarmonyLocalGestureAiService(resourceManager);
-    cachedHarmonyLocalGestureAiService = servicePromise;
-    servicePromise.catch(() => {
-      if (cachedHarmonyLocalGestureAiService === servicePromise) {
-        cachedHarmonyLocalGestureAiService = undefined;
-      }
-    });
-  }
-  return cachedHarmonyLocalGestureAiService;
-}
-
-async function createHarmonyLocalGestureAiService(
-  resourceManager: RawfileContentReader
-): Promise<DefaultAiService> {
-  return new DefaultAiService({
-    gestureService: await createHarmonyLocalGestureService({
-      resourceManager: resourceManager
-    })
-  });
 }
 
 async function createHarmonyLocalSceneDetectionAiService(
@@ -262,7 +235,7 @@ export async function cachedRuntimeAiServiceForWorkflow(
     });
   }
   if (workflow.aiMethod === 'detectGesture') {
-    return cachedHarmonyLocalGestureAiServiceForResourceManager(resourceManager);
+    return new DefaultAiService();
   }
   if (workflow.aiMethod === 'detectScene') {
     return cachedHarmonyLocalSceneDetectionAiServiceForResourceManager(resourceManager);

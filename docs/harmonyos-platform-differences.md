@@ -158,9 +158,11 @@ Current HarmonyOS behavior:
 - The still Gesture and still Scene pages use Android's original image/camera/
   real-time prompt as their top runtime summary, while their live routes keep
   the generic feature summary.
-- The bundled MobileNetV2/ImageNet fallback is not trusted as a gesture model,
-  so it cannot turn any ImageNet class into a hand-gesture success and exits
-  before inference. This also removes the former `mitten` false positive.
+- The production runtime does not construct the bundled MobileNetV2/ImageNet
+  classifier as a gesture detector. Without an authorized gesture runner it
+  reports `feature_runtime_gesture_runner_unavailable` before loading ImageNet
+  labels or attempting inference; this also removes the former `mitten` false
+  positive.
 - Explicit hand/gesture aliases such as `boxing_glove`, `thumb_up`, `fist`,
   `heart`, and `ok_gesture` remain available only when an injected or future
   score runner is explicitly opted in through `trustedGestureModelLabels`
@@ -189,13 +191,11 @@ Current HarmonyOS behavior:
   supplied and authorized gesture model/runner plus validation on a HarmonyOS
   phone; host tests can verify the adapter and false-positive rejection, but
   cannot establish camera inference parity.
-- A real gesture runner can still be injected; if no gesture service exists at
-  all, the app reports the localized
-  `feature_runtime_gesture_runner_unavailable` adapter status.
-- The live gesture route now participates in the shared HarmonyOS live camera
-  loop, so the local fallback or injected gesture runner refreshes continuously
-  at the 500ms fast-live cadence used for lightweight classification-style
-  demos.
+- A real gesture runner can still be injected through the existing runtime
+  boundary and retains the Android-style success/failure result contract.
+- The live gesture route participates in the shared HarmonyOS live camera loop.
+  An injected gesture runner refreshes at the 500ms fast-live cadence; without
+  one, the same explicit unavailable status is returned for captured frames.
 - Live gesture detections with bounding rectangles are drawn directly over the
   HarmonyOS camera preview, reusing the still-image gesture overlay renderer to
   mirror Android's `HandGestureGraphic` behavior.
@@ -277,10 +277,12 @@ Current HarmonyOS behavior:
   adjacent phrases such as `Hello, MindSpore!` and preserves Android's default
   target-language rule (`zh` text translates to `en`, other text translates to
   `zh`).
-- This fallback is not equivalent to HMS cloud translation. Unknown phrases
-  fail with the localized text-translation failure status instead of inventing
-  output.
-- A real translation runner can still be injected. Without one, known typed or
+- This fallback is not equivalent to HMS cloud translation. Known phrases use
+  the explicit offline-demo completion status. Unknown phrases use the
+  dedicated offline-dictionary unsupported status instead of suggesting that a
+  general translation service failed or inventing output.
+- A real translation runner can still be injected and keeps the normal
+  Android-compatible completion/failure messages. Without one, known typed or
   OCR-recognized phrases use the bundled local fallback while unknown phrases
   preserve the source text in result details, rows, and copy action.
 - Blank typed text and blank OCR output are treated as missing or failed input

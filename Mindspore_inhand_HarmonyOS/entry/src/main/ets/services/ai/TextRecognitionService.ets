@@ -109,11 +109,14 @@ export interface TextTranslationLanguagePair {
   readonly code: string;
 }
 
+export type TextTranslationRuntimeSource = 'offlineDictionary';
+
 export interface TextTranslationResult {
   readonly ok: boolean;
   readonly sourceText: string;
   readonly translatedText: string;
   readonly targetLanguage: string;
+  readonly runtimeSource?: TextTranslationRuntimeSource;
 }
 
 export interface TextTranslationRunner {
@@ -557,7 +560,8 @@ export class LocalTextTranslationRunner implements TextTranslationRunner {
       ok: translatedText.length > 0,
       sourceText: text,
       translatedText: translatedText,
-      targetLanguage: normalizedTargetLanguage
+      targetLanguage: normalizedTargetLanguage,
+      runtimeSource: 'offlineDictionary'
     };
   }
 }

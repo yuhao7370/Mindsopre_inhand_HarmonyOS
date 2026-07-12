@@ -196,6 +196,8 @@
     { "name": "feature_runtime_text_recognition_done", "value": "文本提取已完成。" },
     { "name": "feature_runtime_text_recognition_failed", "value": "文本提取失败。" },
     { "name": "feature_runtime_text_translation_done", "value": "文本翻译已完成。" },
+    { "name": "feature_runtime_text_translation_offline_done", "value": "离线示例翻译已完成。" },
+    { "name": "feature_runtime_text_translation_offline_unsupported", "value": "当前离线词典不支持这段文本。" },
     { "name": "feature_runtime_text_translation_failed", "value": "文本翻译失败。" },
     { "name": "feature_runtime_segmentation_done", "value": "人像分割已完成。" },
     { "name": "feature_runtime_segmentation_failed", "value": "人像分割失败。" },

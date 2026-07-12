@@ -524,7 +524,9 @@ export class DefaultAiService {
         ok: false,
         code: 'TEXT_TRANSLATION_FAILED',
         aiMethod: 'translateText',
-        messageKey: 'feature_runtime_text_translation_failed',
+        messageKey: result.runtimeSource === 'offlineDictionary' ?
+          'feature_runtime_text_translation_offline_unsupported' :
+          'feature_runtime_text_translation_failed',
         detailText: this.textTranslationSummary(result),
         data: {
           kind: 'textTranslation',
@@ -536,7 +538,9 @@ export class DefaultAiService {
       ok: true,
       code: 'TEXT_TRANSLATION_DONE',
       aiMethod: 'translateText',
-      messageKey: 'feature_runtime_text_translation_done',
+      messageKey: result.runtimeSource === 'offlineDictionary' ?
+        'feature_runtime_text_translation_offline_done' :
+        'feature_runtime_text_translation_done',
       detailText: this.textTranslationSummary(result),
       data: {
         kind: 'textTranslation',

@@ -2191,6 +2191,8 @@ export default function localUnitTest() {
       expect(hasAppStringKey('workflow_summary_scene')).assertTrue();
       expect(hasAppStringKey('feature_runtime_text_recognition_done')).assertTrue();
       expect(hasAppStringKey('feature_runtime_text_translation_failed')).assertTrue();
+      expect(hasAppStringKey('feature_runtime_text_translation_offline_done')).assertTrue();
+      expect(hasAppStringKey('feature_runtime_text_translation_offline_unsupported')).assertTrue();
       expect(hasAppStringKey('feature_runtime_segmentation_done')).assertTrue();
       expect(hasAppStringKey('feature_runtime_preview_background')).assertTrue();
       expect(hasAppStringKey('feature_runtime_result_background')).assertTrue();
@@ -4164,7 +4166,7 @@ export default function localUnitTest() {
       expect(runner.seenTexts.length).assertEqual(0);
     });
 
-    it('defaultAiServiceUsesLocalTranslationFallbackForTextInput', 0, async () => {
+    it('defaultAiServiceReportsKnownLocalTranslationAsOfflineDemo', 0, async () => {
       const workflow = workflowForRoute(AppRoute.TEXT_TRANSLATION.name);
       expect(workflow !== undefined).assertTrue();
 
@@ -4174,10 +4176,23 @@ export default function localUnitTest() {
 
       expect(result.ok).assertTrue();
       expect(result.code).assertEqual('TEXT_TRANSLATION_DONE');
-      expect(result.messageKey).assertEqual('feature_runtime_text_translation_done');
+      expect(result.messageKey).assertEqual('feature_runtime_text_translation_offline_done');
       expect(result.detailText.indexOf('targetLanguage=zh') >= 0).assertTrue();
       expect(result.detailText.indexOf('translated=\u4F60\u597D\u6607\u601D') >= 0).assertTrue();
       expect(copyableTextForAiResult('translateText', aiRunResultRows(result))).assertEqual('\u4F60\u597D\u6607\u601D');
+    });
+
+    it('defaultAiServiceReportsUnknownLocalTranslationAsOfflineUnsupported', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.TEXT_TRANSLATION.name);
+      expect(workflow !== undefined).assertTrue();
+
+      const result = await new DefaultAiService().run(workflow!, {
+        text: 'unmapped phrase'
+      });
+
+      expect(result.ok).assertFalse();
+      expect(result.code).assertEqual('TEXT_TRANSLATION_FAILED');
+      expect(result.messageKey).assertEqual('feature_runtime_text_translation_offline_unsupported');
     });
 
     it('aiServiceUsesAndroidTargetLanguageRuleForTextTranslation', 0, async () => {
@@ -4261,7 +4276,7 @@ export default function localUnitTest() {
 
       expect(result.ok).assertTrue();
       expect(result.code).assertEqual('TEXT_TRANSLATION_DONE');
-      expect(result.messageKey).assertEqual('feature_runtime_text_translation_done');
+      expect(result.messageKey).assertEqual('feature_runtime_text_translation_offline_done');
       expect(result.detailText.indexOf('targetLanguage=zh') >= 0).assertTrue();
       expect(result.detailText.indexOf('source=MindSpore') >= 0).assertTrue();
       expect(result.detailText.indexOf('translated=\u6607\u601D') >= 0).assertTrue();
@@ -4312,6 +4327,7 @@ export default function localUnitTest() {
       expect(chineseResult.sourceText).assertEqual('\u4F60\u597D\n');
       expect(chineseResult.translatedText).assertEqual('hello');
       expect(chineseResult.targetLanguage).assertEqual('en');
+      expect(chineseResult.runtimeSource).assertEqual('offlineDictionary');
 
       const englishResult = await runner.translate('MindSpore', 'zh');
       expect(englishResult.ok).assertTrue();
@@ -4320,6 +4336,7 @@ export default function localUnitTest() {
       const unknownResult = await runner.translate('unmapped phrase', 'zh');
       expect(unknownResult.ok).assertFalse();
       expect(unknownResult.translatedText).assertEqual('');
+      expect(unknownResult.runtimeSource).assertEqual('offlineDictionary');
     });
 
     it('localTextTranslationRunnerComposesKnownDemoPhrasesOffline', 0, async () => {
@@ -7374,46 +7391,24 @@ export default function localUnitTest() {
       expect(result.detailText.indexOf('Fist 91.00% [4,5,6,7]') >= 0).assertTrue();
     });
 
-    it('cachedRuntimeFactoryRetriesLocalGestureServiceAfterLoadFailure', 0, async () => {
+    it('cachedRuntimeFactoryReportsGestureRunnerUnavailableWithoutLoadingImageNetLabels', 0, async () => {
       resetHarmonyRuntimeAiServiceCachesForTests();
       const workflow = workflowForRoute(AppRoute.GESTURE_LIVE.name);
       expect(workflow !== undefined).assertTrue();
-      let rejected = false;
-      try {
-        await cachedRuntimeAiServiceForWorkflow(workflow!, new ThrowingRawfileContentReader());
-      } catch (_) {
-        rejected = true;
-      }
-      expect(rejected).assertTrue();
-
       const labelContent: Uint8Array = new Uint8Array([
         103, 111, 108, 100, 102, 105, 115, 104, 10,
         109, 105, 116, 116, 101, 110
       ]);
       const resourceManager: FixedRawfileContentReader = new FixedRawfileContentReader(labelContent);
       const service = await cachedRuntimeAiServiceForWorkflow(workflow!, resourceManager);
+      const result = await service.run(workflow!, {
+        imageUri: 'file://selected/hand.jpg'
+      });
 
-      expect(service !== undefined).assertTrue();
-      expect(resourceManager.seenPaths.length).assertEqual(1);
-      expect(resourceManager.seenPaths[0]).assertEqual('labels/image_category_old.txt');
-    });
-
-    it('cachedRuntimeFactoryReusesLocalGestureServiceForLiveLoops', 0, async () => {
-      resetHarmonyRuntimeAiServiceCachesForTests();
-      const workflow = workflowForRoute(AppRoute.GESTURE_LIVE.name);
-      expect(workflow !== undefined).assertTrue();
-      const labelContent: Uint8Array = new Uint8Array([
-        103, 111, 108, 100, 102, 105, 115, 104, 10,
-        109, 105, 116, 116, 101, 110
-      ]);
-      const resourceManager: FixedRawfileContentReader = new FixedRawfileContentReader(labelContent);
-
-      const firstService = await cachedRuntimeAiServiceForWorkflow(workflow!, resourceManager);
-      const secondService = await cachedRuntimeAiServiceForWorkflow(workflow!, new ThrowingRawfileContentReader());
-
-      expect(firstService === secondService).assertTrue();
-      expect(resourceManager.seenPaths.length).assertEqual(1);
-      expect(resourceManager.seenPaths[0]).assertEqual('labels/image_category_old.txt');
+      expect(result.ok).assertFalse();
+      expect(result.code).assertEqual('NATIVE_ADAPTER_PENDING');
+      expect(result.messageKey).assertEqual('feature_runtime_gesture_runner_unavailable');
+      expect(resourceManager.seenPaths.length).assertEqual(0);
     });
 
     it('runtimeFactoryInjectsLocalSceneDetectionServiceByDefault', 0, async () => {
@@ -7947,7 +7942,7 @@ export default function localUnitTest() {
 
       expect(result.ok).assertFalse();
       expect(result.code).assertEqual('TEXT_TRANSLATION_FAILED');
-      expect(result.messageKey).assertEqual('feature_runtime_text_translation_failed');
+      expect(result.messageKey).assertEqual('feature_runtime_text_translation_offline_unsupported');
       expect(result.detailText.indexOf('source=unmapped phrase') >= 0).assertTrue();
       expect(result.detailText.indexOf('translated=') >= 0).assertTrue();
       expect(aiRunResultRows(result)[1].value).assertEqual('unmapped phrase');

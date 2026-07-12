@@ -195,6 +195,8 @@ export type AppStringKey =
   'feature_runtime_text_recognition_done' |
   'feature_runtime_text_recognition_failed' |
   'feature_runtime_text_translation_done' |
+  'feature_runtime_text_translation_offline_done' |
+  'feature_runtime_text_translation_offline_unsupported' |
   'feature_runtime_text_translation_failed' |
   'feature_runtime_segmentation_done' |
   'feature_runtime_segmentation_failed' |
@@ -503,6 +505,8 @@ const APP_STRING_KEYS: AppStringKey[] = [
   'feature_runtime_text_recognition_done',
   'feature_runtime_text_recognition_failed',
   'feature_runtime_text_translation_done',
+  'feature_runtime_text_translation_offline_done',
+  'feature_runtime_text_translation_offline_unsupported',
   'feature_runtime_text_translation_failed',
   'feature_runtime_segmentation_done',
   'feature_runtime_segmentation_failed',
@@ -1011,6 +1015,10 @@ export function appString(key: AppStringKey): ResourceStr {
       return $r('app.string.feature_runtime_text_recognition_failed');
     case 'feature_runtime_text_translation_done':
       return $r('app.string.feature_runtime_text_translation_done');
+    case 'feature_runtime_text_translation_offline_done':
+      return $r('app.string.feature_runtime_text_translation_offline_done');
+    case 'feature_runtime_text_translation_offline_unsupported':
+      return $r('app.string.feature_runtime_text_translation_offline_unsupported');
     case 'feature_runtime_text_translation_failed':
       return $r('app.string.feature_runtime_text_translation_failed');
     case 'feature_runtime_segmentation_done':
