@@ -132,9 +132,14 @@ const localChineseToEnglishPhrases: Array<LocalTranslationPhrase> = [
   { source: '\u8BED\u97F3\u8BED\u4E49\u6280\u672F', target: 'speech semantic technology' },
   { source: '\u5B66\u9662', target: 'college' },
   { source: '\u6211\u7684', target: 'me' },
+  { source: '\u4F53\u9A8C\u4E2D\u5FC3', target: 'Experience Center' },
   {
     source: 'HarmonyOS \u7248 AI \u793A\u4F8B\u5DF2\u5C31\u7EEA',
     target: 'AI demos ready for the HarmonyOS shell'
+  },
+  {
+    source: '\u65B0\u4E00\u4EE3\u5168\u573A\u666FAI\u8BA1\u7B97\u6846\u67B6\uFF0C\u9080\u60A8\u9A6C\u4E0A\u4F53\u9A8C',
+    target: 'Invite you to explore a new generation of ALL-Scenario AI Computing Framework'
   },
   {
     source: 'AI \u7231\u597D\u8005\u7684\u4E00\u7AD9\u5F0F\u534F\u540C\u5B66\u4E60\u3001\u6F14\u793A\u3001\u4F53\u9A8C\u5E73\u53F0',
@@ -274,6 +279,8 @@ const localChineseToEnglishPhrases: Array<LocalTranslationPhrase> = [
   { source: '\u7AEF\u4FA7\u5E94\u7528', target: 'Applications' },
   { source: '\u8BBA\u575B\u63D0\u95EE', target: 'Ask on forum' },
   { source: '\u53C2\u8003\u89C6\u9891', target: 'Reference video' },
+  { source: '\u67E5\u770B', target: 'View' },
+  { source: '~\u70B9\u4EAE\u60A8\u7684\u5B66\u4E60\u4E4B\u65C5~', target: '~Illuminate your learning trip~' },
   { source: '\u4EBA\u5DE5\u667A\u80FD', target: 'artificial intelligence' },
   { source: '\u673A\u5668\u5B66\u4E60', target: 'machine learning' },
   { source: '\u6DF1\u5EA6\u5B66\u4E60', target: 'deep learning' },
@@ -310,9 +317,14 @@ const localEnglishToChinesePhrases: Array<LocalTranslationPhrase> = [
   { source: 'speech semantic technology', target: '\u8BED\u97F3\u8BED\u4E49\u6280\u672F' },
   { source: 'college', target: '\u5B66\u9662' },
   { source: 'me', target: '\u6211\u7684' },
+  { source: 'experience center', target: '\u4F53\u9A8C\u4E2D\u5FC3' },
   {
     source: 'ai demos ready for the harmonyos shell',
     target: 'HarmonyOS \u7248 AI \u793A\u4F8B\u5DF2\u5C31\u7EEA'
+  },
+  {
+    source: 'invite you to explore a new generation of all-scenario ai computing framework',
+    target: '\u65B0\u4E00\u4EE3\u5168\u573A\u666FAI\u8BA1\u7B97\u6846\u67B6\uFF0C\u9080\u60A8\u9A6C\u4E0A\u4F53\u9A8C'
   },
   {
     source: 'a one-stop platform of collaborative learning, demonstrating, and experiencing for AI users',
@@ -460,6 +472,8 @@ const localEnglishToChinesePhrases: Array<LocalTranslationPhrase> = [
   { source: 'applications', target: '\u7AEF\u4FA7\u5E94\u7528' },
   { source: 'ask on forum', target: '\u8BBA\u575B\u63D0\u95EE' },
   { source: 'reference video', target: '\u53C2\u8003\u89C6\u9891' },
+  { source: 'view', target: '\u67E5\u770B' },
+  { source: '~illuminate your learning trip~', target: '~\u70B9\u4EAE\u60A8\u7684\u5B66\u4E60\u4E4B\u65C5~' },
   { source: 'artificial intelligence', target: '\u4EBA\u5DE5\u667A\u80FD' },
   { source: 'machine learning', target: '\u673A\u5668\u5B66\u4E60' },
   { source: 'deep learning', target: '\u6DF1\u5EA6\u5B66\u4E60' },

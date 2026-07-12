@@ -4432,6 +4432,34 @@ export default function localUnitTest() {
         .assertEqual('experience\ncomputer vision\nspeech semantic technology\ncollege\nme');
     });
 
+    it('localTextTranslationRunnerCoversExperienceHeaderAndCollegeFooterCopyOffline', 0, async () => {
+      const runner = new LocalTextTranslationRunner();
+
+      const englishResult = await runner.translate(
+        'Experience Center\n' +
+          'Invite you to explore a new generation of ALL-Scenario AI Computing Framework\n' +
+          'View\n~Illuminate your learning trip~',
+        'zh'
+      );
+      expect(englishResult.ok).assertTrue();
+      expect(englishResult.translatedText)
+        .assertEqual('\u4F53\u9A8C\u4E2D\u5FC3\n' +
+          '\u65B0\u4E00\u4EE3\u5168\u573A\u666FAI\u8BA1\u7B97\u6846\u67B6\uFF0C\u9080\u60A8\u9A6C\u4E0A\u4F53\u9A8C\n' +
+          '\u67E5\u770B\n~\u70B9\u4EAE\u60A8\u7684\u5B66\u4E60\u4E4B\u65C5~');
+
+      const chineseResult = await runner.translate(
+        '\u4F53\u9A8C\u4E2D\u5FC3\n' +
+          '\u65B0\u4E00\u4EE3\u5168\u573A\u666FAI\u8BA1\u7B97\u6846\u67B6\uFF0C\u9080\u60A8\u9A6C\u4E0A\u4F53\u9A8C\n' +
+          '\u67E5\u770B\n~\u70B9\u4EAE\u60A8\u7684\u5B66\u4E60\u4E4B\u65C5~',
+        'en'
+      );
+      expect(chineseResult.ok).assertTrue();
+      expect(chineseResult.translatedText)
+        .assertEqual('Experience Center\n' +
+          'Invite you to explore a new generation of ALL-Scenario AI Computing Framework\n' +
+          'View\n~Illuminate your learning trip~');
+    });
+
     it('localTextTranslationRunnerCoversRuntimePermissionAndStatusCopyOffline', 0, async () => {
       const runner = new LocalTextTranslationRunner();
 

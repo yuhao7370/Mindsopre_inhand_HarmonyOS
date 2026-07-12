@@ -218,8 +218,9 @@ Current HarmonyOS behavior:
   action/status labels such as `detect`, `video`, `copy`, `SAVE`, and
   `Copied successfully`, Text Translation page hint/status copy such as
   `Please enter the content to be translated` and `Offline Translation`, the
-  main shell tab, Experience section labels, hidden Me action labels, College
-  navigation labels, Custom Model page action/help/output copy, Style Transfer
+  main shell tab, Experience header/section labels, hidden Me action labels,
+  College navigation, view action, and footer labels, Custom Model page
+  action/help/output copy, Style Transfer
   page prompts/actions/failure copy, scene/object result labels such as
   `Scene Count`, `Score`, `Inference Time:`, `human`, and `traffic signal`,
   and Android title strings that use parenthesized or hyphenated separators
