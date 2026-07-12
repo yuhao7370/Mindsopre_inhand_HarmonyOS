@@ -2400,12 +2400,16 @@ struct FeatureRuntimePage {
     Scroll() {
       Column() {
         Row() {
-          Text('<')
-            .fontSize(18)
-            .fontColor(AppColor.textSecondary)
+          Row() {
+            Image($r('app.media.icon_back'))
+              .width(11)
+              .height(22)
+              .objectFit(ImageFit.Contain)
+          }
             .width(40)
             .height(40)
-            .textAlign(TextAlign.Center)
+            .justifyContent(FlexAlign.Center)
+            .alignItems(VerticalAlign.Center)
             .onClick(() => router.back())
           Text(appString(this.titleKey))
             .fontSize(22)

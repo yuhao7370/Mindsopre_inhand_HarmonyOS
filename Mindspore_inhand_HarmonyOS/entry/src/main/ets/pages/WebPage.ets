@@ -80,11 +80,10 @@ struct WebPage {
         .height(22)
         .objectFit(ImageFit.Contain)
     } else {
-      Text('<')
-        .fontSize(24)
-        .fontColor(AppColor.textPrimary)
-        .fontWeight(FontWeight.Bold)
-        .textAlign(TextAlign.Center)
+      Image($r('app.media.icon_back'))
+        .width(11)
+        .height(22)
+        .objectFit(ImageFit.Contain)
     }
   }
 
