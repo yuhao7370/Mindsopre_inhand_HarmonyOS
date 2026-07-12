@@ -324,6 +324,8 @@ import {
   autoStartInputKindForWorkflow,
   inputKindReplacesPrimaryInput,
   inputLabelKey,
+  isInputPreparationRequestCurrent,
+  liveRuntimeModeForWorkflow,
   initialInputKindForWorkflow,
   initialPreviewActionForWorkflow,
   initialLiveCameraPositionForWorkflow,
@@ -331,6 +333,7 @@ import {
   rememberLiveCameraPositionForRoute,
   resetRememberedLiveCameraPositionsForTests,
   runtimeInputKindsForWorkflow,
+  runtimeTextInputForWorkflow,
   sampleImageUriForWorkflow,
   shouldAutoRunWorkflowAfterInputReady,
   shouldAutoRunStyleTransferAfterStyleReady,
@@ -357,6 +360,7 @@ import {
   shouldShowLivePoseTemplateOverlay,
   shouldShowPrimaryRunAction,
   shouldShowLiveSegmentationCameraOverlay,
+  shouldRenderLiveCameraPreview,
   liveClassificationEmptyPromptKey,
   shouldMirrorSegmentationForeground,
   shouldShowTranslationSnapshotSaveAction,
@@ -461,6 +465,7 @@ import {
   LiveRuntimeFrameRunner,
   LiveRuntimeLoopScheduler,
   LiveRuntimeLoopService,
+  isLiveRuntimeGenerationCurrent,
   liveImageClassificationIntervalMs,
   liveFrameImageCachePath,
   liveRuntimeIntervalForAiMethod,
@@ -3327,6 +3332,20 @@ export default function localUnitTest() {
       expect(translation.inputKinds.indexOf('text') >= 0).assertTrue();
       expect(translation.inputKinds.indexOf('camera') >= 0).assertTrue();
       expect(translation.inputKinds.indexOf('photo') >= 0).assertTrue();
+      expect(translation.inputKinds.indexOf('liveCamera') >= 0).assertTrue();
+      expect(translation.liveMode).assertFalse();
+      expect(runtimeInputActionForWorkflowInput(translation, 'camera')).assertEqual('captureImage');
+      expect(runtimeInputActionForWorkflowInput(translation, 'liveCamera')).assertEqual('startLiveCamera');
+      expect(liveRuntimeModeForWorkflow(translation, false)).assertFalse();
+      expect(liveRuntimeModeForWorkflow(translation, true)).assertTrue();
+      expect(runtimeTextInputForWorkflow(translation, false, 'typed first')).assertEqual('typed first');
+      expect(runtimeTextInputForWorkflow(translation, true, 'typed first')).assertEqual('');
+      expect(shouldRenderLiveCameraPreview(translation, false, false)).assertFalse();
+      expect(shouldRenderLiveCameraPreview(translation, true, false)).assertTrue();
+      expect(shouldRenderLiveCameraPreview(translation, false, true)).assertTrue();
+      expect(isInputPreparationRequestCurrent(7, 7)).assertTrue();
+      expect(isInputPreparationRequestCurrent(6, 7)).assertFalse();
+      expect(hasAppStringKey('feature_input_live_translation')).assertTrue();
       expect(translation.requiredPermissions.indexOf('internet') >= 0).assertTrue();
 
       const portraitSegmentation: FeatureWorkflow = workflowForRoute(AppRoute.PORTRAIT_SEGMENTATION.name)!;
@@ -3337,6 +3356,8 @@ export default function localUnitTest() {
       expect(portraitSegmentation.requiredPermissions.indexOf('camera') >= 0).assertTrue();
       expect(portraitSegmentation.requiredPermissions.indexOf('media') >= 0).assertTrue();
       expect(portraitSegmentation.liveMode).assertTrue();
+      expect(liveRuntimeModeForWorkflow(portraitSegmentation, false)).assertTrue();
+      expect(shouldRenderLiveCameraPreview(portraitSegmentation, false, false)).assertTrue();
     });
 
     it('usesAndroidStillImagePromptSummariesWhereAndroidLayoutsShowPrompts', 0, () => {
@@ -8619,8 +8640,9 @@ export default function localUnitTest() {
       expect(shouldRunLiveRuntimeLoop('detectPose', true, true, true)).assertTrue();
       expect(shouldRunLiveRuntimeLoop('detectGesture', true, true, true)).assertTrue();
       expect(shouldRunLiveRuntimeLoop('detectScene', true, true, true)).assertTrue();
+      expect(shouldRunLiveRuntimeLoop('translateText', true, true, true)).assertTrue();
       expect(shouldRunLiveRuntimeLoop('runStyleTransfer', true, true, true)).assertFalse();
-      expect(shouldRunLiveRuntimeLoop('translateText', true, true, true)).assertFalse();
+      expect(shouldRunLiveRuntimeLoop('translateText', false, true, true)).assertFalse();
       expect(shouldRunLiveRuntimeLoop('runCustomModel', true, true, true)).assertFalse();
       expect(shouldRunLiveRuntimeLoop('runStyleTransfer', false, true, true)).assertFalse();
       expect(shouldRunLiveRuntimeLoop('detectObjects', false, true, true)).assertFalse();
@@ -8638,6 +8660,12 @@ export default function localUnitTest() {
       expect(shouldAutoRunLiveRuntimeAfterPreview('detectGesture', false, true)).assertFalse();
       expect(shouldAutoRunLiveRuntimeAfterPreview('runStyleTransfer', false, true)).assertFalse();
       expect(shouldAutoRunLiveRuntimeAfterPreview('detectObjects', true, false)).assertFalse();
+    });
+
+    it('rejectsStaleLiveRuntimeFramesWithoutBlockingManualRuns', 0, () => {
+      expect(isLiveRuntimeGenerationCurrent(undefined, 4)).assertTrue();
+      expect(isLiveRuntimeGenerationCurrent(4, 4)).assertTrue();
+      expect(isLiveRuntimeGenerationCurrent(3, 4)).assertFalse();
     });
 
     it('liveRuntimeLoopRunsImmediatelyThenOnEachInterval', 0, async () => {

@@ -102,7 +102,15 @@ export function shouldRunLiveRuntimeLoop(
     aiMethod === 'segmentPerson' ||
     aiMethod === 'detectPose' ||
     aiMethod === 'detectGesture' ||
-    aiMethod === 'detectScene';
+    aiMethod === 'detectScene' ||
+    aiMethod === 'translateText';
+}
+
+export function isLiveRuntimeGenerationCurrent(
+  expectedGeneration: number | undefined,
+  currentGeneration: number
+): boolean {
+  return expectedGeneration === undefined || expectedGeneration === currentGeneration;
 }
 
 export function liveRuntimeIntervalForAiMethod(aiMethod: string): number {

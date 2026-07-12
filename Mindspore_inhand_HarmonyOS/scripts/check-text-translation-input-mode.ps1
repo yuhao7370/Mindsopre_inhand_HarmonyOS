@@ -18,7 +18,7 @@ function Get-SourceSlice([string] $text, [string] $startMarker, [string] $endMar
 $prepareInput = Get-SourceSlice `
   $source `
   'private prepareInput(inputKind: FeatureInputKind, initialPick: boolean = false): void' `
-  'private cacheAndApplyPickedModelFile'
+  'private async cacheAndApplyPickedModelFile'
 $applyPickResult = Get-SourceSlice `
   $source `
   'private applyPickResult(' `

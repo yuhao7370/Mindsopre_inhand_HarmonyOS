@@ -274,6 +274,7 @@ export type AppStringKey =
   'feature_input_photo_android' |
   'feature_input_camera_android' |
   'feature_input_camera' |
+  'feature_input_live_translation' |
   'feature_input_photo' |
   'feature_input_sample_image' |
   'feature_input_content_image' |
@@ -581,6 +582,7 @@ const APP_STRING_KEYS: AppStringKey[] = [
   'feature_input_photo_android',
   'feature_input_camera_android',
   'feature_input_camera',
+  'feature_input_live_translation',
   'feature_input_photo',
   'feature_input_sample_image',
   'feature_input_content_image',
@@ -1167,6 +1169,8 @@ export function appString(key: AppStringKey): ResourceStr {
       return $r('app.string.feature_input_camera_android');
     case 'feature_input_camera':
       return $r('app.string.feature_input_camera');
+    case 'feature_input_live_translation':
+      return $r('app.string.feature_input_live_translation');
     case 'feature_input_photo':
       return $r('app.string.feature_input_photo');
     case 'feature_input_sample_image':

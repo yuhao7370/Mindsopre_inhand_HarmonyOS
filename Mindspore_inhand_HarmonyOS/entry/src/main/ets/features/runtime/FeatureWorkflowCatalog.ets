@@ -14,6 +14,7 @@ import {
 
 export type FeatureInputKind =
   'camera' |
+  'liveCamera' |
   'photo' |
   'sampleImage' |
   'contentImage' |
@@ -219,7 +220,7 @@ export const featureWorkflows: Array<FeatureWorkflow> = [
     titleKey: 'title_texttranslation',
     summaryKey: 'workflow_summary_text_translation',
     aiMethod: 'translateText',
-    inputKinds: ['text', 'camera', 'photo'],
+    inputKinds: ['text', 'camera', 'photo', 'liveCamera'],
     requiredPermissions: ['camera', 'media', 'internet'],
     resultKind: 'translationText',
     liveMode: false,
@@ -526,6 +527,38 @@ export function inputKindReplacesPrimaryInput(inputKind: FeatureInputKind): bool
     inputKind !== 'styleTransferModelFile';
 }
 
+export function liveRuntimeModeForWorkflow(
+  workflow: FeatureWorkflow | undefined,
+  liveCameraInputSelected: boolean
+): boolean {
+  return workflow?.liveMode === true ||
+    (workflow?.aiMethod === 'translateText' && liveCameraInputSelected);
+}
+
+export function runtimeTextInputForWorkflow(
+  workflow: FeatureWorkflow | undefined,
+  liveCameraInputSelected: boolean,
+  userText: string
+): string {
+  if (workflow?.aiMethod === 'translateText' &&
+    liveRuntimeModeForWorkflow(workflow, liveCameraInputSelected)) {
+    return '';
+  }
+  return userText;
+}
+
+export function shouldRenderLiveCameraPreview(
+  workflow: FeatureWorkflow | undefined,
+  liveCameraInputSelected: boolean,
+  liveCameraActive: boolean
+): boolean {
+  return workflow?.liveMode === true || liveCameraInputSelected || liveCameraActive;
+}
+
+export function isInputPreparationRequestCurrent(requestId: number, currentRequestId: number): boolean {
+  return requestId === currentRequestId;
+}
+
 export function shouldDeferRuntimeResultClearUntilPickResult(
   workflow: FeatureWorkflow,
   inputKind: FeatureInputKind
@@ -649,7 +682,7 @@ export function shouldClearTextInputAfterInputReady(workflow: FeatureWorkflow, i
 
 export function shouldHideTextInputWhenPreparingInput(workflow: FeatureWorkflow, inputKind: FeatureInputKind): boolean {
   return workflow.routeName === AppRoute.TEXT_TRANSLATION.name &&
-    (inputKind === 'photo' || inputKind === 'camera');
+    (inputKind === 'photo' || inputKind === 'camera' || inputKind === 'liveCamera');
 }
 
 export function textInputVisibleAfterCancelledPick(
@@ -714,6 +747,8 @@ export function inputLabelKey(inputKind: FeatureInputKind): AppStringKey {
   switch (inputKind) {
     case 'camera':
       return 'feature_input_camera';
+    case 'liveCamera':
+      return 'feature_input_live_translation';
     case 'photo':
       return 'feature_input_photo';
     case 'sampleImage':

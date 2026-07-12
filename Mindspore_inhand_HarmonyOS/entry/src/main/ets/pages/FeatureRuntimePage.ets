@@ -8,12 +8,15 @@ import {
   autoStartInputKindForWorkflow,
   fixedLiveCameraPositionForWorkflow,
   inputKindReplacesPrimaryInput,
+  isInputPreparationRequestCurrent,
   initialInputKindForWorkflow,
   initialPreviewActionForWorkflow,
+  liveRuntimeModeForWorkflow,
   rememberedLiveCameraPositionForWorkflow,
   rememberLiveCameraPositionForRoute,
   permissionLabelKey,
   runtimeInputKindsForWorkflow,
+  runtimeTextInputForWorkflow,
   sampleImageUriForWorkflow,
   shouldAutoRunStyleTransferAfterStyleReady,
   shouldDeferRuntimeResultClearUntilPickResult,
@@ -39,6 +42,7 @@ import {
   shouldShowLivePoseTemplateOverlay,
   shouldShowPrimaryRunAction,
   shouldShowLiveSegmentationCameraOverlay,
+  shouldRenderLiveCameraPreview,
   shouldShowResultSaveAction,
   shouldShowTranslationSnapshotSaveAction,
   shouldShowStyleRecoveryControl,
@@ -107,6 +111,7 @@ import {
   LiveFrameImageService,
   LiveRuntimeFrameRunner,
   LiveRuntimeLoopService,
+  isLiveRuntimeGenerationCurrent,
   liveRuntimeIntervalForAiMethod,
   liveCameraXComponentId,
   shouldRunLiveRuntimeLoop,
@@ -292,7 +297,11 @@ struct FeatureRuntimePage {
   @State liveCameraSwitchAvailable: boolean = true;
   private liveCameraController: XComponentController = new XComponentController();
   private liveCameraService: LiveCameraPreviewService | undefined = undefined;
+  private liveCameraStopTask: Promise<void> | undefined = undefined;
   private liveCameraInputSelected: boolean = false;
+  private liveCameraPreviewRequestId: number = 0;
+  private liveRuntimeGeneration: number = 0;
+  private inputPreparationRequestId: number = 0;
   private liveRuntimeLoopService: LiveRuntimeLoopService = new LiveRuntimeLoopService();
   private initialInputPrepared: boolean = false;
   private pendingPickTextInputVisible: boolean | undefined = undefined;
@@ -320,6 +329,7 @@ struct FeatureRuntimePage {
   }
 
   aboutToDisappear() {
+    this.inputPreparationRequestId++;
     this.setRuntimeKeepScreenOn(false);
     this.stopLiveCameraPreview();
   }
@@ -346,6 +356,15 @@ struct FeatureRuntimePage {
   }
 
   private prepareInput(inputKind: FeatureInputKind, initialPick: boolean = false): void {
+    const requestId = ++this.inputPreparationRequestId;
+    this.prepareInputAsync(inputKind, initialPick, requestId);
+  }
+
+  private async prepareInputAsync(
+    inputKind: FeatureInputKind,
+    initialPick: boolean,
+    requestId: number
+  ): Promise<void> {
     const workflow = workflowForRoute(this.routeName);
     if (!shouldAllowRuntimeInputChange(workflow, inputKind, this.workflowRunning)) {
       this.statusKey = 'feature_runtime_status_running';
@@ -360,8 +379,15 @@ struct FeatureRuntimePage {
     if (liveCameraInput) {
       this.liveCameraInputSelected = true;
     } else if (inputKindReplacesPrimaryInput(inputKind)) {
-      this.liveCameraInputSelected = false;
-      this.stopLiveRuntimeLoop();
+      if (this.liveCameraInputSelected || this.liveCameraActive || this.liveCameraService !== undefined ||
+        this.liveCameraStopTask !== undefined) {
+        await this.stopLiveCameraPreviewAsync();
+        if (!isInputPreparationRequestCurrent(requestId, this.inputPreparationRequestId)) {
+          return;
+        }
+      } else {
+        this.stopLiveRuntimeLoop();
+      }
     }
     if (inputKind === 'text') {
       this.textInputVisible = true;
@@ -370,7 +396,13 @@ struct FeatureRuntimePage {
       return;
     }
     if (liveCameraInput) {
-      this.startLiveCameraPreview();
+      if (workflow && shouldHideTextInputWhenPreparingInput(workflow, inputKind)) {
+        this.pendingPickTextInputVisible = this.textInputVisible;
+        this.textInputVisible = false;
+      }
+      if (this.liveCameraSurfaceId.length > 0) {
+        this.startLiveCameraPreview();
+      }
       return;
     }
     if (inputKind === 'sampleImage') {
@@ -401,25 +433,41 @@ struct FeatureRuntimePage {
     if (inputKind === 'modelFile' ||
       inputKind === 'stylePredictModelFile' ||
       inputKind === 'styleTransferModelFile') {
-      pickerService.pickModelFile().then((result: PickResult) =>
-        this.cacheAndApplyPickedModelFile(result, context.cacheDir, inputKind, initialPick));
+      const result = await pickerService.pickModelFile();
+      if (!isInputPreparationRequestCurrent(requestId, this.inputPreparationRequestId)) {
+        return;
+      }
+      await this.cacheAndApplyPickedModelFile(
+        result,
+        context.cacheDir,
+        inputKind,
+        initialPick,
+        requestId
+      );
       return;
     }
     if (inputKind === 'camera') {
-      pickerService.captureImage().then((result: PickResult) =>
-        this.applyPickResult(result, 'feature_runtime_image_ready', inputKind, true, initialPick));
+      const result = await pickerService.captureImage();
+      if (!isInputPreparationRequestCurrent(requestId, this.inputPreparationRequestId)) {
+        return;
+      }
+      this.applyPickResult(result, 'feature_runtime_image_ready', inputKind, true, initialPick);
       return;
     }
-    pickerService.pickImage().then((result: PickResult) =>
-      this.applyPickResult(result, 'feature_runtime_image_ready', inputKind, true, initialPick));
+    const result = await pickerService.pickImage();
+    if (!isInputPreparationRequestCurrent(requestId, this.inputPreparationRequestId)) {
+      return;
+    }
+    this.applyPickResult(result, 'feature_runtime_image_ready', inputKind, true, initialPick);
   }
 
-  private cacheAndApplyPickedModelFile(
+  private async cacheAndApplyPickedModelFile(
     result: PickResult,
     cacheDir: string,
     inputKind: FeatureInputKind,
-    initialPick: boolean = false
-  ): void {
+    initialPick: boolean,
+    requestId: number
+  ): Promise<void> {
     if (!result.ok) {
       this.applyPickResult(result, 'feature_runtime_model_ready', inputKind, true, initialPick);
       return;
@@ -428,8 +476,12 @@ struct FeatureRuntimePage {
       this.applyPickResult(result, 'feature_runtime_model_ready', inputKind, true, initialPick);
       return;
     }
-    new RuntimeModelFileCacheService().cachePickedModelFile(result.uri, cacheDir, this.routeName, inputKind)
-      .then((cacheResult: ModelFileCacheResult) => this.applyModelFileCacheResult(cacheResult, inputKind));
+    const cacheResult = await new RuntimeModelFileCacheService()
+      .cachePickedModelFile(result.uri, cacheDir, this.routeName, inputKind);
+    if (!isInputPreparationRequestCurrent(requestId, this.inputPreparationRequestId)) {
+      return;
+    }
+    this.applyModelFileCacheResult(cacheResult, inputKind);
   }
 
   private applyModelFileCacheResult(result: ModelFileCacheResult, inputKind: FeatureInputKind): void {
@@ -526,14 +578,17 @@ struct FeatureRuntimePage {
   }
 
   private async startLiveCameraPreviewAsync(): Promise<void> {
+    const requestId = ++this.liveCameraPreviewRequestId;
     const workflow = workflowForRoute(this.routeName);
     const context = this.uiAbilityContext();
     if (!workflow || !context) {
-      this.applyLiveCameraPreviewResult({
-        ok: false,
-        surfaceId: '',
-        messageKey: 'feature_runtime_permission_denied'
-      });
+      if (requestId === this.liveCameraPreviewRequestId) {
+        this.applyLiveCameraPreviewResult({
+          ok: false,
+          surfaceId: '',
+          messageKey: 'feature_runtime_permission_denied'
+        });
+      }
       return;
     }
 
@@ -543,6 +598,9 @@ struct FeatureRuntimePage {
     this.clearVisualResults();
     try {
       const permission = await new PermissionService().requestForWorkflow(context, workflow);
+      if (requestId !== this.liveCameraPreviewRequestId) {
+        return;
+      }
       if (!permission.ok) {
         this.applyLiveCameraPreviewResult({
           ok: false,
@@ -553,22 +611,40 @@ struct FeatureRuntimePage {
         return;
       }
 
+      const pendingStopTask = this.liveCameraStopTask;
+      if (pendingStopTask !== undefined) {
+        await pendingStopTask;
+        if (requestId !== this.liveCameraPreviewRequestId) {
+          return;
+        }
+      }
+
       const surfaceId = this.liveCameraSurfaceId.length > 0 ?
         this.liveCameraSurfaceId :
         this.liveCameraController.getXComponentSurfaceId();
       const previousService = this.liveCameraService;
       if (previousService !== undefined) {
         await previousService.stop();
+        if (requestId !== this.liveCameraPreviewRequestId) {
+          return;
+        }
       }
-      this.liveCameraService = new LiveCameraPreviewService(new HarmonyLiveCameraPreviewDriver(context));
-      const result = await this.liveCameraService.start(surfaceId, this.liveCameraPosition);
+      const service = new LiveCameraPreviewService(new HarmonyLiveCameraPreviewDriver(context));
+      this.liveCameraService = service;
+      const result = await service.start(surfaceId, this.liveCameraPosition);
+      if (requestId !== this.liveCameraPreviewRequestId || this.liveCameraService !== service) {
+        await service.stop();
+        return;
+      }
       this.applyLiveCameraPreviewResult(result);
     } catch (_) {
-      this.applyLiveCameraPreviewResult({
-        ok: false,
-        surfaceId: '',
-        messageKey: 'feature_runtime_live_camera_failed'
-      });
+      if (requestId === this.liveCameraPreviewRequestId) {
+        this.applyLiveCameraPreviewResult({
+          ok: false,
+          surfaceId: '',
+          messageKey: 'feature_runtime_live_camera_failed'
+        });
+      }
     }
   }
 
@@ -577,25 +653,53 @@ struct FeatureRuntimePage {
     this.liveCameraActive = result.ok;
     this.liveCameraSurfaceId = result.surfaceId;
     this.selectedInputSummary = result.surfaceId;
+    const workflow = workflowForRoute(this.routeName);
     if (!result.ok) {
+      this.textInputVisible = textInputVisibleAfterCancelledPick(
+        workflow,
+        'liveCamera',
+        this.textInputVisible,
+        this.pendingPickTextInputVisible
+      );
+      this.pendingPickTextInputVisible = undefined;
       this.liveCameraInputSelected = false;
       this.stopLiveRuntimeLoop();
       return;
     }
-    const workflow = workflowForRoute(this.routeName);
-    if (workflow && shouldAutoRunLiveRuntimeAfterPreview(this.aiMethod, workflow.liveMode, result.ok)) {
+    this.pendingPickTextInputVisible = undefined;
+    if (workflow && shouldAutoRunLiveRuntimeAfterPreview(
+      this.aiMethod,
+      liveRuntimeModeForWorkflow(workflow, this.liveCameraInputSelected),
+      result.ok
+    )) {
       this.startLiveRuntimeLoop(workflow);
     }
   }
 
   private stopLiveCameraPreview(): void {
+    this.stopLiveCameraPreviewAsync();
+  }
+
+  private async stopLiveCameraPreviewAsync(): Promise<void> {
+    this.liveCameraPreviewRequestId++;
     this.stopLiveRuntimeLoop();
     this.liveCameraInputSelected = false;
     this.liveCameraActive = false;
+    this.liveCameraSurfaceId = '';
     const service = this.liveCameraService;
     this.liveCameraService = undefined;
     if (service !== undefined) {
-      service.stop();
+      const stopTask = service.stop();
+      this.liveCameraStopTask = stopTask;
+      await stopTask;
+      if (this.liveCameraStopTask === stopTask) {
+        this.liveCameraStopTask = undefined;
+      }
+      return;
+    }
+    const stopTask = this.liveCameraStopTask;
+    if (stopTask !== undefined) {
+      await stopTask;
     }
   }
 
@@ -680,6 +784,7 @@ struct FeatureRuntimePage {
   }
 
   private aiRunInputs(): AiRunInputs {
+    const workflow = workflowForRoute(this.routeName);
     const contentImageUri = this.contentImageUri.length > 0 ? this.contentImageUri : this.imageInputUri;
     return {
       imageUri: this.imageInputUri,
@@ -689,7 +794,7 @@ struct FeatureRuntimePage {
       stylePredictModelUri: this.stylePredictModelInputUri,
       styleTransferModelUri: this.styleTransferModelInputUri,
       modelUri: this.modelInputUri,
-      text: this.userText
+      text: runtimeTextInputForWorkflow(workflow, this.liveCameraInputSelected, this.userText)
     };
   }
 
@@ -752,7 +857,9 @@ struct FeatureRuntimePage {
       this.statusKey = 'feature_runtime_unknown_route';
       return;
     }
-    const liveRuntimeLoopReady = shouldRunLiveRuntimeLoop(workflow.aiMethod, workflow.liveMode,
+    const liveRuntimeLoopReady = shouldRunLiveRuntimeLoop(
+      workflow.aiMethod,
+      liveRuntimeModeForWorkflow(workflow, this.liveCameraInputSelected),
       this.liveCameraInputSelected, this.liveCameraActive);
     if (liveRuntimeLoopReady) {
       this.startLiveRuntimeLoop(workflow);
@@ -773,17 +880,22 @@ struct FeatureRuntimePage {
   }
 
   private startLiveRuntimeLoop(workflow: FeatureWorkflow): void {
+    if (this.liveRuntimeLoopService.isRunning()) {
+      return;
+    }
+    const liveGeneration = ++this.liveRuntimeGeneration;
     const runner = new PageLiveRuntimeFrameRunner(async (): Promise<void> => {
-      await this.runWorkflowAsync();
+      await this.runWorkflowAsync(liveGeneration);
     });
     this.liveRuntimeLoopService.start(liveRuntimeIntervalForAiMethod(workflow.aiMethod), runner);
   }
 
   private stopLiveRuntimeLoop(): void {
+    this.liveRuntimeGeneration++;
     this.liveRuntimeLoopService.stop();
   }
 
-  private async runWorkflowAsync(): Promise<void> {
+  private async runWorkflowAsync(liveGeneration?: number): Promise<void> {
     const workflow = workflowForRoute(this.routeName);
     if (!workflow) {
       this.statusKey = 'feature_runtime_unknown_route';
@@ -802,6 +914,9 @@ struct FeatureRuntimePage {
     }
     try {
       const permission: PermissionRequestSummary = await new PermissionService().requestForWorkflow(context, workflow);
+      if (!isLiveRuntimeGenerationCurrent(liveGeneration, this.liveRuntimeGeneration)) {
+        return;
+      }
       if (!permission.ok) {
         this.statusKey = 'feature_runtime_permission_denied';
         this.resultText = permission.requested.join(', ');
@@ -809,16 +924,27 @@ struct FeatureRuntimePage {
         this.clearVisualResults();
         return;
       }
-      const frameInputReady = await this.prepareLiveFrameImageInput(context);
+      const frameInputReady = await this.prepareLiveFrameImageInput(context, liveGeneration);
+      if (!isLiveRuntimeGenerationCurrent(liveGeneration, this.liveRuntimeGeneration)) {
+        return;
+      }
       if (!frameInputReady) {
         return;
       }
       const aiService: DefaultAiService =
         await cachedRuntimeAiServiceForHarmonyResourceManager(workflow, context.resourceManager);
+      if (!isLiveRuntimeGenerationCurrent(liveGeneration, this.liveRuntimeGeneration)) {
+        return;
+      }
       const result: AiRunResult = await aiService.run(workflow, this.aiRunInputs());
+      if (!isLiveRuntimeGenerationCurrent(liveGeneration, this.liveRuntimeGeneration)) {
+        return;
+      }
       this.applyAiResult(result);
     } catch (_) {
-      this.applyRuntimeFailure();
+      if (isLiveRuntimeGenerationCurrent(liveGeneration, this.liveRuntimeGeneration)) {
+        this.applyRuntimeFailure();
+      }
     }
   }
 
@@ -829,13 +955,19 @@ struct FeatureRuntimePage {
     this.clearVisualResults();
   }
 
-  private async prepareLiveFrameImageInput(context: common.UIAbilityContext): Promise<boolean> {
+  private async prepareLiveFrameImageInput(
+    context: common.UIAbilityContext,
+    liveGeneration?: number
+  ): Promise<boolean> {
     if (!shouldCaptureLiveFrameImage(this.liveCameraInputSelected, this.imageInputUri, this.liveCameraActive)) {
       return true;
     }
 
     if (!this.liveCameraActive) {
       await this.startLiveCameraPreviewAsync();
+      if (!isLiveRuntimeGenerationCurrent(liveGeneration, this.liveRuntimeGeneration)) {
+        return false;
+      }
       if (!this.liveCameraActive) {
         return false;
       }
@@ -848,6 +980,9 @@ struct FeatureRuntimePage {
       new HarmonyLiveFrameImageEncoder(),
       new HarmonyLiveFrameImageStore()
     ).captureToCacheImage(surfaceId, context.cacheDir);
+    if (!isLiveRuntimeGenerationCurrent(liveGeneration, this.liveRuntimeGeneration)) {
+      return false;
+    }
     if (!result.ok) {
       this.statusKey = result.messageKey;
       this.resultText = '';
@@ -1225,7 +1360,9 @@ struct FeatureRuntimePage {
     if (workflow === undefined) {
       return true;
     }
-    const liveRuntimeLoopReady = shouldRunLiveRuntimeLoop(workflow.aiMethod, workflow.liveMode,
+    const liveRuntimeLoopReady = shouldRunLiveRuntimeLoop(
+      workflow.aiMethod,
+      liveRuntimeModeForWorkflow(workflow, this.liveCameraInputSelected),
       this.liveCameraInputSelected, this.liveCameraActive);
     return shouldStartWorkflowRun(workflow, this.workflowRunning, liveRuntimeLoopReady);
   }
@@ -1644,7 +1781,11 @@ struct FeatureRuntimePage {
           .height('100%')
           .onLoad(() => {
             this.liveCameraSurfaceId = this.liveCameraController.getXComponentSurfaceId();
-            this.autoStartLiveCameraIfNeeded();
+            if (this.liveCameraInputSelected) {
+              this.startLiveCameraPreview();
+            } else {
+              this.autoStartLiveCameraIfNeeded();
+            }
           })
           .onDestroy(() => this.stopLiveCameraPreview())
         if (this.sceneOverlayRows.length > 0 && this.shouldShowLiveSceneOverlay()) {
@@ -2483,7 +2624,11 @@ struct FeatureRuntimePage {
           if (this.isPortraitSegmentationWorkflow()) {
             this.portraitSegmentationBackgroundGrid()
           }
-          if (this.hasLiveCameraInput()) {
+          if (shouldRenderLiveCameraPreview(
+            workflowForRoute(this.routeName),
+            this.liveCameraInputSelected,
+            this.liveCameraActive
+          )) {
             this.liveCameraPreview()
           }
           if (this.inputKinds.indexOf('text') >= 0 && this.textInputVisible) {

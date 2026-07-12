@@ -23,6 +23,8 @@ export function inputActionForKind(kind: FeatureInputKind): RuntimeInputAction {
   switch (kind) {
     case 'camera':
       return 'captureImage';
+    case 'liveCamera':
+      return 'startLiveCamera';
     case 'sampleImage':
       return 'useSampleImage';
     case 'photo':
@@ -43,7 +45,7 @@ export function runtimeInputActionForWorkflowInput(
   workflow: FeatureWorkflow,
   kind: FeatureInputKind
 ): RuntimeInputAction {
-  if (kind === 'camera' && workflow.liveMode) {
+  if ((kind === 'camera' && workflow.liveMode) || kind === 'liveCamera') {
     return 'startLiveCamera';
   }
   return inputActionForKind(kind);
