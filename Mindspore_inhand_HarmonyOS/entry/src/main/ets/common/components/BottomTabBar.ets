@@ -1,5 +1,4 @@
-import { MainTab, TabItem } from '../../app/AppState';
-import { iconLabel } from '../icons/IconSymbols';
+import { MainTab, mainTabIconMediaResource, TabItem } from '../../app/AppState';
 import { appString } from '../i18n/AppStrings';
 import { AppColor } from '../theme/AppTheme';
 
@@ -13,15 +12,10 @@ export struct BottomTabBar {
     Row() {
       ForEach(this.tabs, (tab: TabItem) => {
         Column() {
-          Text(iconLabel(tab.icon))
-            .fontSize(12)
-            .fontWeight(FontWeight.Bold)
+          Image(mainTabIconMediaResource(tab, this.selected === tab.id))
             .width(24)
             .height(24)
-            .textAlign(TextAlign.Center)
-            .fontColor(this.selected === tab.id ? Color.White : AppColor.textSecondary)
-            .backgroundColor(this.selected === tab.id ? AppColor.accent : '#F0F3FF')
-            .borderRadius(12)
+            .objectFit(ImageFit.Contain)
           Text(appString(tab.titleKey))
             .fontSize(13)
             .maxLines(1)
