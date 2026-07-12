@@ -68,6 +68,16 @@ $visibleAndroidZhStringExpectations = @{
   poem_share_poster = (Decode-Utf8Base64 '5YiG5Lqr5Zu+54mH')
   poem_save_success = (Decode-Utf8Base64 '5L+d5a2Y5oiQ5Yqf')
   poem_save_failed = (Decode-Utf8Base64 '5L+d5a2Y5aSx6LSl')
+  dance_score_prefix = (Decode-Utf8Base64 '5oGt5Zac5a6M5oiQ77yM57u85ZCI5b6X5YiG77ya')
+  dance_score_level_no_action = (Decode-Utf8Base64 '6K+35Yqo6LW35p2l5ZOm77yB')
+  dance_score_level_no_point = (Decode-Utf8Base64 '6K+35YWo6Lqr5Ye66ZWc5bGV56S65L2g55qE6aOO6YeH77yB')
+  dance_score_level_try_again = (Decode-Utf8Base64 '5pyJ54K56YKj5Liq5ZGz5LqG77yB')
+  dance_score_level_warmup = (Decode-Utf8Base64 '6JCM5paw6K+05b6X5bCx5piv5L2g77yB')
+  dance_score_level_good = (Decode-Utf8Base64 '5aW95Y6J5a6z77yM5L2g5piv5LiT5Lia55qE5ZCX77yf')
+  dance_score_level_great = (Decode-Utf8Base64 '5L2g5piv6L+Z5p2h6KGX5pyA6Z2T55qE5LuU77yB')
+  dance_score_level_excellent = (Decode-Utf8Base64 '6ZqQ6JeP5Zyo5rCR6Ze055qE6auY5omL77yB')
+  dance_score_level_perfect = (Decode-Utf8Base64 '57uZ5aSn56We54yu5LiK6Iad55uW77yB')
+  dance_score_level_full = (Decode-Utf8Base64 '6L+Z5Liq6Iie5Y+w5bGe5LqO5L2g77yB')
 }
 
 $visibleAndroidStringExpectations = @{
