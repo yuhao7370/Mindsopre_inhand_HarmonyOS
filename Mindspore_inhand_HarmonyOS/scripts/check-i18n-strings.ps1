@@ -164,6 +164,7 @@ foreach ($locale in $visibleAndroidStringExpectations.Keys) {
 
 $appStringsPath = Join-Path $root 'entry/src/main/ets/common/i18n/AppStrings.ets'
 $appStringsSource = Get-Content -Raw -Encoding UTF8 -LiteralPath $appStringsPath
+$appStringsSource = $appStringsSource -replace "`r`n?", "`n"
 
 function Get-SourceSlice([string] $text, [string] $startMarker, [string] $endMarker) {
   $start = $text.IndexOf($startMarker)
