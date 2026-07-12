@@ -220,7 +220,7 @@ export const featureWorkflows: Array<FeatureWorkflow> = [
     titleKey: 'title_texttranslation',
     summaryKey: 'workflow_summary_text_translation',
     aiMethod: 'translateText',
-    inputKinds: ['text', 'camera', 'photo', 'liveCamera'],
+    inputKinds: ['text', 'camera', 'photo'],
     requiredPermissions: ['camera', 'media', 'internet'],
     resultKind: 'translationText',
     liveMode: false,

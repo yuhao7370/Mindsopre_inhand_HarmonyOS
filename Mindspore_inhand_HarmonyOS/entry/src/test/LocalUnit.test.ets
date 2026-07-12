@@ -3335,10 +3335,10 @@ export default function localUnitTest() {
 
       const translation: FeatureWorkflow = workflowForRoute(AppRoute.TEXT_TRANSLATION.name)!;
       expect(translation.aiMethod).assertEqual('translateText');
-      expect(translation.inputKinds.indexOf('text') >= 0).assertTrue();
-      expect(translation.inputKinds.indexOf('camera') >= 0).assertTrue();
-      expect(translation.inputKinds.indexOf('photo') >= 0).assertTrue();
-      expect(translation.inputKinds.indexOf('liveCamera') >= 0).assertTrue();
+      expect(translation.inputKinds.length).assertEqual(3);
+      expect(translation.inputKinds[0]).assertEqual('text');
+      expect(translation.inputKinds[1]).assertEqual('camera');
+      expect(translation.inputKinds[2]).assertEqual('photo');
       expect(translation.liveMode).assertFalse();
       expect(runtimeInputActionForWorkflowInput(translation, 'camera')).assertEqual('captureImage');
       expect(runtimeInputActionForWorkflowInput(translation, 'liveCamera')).assertEqual('startLiveCamera');
