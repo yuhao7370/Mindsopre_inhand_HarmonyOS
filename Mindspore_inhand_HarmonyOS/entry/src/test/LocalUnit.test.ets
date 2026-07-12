@@ -6915,7 +6915,7 @@ export default function localUnitTest() {
     });
 
     it('mapsImageClassificationLabelsToLocalGestureCategories', 0, () => {
-      expect(gestureCategoryForImageClassificationLabel('mitten')).assertEqual(14);
+      expect(gestureCategoryForImageClassificationLabel('mitten')).assertEqual(-1);
       expect(gestureCategoryForImageClassificationLabel('boxing_glove')).assertEqual(10);
       expect(gestureCategoryForImageClassificationLabel('thumb_up')).assertEqual(11);
       expect(gestureCategoryForImageClassificationLabel('Closed_Fist')).assertEqual(10);
@@ -7000,7 +7000,7 @@ export default function localUnitTest() {
       expect(rect === undefined).assertTrue();
     });
 
-    it('imageClassificationGestureRunnerDetectsHandAdjacentLabels', 0, async () => {
+    it('imageClassificationGestureRunnerRejectsBundledImageNetMittenLabel', 0, async () => {
       const runner = new ImageClassificationGestureRunner({
         labels: ['goldfish', 'mitten', 'nail'],
         scoreRunner: new FixedScoreRunner([0.1, 0.82, 0.35])
@@ -7008,12 +7008,8 @@ export default function localUnitTest() {
 
       const result = await runner.detectGesture('file://selected/hand.jpg');
 
-      expect(result.ok).assertTrue();
-      expect(result.gestures.length).assertEqual(1);
-      expect(result.gestures[0].category).assertEqual(14);
-      expect(result.gestures[0].label).assertEqual('Other gesture');
-      expect(result.gestures[0].score.toFixed(2)).assertEqual('0.82');
-      expect(result.gestures[0].rect?.left).assertEqual(25);
+      expect(result.ok).assertFalse();
+      expect(result.gestures.length).assertEqual(0);
       expect(result.imageWidth).assertEqual(100);
       expect(result.imageHeight).assertEqual(100);
     });
@@ -7060,7 +7056,7 @@ export default function localUnitTest() {
       };
       const estimator = new FixedGestureRegionEstimator(estimatedRect, 30, 40);
       const runner = new ImageClassificationGestureRunner({
-        labels: ['goldfish', 'mitten'],
+        labels: ['goldfish', 'Thumb_Up'],
         scoreRunner: new FixedScoreRunner([0.1, 0.82]),
         regionEstimator: estimator
       });
@@ -7079,7 +7075,7 @@ export default function localUnitTest() {
 
     it('imageClassificationGestureRunnerFallsBackWhenRegionEstimatorFails', 0, async () => {
       const runner = new ImageClassificationGestureRunner({
-        labels: ['goldfish', 'mitten'],
+        labels: ['goldfish', 'Thumb_Up'],
         scoreRunner: new FixedScoreRunner([0.1, 0.82]),
         regionEstimator: new RejectingGestureRegionEstimator()
       });
@@ -7115,7 +7111,7 @@ export default function localUnitTest() {
       expect(workflow !== undefined).assertTrue();
       const labelContent: Uint8Array = new Uint8Array([
         103, 111, 108, 100, 102, 105, 115, 104, 10,
-        109, 105, 116, 116, 101, 110
+        98, 111, 120, 105, 110, 103, 95, 103, 108, 111, 118, 101
       ]);
       const service = await createRuntimeAiServiceForWorkflow(workflow!, {
         resourceManager: new FixedRawfileContentReader(labelContent),
@@ -7130,7 +7126,7 @@ export default function localUnitTest() {
       expect(result.ok).assertTrue();
       expect(result.code).assertEqual('GESTURE_DETECTION_DONE');
       expect(result.messageKey).assertEqual('feature_runtime_gesture_done');
-      expect(result.detailText.indexOf('Other gesture 91.00% [25,10,50,70]') >= 0).assertTrue();
+      expect(result.detailText.indexOf('Fist 91.00% [25,10,50,70]') >= 0).assertTrue();
     });
 
     it('runtimeFactoryPassesGestureRegionEstimatorToLocalGestureService', 0, async () => {
@@ -7138,7 +7134,7 @@ export default function localUnitTest() {
       expect(workflow !== undefined).assertTrue();
       const labelContent: Uint8Array = new Uint8Array([
         103, 111, 108, 100, 102, 105, 115, 104, 10,
-        109, 105, 116, 116, 101, 110
+        98, 111, 120, 105, 110, 103, 95, 103, 108, 111, 118, 101
       ]);
       const estimatedRect: GestureRectangle = {
         left: 4,
@@ -7160,7 +7156,7 @@ export default function localUnitTest() {
 
       expect(result.ok).assertTrue();
       expect(estimator.seenImageUris[0]).assertEqual('file://selected/hand-estimated.jpg');
-      expect(result.detailText.indexOf('Other gesture 91.00% [4,5,6,7]') >= 0).assertTrue();
+      expect(result.detailText.indexOf('Fist 91.00% [4,5,6,7]') >= 0).assertTrue();
     });
 
     it('cachedRuntimeFactoryRetriesLocalGestureServiceAfterLoadFailure', 0, async () => {

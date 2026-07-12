@@ -109,8 +109,7 @@ const localGestureCategoryMaps: Array<LocalGestureCategoryMap> = [
   { category: 10, keywords: ['fist', 'closed_fist', 'boxing_glove'] },
   { category: 11, keywords: ['good', 'like_gesture', 'thumb_up', 'thumbs_up', 'thumbs_up_gesture'] },
   { category: 12, keywords: ['heart', 'heart_gesture', 'finger_heart', 'finger_heart_gesture', 'hand_heart'] },
-  { category: 13, keywords: ['ok', 'okay', 'ok_sign', 'ok_gesture'] },
-  { category: localOtherGestureCategory, keywords: ['mitten'] }
+  { category: 13, keywords: ['ok', 'okay', 'ok_sign', 'ok_gesture'] }
 ];
 
 export class GestureService {
