@@ -309,6 +309,9 @@ Current HarmonyOS behavior:
   rejects UTF-8 BOMs so localized first labels do not receive hidden prefixes.
 - The live camera preview shows the latest classification label in a bottom
   overlay, matching Android's `bottomLayout` / `HorTextView` result surface.
+- Before a valid live classification label exists, the same overlay shows the
+  Android `title_keep` prompt (`正在识别` / `Continue to identify`) instead of
+  disappearing.
 
 ## Scene Detection
 

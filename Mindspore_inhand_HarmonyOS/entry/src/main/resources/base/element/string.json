@@ -173,6 +173,7 @@
     { "name": "feature_runtime_classification_runner_unavailable", "value": "当前环境无法执行图像分类。请重新进入功能页或稍后重试。" },
     { "name": "feature_runtime_classification_done", "value": "图像分类执行完成。" },
     { "name": "feature_runtime_classification_failed", "value": "图像分类未产生有效标签。" },
+    { "name": "feature_runtime_live_classification_keep", "value": "正在识别" },
     { "name": "feature_runtime_object_detection_done", "value": "对象检测执行完成。" },
     { "name": "feature_runtime_object_detection_failed", "value": "对象检测未产生有效检测框。" },
     { "name": "feature_runtime_style_transfer_done", "value": "风格迁移执行完成。" },

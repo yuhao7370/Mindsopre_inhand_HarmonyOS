@@ -351,6 +351,7 @@ import {
   shouldShowLivePoseCameraOverlay,
   shouldShowLivePoseTemplateOverlay,
   shouldShowLiveSegmentationCameraOverlay,
+  liveClassificationEmptyPromptKey,
   shouldMirrorSegmentationForeground,
   shouldShowTranslationSnapshotSaveAction,
   shouldUseLongTextInput,
@@ -8054,6 +8055,19 @@ export default function localUnitTest() {
         .assertFalse();
       expect(shouldShowLiveClassificationCameraOverlay(undefined))
         .assertFalse();
+    });
+
+    it('usesAndroidKeepMovingPromptForEmptyLiveClassificationResults', 0, () => {
+      const imageCamera = workflowForRoute(AppRoute.IMAGE_CAMERA.name);
+      const objectCamera = workflowForRoute(AppRoute.OBJECT_CAMERA.name);
+
+      expect(liveClassificationEmptyPromptKey(imageCamera))
+        .assertEqual('feature_runtime_live_classification_keep');
+      expect(hasAppStringKey('feature_runtime_live_classification_keep')).assertTrue();
+      expect(liveClassificationEmptyPromptKey(objectCamera))
+        .assertUndefined();
+      expect(liveClassificationEmptyPromptKey(undefined))
+        .assertUndefined();
     });
 
     it('keepsPreviousLiveClassificationLabelUntilNextResultLikeAndroid', 0, () => {

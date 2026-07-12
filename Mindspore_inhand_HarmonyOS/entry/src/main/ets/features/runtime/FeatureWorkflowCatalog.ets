@@ -464,6 +464,10 @@ export function shouldShowLiveClassificationCameraOverlay(workflow: FeatureWorkf
   return workflow?.aiMethod === 'classifyImage' && workflow.liveMode;
 }
 
+export function liveClassificationEmptyPromptKey(workflow: FeatureWorkflow | undefined): AppStringKey | undefined {
+  return shouldShowLiveClassificationCameraOverlay(workflow) ? 'feature_runtime_live_classification_keep' : undefined;
+}
+
 export function shouldClearRuntimeResultAtWorkflowStart(workflow: FeatureWorkflow | undefined): boolean {
   return !shouldShowLiveClassificationCameraOverlay(workflow) &&
     workflow?.routeName !== AppRoute.PORTRAIT_SEGMENTATION.name;

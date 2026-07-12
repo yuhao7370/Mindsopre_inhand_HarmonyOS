@@ -173,6 +173,7 @@
     { "name": "feature_runtime_classification_runner_unavailable", "value": "Image classification is unavailable in the current runtime. Reopen the feature page or try again later." },
     { "name": "feature_runtime_classification_done", "value": "Image classification completed." },
     { "name": "feature_runtime_classification_failed", "value": "Image classification did not produce a valid label." },
+    { "name": "feature_runtime_live_classification_keep", "value": "Continue to identify" },
     { "name": "feature_runtime_object_detection_done", "value": "Object detection completed." },
     { "name": "feature_runtime_object_detection_failed", "value": "Object detection did not produce valid boxes." },
     { "name": "feature_runtime_style_transfer_done", "value": "Style transfer completed." },

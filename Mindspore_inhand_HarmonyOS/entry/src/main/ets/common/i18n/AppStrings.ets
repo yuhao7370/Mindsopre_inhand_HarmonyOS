@@ -172,6 +172,7 @@ export type AppStringKey =
   'feature_runtime_classification_runner_unavailable' |
   'feature_runtime_classification_done' |
   'feature_runtime_classification_failed' |
+  'feature_runtime_live_classification_keep' |
   'feature_runtime_object_detection_done' |
   'feature_runtime_object_detection_failed' |
   'feature_runtime_style_transfer_done' |
@@ -472,6 +473,7 @@ const APP_STRING_KEYS: AppStringKey[] = [
   'feature_runtime_classification_runner_unavailable',
   'feature_runtime_classification_done',
   'feature_runtime_classification_failed',
+  'feature_runtime_live_classification_keep',
   'feature_runtime_object_detection_done',
   'feature_runtime_object_detection_failed',
   'feature_runtime_style_transfer_done',
@@ -949,6 +951,8 @@ export function appString(key: AppStringKey): ResourceStr {
       return $r('app.string.feature_runtime_classification_done');
     case 'feature_runtime_classification_failed':
       return $r('app.string.feature_runtime_classification_failed');
+    case 'feature_runtime_live_classification_keep':
+      return $r('app.string.feature_runtime_live_classification_keep');
     case 'feature_runtime_object_detection_done':
       return $r('app.string.feature_runtime_object_detection_done');
     case 'feature_runtime_object_detection_failed':

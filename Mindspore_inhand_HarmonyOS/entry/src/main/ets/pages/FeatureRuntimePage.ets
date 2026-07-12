@@ -30,6 +30,7 @@ import {
   shouldMirrorSegmentationForeground,
   shouldShowCopyTextAction,
   shouldShowLiveClassificationCameraOverlay,
+  liveClassificationEmptyPromptKey,
   shouldShowLiveGestureCameraOverlay,
   shouldShowLiveObjectDetectionCameraOverlay,
   shouldShowLivePoseCameraOverlay,
@@ -1659,9 +1660,8 @@ struct FeatureRuntimePage {
           .alignItems(HorizontalAlign.End)
           .padding({ right: 10, bottom: 10 })
         }
-        if (this.resultRows.length > 0 &&
-          shouldShowLiveClassificationCameraOverlay(workflowForRoute(this.routeName))) {
-          this.liveClassificationOverlay(this.resultRows[0])
+        if (shouldShowLiveClassificationCameraOverlay(workflowForRoute(this.routeName))) {
+          this.liveClassificationOverlay()
         }
       }
         .width('100%')
@@ -1706,10 +1706,10 @@ struct FeatureRuntimePage {
   }
 
   @Builder
-  liveClassificationOverlay(row: AiRunResultRow) {
+  liveClassificationOverlay() {
     Column() {
       Row() {
-        Text(this.resultRowValue(row))
+        Text(this.liveClassificationOverlayValue())
           .fontSize(18)
           .fontColor(Color.White)
           .fontWeight(FontWeight.Medium)
@@ -1823,6 +1823,18 @@ struct FeatureRuntimePage {
       return appString(row.valueKey);
     }
     return row.value;
+  }
+
+  private liveClassificationOverlayValue(): ResourceStr {
+    const row = this.resultRows[0];
+    if (row !== undefined) {
+      return this.resultRowValue(row);
+    }
+    const promptKey = liveClassificationEmptyPromptKey(workflowForRoute(this.routeName));
+    if (promptKey !== undefined) {
+      return appString(promptKey);
+    }
+    return '';
   }
 
   private livePoseSimilarityPercent(): string {
