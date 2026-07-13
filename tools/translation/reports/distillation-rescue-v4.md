@@ -96,3 +96,22 @@ The smallest evidence-backed next experiment is not another teacher-target rescu
 Before launch, a v5 continuation contract must test and bind that resume hash/cursor, the original pinned BiST manifest and six artifacts, the original tokenizer/config, the selected model hash, validation history, and the reconciled 27,905.5140849-second budget root. Execution must occur in a new artifact directory and restore model, optimizer, scaler, RNG, epoch, and plan cursor without resetting any of them. It must use the original `zh-en.train.jsonl` and `en-zh.train.jsonl`; the distilled teacher view is forbidden.
 
 The proposed ceiling is one additional epoch only (global final step 18,284), at most 2,400 additional GPU seconds, with validation at global steps 17,000, 18,000, and the final step. Each validation must record both directional losses. A checkpoint is eligible only if English-to-Chinese validation loss is strictly below 4.1427683151 and Chinese-to-English validation loss is strictly below 3.2650395485; two consecutive checks without a jointly improving checkpoint stop the run. Test BLEU/chrF2 and the 100-row manual audit run only once on a validation-eligible strict best, never for checkpoint selection. Even then, export remains blocked until the existing manual and FLORES promotion gate passes. No v5 GPU job starts until these contracts and their fail-closed tests pass.
+
+## Completed v5 original-BiST continuation
+
+The reviewed continuation replayed from the exact original step-16,878 resume rather than correcting optimizer metadata. The first attempted step 16,904 deterministically reproduced the retained FP16 overflow and matched the previous failed resume recursively across model, optimizer, scaler, and Python/Torch/CUDA RNG state. A second overflow occurred at attempted step 18,189. Both attempts advanced the external batch cursor and RNG but did not advance AdamW, exactly matching the original GradScaler training semantics.
+
+The run completed the bounded epoch at external step 18,284 with AdamW inner step 18,279, 1,404 applied updates, two overflow skips, and the two consumed-then-discarded partial logical tail batches. It selected the step-18,284 candidate because both directional validation losses strictly improved over the step-16,878 baseline:
+
+| Checkpoint | Chinese-to-English loss | English-to-Chinese loss | Jointly improved |
+| ---: | ---: | ---: | :---: |
+| Baseline step 16,878 | 3.2650395485 | 4.1427683151 | reference |
+| Step 17,000 | 3.2625525455 | 4.1440816681 | no |
+| Step 18,000 | 3.2511583618 | 4.1006372139 | yes |
+| Step 18,284 | 3.2496647186 | 4.0915901009 | yes |
+
+The selected `model.safetensors` is 68,702,684 bytes with SHA-256 `3b8b9a61910ae1b147947eef0168d6b0c5b8033d0a9059e82ef79cc468ce705f`; its tokenizer remains SHA-256 `e5528a5c3685d08f8868902d31febeb763eea8519f9997f43b05964b02554640`. Candidate resume SHA-256 is `570e71c9bfdd771fe53f466ffa336c946d87378d604d3c7b12fb6c11a410498c`; final continuation resume SHA-256 is `7187bfbe7d5cbfa0f7938baa11db43895096601378ecc6b9ff0a7416c300e2b0`. The canonical terminal SHA-256 is `61f9554923cbc617d813d3c0b7128d44456e703bd3e1806978810cd1fa5ebd13`, and the recursively chained terminal budget receipt SHA-256 is `96d4c9baca530799b1c1a6ce026efdca320c28ff9b6f7873fce05eeab7ed1a7d`.
+
+The recovery consumed 975.25 actual GPU seconds. Cumulative actual usage is 28,924.02908489965 seconds, leaving 14,275.970915100352 seconds beneath the unchanged 43,200-second ceiling. This candidate is eligible for the one-time BiST test and manual-output evaluation, but it is not relabeled as production-promoted: exact pinned FLORES+ access and the original manual quality threshold remain separate production gates.
+
+For this private repository's explicitly local-learning scope, packaging may use a distinct fail-closed `local-learning` release authorization bound to the exact candidate, evaluation, conversion, and budget artifacts. That path must keep `productionPromotionAllowed=false`, retain the measured quality limitations, contain no network or dictionary fallback, and must never satisfy or weaken the production promotion path.

@@ -12,7 +12,7 @@
 
 - Scope is only Chinese↔English; there is no network or server fallback.
 - Base checkpoint is `Helsinki-NLP/opus-mt_tiny_zho-eng@4ee3a9342aae4ca6fbae82c930b5dccff5dd68dd`.
-- BiST revision is `aca6be897afc319f779009379c8b849c1eb8d63e`; FLORES+ revision is `b3a5298db5721c8a682e7ef00a37fcc9ab522757`.
+- BiST revision is `aca6be897afc319f779009379c8b849c1eb8d63e`; FLORES+ revision is `b3a5298db5721c8a682e7ef00a37fcc9ab522757`, with upstream `devtest/cmn_Hans.jsonl` (Simplified Chinese; not the absent `zho_Hans` alias) and `devtest/eng_Latn.jsonl`.
 - Token IDs: `EOS=0`, `UNK=1`, `PAD/decoder_start=32000`, `<2en>=32001`, `<2zh>=32002`; vocab size `32003`.
 - Tokenizer is SentencePiece Unigram with `nmt_nfkc`, dummy prefix, whitespace removal, and escaped whitespace.
 - Input/output maximum is 128 tokens; fixed shapes only; 2 decoder layers, 8 heads, head dimension 32.
@@ -102,7 +102,7 @@ Expected: converter exit 0; benchmark exit 0; output `FLOAT32 [1,128,256]` with 
 
 Use host-managed self history `[1,8,127,32]`, one new self slot/output `[1,8,1,32]`, retained cross caches `[1,8,128,32]`, and an explicit integer `position_id`. Masks are INT32 in ONNX; ONNX floating tensors are FP16 while converted MindSpore runtime tensors are FP32. The final converter command for prefill/step must set NCHW input and output flags. Run `decoder_step` for at least five tokens with one retained cross cache and evolving self history. PyTorch↔ONNX FP16 comparison is diagnostic (the retained host stack reaches `max_abs=0.015625`); the technical numerical gate remains float MindSpore↔ONNX `max_abs <= 0.02`, `mean_abs <= 0.002`, plus finite tensors and exact W8 token agreement.
 
-Measured prototype evidence: stable-softmax encoder, prefill, and fixed-cache step all convert and execute. Encoder all-mask error is `max/mean 0.0071133/0.0007997`; half-padding is `0.0146904/0.0010149`. The reproducible harness now makes ONNX Runtime, float MindSpore and W8 MindSpore agree on the prefill-plus-five-step sequence `[422,21,23,22,80,5]`; it binds tensors by exact names and fails closed on divergence. This is graph/runtime feasibility evidence only, not final bilingual quality.
+Measured prototype evidence: stable-softmax encoder, prefill, and fixed-cache step all convert and execute. Encoder all-mask error is `max/mean 0.0071133/0.0007997`; half-padding is `0.0146904/0.0010149`. A fresh replay against the retained graph/model hashes corrected a stale report fixture: ONNX Runtime, float MindSpore and W8 MindSpore reproducibly agree on the prefill-plus-five-step sequence `[422,22,7,4,422,22]`; the harness binds tensors by exact names and fails closed on divergence. This is graph/runtime feasibility evidence only, not final bilingual quality.
 
 - [ ] **Step 5: Run weight quantization and the package-size gate**
 
@@ -187,6 +187,8 @@ git commit -m "build: define bidirectional translation dataset"
 - Create: `tools/translation/evaluate_translation.py`
 - Create: `tools/translation/manual-eval-v1.jsonl`
 - Create: `tools/translation/reports/translation-v1.md`
+- Create: `tools/translation/config/training-run-v2.json`
+- Create: `tools/translation/config/training-run-v3.json`
 
 **Interfaces:**
 - Consumes: Task 2 JSONL and the fixed base checkpoint.
@@ -194,7 +196,13 @@ git commit -m "build: define bidirectional translation dataset"
 
 - [ ] **Step 1: Write contract tests before training**
 
-Assert config has seed `20260713`, batch 32, accumulation 4, learning rate `3e-5`, warmup 1000, weight decay 0.01, label smoothing 0.1, max 4 epochs, max 12 GPU hours, and new embedding rows initialized with `normal(0,0.02)`.
+Assert the original config has seed `20260713`, batch 32, accumulation 4, learning rate `3e-5`, warmup 1000, weight decay 0.01, label smoothing 0.1, max 4 epochs, max 12 GPU hours, and new embedding rows initialized with `normal(0,0.02)`.
+
+The first four epochs ended at optimizer step 5626 with validation loss still improving to `4.171371296310425`. The held-out BiST diagnostic at that strict-best checkpoint reached en-to-zh BLEU `22.471487847301177` with `tok:zh`, but chrF2 only `21.620435536984907`; a fixed 20-row sample contained English residue in 9 outputs. The evidence amendment therefore adds schema-v2 config with only `max_epochs: 8` changed, resumes the same optimizer/scaler/RNG/cursor, preserves the original 12 GPU-hour total budget and absolute 1000-step validation cadence, and keeps every quality threshold unchanged.
+
+After eight epochs, validation loss still improved to `3.870474980163574`, while the diagnostic en-to-zh chrF2 remained `26.134425140756175` and final manual audit passed only 34/50 zh-to-en and 26/50 en-to-zh. Direction-specific validation loss was `3.3318655151367187` zh-to-en versus `4.409084445190429` en-to-zh. A second evidence amendment adds schema-v3 config with only `max_epochs: 12` changed; it retains 1:1 sampling and every other v2 contract value, initially resumes the exact step-11252 state, and does not reset the 12-hour elapsed budget. An operational stop under the former 100-step resume cadence durably advanced the only complete optimizer state to step 11300; after a TDD-only cadence change to 500 steps, training continued that exact model/optimizer/scaler/RNG cursor without rollback or fabrication.
+
+The 12-epoch run ended at step 16878 with validation loss still improving to `3.7039039318084717`. Direction losses were `3.2650395484924317` zh-to-en and `4.142768315124512` en-to-zh. BiST test diagnostics reached zh-to-en BLEU/chrF2 `24.88509876073252/51.8995801970156` and en-to-zh `30.993262133451687/28.374817170642853`, but these are not FLORES. Explicit manual audit passed only 34/50 and 25/50 with 5 and 7 fatal rows. The exact pinned FLORES+ repository returned HTTP 401 because it is access-gated. Task 3 is therefore `T3_QUALITY_BLOCKED`; the selected checkpoint is preserved but must not be promoted or converted without a separately approved quality-rescue definition.
 
 - [ ] **Step 2: Run a 20-step overfit smoke**
 

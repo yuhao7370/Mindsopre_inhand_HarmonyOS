@@ -195,7 +195,8 @@ cmake --build $BUILD --target MNN -j 8
 - 对 UTF-8 `source + "\0" + target` 计算 SHA-256，把十六进制摘要前 8 个字符按无符号 32 位大端整数解析，以该值 `% 20` 分配：0 为 test、1 为 validation、其余为 train；每方向分别收满 90,000 train、5,000 validation、5,000 test 后停止。
 - seed 固定为 `20260713`；中→英和英→中以 1:1 batch 交替采样。
 - 从上述 tiny checkpoint 加载权重，扩展两个方向 embedding，并用 seed `20260713`、normal(0, 0.02) 初始化新行；FP16 训练，AdamW，learning rate `3e-5`，weight decay `0.01`，label smoothing `0.1`，warmup 1,000 steps，单卡 batch 32、gradient accumulation 4、effective batch 128。
-- 最多训练 4 epochs 或 12 个 RTX 2070 GPU 小时，以先到者为准；每 1,000 steps 评估，validation loss 连续两次不改善即 early stop；保存 validation loss 最低的 checkpoint。
+- 初始最多训练 4 epochs；step 5626 的 validation loss 仍改善到 `4.171371296310425`，但固定 BiST held-out 诊断的英→中 chrF2 仅为 `21.620435536984907`，因此启用证据修订：从同一 model/optimizer/scaler/RNG/cursor 严格续训到总计最多 8 epochs。8 epochs 后 loss 仍改善到 `3.870474980163574`，但英→中 chrF2 仅 `26.134425140756175`，人工审计中→英/英→中仅 34/50 与 26/50；方向 validation loss 分别为 `3.3318655151367187` 与 `4.409084445190429`。因此第二次证据修订只把总 epoch 上限延到 12，仍保持 1:1，不做方向重采样。总预算仍为累计 12 个 RTX 2070 GPU 小时，不因恢复而重置；继续在绝对 optimizer step 12000、13000……评估，validation loss 连续两次不改善即 early stop；始终只保存 validation loss 严格最低的 checkpoint。运行期间旧 100-step 恢复节奏在操作性停机前保存了完整 step-11300 状态，随后仅把周期恢复间隔改为 500 steps 并严格继续该 model/optimizer/scaler/RNG 状态，没有回滚或伪造 step-11252 优化器状态。
+- 12 epochs 最终停在 step 16878，validation loss 为 `3.7039039318084717`，方向 loss 为中→英 `3.2650395484924317`、英→中 `4.142768315124512`。人工审计仅 34/50 与 25/50，分别有 5 与 7 个致命损坏；精确固定 FLORES+ 仓库又因访问门控返回 HTTP 401。因此当前 checkpoint 判定 `T3_QUALITY_BLOCKED`，只保留证据，不进入生产转换或装配；任何蒸馏/数据救援都必须另行批准并保持质量阈值不变。
 - 不再引入未固定的教师模型。BiST 本身是合成双向平行语料；若上述预算内质量不达标，模型里程碑判定失败并调整训练定义，不暗中切回云服务或字典。
 
 “一个翻译模型”指上述单一双向 checkpoint 和一个版本化模型包。为了高效自回归推理，导出为 `encoder.ms`、`decoder_prefill.ms`、`decoder_step.ms` 三个计算图；三图共享同一 manifest、词表、版本和哈希，不作为三个语言模型管理。HAP 只携带一个固实压缩的 W8 `translation-models.tar.xz`，运行时把其中三图严格校验后解压到应用私有目录；不把三份原始 `.ms` 直接作为 rawfile 分别打包。checkpoint 生成、ONNX→MindSpore 转换和桌面 benchmark tensor smoke 全部成功之前，不开始页面生产装配。
@@ -249,7 +250,7 @@ Tokenizer 固定为基线 `source.spm` 的 SentencePiece Unigram，不再混用�
 
 上述三个 ONNX 图必须在完整训练开始前通过 MindSpore converter 与桌面 benchmark smoke。若固定 cache 更新仍产生不支持算子，本设计的翻译里程碑失败并重新评审图结构；不允许在实施中静默改成另一套 ML runtime。
 
-三图 MindSpore Lite 2.8 原型已证明 stable-softmax encoder、prefill 和 fixed-cache step 均可转换并逐图执行。Encoder 原型证明 Transformers 通用动态 mask 和原生 Softmax 导出会分别触发 MindSpore shape 推断失败与第 5 层 NaN；三个导出 wrapper 因此统一直接构造固定 additive mask，并把 Softmax 展开为 `ReduceMax → Sub → Exp → ReduceSum → Div`。Encoder 对 ONNX Runtime 的实测误差为：全有效 mask `max_abs=0.0071133`、`mean_abs=0.0007997`；半 padding `max_abs=0.0146904`、`mean_abs=0.0010149`。新导出工具独立重建夹具后，ONNX Runtime、float MindSpore 和 fixed-bit W8 MindSpore 均复现 prefill 加五步序列 `[422,21,23,22,80,5]`；MindSpore smoke 按精确 tensor name 绑定，并按 NCHW head stride 写回 cache slot，分叉时 fail closed。Cache 图的最终 converter 命令必须显式使用 NCHW input/output flags。以上只证明图结构、converter 和 runtime 可行，不证明尚未训练完成的最终双向模型质量；最终三图仍须满足 `max_abs <= 0.02`、`mean_abs <= 0.002` 且无 NaN/Inf。
+三图 MindSpore Lite 2.8 原型已证明 stable-softmax encoder、prefill 和 fixed-cache step 均可转换并逐图执行。Encoder 原型证明 Transformers 通用动态 mask 和原生 Softmax 导出会分别触发 MindSpore shape 推断失败与第 5 层 NaN；三个导出 wrapper 因此统一直接构造固定 additive mask，并把 Softmax 展开为 `ReduceMax → Sub → Exp → ReduceSum → Div`。Encoder 对 ONNX Runtime 的实测误差为：全有效 mask `max_abs=0.0071133`、`mean_abs=0.0007997`；半 padding `max_abs=0.0146904`、`mean_abs=0.0010149`。针对保留图/模型哈希的 fresh replay 纠正了旧报告中的陈旧序列：ONNX Runtime、float MindSpore 和 fixed-bit W8 MindSpore 均稳定复现 prefill 加五步序列 `[422,22,7,4,422,22]`；MindSpore smoke 按精确 tensor name 绑定，并按 NCHW head stride 写回 cache slot，分叉时 fail closed。Cache 图的最终 converter 命令必须显式使用 NCHW input/output flags。以上只证明图结构、converter 和 runtime 可行，不证明尚未训练完成的最终双向模型质量；最终三图仍须满足 `max_abs <= 0.02`、`mean_abs <= 0.002` 且无 NaN/Inf。
 
 量化原型的实测结论如下：
 
@@ -395,7 +396,7 @@ entry/src/main/resources/rawfile/models/
 
 ### 8.3 模型质量与端侧验收
 
-固定外部测试集为 `openlanguagedata/flores_plus` revision `b3a5298db5721c8a682e7ef00a37fcc9ab522757` 的 `devtest`，语言为 `zho_Hans` 与 `eng_Latn`，不得用于训练或 early stopping。
+固定外部测试集为 `openlanguagedata/flores_plus` revision `b3a5298db5721c8a682e7ef00a37fcc9ab522757` 的 `devtest`，使用上游实际文件名 `cmn_Hans`（简体中文；原设计中的 `zho_Hans` 是不存在于该 revision 的别名）与 `eng_Latn`，不得用于训练或 early stopping。
 
 指标使用 sacreBLEU 2.4.3：
 
