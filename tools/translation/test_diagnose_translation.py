@@ -7,6 +7,7 @@ from unittest import mock
 
 from tools.translation.diagnose_translation import (
     DiagnosticEvaluationError,
+    _published_dataset_manifest_load,
     build_budget_terminal,
     build_checkpoint_comparison,
     evaluate_checkpoint,
@@ -115,6 +116,66 @@ class DiagnosticTranslationTest(unittest.TestCase):
             path.write_bytes(path.read_bytes().replace(b"\n", b"\r\n"))
             with self.assertRaises(DiagnosticEvaluationError):
                 load_bist_rows(path, "zh-en", 2)
+
+    def test_prepare_bist_manifest_publication_format_is_exact(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "run1-manifest.json"
+            manifest = {
+                "schema_version": 1,
+                "dataset": {
+                    "repo": "Mxode/BiST",
+                    "revision": "aca6be897afc319f779009379c8b849c1eb8d63e",
+                },
+                "outputs": {},
+            }
+            published = (
+                json.dumps(manifest, ensure_ascii=False, indent=2) + "\n"
+            ).encode("utf-8")
+            path.write_bytes(published)
+            published_sha256 = hashlib.sha256(published).hexdigest()
+            self.assertEqual(
+                _published_dataset_manifest_load(path, published_sha256), manifest
+            )
+            path.write_bytes(canonical_json_bytes(manifest))
+            with self.assertRaises(DiagnosticEvaluationError):
+                _published_dataset_manifest_load(path, published_sha256)
+
+    def test_prepare_bist_manifest_rejects_reordered_keys(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "run1-manifest.json"
+            original = {
+                "schema_version": 1,
+                "dataset": {
+                    "repo": "Mxode/BiST",
+                    "revision": "aca6be897afc319f779009379c8b849c1eb8d63e",
+                },
+                "outputs": {},
+            }
+            published = (
+                json.dumps(original, ensure_ascii=False, indent=2) + "\n"
+            ).encode("utf-8")
+            published_sha256 = hashlib.sha256(published).hexdigest()
+            for reordered in (
+                {
+                    "dataset": original["dataset"],
+                    "schema_version": 1,
+                    "outputs": {},
+                },
+                {
+                    "schema_version": 1,
+                    "dataset": {
+                        "revision": original["dataset"]["revision"],
+                        "repo": original["dataset"]["repo"],
+                    },
+                    "outputs": {},
+                },
+            ):
+                path.write_bytes(
+                    (json.dumps(reordered, ensure_ascii=False, indent=2) + "\n")
+                    .encode("utf-8")
+                )
+                with self.assertRaises(DiagnosticEvaluationError):
+                    _published_dataset_manifest_load(path, published_sha256)
 
     def test_evaluation_budget_is_monotonic_finite_and_bounded(self):
         budget = evaluation_budget_snapshot(27338.577, 100.5, 43200.0)
@@ -296,14 +357,19 @@ class DiagnosticTranslationTest(unittest.TestCase):
                     if split == "test":
                         test_rows[direction] = rows
             dataset_manifest_path = root / "dataset-manifest-v1.json"
-            dataset_manifest_artifact = self._write(dataset_manifest_path, {
+            dataset_manifest_value = {
                 "schema_version": 1,
                 "dataset": {
                     "repo": "Mxode/BiST",
                     "revision": "aca6be897afc319f779009379c8b849c1eb8d63e",
                 },
                 "outputs": dataset_outputs,
-            })
+            }
+            dataset_manifest_path.write_bytes(
+                (json.dumps(dataset_manifest_value, ensure_ascii=False, indent=2) + "\n")
+                .encode("utf-8")
+            )
+            dataset_manifest_artifact = artifact(dataset_manifest_path)
             manual_path = root / "manual.jsonl"
             manual_path.write_bytes(b"{}\n" * 100)
             manual_artifact = artifact(manual_path, rows=100)
@@ -443,6 +509,9 @@ class DiagnosticTranslationTest(unittest.TestCase):
             ), mock.patch(
                 "tools.translation.diagnose_translation.corpus_metrics",
                 side_effect=recompute,
+            ), mock.patch(
+                "tools.translation.diagnose_translation.PINNED_BIST_MANIFEST_SHA256",
+                dataset_manifest_artifact["sha256"],
             ):
                 report = build_checkpoint_comparison(*arguments)
                 self.assertTrue(report["sequence_metrics_improved"])

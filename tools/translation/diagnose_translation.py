@@ -35,6 +35,9 @@ from tools.translation.train_rescue import DIAGNOSTIC_STATUS
 
 DIRECTION_IDS = {"zh-en": 32001, "en-zh": 32002}
 TOTAL_GPU_BUDGET_SECONDS = 43200.0
+PINNED_BIST_MANIFEST_SHA256 = (
+    "6776016325cc0a42653aa964acb30d577c9aa05fe08bfc695d691ccfb1a738a6"
+)
 
 
 class DiagnosticEvaluationError(RuntimeError):
@@ -78,6 +81,31 @@ def _canonical_load(path, label):
         raise DiagnosticEvaluationError("cannot read %s" % label) from error
     if path.read_bytes() != canonical_json_bytes(value):
         raise DiagnosticEvaluationError("%s is not canonical" % label)
+    return value
+
+
+def _published_dataset_manifest_load(path, expected_sha256=None):
+    path = Path(path)
+    if expected_sha256 is None:
+        expected_sha256 = PINNED_BIST_MANIFEST_SHA256
+    try:
+        raw = path.read_bytes()
+        value = json.loads(raw.decode("utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise DiagnosticEvaluationError("cannot read BiST dataset manifest") from error
+    expected = (
+        json.dumps(value, ensure_ascii=False, indent=2) + "\n"
+    ).encode("utf-8")
+    if (
+        not isinstance(expected_sha256, str)
+        or len(expected_sha256) != 64
+        or any(character not in "0123456789abcdef" for character in expected_sha256)
+        or _artifact(path)["sha256"] != expected_sha256
+        or raw != expected
+    ):
+        raise DiagnosticEvaluationError(
+            "BiST dataset manifest differs from prepare_bist publication format"
+        )
     return value
 
 
@@ -770,7 +798,7 @@ def _validate_evaluation_report(
         "%s manual results" % expected_label,
         rows=100,
     )
-    dataset_manifest = _canonical_load(dataset_manifest_path, "BiST dataset manifest")
+    dataset_manifest = _published_dataset_manifest_load(dataset_manifest_path)
     if (
         not isinstance(dataset_manifest, dict)
         or dataset_manifest.get("dataset")
