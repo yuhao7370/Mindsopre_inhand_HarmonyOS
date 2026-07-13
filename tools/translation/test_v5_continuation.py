@@ -25,7 +25,9 @@ from tools.translation.train_v5_continuation import (
     _build_fresh_token_caches,
     _canonical_supporting_evidence,
     _configure_determinism,
+    _compare_replay_states,
     _run_production_v5,
+    _validate_optimizer_attempt,
     _verify_output_resume,
     evaluate_v5_validation_history,
     validate_v5_launch_bundle,
@@ -39,6 +41,8 @@ from tools.translation.train_v5_continuation import (
 class V5ContinuationContractTest(unittest.TestCase):
     def _supporting_evidence(self):
         return [
+            {"path": "diagnostic-budget-terminal-v1.json", "bytes": 584,
+             "sha256": "2996575f8100857820d92a4874989c561211ac2a68c617b7d287ceff28307675"},
             {"path": "baseline-budget-terminal-v1.json", "bytes": 596,
              "sha256": "4dc8803c2f81855224883627dc06f734ed6b48a31c99fe21aa2bc525a0d33bc3"},
             {"path": "failed-budget-terminal-v1.json", "bytes": 668,
@@ -99,7 +103,7 @@ class V5ContinuationContractTest(unittest.TestCase):
         evidence = validate_v5_budget_root({
             "artifact": {
                 "path": "budget-terminal-v1.json",
-                "bytes": 584,
+                "bytes": 650,
                 "sha256": V5_BUDGET_RECEIPT_SHA256,
             },
             "rootEvidence": {
@@ -129,11 +133,18 @@ class V5ContinuationContractTest(unittest.TestCase):
                 "alternation": "strict-1-to-1",
             },
             "budget": evidence,
+            "replayReference": {
+                "artifact": dict(v5.V5_REPLAY_REFERENCE),
+                "optimizerStep": 16903,
+                "planIndex": 100,
+                "adamWStep": 16900,
+                "scale": 1048576.0,
+            },
             "limits": {
                 "startGlobalStep": 16878,
                 "finalGlobalStep": 18284,
                 "epochs": 1,
-                "maxV5ActualSeconds": 2400.0,
+                "maxV5ActualSeconds": v5.V5_MAX_GPU_SECONDS,
                 "validationSteps": [17000, 18000, 18284],
                 "physicalMicrobatch": 32,
             },
@@ -265,7 +276,7 @@ class V5ContinuationContractTest(unittest.TestCase):
         evidence = {
             "artifact": {
                 "path": "budget-terminal-v1.json",
-                "bytes": 584,
+                "bytes": 650,
                 "sha256": V5_BUDGET_RECEIPT_SHA256,
             },
             "rootEvidence": {
@@ -278,7 +289,8 @@ class V5ContinuationContractTest(unittest.TestCase):
             "supportingEvidence": self._supporting_evidence(),
         }
         self.assertEqual(
-            validate_v5_budget_root(evidence)["maxV5ActualSeconds"], 2400.0
+            validate_v5_budget_root(evidence)["maxV5ActualSeconds"],
+            2356.734999999986,
         )
         for field, value in (
             ("cumulativeActualSeconds", V5_PRIOR_CUMULATIVE_SECONDS - 1),
@@ -445,18 +457,114 @@ class V5ContinuationContractTest(unittest.TestCase):
             path = Path(temporary) / "resume.pt"
             path.write_bytes(b"serialized independently")
             torch = Torch()
-            verified = _verify_output_resume(torch, path, 17000, 488, v5_elapsed)
+            verified = _verify_output_resume(
+                torch, path, 17000, 488, 16997, v5_elapsed
+            )
             self.assertEqual(torch.arguments, ("cpu", False))
             self.assertEqual(verified["adamWStep"], 16997)
             state["optimizer"]["state"][0]["step"] = 16996
             with self.assertRaises(V5ContractError):
-                _verify_output_resume(torch, path, 17000, 488, v5_elapsed)
+                _verify_output_resume(torch, path, 17000, 488, 16997, v5_elapsed)
+
+    def test_optimizer_attempt_distinguishes_applied_update_and_overflow_skip(self):
+        applied = _validate_optimizer_attempt(
+            16904, 16900, 16901, 1048576.0, 1048576.0, 1
+        )
+        self.assertTrue(applied["applied"])
+        skipped = _validate_optimizer_attempt(
+            16904, 16900, 16900, 2097152.0, 1048576.0, 0
+        )
+        self.assertFalse(skipped["applied"])
+        self.assertEqual(skipped["reason"], "fp16-overflow")
+        for args in (
+            (16904, 16900, 16900, 2097152.0, 2097152.0, 58),
+            (16904, 16900, 16902, 2097152.0, 2097152.0, 58),
+        ):
+            with self.assertRaises(V5ContractError):
+                _validate_optimizer_attempt(*args)
+
+    def test_runtime_advances_consumed_cursor_before_attempt_classification_error(self):
+        runtime = v5._TorchV5Runtime.__new__(v5._TorchV5Runtime)
+        runtime.step = 16878
+        runtime.plan_index = 0
+        runtime.plan = [("zh-en", [0])] * 4
+        runtime.attempts = []
+        runtime._logical_backward = lambda *unused: None
+        runtime.current_adam_step = mock.Mock(side_effect=[16875, 16875])
+
+        class Optimizer:
+            param_groups = [{"lr": 0.0}]
+
+            def zero_grad(self, set_to_none):
+                pass
+
+        class Scaler:
+            def get_scale(self):
+                return 2097152.0
+
+            def unscale_(self, unused):
+                pass
+
+            def step(self, unused):
+                pass
+
+            def update(self):
+                pass
+
+            def state_dict(self):
+                return {"scale": 2097152.0, "_growth_tracker": 58}
+
+        class Utils:
+            @staticmethod
+            def clip_grad_norm_(unused_parameters, unused_limit):
+                pass
+
+        class NN:
+            utils = Utils()
+
+        class Torch:
+            nn = NN()
+
+        class Model:
+            def parameters(self):
+                return []
+
+        runtime.optimizer = Optimizer()
+        runtime.scaler = Scaler()
+        runtime.torch = Torch()
+        runtime.model = Model()
+        runtime.training = {"learning_rate": 0.00003}
+        with self.assertRaises(V5ContractError):
+            runtime.train_optimizer_step(16879, 0, lambda: None)
+        self.assertEqual(runtime.current_optimizer_step(), 16879)
+        self.assertEqual(runtime.current_plan_index(), 4)
+        self.assertEqual(runtime.attempts, [])
+
+    def test_replay_comparison_ignores_only_cursor_and_elapsed_metadata(self):
+        actual, unused, unused_artifact = self._resume_fixture()
+        actual["epoch"] = 12
+        actual["optimizer_step"] = 16904
+        actual["plan_index"] = 104
+        reference = copy.deepcopy(actual)
+        reference["optimizer_step"] = 16903
+        reference["plan_index"] = 100
+        reference["elapsed_seconds"] += 10.0
+
+        class Torch:
+            @staticmethod
+            def is_tensor(unused_value):
+                return False
+
+        _compare_replay_states(Torch(), actual, reference)
+        reference["scaler"]["scale"] /= 2
+        with self.assertRaises(V5ContractError):
+            _compare_replay_states(Torch(), actual, reference)
 
     def test_internal_plan_executes_tail_batches_and_owns_cursor_and_losses(self):
         launch = self._launch_fixture()
 
         class FakeRuntime:
-            def __init__(self, losses, fail_at=None, advance=True):
+            def __init__(self, losses, fail_at=None, advance=True, skip_at=16904):
                 self.step = V5_START_GLOBAL_STEP
                 self.losses = iter(losses)
                 self.fail_at = fail_at
@@ -464,6 +572,8 @@ class V5ContinuationContractTest(unittest.TestCase):
                 self.saved = {}
                 self.plan_index = 0
                 self.tail_calls = []
+                self.adam_step = 16875
+                self.skip_at = skip_at
 
             def current_optimizer_step(self):
                 return self.step
@@ -475,6 +585,22 @@ class V5ContinuationContractTest(unittest.TestCase):
                 if self.advance:
                     self.step = expected_step
                     self.plan_index += 4
+                    before = self.adam_step
+                    if expected_step != self.skip_at:
+                        self.adam_step += 1
+                    return {
+                        "globalStep": expected_step,
+                        "adamWStepBefore": before,
+                        "adamWStepAfter": self.adam_step,
+                        "scaleBefore": 2097152.0,
+                        "scaleAfter": 1048576.0 if expected_step == self.skip_at else 2097152.0,
+                        "growthTrackerAfter": 0 if expected_step == self.skip_at else 58,
+                        "applied": expected_step != self.skip_at,
+                        "reason": "applied" if expected_step != self.skip_at else "fp16-overflow",
+                    }
+
+            def current_adam_step(self):
+                return self.adam_step
 
             def directional_validation(self, budget_guard):
                 budget_guard()
@@ -537,6 +663,9 @@ class V5ContinuationContractTest(unittest.TestCase):
         self.assertEqual(terminal["currentStep"], 18284)
         self.assertEqual(terminal["planIndex"], 5626)
         self.assertEqual(runtime.tail_calls, [5624])
+        self.assertEqual(terminal["skippedUpdates"], 1)
+        self.assertEqual(terminal["appliedUpdates"], 1405)
+        self.assertEqual(terminal["skipLedger"][0]["globalStep"], 16904)
 
         losses = [
             {"zh-en": 3.3, "en-zh": 4.1},
@@ -568,6 +697,9 @@ class V5ContinuationContractTest(unittest.TestCase):
             def current_plan_index(self):
                 return 84
 
+            def current_adam_step(self):
+                return 16896
+
             def save_resume(self, *unused):
                 raise RuntimeError("save broke")
 
@@ -589,7 +721,8 @@ class V5ContinuationContractTest(unittest.TestCase):
                 with self.assertRaisesRegex(RuntimeError, "primary failure"):
                     _run_production_v5(
                         object(), launch, {}, Path("dataset"), {}, Path("selected"),
-                        Path("resume.pt"), Path("cache"), root, clock=Clock(),
+                        Path("resume.pt"), Path("replay.pt"), Path("cache"), root,
+                        clock=Clock(),
                     )
             terminal = json.loads(
                 (root / "v5-terminal-v1.json").read_text(encoding="utf-8")

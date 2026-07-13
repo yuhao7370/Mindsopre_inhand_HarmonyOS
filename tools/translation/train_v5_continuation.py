@@ -40,15 +40,22 @@ V5_RESUME_SHA256 = "f9b78ef7f07476881d76ff724188558ed461b9b026113d2ed3de692c8ba2
 V5_RESUME_BYTES = 206519930
 V5_BASELINE_MODEL_SHA256 = "a7603325361de12f35ebc660c861c648a1f7293b31174280b32bbea34d9f491a"
 V5_TOKENIZER_SHA256 = "e5528a5c3685d08f8868902d31febeb763eea8519f9997f43b05964b02554640"
-V5_BUDGET_RECEIPT_SHA256 = "2996575f8100857820d92a4874989c561211ac2a68c617b7d287ceff28307675"
-V5_BUDGET_RECEIPT_BYTES = 584
+V5_BUDGET_RECEIPT_SHA256 = "7ebfebc0f39a5af8b5f0b4973874579244e61c68921cb77181f5353a7ef3a257"
+V5_BUDGET_RECEIPT_BYTES = 650
 V5_BUDGET_ROOT_SHA256 = "5ab469aca6d5f147e3dcdc1dc3a0ddbe198ed00b128b62aacdcaf34415e591c5"
-V5_PRIOR_CUMULATIVE_SECONDS = 27905.514084899634
+V5_PRIOR_CUMULATIVE_SECONDS = 27948.77908489965
 V5_TOTAL_GPU_SECONDS = 43200.0
-V5_MAX_GPU_SECONDS = 2400.0
+V5_MAX_GPU_SECONDS = 2356.734999999986
 V5_START_GLOBAL_STEP = 16878
 V5_FINAL_GLOBAL_STEP = 18284
 V5_VALIDATION_STEPS = (17000, 18000, 18284)
+V5_REPLAY_STEP = 16904
+V5_REPLAY_PLAN_INDEX = 104
+V5_REPLAY_REFERENCE = {
+    "path": "resume-failed.pt",
+    "bytes": 206524165,
+    "sha256": "d063ece95259c7e51cdc374c1bf3fede9a6b161d75024fc887f383bd963d1500",
+}
 V5_BASELINE_LOSSES = {
     "zh-en": 3.2650395484924317,
     "en-zh": 4.142768315124512,
@@ -98,6 +105,7 @@ V5_DETERMINISM = {
     "cudnnBenchmark": False,
 }
 V5_BUDGET_SUPPORTING = {
+    (584, "2996575f8100857820d92a4874989c561211ac2a68c617b7d287ceff28307675"),
     (596, "4dc8803c2f81855224883627dc06f734ed6b48a31c99fe21aa2bc525a0d33bc3"),
     (668, "edda591abc9943f0f0b65eda34487ec6e8abd5a7310a29a5b694da6c38dd639f"),
     (2382, V5_BUDGET_ROOT_SHA256),
@@ -264,6 +272,28 @@ def verify_v5_resume_bundle(torch, resume_path, baseline_model_path):
     return validate_v5_resume_state(state, resume_artifact, baseline, torch.equal)
 
 
+def verify_v5_replay_reference(torch, path):
+    path = Path(path).resolve()
+    if _artifact(path) != V5_REPLAY_REFERENCE:
+        raise V5ContractError("V5 replay reference artifact differs")
+    verified = _verify_output_resume(
+        torch, path, 16903, 100, 16900, 43.26500000001397
+    )
+    try:
+        state = torch.load(path, map_location="cpu", weights_only=False)
+    except Exception as error:
+        raise V5ContractError("cannot load V5 replay reference") from error
+    if state["scaler"].get("scale") != 1048576.0 or state["scaler"].get("_growth_tracker") != 0:
+        raise V5ContractError("V5 replay reference overflow state differs")
+    return {
+        "artifact": V5_REPLAY_REFERENCE,
+        "optimizerStep": verified["optimizerStep"],
+        "planIndex": verified["planIndex"],
+        "adamWStep": verified["adamWStep"],
+        "scale": 1048576.0,
+    }
+
+
 def verify_v5_dataset_bundle(dataset_root, manifest_path, expected_manifest_sha256=None):
     manifest_path = Path(manifest_path).resolve()
     expected = expected_manifest_sha256 or PINNED_BIST_MANIFEST_SHA256
@@ -338,7 +368,7 @@ def verify_v5_budget_root(receipt_path, supporting_evidence_paths=()):
 def _canonical_supporting_evidence(supporting):
     if (
         not isinstance(supporting, list)
-        or len(supporting) != 3
+        or len(supporting) != 4
         or any(not isinstance(item, dict) for item in supporting)
         or {(item.get("bytes"), item.get("sha256")) for item in supporting}
         != V5_BUDGET_SUPPORTING
@@ -404,6 +434,7 @@ def verify_v5_launch_bundle(
     dataset_root,
     manifest_path,
     budget_receipt_path,
+    replay_reference_resume_path,
     budget_supporting_paths=(),
     physical_microbatch=V5_PHYSICAL_MICROBATCH,
     execution_code_sha256=None,
@@ -449,6 +480,9 @@ def verify_v5_launch_bundle(
         "trainingConfig": config_artifact,
         "dataset": verify_v5_dataset_bundle(dataset_root, manifest_path),
         "budget": verify_v5_budget_root(budget_receipt_path, budget_supporting_paths),
+        "replayReference": verify_v5_replay_reference(
+            torch, replay_reference_resume_path
+        ),
         "limits": {
             "startGlobalStep": V5_START_GLOBAL_STEP,
             "finalGlobalStep": V5_FINAL_GLOBAL_STEP,
@@ -472,7 +506,7 @@ def validate_v5_launch_bundle(launch):
         or set(launch) != {
             "schema_version", "contract", "resume", "selectedCheckpoint",
             "trainingConfig", "dataset", "budget", "limits", "execution",
-            "teacherView",
+            "replayReference", "teacherView",
         }
         or launch.get("schema_version") != 1
         or launch.get("contract") != "original-bist-v5-continuation"
@@ -485,6 +519,7 @@ def validate_v5_launch_bundle(launch):
     dataset = launch.get("dataset")
     budget = launch.get("budget")
     execution = launch.get("execution")
+    replay = launch.get("replayReference")
     if (
         not isinstance(resume, dict)
         or resume.get("artifact")
@@ -514,6 +549,13 @@ def validate_v5_launch_bundle(launch):
             for item in budget.get("supportingEvidence", [])
             if isinstance(item, dict)
         } != V5_BUDGET_SUPPORTING
+        or replay != {
+            "artifact": V5_REPLAY_REFERENCE,
+            "optimizerStep": 16903,
+            "planIndex": 100,
+            "adamWStep": 16900,
+            "scale": 1048576.0,
+        }
         or not isinstance(execution, dict)
         or set(execution) != {
             "code", "trainingCore", "diagnosticCore", "distillationCore",
@@ -629,7 +671,8 @@ def _state_step_value(value):
 
 
 def _verify_output_resume(
-    torch, path, expected_step, expected_plan_index, expected_v5_elapsed
+    torch, path, expected_step, expected_plan_index, expected_adam_step,
+    expected_v5_elapsed,
 ):
     """Independently reload a saved resume; never trust runtime self-reporting."""
     try:
@@ -640,7 +683,6 @@ def _verify_output_resume(
     optimizer_state = optimizer.get("state") if isinstance(optimizer, dict) else None
     model = state.get("model") if isinstance(state, dict) else None
     scaler = state.get("scaler") if isinstance(state, dict) else None
-    expected_adam_step = 16875 + (expected_step - V5_START_GLOBAL_STEP)
     try:
         adam_steps = {_state_step_value(item["step"]) for item in optimizer_state.values()}
     except (AttributeError, KeyError, TypeError, ValueError) as error:
@@ -679,6 +721,37 @@ def _verify_output_resume(
     }
 
 
+def _nested_state_equal(torch, left, right):
+    if torch.is_tensor(left) or torch.is_tensor(right):
+        return torch.is_tensor(left) and torch.is_tensor(right) and torch.equal(left, right)
+    if isinstance(left, dict) or isinstance(right, dict):
+        return (
+            isinstance(left, dict) and isinstance(right, dict)
+            and set(left) == set(right)
+            and all(_nested_state_equal(torch, left[key], right[key]) for key in left)
+        )
+    if isinstance(left, (list, tuple)) or isinstance(right, (list, tuple)):
+        return (
+            type(left) is type(right) and len(left) == len(right)
+            and all(_nested_state_equal(torch, a, b) for a, b in zip(left, right))
+        )
+    return type(left) is type(right) and left == right
+
+
+def _compare_replay_states(torch, replay, reference):
+    ignored = {"optimizer_step", "plan_index", "elapsed_seconds"}
+    if (
+        not isinstance(replay, dict) or not isinstance(reference, dict)
+        or set(replay) != V5_RESUME_KEYS or set(reference) != V5_RESUME_KEYS
+        or any(
+            not _nested_state_equal(torch, replay[key], reference[key])
+            for key in V5_RESUME_KEYS - ignored
+        )
+    ):
+        raise V5ContractError("V5 deterministic replay differs from failed overflow state")
+    return True
+
+
 @contextmanager
 def _preserve_rng(torch):
     python_state = random.getstate()
@@ -692,7 +765,9 @@ def _preserve_rng(torch):
         torch.cuda.set_rng_state_all(cuda_state)
 
 
-def _verify_candidate_bundle(torch, checkpoint_root, resume_path, step, losses):
+def _verify_candidate_bundle(
+    torch, checkpoint_root, resume_path, step, losses, adam_step, skip_ledger,
+):
     inventory = _candidate_file_inventory(checkpoint_root)
     selection = json.loads(
         (Path(checkpoint_root) / "selection.json").read_text(encoding="utf-8")
@@ -700,6 +775,9 @@ def _verify_candidate_bundle(torch, checkpoint_root, resume_path, step, losses):
     if selection != {
         "schema_version": 1,
         "optimizer_step": step,
+        "adamw_step": adam_step,
+        "skipped_optimizer_updates": len(skip_ledger),
+        "skip_ledger": skip_ledger,
         "directional_losses": losses,
         "vocab_size": 32003,
         "optimizer_independent": True,
@@ -767,27 +845,99 @@ def _terminal_report(
     }
 
 
-def _execute_v5_training_plan(runtime, budget_guard, on_joint_improvement=None):
+def _validate_optimizer_attempt(
+    global_step, adam_before, adam_after, scale_before, scale_after,
+    growth_tracker_after,
+):
+    for value, label in (
+        (scale_before, "GradScaler scale before"),
+        (scale_after, "GradScaler scale after"),
+    ):
+        if _finite(value, label) <= 0:
+            raise V5ContractError(label + " must be positive")
+    _exact_int(global_step, global_step, "optimizer attempt step")
+    if any(isinstance(value, bool) or not isinstance(value, int) for value in (
+        adam_before, adam_after, growth_tracker_after,
+    )):
+        raise V5ContractError("optimizer attempt integer fields differ")
+    base = {
+        "globalStep": global_step,
+        "adamWStepBefore": adam_before,
+        "adamWStepAfter": adam_after,
+        "scaleBefore": float(scale_before),
+        "scaleAfter": float(scale_after),
+        "growthTrackerAfter": growth_tracker_after,
+    }
+    if adam_after == adam_before + 1:
+        return {**base, "applied": True, "reason": "applied"}
+    if (
+        adam_after == adam_before
+        and scale_after == scale_before * V5_SCALER["backoff_factor"]
+        and growth_tracker_after == 0
+    ):
+        return {**base, "applied": False, "reason": "fp16-overflow"}
+    raise V5ContractError("V5 optimizer attempt is neither applied nor an audited overflow skip")
+
+
+def _execute_v5_training_plan(
+    runtime, budget_guard, on_joint_improvement=None, on_replay=None,
+):
     """Private plan engine. Production constructs the runtime; tests may fake only this layer."""
     current_step = V5_START_GLOBAL_STEP
     plan_index = 0
     history = []
     candidate = None
+    replay_parity = None
+    applied_updates = 0
+    skip_ledger = []
     if runtime.current_optimizer_step() != V5_START_GLOBAL_STEP:
         raise V5ContractError("runtime did not restore optimizer step 16878")
     if runtime.current_plan_index() != 0:
         raise V5ContractError("V5 continuation must begin at epoch-12 plan cursor zero")
+    if runtime.current_adam_step() != 16875:
+        raise V5ContractError("V5 continuation must begin at AdamW inner step 16875")
+    previous_adam_step = 16875
     status = "completed"
     for expected_step in range(V5_START_GLOBAL_STEP + 1, V5_FINAL_GLOBAL_STEP + 1):
         budget_guard()
-        runtime.train_optimizer_step(expected_step, plan_index, budget_guard)
+        outcome = runtime.train_optimizer_step(expected_step, plan_index, budget_guard)
         plan_index += 4
         if (
             runtime.current_optimizer_step() != expected_step
             or runtime.current_plan_index() != plan_index
         ):
             raise V5ContractError("runtime optimizer/plan cursor did not advance exactly once")
+        try:
+            normalized = _validate_optimizer_attempt(
+                outcome["globalStep"], outcome["adamWStepBefore"],
+                outcome["adamWStepAfter"], outcome["scaleBefore"],
+                outcome["scaleAfter"], outcome["growthTrackerAfter"],
+            )
+        except (KeyError, TypeError) as error:
+            raise V5ContractError("V5 optimizer attempt receipt differs") from error
+        if (
+            normalized != outcome
+            or normalized["globalStep"] != expected_step
+            or normalized["adamWStepBefore"] != previous_adam_step
+            or runtime.current_adam_step() != normalized["adamWStepAfter"]
+        ):
+            raise V5ContractError("V5 optimizer attempt/runtime receipt differs")
+        if normalized["applied"]:
+            applied_updates += 1
+        else:
+            skip_ledger.append(normalized)
+        previous_adam_step = normalized["adamWStepAfter"]
+        if previous_adam_step != 16875 + applied_updates:
+            raise V5ContractError("V5 AdamW step differs from applied-update ledger")
         current_step = expected_step
+        if current_step == V5_REPLAY_STEP:
+            if normalized["applied"] or plan_index != V5_REPLAY_PLAN_INDEX:
+                raise V5ContractError("V5 replay did not reproduce the approved overflow skip")
+            if on_replay is not None:
+                replay_parity = on_replay(
+                    current_step, plan_index, normalized["adamWStepAfter"],
+                    list(skip_ledger),
+                )
         budget_guard()
         if current_step not in V5_VALIDATION_STEPS:
             continue
@@ -797,10 +947,12 @@ def _execute_v5_training_plan(runtime, budget_guard, on_joint_improvement=None):
         history = proposed
         observed = gate["history"][-1]
         if observed["jointlyImproved"]:
-            candidate = (
-                on_joint_improvement(current_step, plan_index, observed["losses"])
-                if on_joint_improvement is not None else observed
-            )
+            candidate = observed
+            if on_joint_improvement is not None:
+                candidate = on_joint_improvement(
+                    current_step, plan_index, observed["losses"],
+                    runtime.current_adam_step(), list(skip_ledger),
+                )
         if gate["patienceReached"] and current_step < V5_FINAL_GLOBAL_STEP:
             status = "early_stopped"
             break
@@ -818,6 +970,11 @@ def _execute_v5_training_plan(runtime, budget_guard, on_joint_improvement=None):
         "planIndex": plan_index,
         "history": history,
         "candidate": candidate,
+        "adamWStep": runtime.current_adam_step(),
+        "appliedUpdates": applied_updates,
+        "skippedUpdates": len(skip_ledger),
+        "skipLedger": skip_ledger,
+        "replayParity": replay_parity,
     }
 
 
@@ -955,6 +1112,7 @@ class _TorchV5Runtime:
         self.step = V5_START_GLOBAL_STEP
         self.plan_index = 0
         self.previous_elapsed = cursor[3]
+        self.attempts = []
         self.plan = alternating_batch_plan(
             {"zh-en": 90000, "en-zh": 90000}, 32, config["seed"], 12
         )
@@ -995,10 +1153,18 @@ class _TorchV5Runtime:
     def current_plan_index(self):
         return self.plan_index
 
+    def current_adam_step(self):
+        steps = self._adam_steps()
+        if len(steps) != 1:
+            raise V5ContractError("V5 AdamW state has divergent inner steps")
+        return next(iter(steps))
+
     def train_optimizer_step(self, expected_step, expected_plan_index, budget_guard):
         if expected_plan_index != self.plan_index or expected_step != self.step + 1:
             raise V5ContractError("V5 runtime received a non-contiguous optimizer cursor")
         self.optimizer.zero_grad(set_to_none=True)
+        adam_before = self.current_adam_step()
+        scale_before = float(self.scaler.get_scale())
         for direction, indices in self.plan[self.plan_index:self.plan_index + 4]:
             self._logical_backward(direction, indices, budget_guard)
         for group in self.optimizer.param_groups:
@@ -1007,11 +1173,19 @@ class _TorchV5Runtime:
         self.torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
         self.scaler.step(self.optimizer)
         self.scaler.update()
-        expected_adam_step = 16875 + (expected_step - V5_START_GLOBAL_STEP)
-        if self._adam_steps() != {expected_adam_step}:
-            raise V5ContractError("V5 AdamW inner step did not advance exactly once")
+        adam_after = self.current_adam_step()
+        scaler_state = self.scaler.state_dict()
+        # The four logical batches, RNG and scaler attempt are already consumed.
+        # Advance the external cursor before classifying the attempt so any
+        # fail-closed resume records the real post-attempt position.
         self.step = expected_step
         self.plan_index += 4
+        outcome = _validate_optimizer_attempt(
+            expected_step, adam_before, adam_after, scale_before,
+            float(scaler_state["scale"]), int(scaler_state["_growth_tracker"]),
+        )
+        self.attempts.append(outcome)
+        return outcome
 
     def consume_partial_logical_batches(self, expected_plan_index, budget_guard):
         if expected_plan_index != 5624 or self.plan_index != 5624:
@@ -1042,7 +1216,7 @@ class _TorchV5Runtime:
             step, 12, plan_index, self.previous_elapsed + elapsed,
         )
 
-    def save_candidate(self, root, step, losses):
+    def save_candidate(self, root, step, losses, adam_step, skip_ledger):
         root = Path(root).resolve()
         if root.exists():
             raise V5ContractError("V5 candidate checkpoint path must be new")
@@ -1055,6 +1229,9 @@ class _TorchV5Runtime:
         (root / "selection.json").write_bytes(canonical_json_bytes({
             "schema_version": 1,
             "optimizer_step": step,
+            "adamw_step": adam_step,
+            "skipped_optimizer_updates": len(skip_ledger),
+            "skip_ledger": skip_ledger,
             "directional_losses": losses,
             "vocab_size": 32003,
             "optimizer_independent": True,
@@ -1063,7 +1240,8 @@ class _TorchV5Runtime:
 
 def _run_production_v5(
     torch, launch, config, dataset_root, manifest, selected_checkpoint_dir,
-    resume_path, cache_root, artifact_root, clock=time.monotonic,
+    resume_path, replay_reference_resume_path, cache_root, artifact_root,
+    clock=time.monotonic,
 ):
     artifact_root = Path(artifact_root).resolve()
     if artifact_root.exists():
@@ -1082,7 +1260,7 @@ def _run_production_v5(
         if elapsed_now() >= V5_MAX_GPU_SECONDS:
             raise V5ContractError("V5 GPU time ceiling reached")
 
-    def save_candidate(step, plan_index, losses):
+    def save_candidate(step, plan_index, losses, adam_step, skip_ledger):
         candidate_root = artifact_root / ("candidate-step-%d" % step)
         candidate_root.mkdir()
         resume_path = candidate_root / "resume.pt"
@@ -1090,28 +1268,64 @@ def _run_production_v5(
         runtime.save_resume(resume_path, step, plan_index, candidate_elapsed)
         with _preserve_rng(torch):
             resume = _verify_output_resume(
-                torch, resume_path, step, plan_index, candidate_elapsed
+                torch, resume_path, step, plan_index, adam_step, candidate_elapsed
             )
             checkpoint_root = candidate_root / "checkpoint"
-            runtime.save_candidate(checkpoint_root, step, losses)
+            runtime.save_candidate(
+                checkpoint_root, step, losses, adam_step, skip_ledger
+            )
             checkpoint = _verify_candidate_bundle(
-                torch, checkpoint_root, resume_path, step, losses
+                torch, checkpoint_root, resume_path, step, losses,
+                adam_step, skip_ledger,
             )
         return {
             "globalStep": step, "losses": losses,
             "checkpoint": checkpoint, "resume": resume,
+            "adamWStep": adam_step,
+            "skippedUpdates": len(skip_ledger),
+        }
+
+    def verify_replay(step, plan_index, adam_step, skip_ledger):
+        elapsed = elapsed_now()
+        replay_path = artifact_root / ("replay-step-%d.pt" % step)
+        runtime.discard_partial_gradients()
+        runtime.save_resume(replay_path, step, plan_index, elapsed)
+        with _preserve_rng(torch):
+            replay_artifact = _verify_output_resume(
+                torch, replay_path, step, plan_index, adam_step, elapsed
+            )
+            replay_state = torch.load(
+                replay_path, map_location="cpu", weights_only=False
+            )
+            reference_state = torch.load(
+                replay_reference_resume_path, map_location="cpu", weights_only=False
+            )
+            _compare_replay_states(torch, replay_state, reference_state)
+        return {
+            "matched": True,
+            "globalStep": step,
+            "planIndex": plan_index,
+            "adamWStep": adam_step,
+            "skippedUpdates": len(skip_ledger),
+            "replay": replay_artifact,
+            "reference": V5_REPLAY_REFERENCE,
+            "ignoredMetadata": ["elapsed_seconds", "optimizer_step", "plan_index"],
         }
 
     plan = {
         "status": "failed", "currentStep": V5_START_GLOBAL_STEP,
         "planIndex": 0, "history": [], "candidate": None,
+        "adamWStep": 16875, "appliedUpdates": 0, "skippedUpdates": 0,
+        "skipLedger": [], "replayParity": None,
     }
     try:
         runtime = _TorchV5Runtime(
             torch, config, dataset_root, manifest, selected_checkpoint_dir,
             resume_path, cache_root,
         )
-        plan = _execute_v5_training_plan(runtime, budget_guard, save_candidate)
+        plan = _execute_v5_training_plan(
+            runtime, budget_guard, save_candidate, verify_replay
+        )
         final_resume_path = artifact_root / "resume.pt"
         final_elapsed = elapsed_now()
         runtime.save_resume(
@@ -1120,7 +1334,7 @@ def _run_production_v5(
         with _preserve_rng(torch):
             final_resume = _verify_output_resume(
                 torch, final_resume_path, plan["currentStep"], plan["planIndex"],
-                final_elapsed,
+                plan["adamWStep"], final_elapsed,
             )
         elapsed = elapsed_now()
         budget_guard()
@@ -1133,6 +1347,11 @@ def _run_production_v5(
             elapsed, None,
         )
         report["tokenCache"] = runtime.cache_inventory
+        report["adamWStep"] = plan["adamWStep"]
+        report["appliedOptimizerUpdates"] = plan["appliedUpdates"]
+        report["skippedOptimizerUpdates"] = plan["skippedUpdates"]
+        report["skipLedger"] = plan["skipLedger"]
+        report["replayParity"] = plan["replayParity"]
         _write_new_json(artifact_root / "v5-terminal-v1.json", report)
         return report
     except BaseException as primary:
@@ -1145,6 +1364,12 @@ def _run_production_v5(
             try:
                 plan["currentStep"] = runtime.current_optimizer_step()
                 plan["planIndex"] = runtime.current_plan_index()
+                plan["adamWStep"] = runtime.current_adam_step()
+                plan["skipLedger"] = [
+                    item for item in runtime.attempts if not item["applied"]
+                ]
+                plan["skippedUpdates"] = len(plan["skipLedger"])
+                plan["appliedUpdates"] = len(runtime.attempts) - plan["skippedUpdates"]
             except BaseException as error:
                 secondary.append("cursor: %s: %s" % (type(error).__name__, error))
         try:
@@ -1160,7 +1385,8 @@ def _run_production_v5(
             runtime.save_resume(path, plan["currentStep"], plan["planIndex"], elapsed)
             with _preserve_rng(torch):
                 failure_resume = _verify_output_resume(
-                    torch, path, plan["currentStep"], plan["planIndex"], elapsed
+                    torch, path, plan["currentStep"], plan["planIndex"],
+                    plan["adamWStep"], elapsed,
                 )
         except BaseException as error:
             secondary.append("failureResume: %s: %s" % (type(error).__name__, error))
@@ -1178,6 +1404,11 @@ def _run_production_v5(
             elapsed, message, secondary,
         )
         report["tokenCache"] = getattr(runtime, "cache_inventory", None)
+        report["adamWStep"] = plan["adamWStep"]
+        report["appliedOptimizerUpdates"] = plan["appliedUpdates"]
+        report["skippedOptimizerUpdates"] = plan["skippedUpdates"]
+        report["skipLedger"] = plan["skipLedger"]
+        report["replayParity"] = plan["replayParity"]
         try:
             _write_new_json(artifact_root / "v5-terminal-v1.json", report)
         except BaseException as error:
@@ -1190,7 +1421,8 @@ def _run_production_v5(
 
 def run_v5_continuation(
     resume_path, selected_checkpoint_dir, training_config_path, dataset_root,
-    manifest_path, budget_receipt_path, budget_supporting_paths,
+    manifest_path, budget_receipt_path, replay_reference_resume_path,
+    budget_supporting_paths,
     requirements_lock_path, execution_code_sha256, cache_root, artifact_root,
 ):
     """Verify every launch input, construct the private Torch runtime, and train."""
@@ -1200,7 +1432,8 @@ def run_v5_continuation(
         raise V5ContractError("pinned Torch runtime is unavailable") from error
     launch = verify_v5_launch_bundle(
         torch, resume_path, selected_checkpoint_dir, training_config_path,
-        dataset_root, manifest_path, budget_receipt_path, budget_supporting_paths,
+        dataset_root, manifest_path, budget_receipt_path,
+        replay_reference_resume_path, budget_supporting_paths,
         V5_PHYSICAL_MICROBATCH, execution_code_sha256, requirements_lock_path,
     )
     config = load_training_config(training_config_path)
@@ -1209,7 +1442,7 @@ def run_v5_continuation(
     )
     return _run_production_v5(
         torch, launch, config, dataset_root, manifest, selected_checkpoint_dir,
-        resume_path, cache_root, artifact_root,
+        resume_path, replay_reference_resume_path, cache_root, artifact_root,
     )
 
 
@@ -1220,6 +1453,7 @@ def _common_arguments(parser):
     parser.add_argument("--dataset-root", required=True, type=Path)
     parser.add_argument("--dataset-manifest", required=True, type=Path)
     parser.add_argument("--budget-receipt", required=True, type=Path)
+    parser.add_argument("--replay-reference-resume", required=True, type=Path)
     parser.add_argument(
         "--budget-supporting-evidence", required=True, action="append", type=Path
     )
@@ -1245,7 +1479,8 @@ def main(argv=None):
         launch = verify_v5_launch_bundle(
             torch, args.resume, args.selected_checkpoint, args.config,
             args.dataset_root, args.dataset_manifest, args.budget_receipt,
-            args.budget_supporting_evidence, V5_PHYSICAL_MICROBATCH,
+            args.replay_reference_resume, args.budget_supporting_evidence,
+            V5_PHYSICAL_MICROBATCH,
             args.execution_code_sha256, args.requirements_lock,
         )
         print(json.dumps({
@@ -1258,7 +1493,8 @@ def main(argv=None):
     report = run_v5_continuation(
         args.resume, args.selected_checkpoint, args.config, args.dataset_root,
         args.dataset_manifest, args.budget_receipt,
-        args.budget_supporting_evidence, args.requirements_lock,
+        args.replay_reference_resume, args.budget_supporting_evidence,
+        args.requirements_lock,
         args.execution_code_sha256, args.cache_root, args.artifact_root,
     )
     print(json.dumps(report, sort_keys=True), flush=True)
