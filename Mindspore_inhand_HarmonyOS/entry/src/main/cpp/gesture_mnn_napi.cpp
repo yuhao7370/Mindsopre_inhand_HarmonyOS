@@ -7,11 +7,30 @@
 #include <memory>
 #include <stdexcept>
 #include <string>
-#include <utility>
 
 namespace {
 constexpr size_t kInputElementCount = 150528;
+constexpr const char* kUnknownNativeError = "Unknown native gesture error.";
 GestureMnnSession g_session;
+
+[[noreturn]] void FatalNapi(const char* location, const char* message) noexcept
+{
+    napi_fatal_error(location, NAPI_AUTO_LENGTH, message, NAPI_AUTO_LENGTH);
+}
+
+void EstablishExceptionOrFatal(napi_env env, const char* message) noexcept
+{
+    bool pending = false;
+    if (napi_is_exception_pending(env, &pending) != napi_ok) {
+        FatalNapi("gesture_mnn", "Could not inspect the NAPI exception state.");
+    }
+    if (pending) {
+        return;
+    }
+    if (napi_throw_error(env, nullptr, message) != napi_ok) {
+        FatalNapi("gesture_mnn", "Could not establish a JavaScript exception.");
+    }
+}
 
 void Check(napi_env env, napi_status status, const char* operation)
 {
@@ -40,15 +59,14 @@ void Set(napi_env env, napi_value object, const char* name, napi_value value)
     Check(env, napi_set_named_property(env, object, name, value), "set property");
 }
 
-napi_value ErrorValue(napi_env env, const std::string& message)
+napi_status CreateErrorValue(napi_env env, const char* message, napi_value* result) noexcept
 {
     napi_value text = nullptr;
-    napi_value error = nullptr;
-    if (napi_create_string_utf8(env, message.c_str(), message.size(), &text) != napi_ok ||
-        napi_create_error(env, nullptr, text, &error) != napi_ok) {
-        return nullptr;
+    napi_status status = napi_create_string_utf8(env, message, NAPI_AUTO_LENGTH, &text);
+    if (status != napi_ok) {
+        return status;
     }
-    return error;
+    return napi_create_error(env, nullptr, text, result);
 }
 
 napi_value Shape(napi_env env, const std::vector<int32_t>& shape)
@@ -88,6 +106,9 @@ napi_value OutputsValue(napi_env env, const GestureRawOutputs& outputs)
         Set(env, tensor, "shape", Shape(env, source.shape));
         const size_t byteLength = source.data.size() * sizeof(float);
         Check(env, napi_create_arraybuffer(env, byteLength, &destination, &arrayBuffer), "create tensor buffer");
+        if (byteLength != 0 && destination == nullptr) {
+            throw std::runtime_error("NAPI returned a null gesture output buffer.");
+        }
         std::memcpy(destination, source.data.data(), byteLength);
         Set(env, tensor, "data", arrayBuffer);
         Check(env, napi_set_element(env, tensors, index, tensor), "set output tensor");
@@ -96,30 +117,35 @@ napi_value OutputsValue(napi_env env, const GestureRawOutputs& outputs)
     return result;
 }
 
-napi_value LoadModel(napi_env env, napi_callback_info callbackInfo)
+napi_value LoadModelImpl(napi_env env, napi_callback_info callbackInfo)
+{
+    size_t argc = 1;
+    napi_value argument = nullptr;
+    Check(env, napi_get_cb_info(env, callbackInfo, &argc, &argument, nullptr, nullptr), "read loadModel arguments");
+    bool isTypedArray = false;
+    if (argc != 1 || napi_is_typedarray(env, argument, &isTypedArray) != napi_ok || !isTypedArray) {
+        throw std::invalid_argument("loadModel expects one Uint8Array.");
+    }
+    napi_typedarray_type type;
+    size_t length = 0;
+    void* data = nullptr;
+    Check(env, napi_get_typedarray_info(env, argument, &type, &length, &data, nullptr, nullptr), "read model bytes");
+    if (type != napi_uint8_array) {
+        throw std::invalid_argument("loadModel expects one Uint8Array.");
+    }
+    return ModelInfoValue(env, g_session.LoadModel(static_cast<const uint8_t*>(data), length));
+}
+
+napi_value LoadModelBoundary(napi_env env, napi_callback_info callbackInfo) noexcept
 {
     try {
-        size_t argc = 1;
-        napi_value argument = nullptr;
-        Check(env, napi_get_cb_info(env, callbackInfo, &argc, &argument, nullptr, nullptr), "read loadModel arguments");
-        bool isTypedArray = false;
-        if (argc != 1 || napi_is_typedarray(env, argument, &isTypedArray) != napi_ok || !isTypedArray) {
-            napi_throw_type_error(env, nullptr, "loadModel expects one Uint8Array.");
-            return nullptr;
-        }
-        napi_typedarray_type type;
-        size_t length = 0;
-        void* data = nullptr;
-        Check(env, napi_get_typedarray_info(env, argument, &type, &length, &data, nullptr, nullptr), "read model bytes");
-        if (type != napi_uint8_array) {
-            napi_throw_type_error(env, nullptr, "loadModel expects one Uint8Array.");
-            return nullptr;
-        }
-        return ModelInfoValue(env, g_session.LoadModel(static_cast<const uint8_t*>(data), length));
+        return LoadModelImpl(env, callbackInfo);
     } catch (const std::exception& error) {
-        napi_throw_error(env, nullptr, error.what());
-        return nullptr;
+        EstablishExceptionOrFatal(env, error.what());
+    } catch (...) {
+        EstablishExceptionOrFatal(env, kUnknownNativeError);
     }
+    return nullptr;
 }
 
 struct PredictWork {
@@ -127,64 +153,108 @@ struct PredictWork {
     napi_async_work work = nullptr;
     std::vector<float> input;
     GestureRawOutputs outputs;
-    std::string error;
+    std::exception_ptr error;
 };
 
-void ExecutePredict(napi_env, void* raw)
+void ExecutePredict(napi_env, void* raw) noexcept
 {
     auto* work = static_cast<PredictWork*>(raw);
     try {
         work->outputs = g_session.Predict(work->input);
-    } catch (const std::exception& error) {
-        work->error = error.what();
     } catch (...) {
-        work->error = "Unknown native gesture inference error.";
+        work->error = std::current_exception();
     }
 }
 
-void CompletePredict(napi_env env, napi_status status, void* raw)
+napi_status CleanupPredictWork(napi_env env, std::unique_ptr<PredictWork>& work) noexcept
 {
-    std::unique_ptr<PredictWork> work(static_cast<PredictWork*>(raw));
-    if (status != napi_ok && work->error.empty()) {
-        work->error = "Native gesture inference was cancelled.";
+    napi_async_work asyncWork = work->work;
+    work->work = nullptr;
+    const napi_status status = asyncWork == nullptr ? napi_ok : napi_delete_async_work(env, asyncWork);
+    work.reset();
+    return status;
+}
+
+[[noreturn]] void CleanupThenFatal(napi_env env, std::unique_ptr<PredictWork>& work, const char* message) noexcept
+{
+    const napi_status cleanupStatus = CleanupPredictWork(env, work);
+    if (cleanupStatus != napi_ok) {
+        FatalNapi("gesture_mnn completion", "Could not delete failed gesture async work.");
+    }
+    FatalNapi("gesture_mnn completion", message);
+}
+
+void RejectAsyncOrFatal(napi_env env, std::unique_ptr<PredictWork>& work, const char* message) noexcept
+{
+    napi_value error = nullptr;
+    if (CreateErrorValue(env, message, &error) != napi_ok) {
+        CleanupThenFatal(env, work, "Could not create the gesture Promise rejection value.");
+    }
+    if (napi_reject_deferred(env, work->deferred, error) != napi_ok) {
+        CleanupThenFatal(env, work, "Could not reject the gesture Promise.");
+    }
+}
+
+void SettleAsyncOrFatal(napi_env env, napi_status status, std::unique_ptr<PredictWork>& work) noexcept
+{
+    if (status != napi_ok) {
+        RejectAsyncOrFatal(env, work, "Native gesture inference was cancelled.");
+        return;
+    }
+    if (work->error != nullptr) {
+        try {
+            std::rethrow_exception(work->error);
+        } catch (const std::exception& error) {
+            RejectAsyncOrFatal(env, work, error.what());
+        } catch (...) {
+            RejectAsyncOrFatal(env, work, kUnknownNativeError);
+        }
+        return;
     }
     try {
-        if (work->error.empty()) {
-            Check(env, napi_resolve_deferred(env, work->deferred, OutputsValue(env, work->outputs)), "resolve prediction");
-        } else {
-            napi_value error = ErrorValue(env, work->error);
-            if (error != nullptr) {
-                napi_reject_deferred(env, work->deferred, error);
-            }
+        napi_value outputs = OutputsValue(env, work->outputs);
+        if (napi_resolve_deferred(env, work->deferred, outputs) != napi_ok) {
+            CleanupThenFatal(env, work, "Could not resolve the gesture Promise.");
         }
     } catch (const std::exception& error) {
-        napi_value value = ErrorValue(env, error.what());
-        if (value != nullptr) {
-            napi_reject_deferred(env, work->deferred, value);
-        }
-    }
-    if (work->work != nullptr) {
-        napi_delete_async_work(env, work->work);
+        RejectAsyncOrFatal(env, work, error.what());
+    } catch (...) {
+        RejectAsyncOrFatal(env, work, kUnknownNativeError);
     }
 }
 
-napi_value RejectedPromise(napi_env env, napi_deferred deferred, napi_value promise, const std::string& message)
+void CompletePredict(napi_env env, napi_status status, void* raw) noexcept
 {
-    napi_value error = ErrorValue(env, message);
-    if (error != nullptr) {
-        napi_reject_deferred(env, deferred, error);
+    std::unique_ptr<PredictWork> work(static_cast<PredictWork*>(raw));
+    if (work == nullptr) {
+        FatalNapi("gesture_mnn completion", "Gesture async work context is null.");
+    }
+    SettleAsyncOrFatal(env, status, work);
+    const napi_status cleanupStatus = CleanupPredictWork(env, work);
+    if (cleanupStatus != napi_ok) {
+        FatalNapi("gesture_mnn completion", "Could not delete gesture async work.");
+    }
+}
+
+napi_value RejectBeforeQueue(napi_env env, napi_deferred deferred, napi_value promise, const char* message) noexcept
+{
+    napi_value error = nullptr;
+    if (CreateErrorValue(env, message, &error) != napi_ok) {
+        EstablishExceptionOrFatal(env, message);
+        return nullptr;
+    }
+    if (napi_reject_deferred(env, deferred, error) != napi_ok) {
+        EstablishExceptionOrFatal(env, message);
+        return nullptr;
     }
     return promise;
 }
 
-napi_value Predict(napi_env env, napi_callback_info callbackInfo)
+napi_value PredictImpl(napi_env env, napi_callback_info callbackInfo)
 {
     napi_deferred deferred = nullptr;
     napi_value promise = nullptr;
-    if (napi_create_promise(env, &deferred, &promise) != napi_ok) {
-        napi_throw_error(env, nullptr, "Could not create gesture prediction promise.");
-        return nullptr;
-    }
+    Check(env, napi_create_promise(env, &deferred, &promise), "create gesture prediction promise");
 
     size_t argc = 1;
     napi_value argument = nullptr;
@@ -196,49 +266,95 @@ napi_value Predict(napi_env env, napi_callback_info callbackInfo)
         napi_is_typedarray(env, argument, &isTypedArray) != napi_ok || !isTypedArray ||
         napi_get_typedarray_info(env, argument, &type, &length, &data, nullptr, nullptr) != napi_ok ||
         type != napi_float32_array) {
-        return RejectedPromise(env, deferred, promise, "predict expects one Float32Array.");
+        return RejectBeforeQueue(env, deferred, promise, "predict expects one Float32Array.");
     }
     if (length != kInputElementCount) {
-        return RejectedPromise(env, deferred, promise, "Gesture input must contain exactly 150528 float32 values.");
+        return RejectBeforeQueue(env, deferred, promise, "Gesture input must contain exactly 150528 float32 values.");
     }
 
     auto work = std::make_unique<PredictWork>();
     work->deferred = deferred;
-    try {
-        const float* values = static_cast<const float*>(data);
-        work->input.assign(values, values + length);
-        napi_value resourceName = String(env, "gesture_mnn_predict");
-        Check(env, napi_create_async_work(env, nullptr, resourceName, ExecutePredict, CompletePredict, work.get(), &work->work),
-              "create gesture async work");
-        Check(env, napi_queue_async_work(env, work->work), "queue gesture async work");
-        work.release();
-        return promise;
-    } catch (const std::exception& error) {
-        if (work->work != nullptr) {
-            napi_delete_async_work(env, work->work);
+    const float* values = static_cast<const float*>(data);
+    work->input.assign(values, values + length);
+    napi_value resourceName = String(env, "gesture_mnn_predict");
+    napi_status status = napi_create_async_work(env, nullptr, resourceName, ExecutePredict, CompletePredict, work.get(),
+                                                &work->work);
+    if (status != napi_ok) {
+        if (work->work != nullptr && napi_delete_async_work(env, work->work) != napi_ok) {
+            EstablishExceptionOrFatal(env, "Could not delete unqueued gesture async work.");
+            return nullptr;
         }
-        return RejectedPromise(env, deferred, promise, error.what());
+        work->work = nullptr;
+        return RejectBeforeQueue(env, deferred, promise, "Could not create gesture async work.");
     }
+    status = napi_queue_async_work(env, work->work);
+    if (status != napi_ok) {
+        napi_async_work asyncWork = work->work;
+        work->work = nullptr;
+        if (napi_delete_async_work(env, asyncWork) != napi_ok) {
+            EstablishExceptionOrFatal(env, "Could not delete unqueued gesture async work.");
+            return nullptr;
+        }
+        return RejectBeforeQueue(env, deferred, promise, "Could not queue gesture async work.");
+    }
+    work.release();
+    return promise;
 }
 
-napi_value Release(napi_env env, napi_callback_info)
+napi_value PredictBoundary(napi_env env, napi_callback_info callbackInfo) noexcept
+{
+    try {
+        return PredictImpl(env, callbackInfo);
+    } catch (const std::exception& error) {
+        EstablishExceptionOrFatal(env, error.what());
+    } catch (...) {
+        EstablishExceptionOrFatal(env, kUnknownNativeError);
+    }
+    return nullptr;
+}
+
+napi_value ReleaseImpl(napi_env env)
 {
     g_session.Release();
     napi_value result = nullptr;
-    napi_get_undefined(env, &result);
+    Check(env, napi_get_undefined(env, &result), "create release result");
     return result;
 }
 
-napi_value Init(napi_env env, napi_value exports)
+napi_value ReleaseBoundary(napi_env env, napi_callback_info) noexcept
+{
+    try {
+        return ReleaseImpl(env);
+    } catch (const std::exception& error) {
+        EstablishExceptionOrFatal(env, error.what());
+    } catch (...) {
+        EstablishExceptionOrFatal(env, kUnknownNativeError);
+    }
+    return nullptr;
+}
+
+napi_value InitImpl(napi_env env, napi_value exports)
 {
     napi_property_descriptor properties[] = {
-        {"loadModel", nullptr, LoadModel, nullptr, nullptr, nullptr, napi_default, nullptr},
-        {"predict", nullptr, Predict, nullptr, nullptr, nullptr, napi_default, nullptr},
-        {"release", nullptr, Release, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"loadModel", nullptr, LoadModelBoundary, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"predict", nullptr, PredictBoundary, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"release", nullptr, ReleaseBoundary, nullptr, nullptr, nullptr, napi_default, nullptr},
     };
     Check(env, napi_define_properties(env, exports, sizeof(properties) / sizeof(properties[0]), properties),
           "define gesture exports");
     return exports;
+}
+
+napi_value InitBoundary(napi_env env, napi_value exports) noexcept
+{
+    try {
+        return InitImpl(env, exports);
+    } catch (const std::exception& error) {
+        EstablishExceptionOrFatal(env, error.what());
+    } catch (...) {
+        EstablishExceptionOrFatal(env, kUnknownNativeError);
+    }
+    return nullptr;
 }
 }
 
@@ -246,7 +362,7 @@ static napi_module gestureModule = {
     1,
     0,
     nullptr,
-    Init,
+    InitBoundary,
     "gesture_mnn",
     nullptr,
     {0},

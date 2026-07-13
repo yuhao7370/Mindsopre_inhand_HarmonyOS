@@ -41,6 +41,18 @@ void ValidateTensor(const MNN::Tensor* tensor, const std::vector<int>& shape, co
         throw std::runtime_error(std::string("Gesture tensor shape mismatch: ") + name);
     }
 }
+
+size_t ElementCount(const std::vector<int>& shape)
+{
+    size_t count = 1;
+    for (const int dimension : shape) {
+        if (dimension <= 0) {
+            throw std::runtime_error("Gesture tensor has a non-positive dimension.");
+        }
+        count *= static_cast<size_t>(dimension);
+    }
+    return count;
+}
 }
 
 GestureMnnSession::~GestureMnnSession()
@@ -104,7 +116,11 @@ GestureRawOutputs GestureMnnSession::Predict(const std::vector<float>& input)
     }
 
     MNN::Tensor hostInput(input_, MNN::Tensor::CAFFE, true);
-    std::memcpy(hostInput.host<float>(), input.data(), input.size() * sizeof(float));
+    if (hostInput.host<float>() == nullptr || hostInput.elementSize() != kInputElementCount ||
+        hostInput.usize() != kInputElementCount * sizeof(float)) {
+        throw std::runtime_error("MNN allocated an invalid gesture input host tensor.");
+    }
+    std::memcpy(hostInput.host<float>(), input.data(), kInputElementCount * sizeof(float));
     if (!input_->copyFromHostTensor(&hostInput)) {
         throw std::runtime_error("MNN failed to copy the gesture input tensor.");
     }
@@ -119,13 +135,20 @@ GestureRawOutputs GestureMnnSession::Predict(const std::vector<float>& input)
         MNN::Tensor* output = interpreter_->getSessionOutput(session_, contract.name);
         ValidateTensor(output, contract.shape, contract.name);
         MNN::Tensor hostOutput(output, MNN::Tensor::CAFFE, true);
+        const size_t expectedElementCount = ElementCount(contract.shape);
+        if (hostOutput.host<float>() == nullptr ||
+            static_cast<size_t>(hostOutput.elementSize()) != expectedElementCount ||
+            hostOutput.usize() != expectedElementCount * sizeof(float)) {
+            throw std::runtime_error(std::string("MNN allocated an invalid gesture output host tensor: ") +
+                                     contract.name);
+        }
         if (!output->copyToHostTensor(&hostOutput)) {
             throw std::runtime_error(std::string("MNN failed to copy gesture output: ") + contract.name);
         }
         GestureRawTensor tensor;
         tensor.name = contract.name;
         tensor.shape.assign(contract.shape.begin(), contract.shape.end());
-        tensor.data.assign(hostOutput.host<float>(), hostOutput.host<float>() + hostOutput.elementSize());
+        tensor.data.assign(hostOutput.host<float>(), hostOutput.host<float>() + expectedElementCount);
         if (!std::all_of(tensor.data.begin(), tensor.data.end(), [](float value) { return std::isfinite(value); })) {
             throw std::runtime_error(std::string("Gesture output contains a non-finite value: ") + contract.name);
         }
