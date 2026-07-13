@@ -167,6 +167,8 @@ $appStringsSource = Get-Content -Raw -Encoding UTF8 -LiteralPath $appStringsPath
 $appStringsSource = $appStringsSource -replace "`r`n?", "`n"
 
 function Get-SourceSlice([string] $text, [string] $startMarker, [string] $endMarker) {
+  $startMarker = $startMarker -replace "`r`n?", "`n"
+  $endMarker = $endMarker -replace "`r`n?", "`n"
   $start = $text.IndexOf($startMarker)
   if ($start -lt 0) {
     throw "Missing source marker: $startMarker"
