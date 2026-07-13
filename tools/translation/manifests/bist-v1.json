@@ -4,6 +4,11 @@
     "repo": "Mxode/BiST",
     "revision": "aca6be897afc319f779009379c8b849c1eb8d63e"
   },
+  "source_manifest": {
+    "path": "tools/translation/manifests/bist-source-v1.json",
+    "bytes": 5198,
+    "sha256": "a39804b4f5d884e624b7c4748a2582bfe4133e9f04463bf3578d468fa1d8c4e4"
+  },
   "tokenizer": {
     "repo": "Helsinki-NLP/opus-mt_tiny_zho-eng",
     "revision": "4ee3a9342aae4ca6fbae82c930b5dccff5dd68dd",
@@ -230,7 +235,7 @@
   },
   "implementation": {
     "script": "prepare_bist.py",
-    "script_sha256": "59687aa4f4206485a38759f1bfe68d7a6426360699597e128b4374c7278e39b6",
+    "script_sha256": "0ef1b97e500c3c6f872e670ca1e05713216d9223c56872e8bb6cde00c6af9059",
     "config": "config/training-v1.json",
     "config_sha256": "9fd7f341548567854b38878270de5403ccfca50d9337dfad55db6ecfd29b1b3c"
   },

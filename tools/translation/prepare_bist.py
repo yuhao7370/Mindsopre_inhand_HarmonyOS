@@ -5,6 +5,9 @@ import argparse
 import hashlib
 import json
 import os
+import shutil
+import stat
+import tempfile
 import time
 from pathlib import Path
 from pathlib import PurePosixPath
@@ -39,6 +42,44 @@ SPLITS = ("train", "validation", "test")
 
 class DatasetError(RuntimeError):
     pass
+
+
+def _reject_existing_links(path, label):
+    absolute = Path(path).absolute()
+    current = Path(absolute.anchor)
+    for part in absolute.parts[1:]:
+        current /= part
+        if not os.path.lexists(str(current)):
+            break
+        details = os.lstat(str(current))
+        attributes = getattr(details, "st_file_attributes", 0)
+        reparse_flag = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400)
+        if os.name == "nt" and attributes & reparse_flag:
+            raise DatasetError("%s contains a reparse point: %s" % (label, current.name))
+        if stat.S_ISLNK(details.st_mode):
+            raise DatasetError("%s contains a symlink: %s" % (label, current.name))
+
+
+def _safe_child(root, relative, label):
+    root = Path(root).absolute()
+    relative = Path(relative)
+    if relative.is_absolute() or ".." in relative.parts:
+        raise DatasetError("%s path traversal is not allowed" % label)
+    _reject_existing_links(root, label)
+    resolved_root = root.resolve(strict=False)
+    candidate = root / relative
+    _reject_existing_links(candidate, label)
+    resolved_candidate = candidate.resolve(strict=False)
+    try:
+        resolved_candidate.relative_to(resolved_root)
+    except ValueError as error:
+        raise DatasetError("%s resolves outside its root" % label) from error
+    return resolved_candidate
+
+
+def _safe_exact_path(path, label):
+    path = Path(path).absolute()
+    return _safe_child(path.parent, path.name, label)
 
 
 class SentencePieceTextProcessor:
@@ -206,13 +247,15 @@ class HuggingFaceParquetProvider:
 
     @property
     def snapshot_root(self):
-        return self.cache_dir / "Mxode--BiST" / DATASET_REVISION
+        return _safe_child(
+            self.cache_dir, Path("Mxode--BiST") / DATASET_REVISION, "dataset snapshot"
+        )
 
     def cache_path(self, shard):
         relative = PurePosixPath(shard["path"])
         if relative.is_absolute() or ".." in relative.parts or "\\" in shard["path"]:
             raise DatasetError("unsafe source shard path")
-        return self.snapshot_root.joinpath(*relative.parts)
+        return _safe_child(self.snapshot_root, Path(*relative.parts), "source shard cache")
 
     def _hf_download(self, shard, destination):
         try:
@@ -239,6 +282,7 @@ class HuggingFaceParquetProvider:
             if self.verbose:
                 print("download %s (%d bytes)" % (shard["path"], shard["size"]), flush=True)
             path.parent.mkdir(parents=True, exist_ok=True)
+            path = self.cache_path(shard)
             self._downloader(shard, path)
             self.downloaded.append(shard["path"])
         verify_file(path, shard["size"], shard["sha256"])
@@ -270,18 +314,24 @@ def _download_tokenizer(tokenizer, snapshot_root, destination):
 
 
 def ensure_tokenizer(tokenizer, cache_dir, offline=False, downloader=None):
-    snapshot_root = Path(cache_dir) / tokenizer["repo"].replace("/", "--") / tokenizer["revision"]
-    destination = snapshot_root / tokenizer["file"]
+    cache_dir = _safe_exact_path(cache_dir, "tokenizer cache")
+    snapshot_root = _safe_child(
+        cache_dir,
+        Path(tokenizer["repo"].replace("/", "--")) / tokenizer["revision"],
+        "tokenizer snapshot",
+    )
+    destination = _safe_child(snapshot_root, tokenizer["file"], "tokenizer model")
     if not destination.exists():
         if offline:
             raise DatasetError("offline cache miss for pinned SentencePiece model")
         destination.parent.mkdir(parents=True, exist_ok=True)
+        destination = _safe_child(snapshot_root, tokenizer["file"], "tokenizer model")
         (downloader or _download_tokenizer)(tokenizer, snapshot_root, destination)
     verify_file(destination, tokenizer["size"], tokenizer["sha256"])
     return destination
 
 
-def verify_remote_revision(api, repo, revision, shards=None):
+def verify_remote_revision(api, repo, revision, shards=None, configured_subsets=None):
     try:
         info = api.dataset_info(repo_id=repo, revision=revision, files_metadata=True)
     except Exception as error:
@@ -290,6 +340,22 @@ def verify_remote_revision(api, repo, revision, shards=None):
         raise DatasetError("remote dataset revision resolved to %s, expected %s" % (info.sha, revision))
     if shards is not None:
         remote = {sibling.rfilename: sibling for sibling in info.siblings}
+        subsets = set(configured_subsets or (shard["subset"] for shard in shards))
+        expected_inventory = {
+            subset: {shard["path"] for shard in shards if shard["subset"] == subset}
+            for subset in subsets
+        }
+        remote_inventory = {
+            subset: {
+                sibling.rfilename
+                for sibling in info.siblings
+                if sibling.rfilename.startswith("data/%s/" % subset)
+                and sibling.rfilename.endswith(".parquet")
+            }
+            for subset in subsets
+        }
+        if remote_inventory != expected_inventory:
+            raise DatasetError("remote configured-subset parquet inventory differs from source manifest")
         for shard in shards:
             sibling = remote.get(shard["path"])
             lfs = None if sibling is None else sibling.lfs
@@ -303,15 +369,39 @@ def verify_remote_revision(api, repo, revision, shards=None):
                 raise DatasetError("remote LFS metadata differs for %s" % shard["path"])
 
 
-def _file_sha256(path):
+def _canonical_text_bytes(path):
     canonical = Path(path).read_text(encoding="utf-8").replace("\r\n", "\n").replace("\r", "\n")
-    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+    return canonical.encode("utf-8")
 
 
-def build_result_manifest(config, source_manifest, preparation, config_path, script_path):
+def _file_sha256(path):
+    return hashlib.sha256(_canonical_text_bytes(path)).hexdigest()
+
+
+def build_result_manifest(
+    config,
+    source_manifest,
+    preparation,
+    config_path,
+    script_path,
+    source_manifest_path,
+    repository_root,
+):
+    repository_root = Path(repository_root).resolve()
+    source_manifest_path = Path(source_manifest_path).resolve()
+    try:
+        portable_source_path = source_manifest_path.relative_to(repository_root).as_posix()
+    except ValueError as error:
+        raise DatasetError("source manifest must be inside the repository") from error
+    source_bytes = _canonical_text_bytes(source_manifest_path)
     return {
         "schema_version": 1,
         "dataset": config["dataset"],
+        "source_manifest": {
+            "path": portable_source_path,
+            "bytes": len(source_bytes),
+            "sha256": hashlib.sha256(source_bytes).hexdigest(),
+        },
         "tokenizer": config["tokenizer"],
         "normalizer": {
             "name": "nmt_nfkc",
@@ -432,10 +522,11 @@ def _artifact(path, count, relative_path):
     }
 
 
-def prepare_from_provider(provider, processor, shards, output_root, config):
+def _prepare_into(provider, processor, shards, output_root, config):
     """Prepare from an injected batch provider; unit tests need no optional dependencies."""
-    output_root = Path(output_root)
+    output_root = _safe_exact_path(output_root, "staged dataset output")
     output_root.mkdir(parents=True, exist_ok=True)
+    output_root = _safe_exact_path(output_root, "staged dataset output")
     quotas = config["quotas"]
     min_tokens = config["token_bounds"]["min"]
     max_tokens = config["token_bounds"]["max"]
@@ -465,8 +556,9 @@ def prepare_from_provider(provider, processor, shards, output_root, config):
             partials = {}
             for split in SPLITS:
                 name = "%s.%s.jsonl" % (direction, split)
-                partial = output_root / (name + ".partial")
-                paths_to_clean.extend((partial, output_root / name))
+                partial = _safe_child(output_root, name + ".partial", "staged JSONL")
+                final = _safe_child(output_root, name, "staged JSONL")
+                paths_to_clean.extend((partial, final))
                 partials[split] = partial
                 files[split] = partial.open("wb")
             try:
@@ -511,7 +603,7 @@ def prepare_from_provider(provider, processor, shards, output_root, config):
                     stream.close()
             for split in SPLITS:
                 name = "%s.%s.jsonl" % (direction, split)
-                final_path = output_root / name
+                final_path = _safe_child(output_root, name, "staged JSONL")
                 os.replace(str(partials[split]), str(final_path))
                 outputs[name] = _artifact(final_path, counts[split], name)
             filtering[direction] = counters
@@ -527,10 +619,108 @@ def prepare_from_provider(provider, processor, shards, output_root, config):
     except Exception:
         for path in paths_to_clean:
             try:
-                path.unlink()
+                _safe_child(output_root, path.name, "staged cleanup").unlink()
             except FileNotFoundError:
                 pass
         raise
+
+
+def publish_transaction(staging_root, publications, replace_func=os.replace):
+    """Publish staged files with backups and rollback for flat-file consumers."""
+    staging_root = _safe_exact_path(staging_root, "publication staging")
+    backup_root = _safe_child(staging_root, ".publication-backup", "publication backup")
+    backup_root.mkdir()
+    states = []
+    try:
+        for index, (source, target) in enumerate(publications):
+            try:
+                relative_source = Path(source).resolve(strict=False).relative_to(staging_root)
+            except ValueError as error:
+                raise DatasetError("publication source is outside staging") from error
+            source = _safe_child(staging_root, relative_source, "publication source")
+            target = _safe_exact_path(target, "publication target")
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target = _safe_exact_path(target, "publication target")
+            backup = _safe_child(backup_root, "%06d.bak" % index, "publication backup")
+            state = {"source": source, "target": target, "backup": backup, "backed": False, "published": False}
+            states.append(state)
+            if target.exists():
+                replace_func(str(target), str(backup))
+                state["backed"] = True
+        for state in states:
+            replace_func(str(state["source"]), str(state["target"]))
+            state["published"] = True
+    except Exception:
+        rollback_errors = []
+        for state in reversed(states):
+            try:
+                target = _safe_exact_path(state["target"], "publication rollback target")
+                backup = _safe_child(backup_root, state["backup"].name, "publication rollback backup")
+                if state["published"] and target.exists():
+                    target.unlink()
+                if state["backed"]:
+                    os.replace(str(backup), str(target))
+            except Exception as error:
+                rollback_errors.append(error)
+        if rollback_errors:
+            raise DatasetError("publication failed and rollback was incomplete") from rollback_errors[0]
+        shutil.rmtree(str(_safe_child(staging_root, backup_root.name, "publication backup cleanup")))
+        raise
+    shutil.rmtree(str(_safe_child(staging_root, backup_root.name, "publication backup cleanup")))
+
+
+def _create_staging(output_root):
+    output_root = _require_outside_repository(output_root, "dataset output")
+    output_root.parent.mkdir(parents=True, exist_ok=True)
+    output_root = _require_outside_repository(output_root, "dataset output")
+    staging = Path(
+        tempfile.mkdtemp(prefix=".%s.staging-" % output_root.name, dir=str(output_root.parent))
+    )
+    return output_root, _safe_exact_path(staging, "dataset staging")
+
+
+def _cleanup_staging(staging):
+    safe_staging = _safe_exact_path(staging, "dataset staging cleanup")
+    shutil.rmtree(str(safe_staging), ignore_errors=True)
+
+
+def prepare_from_provider(provider, processor, shards, output_root, config):
+    """Prepare and atomically publish six files while preserving existing outputs on failure."""
+    output_root, staging = _create_staging(output_root)
+    try:
+        preparation = _prepare_into(provider, processor, shards, staging, config)
+        publications = [
+            (staging / name, output_root / artifact["path"])
+            for name, artifact in preparation["outputs"].items()
+        ]
+        publish_transaction(staging, publications)
+        return preparation
+    finally:
+        _cleanup_staging(staging)
+
+
+def publish_prepared_result(
+    staging,
+    output_root,
+    result_manifest,
+    preparation,
+    result,
+    replace_func=os.replace,
+):
+    staging = _safe_exact_path(staging, "dataset staging")
+    output_root = _require_outside_repository(output_root, "dataset output")
+    result_manifest = _safe_exact_path(result_manifest, "result manifest")
+    staged_manifest = _safe_child(staging, ".bist-v1.json.staged", "staged result manifest")
+    _write_json(staged_manifest, result)
+    publications = [
+        (
+            _safe_child(staging, name, "staged JSONL"),
+            _safe_child(output_root, artifact["path"], "published JSONL"),
+        )
+        for name, artifact in preparation["outputs"].items()
+    ]
+    publications.append((staged_manifest, result_manifest))
+    publish_transaction(staging, publications, replace_func=replace_func)
 
 
 def _load_source_manifest(path, config):
@@ -544,14 +734,16 @@ def _load_source_manifest(path, config):
 
 def _require_outside_repository(path, label):
     repository = Path(__file__).resolve().parents[2]
-    resolved = Path(path).resolve()
+    resolved = _safe_exact_path(path, label)
     if resolved == repository or repository in resolved.parents:
         raise DatasetError("%s must be outside the repository" % label)
+    return resolved
 
 
 def _write_json(path, value):
-    path = Path(path)
+    path = _safe_exact_path(path, "JSON output")
     path.parent.mkdir(parents=True, exist_ok=True)
+    path = _safe_exact_path(path, "JSON output")
     with path.open("w", encoding="utf-8", newline="\n") as stream:
         json.dump(value, stream, ensure_ascii=False, indent=2)
         stream.write("\n")
@@ -567,12 +759,9 @@ def main(argv=None):
     parser.add_argument("--result-manifest", required=True, type=Path)
     parser.add_argument("--offline", action="store_true")
     args = parser.parse_args(argv)
-    for path, label in (
-        (args.cache_dir, "dataset cache"),
-        (args.tokenizer_cache_dir, "tokenizer cache"),
-        (args.output_dir, "dataset output"),
-    ):
-        _require_outside_repository(path, label)
+    args.cache_dir = _require_outside_repository(args.cache_dir, "dataset cache")
+    args.tokenizer_cache_dir = _require_outside_repository(args.tokenizer_cache_dir, "tokenizer cache")
+    args.output_dir = _require_outside_repository(args.output_dir, "dataset output")
     config = load_config(args.config)
     source_manifest = _load_source_manifest(args.source_manifest, config)
     if not args.offline:
@@ -581,7 +770,11 @@ def main(argv=None):
         except ImportError as error:
             raise DatasetError("real mode requires the pinned huggingface-hub dependency") from error
         verify_remote_revision(
-            HfApi(), config["dataset"]["repo"], config["dataset"]["revision"], source_manifest["shards"]
+            HfApi(),
+            config["dataset"]["repo"],
+            config["dataset"]["revision"],
+            source_manifest["shards"],
+            {settings["subset"] for settings in config["directions"].values()},
         )
         print("verified remote revision %s" % config["dataset"]["revision"], flush=True)
     started = time.monotonic()
@@ -592,13 +785,25 @@ def main(argv=None):
     provider = HuggingFaceParquetProvider(
         args.cache_dir, offline=args.offline, verbose=True
     )
-    preparation = prepare_from_provider(
-        provider, processor, source_manifest["shards"], args.output_dir, config
-    )
-    result = build_result_manifest(
-        config, source_manifest, preparation, args.config, Path(__file__)
-    )
-    _write_json(args.result_manifest, result)
+    output_root, staging = _create_staging(args.output_dir)
+    try:
+        preparation = _prepare_into(
+            provider, processor, source_manifest["shards"], staging, config
+        )
+        result = build_result_manifest(
+            config,
+            source_manifest,
+            preparation,
+            args.config,
+            Path(__file__),
+            args.source_manifest,
+            Path(__file__).resolve().parents[2],
+        )
+        publish_prepared_result(
+            staging, output_root, args.result_manifest, preparation, result
+        )
+    finally:
+        _cleanup_staging(staging)
     downloaded_bytes = sum(
         shard["size"] for shard in source_manifest["shards"] if shard["path"] in provider.downloaded
     )

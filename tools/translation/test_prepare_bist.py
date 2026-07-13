@@ -1,21 +1,26 @@
 import hashlib
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
+from unittest import mock
 
 from tools.translation.prepare_bist import (
     DatasetError,
     HuggingFaceParquetProvider,
     SentencePieceTextProcessor,
     _file_sha256,
+    _safe_child,
     build_result_manifest,
     direction_row,
     load_config,
     ensure_tokenizer,
     normalize_pair,
     prepare_from_provider,
+    publish_prepared_result,
+    publish_transaction,
     serialize_row,
     sort_shards,
     split_bucket,
@@ -93,6 +98,39 @@ class PrepareBistTest(unittest.TestCase):
             crlf.write_bytes(b"line one\r\nline two\r\n")
             self.assertEqual(_file_sha256(lf), _file_sha256(crlf))
 
+    def test_safe_child_rejects_traversal_and_nested_symlink_or_reparse_point(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            root = base / "root"
+            outside = base / "outside"
+            root.mkdir()
+            outside.mkdir()
+            with self.assertRaisesRegex(DatasetError, "traversal"):
+                _safe_child(root, "../outside/file", "fixture")
+            link = root / "linked"
+            try:
+                link.symlink_to(outside, target_is_directory=True)
+            except OSError as error:
+                if os.name != "nt":
+                    self.skipTest("symlink creation unavailable: %s" % error)
+                link.mkdir()
+                real_lstat = os.lstat
+
+                def reparse_lstat(path):
+                    details = real_lstat(path)
+                    attributes = getattr(details, "st_file_attributes", 0)
+                    if os.path.normcase(os.path.abspath(path)) == os.path.normcase(str(link.absolute())):
+                        attributes |= 0x400
+                    return SimpleNamespace(st_mode=details.st_mode, st_file_attributes=attributes)
+
+                with mock.patch("tools.translation.prepare_bist.os.lstat", side_effect=reparse_lstat):
+                    with self.assertRaisesRegex(DatasetError, "reparse"):
+                        _safe_child(root, "linked/file", "fixture")
+                return
+            expected_kind = "reparse" if os.name == "nt" else "symlink"
+            with self.assertRaisesRegex(DatasetError, expected_kind):
+                _safe_child(root, "linked/file", "fixture")
+
     def test_checked_in_manifests_pin_exact_real_result_without_machine_paths(self):
         config = load_config(CONFIG)
         source = json.loads(SOURCE_MANIFEST.read_text(encoding="utf-8"))
@@ -107,6 +145,14 @@ class PrepareBistTest(unittest.TestCase):
                 self.assertEqual(result["outputs"][f"{direction}.{split}.jsonl"]["count"], quota)
         self.assertEqual(len(result["source_shards"]), 4)
         self.assertTrue(all("parquet_schema" in shard for shard in result["source_shards"]))
+        self.assertEqual(
+            result["source_manifest"],
+            {
+                "path": "tools/translation/manifests/bist-source-v1.json",
+                "bytes": 5198,
+                "sha256": "a39804b4f5d884e624b7c4748a2582bfe4133e9f04463bf3578d468fa1d8c4e4",
+            },
+        )
         self.assertEqual(
             result["implementation"]["script_sha256"], _file_sha256(ROOT / "prepare_bist.py")
         )
@@ -301,24 +347,74 @@ class PrepareBistTest(unittest.TestCase):
                 offline=True,
                 downloader=lambda *args, **kwargs: calls.append((args, kwargs)),
             )
-            self.assertEqual(actual, expected)
+            self.assertEqual(actual, expected.resolve())
             self.assertEqual(calls, [])
 
     def test_remote_revision_must_resolve_to_exact_commit(self):
-        shard = {"path": "data/dev.parquet", "size": 7, "sha256": "c" * 64}
-        sibling = SimpleNamespace(
-            rfilename=shard["path"], size=7, lfs=SimpleNamespace(size=7, sha256="c" * 64)
+        def shard(subset, name, marker):
+            return {"subset": subset, "path": f"data/{subset}/{name}.parquet", "size": 7, "sha256": marker * 64}
+
+        def sibling(item):
+            return SimpleNamespace(
+                rfilename=item["path"],
+                size=item["size"],
+                lfs=SimpleNamespace(size=item["size"], sha256=item["sha256"]),
+            )
+
+        en = shard("en-zh", "dev", "c")
+        zh = shard("zh-en", "dev", "d")
+        arxiv = SimpleNamespace(
+            rfilename="data/en-zh(arxiv_abstract)/extra.parquet",
+            size=9,
+            lfs=SimpleNamespace(size=9, sha256="f" * 64),
         )
         good = SimpleNamespace(
-            dataset_info=lambda **kwargs: SimpleNamespace(sha=kwargs["revision"], siblings=[sibling])
+            dataset_info=lambda **kwargs: SimpleNamespace(
+                sha=kwargs["revision"], siblings=[sibling(en), sibling(zh), arxiv]
+            )
         )
-        verify_remote_revision(good, "Mxode/BiST", "a" * 40, [shard])
+        verify_remote_revision(good, "Mxode/BiST", "a" * 40, [en, zh], {"en-zh", "zh-en"})
         bad = SimpleNamespace(dataset_info=lambda **kwargs: SimpleNamespace(sha="b" * 40))
         with self.assertRaisesRegex(DatasetError, "resolved"):
             verify_remote_revision(bad, "Mxode/BiST", "a" * 40)
-        sibling.lfs.sha256 = "d" * 64
+        changed = sibling(en)
+        changed.lfs.sha256 = "e" * 64
+        drift = SimpleNamespace(
+            dataset_info=lambda **kwargs: SimpleNamespace(sha=kwargs["revision"], siblings=[changed, sibling(zh)])
+        )
         with self.assertRaisesRegex(DatasetError, "metadata"):
-            verify_remote_revision(good, "Mxode/BiST", "a" * 40, [shard])
+            verify_remote_revision(drift, "Mxode/BiST", "a" * 40, [en, zh], {"en-zh", "zh-en"})
+
+    def test_remote_inventory_rejects_manifest_missing_or_remote_extra_configured_shard(self):
+        def item(path, marker):
+            return {"subset": path.split("/")[1], "path": path, "size": 7, "sha256": marker * 64}
+
+        def sibling(shard):
+            return SimpleNamespace(
+                rfilename=shard["path"],
+                size=shard["size"],
+                lfs=SimpleNamespace(size=shard["size"], sha256=shard["sha256"]),
+            )
+
+        en = item("data/en-zh/dev.parquet", "a")
+        zh = item("data/zh-en/dev.parquet", "b")
+        extra = item("data/en-zh/train-0.parquet", "c")
+        api = SimpleNamespace(
+            dataset_info=lambda **kwargs: SimpleNamespace(
+                sha=kwargs["revision"], siblings=[sibling(en), sibling(zh), sibling(extra)]
+            )
+        )
+        with self.assertRaisesRegex(DatasetError, "inventory"):
+            verify_remote_revision(api, "Mxode/BiST", "a" * 40, [en, zh], {"en-zh", "zh-en"})
+        missing_remote = SimpleNamespace(
+            dataset_info=lambda **kwargs: SimpleNamespace(
+                sha=kwargs["revision"], siblings=[sibling(en), sibling(zh)]
+            )
+        )
+        with self.assertRaisesRegex(DatasetError, "inventory"):
+            verify_remote_revision(
+                missing_remote, "Mxode/BiST", "a" * 40, [en, zh, extra], {"en-zh", "zh-en"}
+            )
 
     def test_result_manifest_is_machine_independent_and_pins_inputs(self):
         config = {
@@ -351,12 +447,24 @@ class PrepareBistTest(unittest.TestCase):
             script_path = root / "prepare_bist.py"
             config_path.write_text("config", encoding="utf-8")
             script_path.write_text("script", encoding="utf-8")
-            result = build_result_manifest(config, source_manifest, preparation, config_path, script_path)
+            source_path = root / "tools" / "translation" / "manifests" / "bist-source-v1.json"
+            source_path.parent.mkdir(parents=True)
+            source_path.write_text("source manifest\n", encoding="utf-8")
+            result = build_result_manifest(
+                config,
+                source_manifest,
+                preparation,
+                config_path,
+                script_path,
+                source_path,
+                root,
+            )
             encoded = json.dumps(result, ensure_ascii=False)
             self.assertNotIn(str(root), encoded)
             self.assertNotIn("timestamp", encoded)
             self.assertEqual(result["normalizer"]["name"], "nmt_nfkc")
             self.assertIn("synthetic", result["provenance"]["limitations"].lower())
+            self.assertEqual(result["source_manifest"]["path"], "tools/translation/manifests/bist-source-v1.json")
 
     def test_shards_are_sorted_lexically_within_subset(self):
         shards = [
@@ -429,6 +537,119 @@ class PrepareBistTest(unittest.TestCase):
                     Path(directory),
                     config,
                 )
+
+    def test_failed_second_direction_preserves_existing_six_file_publication(self):
+        zh_rows = [row_for_direction_bucket("zh-en", bucket) for bucket in (2, 1, 0)]
+        provider = FixtureProvider(
+            {
+                "data/zh.parquet": zh_rows,
+                "data/en.parquet": [row_for_direction_bucket("en-zh", 2, 100000)],
+            }
+        )
+        shards = [
+            {"subset": "en-zh", "path": "data/en.parquet", "sha256": "a" * 64, "size": 1},
+            {"subset": "zh-en", "path": "data/zh.parquet", "sha256": "b" * 64, "size": 1},
+        ]
+        config = {
+            "directions": {
+                "zh-en": {"direction_id": 32001, "subset": "zh-en"},
+                "en-zh": {"direction_id": 32002, "subset": "en-zh"},
+            },
+            "quotas": {"train": 1, "validation": 1, "test": 1},
+            "token_bounds": {"min": 3, "max": 120},
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "published"
+            output.mkdir()
+            names = [
+                f"{direction}.{split}.jsonl"
+                for direction in ("zh-en", "en-zh")
+                for split in ("train", "validation", "test")
+            ]
+            expected = {}
+            for index, name in enumerate(names):
+                payload = f"old-{index}\n".encode()
+                (output / name).write_bytes(payload)
+                expected[name] = payload
+            with self.assertRaisesRegex(DatasetError, "quotas"):
+                prepare_from_provider(provider, FixtureProcessor(), shards, output, config)
+            self.assertEqual({name: (output / name).read_bytes() for name in names}, expected)
+            self.assertEqual(list(output.parent.glob(".published.staging-*")), [])
+
+    def test_publish_failure_rolls_back_every_replaced_target(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            staging = root / "staging"
+            target = root / "target"
+            staging.mkdir()
+            target.mkdir()
+            publications = []
+            expected = {}
+            for index in range(3):
+                name = f"artifact-{index}"
+                (staging / name).write_bytes(f"new-{index}".encode())
+                payload = f"old-{index}".encode()
+                destination = target / name
+                destination.write_bytes(payload)
+                expected[name] = payload
+                publications.append((staging / name, destination))
+            calls = 0
+
+            def fail_once(source, destination):
+                nonlocal calls
+                calls += 1
+                if calls == 5:
+                    raise OSError("injected publish failure")
+                os.replace(source, destination)
+
+            with self.assertRaisesRegex(OSError, "injected"):
+                publish_transaction(staging, publications, replace_func=fail_once)
+            self.assertEqual({name: (target / name).read_bytes() for name in expected}, expected)
+            self.assertFalse((staging / ".publication-backup").exists())
+
+    def test_result_manifest_publish_failure_rolls_back_old_manifest_and_six_jsonl(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            staging = root / "staging"
+            output = root / "output"
+            staging.mkdir()
+            output.mkdir()
+            names = [
+                f"{direction}.{split}.jsonl"
+                for direction in ("zh-en", "en-zh")
+                for split in ("train", "validation", "test")
+            ]
+            expected = {}
+            outputs = {}
+            for index, name in enumerate(names):
+                (staging / name).write_bytes(f"new-{index}".encode())
+                payload = f"old-{index}".encode()
+                (output / name).write_bytes(payload)
+                expected[name] = payload
+                outputs[name] = {"path": name}
+            result_manifest = root / "bist-v1.json"
+            expected_manifest = b"old-manifest"
+            result_manifest.write_bytes(expected_manifest)
+            calls = 0
+
+            def fail_manifest_publish(source, destination):
+                nonlocal calls
+                calls += 1
+                if calls == 14:
+                    raise OSError("injected manifest publish failure")
+                os.replace(source, destination)
+
+            with self.assertRaisesRegex(OSError, "manifest publish"):
+                publish_prepared_result(
+                    staging,
+                    output,
+                    result_manifest,
+                    {"outputs": outputs},
+                    {"schema_version": 1},
+                    replace_func=fail_manifest_publish,
+                )
+            self.assertEqual({name: (output / name).read_bytes() for name in names}, expected)
+            self.assertEqual(result_manifest.read_bytes(), expected_manifest)
 
 
 if __name__ == "__main__":
