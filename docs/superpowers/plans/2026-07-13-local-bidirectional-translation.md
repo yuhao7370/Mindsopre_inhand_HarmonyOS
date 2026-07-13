@@ -4,7 +4,7 @@
 
 **Goal:** Replace the finite offline phrase dictionary with one compact, fully local Chinese↔English translation model that handles arbitrary new text and OCR output on HarmonyOS.
 
-**Architecture:** Train one direction-token-conditioned tiny Marian checkpoint, export fixed-shape encoder/prefill/decode graphs, weight-quantize them for MindSpore Lite, ship the three W8 graphs as one verified solid `translation-models.tar.xz`, and drive SentencePiece plus greedy KV-cache decoding from ArkTS. A narrow pinned `liblzma` utility extracts the archive to app-private storage; it is not a second ML runtime. The existing `TextTranslationRunner`, Android target-language rule, OCR chaining, copy behavior, and request-generation protection remain intact. The three-graph prototype has passed converter, benchmark, finite-value and five-token cache execution; full training and production wiring remain gated on bilingual quality, final W8 agreement, archive integrity, HAP asset size and target-device checks.
+**Architecture:** Train one direction-token-conditioned tiny Marian checkpoint, export fixed-shape encoder/prefill/decode graphs, weight-quantize them for MindSpore Lite, ship the three W8 graphs as one verified solid `translation-models.tar.xz`, and drive SentencePiece plus greedy KV-cache decoding from ArkTS. A narrow pinned `liblzma` utility extracts the archive to app-private storage; it is not a second ML runtime. The existing `TextTranslationRunner`, Android target-language rule, OCR chaining, copy behavior, and request-generation protection remain intact. The three-graph prototype has passed converter, per-graph benchmark, finite-value execution and the reproducible W8 cache loop; full training and production wiring remain gated on bilingual quality, archive integrity, HAP asset size and target-device checks.
 
 **Tech Stack:** Python 3.9, PyTorch, Transformers, ONNX opset 17, MindSpore Lite 2.8 converter/benchmark, SentencePiece Unigram, BiST, FLORES+, ArkTS, `@kit.MindSporeLiteKit`, pinned XZ Utils 5.8.3/minimal static `liblzma`, NAPI, Hypium, DevEco/Hvigor.
 
@@ -85,7 +85,7 @@ Add all prefill/step cache names exactly as the design spec; reject any generate
 
 - [ ] **Step 2: Export encoder and verify numerical equality**
 
-Use a fixed wrapper that constructs additive mask shape `[1,1,1,128]` directly instead of the Transformers dynamic mask helper. Replace attention Softmax with stable `ReduceMax → Sub → Exp → ReduceSum → Div`. Export opset 17, run ONNX Runtime, and require finite outputs plus `max_abs <= 1e-5` against PyTorch before conversion.
+Use a fixed wrapper that constructs additive mask shape `[1,1,1,128]` directly instead of the Transformers dynamic mask helper. Replace attention Softmax with stable `ReduceMax → Sub → Exp → ReduceSum → Div`. Export opset 17 and require finite outputs. The retained FP16 prototype shows that a `1e-5` PyTorch↔ONNX CPU bound is not reproducible (`max_abs=0.0231934`); record that comparison diagnostically and keep the conversion gate on float MindSpore↔ONNX (`max_abs <= 0.02`, `mean_abs <= 0.002`) instead of silently changing graph precision.
 
 - [ ] **Step 3: Convert and benchmark encoder**
 
@@ -100,13 +100,13 @@ Expected: converter exit 0; benchmark exit 0; output `FLOAT32 [1,128,256]` with 
 
 - [ ] **Step 4: Export and convert prefill/step**
 
-Use fixed full-size cache tensors `[1,8,128,32]` and an explicit integer `decoder_position` update. The final converter command for prefill/step must set NCHW input and output flags. Run `decoder_step` for at least five tokens with one retained cross cache and evolving self caches. Assert every logits/cache output is finite and matches PyTorch/ONNX Runtime within `1e-4` before quantization.
+Use host-managed self history `[1,8,127,32]`, one new self slot/output `[1,8,1,32]`, retained cross caches `[1,8,128,32]`, and an explicit integer `position_id`. Masks are INT32 in ONNX; ONNX floating tensors are FP16 while converted MindSpore runtime tensors are FP32. The final converter command for prefill/step must set NCHW input and output flags. Run `decoder_step` for at least five tokens with one retained cross cache and evolving self history. PyTorch↔ONNX FP16 comparison is diagnostic (the retained host stack reaches `max_abs=0.015625`); the technical numerical gate remains float MindSpore↔ONNX `max_abs <= 0.02`, `mean_abs <= 0.002`, plus finite tensors and exact W8 token agreement.
 
-Measured prototype evidence: stable-softmax encoder, prefill, and fixed-cache step all convert and execute; the five-token MindSpore sequence exactly matches ONNX Runtime. Encoder all-mask error is `max/mean 0.0071133/0.0007997`; half-padding is `0.0146904/0.0010149`. This is graph/runtime feasibility evidence only, not final bilingual quality.
+Measured prototype evidence: stable-softmax encoder, prefill, and fixed-cache step all convert and execute. Encoder all-mask error is `max/mean 0.0071133/0.0007997`; half-padding is `0.0146904/0.0010149`. The reproducible harness now makes ONNX Runtime, float MindSpore and W8 MindSpore agree on the prefill-plus-five-step sequence `[422,21,23,22,80,5]`; it binds tensors by exact names and fails closed on divergence. This is graph/runtime feasibility evidence only, not final bilingual quality.
 
 - [ ] **Step 5: Run weight quantization and the package-size gate**
 
-Use the exact fixed-bit W8 config from the design spec. Prototype measurements are: float `100.169 MiB`; fixed W8 `58,161,928 B / 55.468 MiB`, finite and five-token exact; dynamic W8 `56,629,192 B / 54.006 MiB`; W4 `32,877,504 B / 31.354 MiB`; mixed `30,739,720 B / 29.316 MiB`. W4 and mixed diverge tokens badly and are quality NO; there is no 4-bit/mixed production fallback. W8 is the only quality candidate even though its raw three-file sum is not a valid ≤35 MiB gate.
+Use the exact fixed-bit W8 config from the design spec. Prototype measurements are: float `100.169 MiB`; fixed W8 `58,161,928 B / 55.468 MiB`, finite, per-graph benchmarkable and exact on the reproducible cache-loop fixture; dynamic W8 `56,629,192 B / 54.006 MiB`; W4 `32,877,504 B / 31.354 MiB`; mixed `30,739,720 B / 29.316 MiB`. W4 and mixed diverge tokens badly and are quality NO; there is no 4-bit/mixed production fallback. W8 remains the only quality candidate; final promotion still requires the trained-model quality gates below.
 
 For the final trained checkpoint, require ≥99% token argmax agreement over 100 fixture steps. Build one solid W8 `translation-models.tar.xz`, then require the complete shipped HAP translation asset set—including archive, tokenizer/runtime, manifest/licenses/hashes, and decompressor—to be ≤35 MiB. Do not ship the three raw `.ms` files or float/ONNX/checkpoint artifacts.
 
@@ -116,7 +116,7 @@ Implement and test `build_translation_archive.py` here, before any task consumes
 
 Implement `verify_translation_package.py` and its tests in the same task. `prototype-package-v1.json` records the measured archive and actual prototype tokenizer/runtime/manifest/license/hash assets plus the reserved decompressor allowance; the verifier must sum the complete staged HAP translation asset set and fail above 35 MiB. Task 4 must rerun the same verifier over actual final assets with no allowance substituted for a real file. Pin XZ Utils 5.8.3 source SHA-256 `FFF1FFCF2B0DA84D308A14DE513A1AA23D4E9AA3464D17E64B9714BFDD0BBFB6` and tag commit `4b73f2ec19a99ef465282fbce633e8deb33691b3`; explicitly reject compromised 5.6.0/5.6.1. Task 1 may invoke a verified host XZ binary; the OHOS static `liblzma` build/import belongs to Task 4.
 
-The evidence archive is `25,073,516 B`, SHA-256 `1DBB6BA66FC7F5FBA777F38960E1D56FBC0AAB793C30B068020D1DCD0773BC7F`; its TAR is `58,173,440 B`, SHA-256 `D305ED7D1FE5DF6E1019078646D3D8D9F43D4514345D166011BF2A70F95FBB84`. Its W8 members are:
+The legacy source-evidence archive is `25,073,516 B`, SHA-256 `1DBB6BA66FC7F5FBA777F38960E1D56FBC0AAB793C30B068020D1DCD0773BC7F`; its non-canonical TAR is `58,173,440 B`, SHA-256 `D305ED7D1FE5DF6E1019078646D3D8D9F43D4514345D166011BF2A70F95FBB84`. It is verified as immutable input evidence, not reproduced byte-for-byte. Rebuilding the same members with canonical names and normalized metadata produces deterministic TAR SHA-256 `23A3DD41E006A6A3E1A7C844E6E66B3F99A49A54ACCEED02B7EAF38D0108F3E5` and XZ SHA-256 `A942697ADA0EC6EC8C102AB898B43D931C31EE132112B2A11B95F2673C8B30EE`. Its W8 members are:
 
 - `encoder_fixed_stable_w8.ms`: `16,109,400 B`, SHA-256 `317DB84237D67206AEC036CF4A5B6F8212E5F116C3682C1B3E1ED7916460B558`.
 - `decoder_prefill1_stable_w8_nchw.ms`: `21,138,552 B`, SHA-256 `FBCBCBC50C89740EE4851BBE0DC397973F1A2905473237F0934E12497BF4084C`.

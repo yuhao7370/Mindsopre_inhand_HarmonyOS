@@ -233,30 +233,30 @@ Tokenizer 固定为基线 `source.spm` 的 SentencePiece Unigram，不再混用�
 
 `encoder.ms`：
 
-- inputs：`input_ids INT32 [1,128]`、`attention_mask FLOAT32 [1,128]`
-- output：`encoder_hidden_states FLOAT32 [1,128,256]`
+- ONNX inputs：`input_ids INT32 [1,128]`、`attention_mask INT32 [1,128]`
+- ONNX output：`last_hidden_state FLOAT16 [1,128,256]`；转换后的 MindSpore runtime tensor 为 `FLOAT32`
 
 `decoder_prefill.ms`：
 
-- inputs：`decoder_input_ids INT32 [1,1]`、`decoder_position INT32 [1]`、`encoder_hidden_states FLOAT32 [1,128,256]`、`encoder_attention_mask FLOAT32 [1,128]`
-- outputs：`logits FLOAT32 [1,1,32003]`，以及每层 `present_self_key_{0,1}`、`present_self_value_{0,1}`、`present_cross_key_{0,1}`、`present_cross_value_{0,1}`，每个 cache 均为 `FLOAT32 [1,8,128,32]`
+- ONNX inputs：`decoder_input_ids INT32 [1,1]`、`encoder_hidden_states FLOAT16 [1,128,256]`、`encoder_attention_mask INT32 [1,128]`
+- ONNX outputs：`logits FLOAT16 [1,32003]`，每层 self key/value 为 `FLOAT16 [1,8,1,32]`，cross key/value 为 `FLOAT16 [1,8,128,32]`；对应 MindSpore runtime tensor 为 `FLOAT32`
 
 `decoder_step.ms`：
 
-- inputs：`decoder_input_ids INT32 [1,1]`、`decoder_position INT32 [1]`、`encoder_attention_mask FLOAT32 [1,128]`，以及上一步 8 个 `past_*` cache，均为 `FLOAT32 [1,8,128,32]`
-- outputs：`logits FLOAT32 [1,1,32003]`，4 个更新后的 self `present_*` cache；cross cache 由 ArkTS 保留并复用
-- cache 使用固定 128 槽，`decoder_position` 指定写入位置；padding 槽必须为 0，self-attention mask 禁止读取未来槽位
+- ONNX inputs：`decoder_input_ids INT32 [1,1]`、`position_id INT32 [1]`、`self_attention_mask INT32 [1,128]`、`cross_attention_mask INT32 [1,128]`，每层 host-managed past key/value 为 `FLOAT16 [1,8,127,32]`，cross key/value 为 `FLOAT16 [1,8,128,32]`
+- ONNX outputs：`logits FLOAT16 [1,32003]`，每层一个 new key/value，均为 `FLOAT16 [1,8,1,32]`；对应 MindSpore runtime tensor 为 `FLOAT32`，cross cache 由 ArkTS 保留并复用
+- cache 使用固定 128 槽，`position_id` 指定写入位置；padding 槽必须为 0，self-attention mask 禁止读取未来槽位
 
 上述三个 ONNX 图必须在完整训练开始前通过 MindSpore converter 与桌面 benchmark smoke。若固定 cache 更新仍产生不支持算子，本设计的翻译里程碑失败并重新评审图结构；不允许在实施中静默改成另一套 ML runtime。
 
-三图 MindSpore Lite 2.8 原型门槛已经完成：stable-softmax encoder、prefill 和 fixed-cache step 均可转换并执行，连续 5 token 的 MindSpore argmax 序列与 ONNX Runtime 完全相同。Encoder 原型证明 Transformers 通用动态 mask 和原生 Softmax 导出会分别触发 MindSpore shape 推断失败与第 5 层 NaN；三个导出 wrapper 因此统一直接构造固定 additive mask，并把 Softmax 展开为 `ReduceMax → Sub → Exp → ReduceSum → Div`。Encoder 对 ONNX Runtime 的实测误差为：全有效 mask `max_abs=0.0071133`、`mean_abs=0.0007997`；半 padding `max_abs=0.0146904`、`mean_abs=0.0010149`。Cache 图的最终 converter 命令必须显式使用 NCHW input/output flags。以上只证明图结构、converter 和 runtime 可行，不证明尚未训练完成的最终双向模型质量；最终三图仍须满足 `max_abs <= 0.02`、`mean_abs <= 0.002` 且无 NaN/Inf。
+三图 MindSpore Lite 2.8 原型已证明 stable-softmax encoder、prefill 和 fixed-cache step 均可转换并逐图执行。Encoder 原型证明 Transformers 通用动态 mask 和原生 Softmax 导出会分别触发 MindSpore shape 推断失败与第 5 层 NaN；三个导出 wrapper 因此统一直接构造固定 additive mask，并把 Softmax 展开为 `ReduceMax → Sub → Exp → ReduceSum → Div`。Encoder 对 ONNX Runtime 的实测误差为：全有效 mask `max_abs=0.0071133`、`mean_abs=0.0007997`；半 padding `max_abs=0.0146904`、`mean_abs=0.0010149`。新导出工具独立重建夹具后，ONNX Runtime、float MindSpore 和 fixed-bit W8 MindSpore 均复现 prefill 加五步序列 `[422,21,23,22,80,5]`；MindSpore smoke 按精确 tensor name 绑定，并按 NCHW head stride 写回 cache slot，分叉时 fail closed。Cache 图的最终 converter 命令必须显式使用 NCHW input/output flags。以上只证明图结构、converter 和 runtime 可行，不证明尚未训练完成的最终双向模型质量；最终三图仍须满足 `max_abs <= 0.02`、`mean_abs <= 0.002` 且无 NaN/Inf。
 
 量化原型的实测结论如下：
 
 | 方案 | 三图总大小 | 数值/序列结论 | 决策 |
 | --- | ---: | --- | --- |
 | float | `100.169 MiB` | 数值对照基线 | 不进入 HAP |
-| fixed-bit W8 | `58,161,928 B` / `55.468 MiB` | 输出有限，5-token 序列与 ONNX Runtime 完全相同 | 质量候选 GO；原始三图体积 NO |
+| fixed-bit W8 | `58,161,928 B` / `55.468 MiB` | 输出有限、逐图 benchmark 成功；可复现 cache-loop exact 已通过 | 质量候选；原始三图体积 NO，最终训练质量仍待验收 |
 | dynamic W8 | `56,629,192 B` / `54.006 MiB` | 原始三图仍超体积 | NO |
 | W4 | `32,877,504 B` / `31.354 MiB` | token 序列严重偏离 | 质量 NO |
 | mixed | `30,739,720 B` / `29.316 MiB` | token 序列严重偏离 | 质量 NO |
@@ -269,7 +269,7 @@ Tokenizer 固定为基线 `source.spm` 的 SentencePiece Unigram，不再混用�
 | `decoder_prefill1_stable_w8_nchw.ms` | `21,138,552 B` | `FBCBCBC50C89740EE4851BBE0DC397973F1A2905473237F0934E12497BF4084C` |
 | `decoder_step_fixedcache_stable_w8_nchw.ms` | `20,913,976 B` | `333704F597B2C28CEB37DE7E61CBAA3B503D45FA84EA2D81F0A328408D8B4C33` |
 
-35 MiB 门槛约束的是 HAP 内完整的已交付翻译资产集合，而不是三份解压后 `.ms` 的和。最终 HAP 资产集合必须 `<=35 MiB`，且只包含一个固实 W8 `translation-models.tar.xz`、tokenizer/runtime 资产、manifest/licenses/hashes 和小型解压器；不得包含三份原始 `.ms`、float/ONNX/checkpoint 等训练或中间产物。当前原型归档为 `25,073,516 B`，SHA-256 `1DBB6BA66FC7F5FBA777F38960E1D56FBC0AAB793C30B068020D1DCD0773BC7F`；解压后的 TAR 为 `58,173,440 B`，SHA-256 `D305ED7D1FE5DF6E1019078646D3D8D9F43D4514345D166011BF2A70F95FBB84`。该归档仅为打包与解压可行性证据，不是最终双向模型；最终归档只能在双向训练和质量门槛通过后生成。
+35 MiB 门槛约束的是 HAP 内完整的已交付翻译资产集合，而不是三份解压后 `.ms` 的和。最终 HAP 资产集合必须 `<=35 MiB`，且只包含一个固实 W8 `translation-models.tar.xz`、tokenizer/runtime 资产、manifest/licenses/hashes 和小型解压器；不得包含三份原始 `.ms`、float/ONNX/checkpoint 等训练或中间产物。旧 source-evidence 归档为 `25,073,516 B`，SHA-256 `1DBB6BA66FC7F5FBA777F38960E1D56FBC0AAB793C30B068020D1DCD0773BC7F`；其非 canonical TAR 为 `58,173,440 B`，SHA-256 `D305ED7D1FE5DF6E1019078646D3D8D9F43D4514345D166011BF2A70F95FBB84`。同一成员按 canonical 名称和归一化元数据重建后，TAR SHA-256 为 `23A3DD41E006A6A3E1A7C844E6E66B3F99A49A54ACCEED02B7EAF38D0108F3E5`，XZ SHA-256 为 `A942697ADA0EC6EC8C102AB898B43D931C31EE132112B2A11B95F2673C8B30EE`。两组证据必须分开记录，不能声称 canonical rebuild 与旧归档 byte-identical。该归档仅为打包与解压可行性证据，不是最终双向模型；最终归档只能在双向训练和质量门槛通过后生成。
 
 本地解压固定使用 XZ Utils 5.8.3，官方源码 SHA-256 `FFF1FFCF2B0DA84D308A14DE513A1AA23D4E9AA3464D17E64B9714BFDD0BBFB6`、tag commit `4b73f2ec19a99ef465282fbce633e8deb33691b3`；明确拒绝已受攻击的 5.6.0/5.6.1。只构建最小静态 `liblzma`，关闭 encoders、tools 和 threads；API 24 arm64 编译/链接 probe 已通过。ArkTS 仍负责 tokenizer 和 greedy decoder，Native 代码只是窄接口解压工具，不是第二套 ML runtime。
 

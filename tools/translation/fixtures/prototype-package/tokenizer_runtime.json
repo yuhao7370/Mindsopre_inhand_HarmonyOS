@@ -1,0 +1,7 @@
+{
+  "normalizer": "nmt_nfkc",
+  "modelType": "unigram",
+  "addDummyPrefix": true,
+  "removeExtraWhitespaces": true,
+  "escapeWhitespaces": true
+}
