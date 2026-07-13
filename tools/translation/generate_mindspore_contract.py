@@ -88,7 +88,11 @@ def generate_header(contract_path: Path, profile_name: str, output_path: Path) -
         )
     )
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(header, encoding="utf-8", newline="\n")
+    # ``Path.write_text(..., newline=...)`` was only added in Python 3.10.
+    # The export toolchain is pinned to Python 3.9, so use ``open`` directly
+    # while still forcing reproducible LF output on Windows.
+    with output_path.open("w", encoding="utf-8", newline="\n") as output:
+        output.write(header)
     return output_path
 
 
