@@ -4,6 +4,7 @@
 #include <iostream>
 #include <fstream>
 #include <memory>
+#include <limits>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -123,6 +124,17 @@ static void CheckFinite(const std::vector<MSTensor> &outputs) {
   }
 }
 
+static void WriteFloatTensor(const std::string &path, const MSTensor &tensor) {
+  if (path.empty()) return;
+  std::ofstream stream(path, std::ios::binary | std::ios::trunc);
+  if (!stream) throw std::runtime_error("cannot create encoder parity output: " + path);
+  for (int64_t index = 0; index < tensor.ElementNum(); ++index) {
+    const float value = ValueAt(tensor, index);
+    stream.write(reinterpret_cast<const char *>(&value), sizeof(value));
+  }
+  if (!stream) throw std::runtime_error("cannot write encoder parity output: " + path);
+}
+
 static int32_t Argmax(const MSTensor &tensor) {
   int32_t best = 0;
   float best_value = ValueAt(tensor, 0);
@@ -143,8 +155,47 @@ static mindspore::Model Build(const char *path, const std::shared_ptr<mindspore:
   return model;
 }
 
+static int32_t ParseInt32(const std::string &value, const std::string &label) {
+  size_t consumed = 0;
+  long long parsed = 0;
+  try {
+    parsed = std::stoll(value, &consumed, 10);
+  } catch (const std::exception &) {
+    throw std::runtime_error("invalid " + label + ": " + value);
+  }
+  if (consumed != value.size() || parsed < std::numeric_limits<int32_t>::min() ||
+      parsed > std::numeric_limits<int32_t>::max()) {
+    throw std::runtime_error("invalid " + label + ": " + value);
+  }
+  return static_cast<int32_t>(parsed);
+}
+
 int main(int argc, char **argv) try {
-  if (argc != 4 && argc != 5) return 2;
+  if (argc < 4) return 2;
+  std::string fixture_root;
+  std::string encoder_output_path;
+  int32_t steps = 5;
+  int32_t valid_tokens = -1;
+  for (int index = 4; index < argc; ++index) {
+    const std::string argument = argv[index];
+    const std::string fixture_prefix = "--fixture-root=";
+    const std::string steps_prefix = "--steps=";
+    const std::string output_prefix = "--encoder-output=";
+    const std::string valid_prefix = "--valid-tokens=";
+    if (argument.rfind(fixture_prefix, 0) == 0) {
+      fixture_root = argument.substr(fixture_prefix.size());
+    } else if (argument.rfind(steps_prefix, 0) == 0) {
+      steps = ParseInt32(argument.substr(steps_prefix.size()), "step count");
+    } else if (argument.rfind(output_prefix, 0) == 0) {
+      encoder_output_path = argument.substr(output_prefix.size());
+    } else if (argument.rfind(valid_prefix, 0) == 0) {
+      valid_tokens = ParseInt32(argument.substr(valid_prefix.size()), "valid-token count");
+    } else if (argument.rfind("--", 0) != 0 && fixture_root.empty()) {
+      fixture_root = argument;  // Backward-compatible prototype invocation.
+    } else {
+      throw std::runtime_error("unknown smoke argument: " + argument);
+    }
+  }
   auto context = std::make_shared<mindspore::Context>();
   context->SetThreadNum(2);
   context->MutableDeviceInfo().push_back(std::make_shared<mindspore::CPUDeviceInfo>());
@@ -158,14 +209,22 @@ int main(int argc, char **argv) try {
   auto *encoder_id_data = static_cast<int32_t *>(encoder_ids.MutableData());
   for (int64_t index = 0; index < encoder_ids.ElementNum(); ++index) encoder_id_data[index] = static_cast<int32_t>(index);
   auto &encoder_mask = Find(encoder_inputs, "attention_mask");
+  if (valid_tokens < 0) valid_tokens = static_cast<int32_t>(encoder_mask.ElementNum() / 2);
+  if (valid_tokens < 1 || valid_tokens > encoder_mask.ElementNum()) {
+    throw std::runtime_error("valid-token count is outside encoder contract");
+  }
+  if (steps < 1 || steps >= encoder_mask.ElementNum() - 1) {
+    throw std::runtime_error("step count is outside cache contract");
+  }
   FillI32(encoder_mask, 0);
   std::fill(static_cast<int32_t *>(encoder_mask.MutableData()),
-            static_cast<int32_t *>(encoder_mask.MutableData()) + encoder_mask.ElementNum() / 2, 1);
+            static_cast<int32_t *>(encoder_mask.MutableData()) + valid_tokens, 1);
   std::vector<MSTensor> encoder_outputs;
   auto status = encoder.Predict(encoder_inputs, &encoder_outputs);
   if (!status.IsOk()) throw std::runtime_error(status.ToString());
   RequireDescriptors("encoder outputs", encoder_outputs, translation_contract::kEncoderOutputs);
   CheckFinite(encoder_outputs);
+  WriteFloatTensor(encoder_output_path, Find(encoder_outputs, "last_hidden_state"));
 
   auto prefill_inputs = prefill.GetInputs();
   RequireDescriptors("prefill inputs", prefill_inputs, translation_contract::kDecoderPrefillInputs);
@@ -174,8 +233,7 @@ int main(int argc, char **argv) try {
   FillI32(prefill_mask, 0);
   std::fill(static_cast<int32_t *>(prefill_mask.MutableData()),
             static_cast<int32_t *>(prefill_mask.MutableData()) + prefill_mask.ElementNum() / 2, 1);
-  if (argc == 5) {
-    const std::string fixture_root = argv[4];
+  if (!fixture_root.empty()) {
     ReadFixture(fixture_root + "\\pre_01_encoder.bin", Find(prefill_inputs, "encoder_hidden_states"));
     ReadFixture(fixture_root + "\\pre_02_mask.bin", Find(prefill_inputs, "encoder_attention_mask"));
   } else {
@@ -209,8 +267,7 @@ int main(int argc, char **argv) try {
     Copy(Find(prefill_outputs, "cross_value_" + std::to_string(layer)),
          Find(step_inputs, "cross_value_" + std::to_string(layer)));
   }
-  if (argc == 5) {
-    const std::string fixture_root = argv[4];
+  if (!fixture_root.empty()) {
     ReadFixture(fixture_root + "\\step_00_ids.bin", Find(step_inputs, "decoder_input_ids"));
     token = *static_cast<int32_t *>(Find(step_inputs, "decoder_input_ids").MutableData());
     tokens = {token};
@@ -227,7 +284,7 @@ int main(int argc, char **argv) try {
     }
   }
 
-  for (int32_t position = 1; position <= 5; ++position) {
+  for (int32_t position = 1; position <= steps; ++position) {
     FillI32(Find(step_inputs, "decoder_input_ids"), token);
     FillI32(Find(step_inputs, "position_id"), position);
     auto &mask = Find(step_inputs, "self_attention_mask");

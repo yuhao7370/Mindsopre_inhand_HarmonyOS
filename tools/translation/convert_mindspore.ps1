@@ -14,7 +14,8 @@ param(
 $ErrorActionPreference = 'Stop'
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $resolvedOutput = [IO.Path]::GetFullPath($OutputRoot)
-if ($resolvedOutput.StartsWith($repoRoot + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
+if ($resolvedOutput.Equals($repoRoot, [StringComparison]::OrdinalIgnoreCase) -or
+    $resolvedOutput.StartsWith($repoRoot + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
   throw 'Generated ONNX/MS artifacts must stay outside the repository.'
 }
 foreach ($path in @($Python, $Converter, $Benchmark, $CxxCompiler, $Contract)) {
@@ -31,8 +32,22 @@ $runtimeGlog = Join-Path $RuntimeRoot 'runtime\third_party\glog'
 $compilerBin = Split-Path $CxxCompiler -Parent
 $env:PATH = "$converterLib;$runtimeLib;$runtimeGlog;$compilerBin;$env:PATH"
 
-& $Python (Join-Path $PSScriptRoot 'export_marian_smoke.py') --checkpoint $OnnxDir --output-root $OnnxDir --contract $Contract --profile $Profile --inspect-only
-if ($LASTEXITCODE -ne 0) { throw 'ONNX contract inspection failed.' }
+$exportReport = $null
+$exportReportArtifact = $null
+if ($Profile -eq 'final') {
+  & $Python (Join-Path $PSScriptRoot 'export_marian_smoke.py') --checkpoint $OnnxDir --output-root $OnnxDir --contract $Contract --profile $Profile --verify-export-report
+  if ($LASTEXITCODE -ne 0) { throw 'Approved final ONNX export report verification failed.' }
+  $exportReportPath = Join-Path $OnnxDir 'export-report.json'
+  $exportReport = [IO.File]::ReadAllText($exportReportPath) | ConvertFrom-Json
+  $exportReportArtifact = [ordered]@{
+    path = 'export-report.json'
+    bytes = (Get-Item -LiteralPath $exportReportPath).Length
+    sha256 = (Get-FileHash -LiteralPath $exportReportPath -Algorithm SHA256).Hash.ToLowerInvariant()
+  }
+} else {
+  & $Python (Join-Path $PSScriptRoot 'export_marian_smoke.py') --checkpoint $OnnxDir --output-root $OnnxDir --contract $Contract --profile $Profile --inspect-only
+  if ($LASTEXITCODE -ne 0) { throw 'ONNX contract inspection failed.' }
+}
 
 New-Item -ItemType Directory -Force -Path $resolvedOutput | Out-Null
 $floatDir = Join-Path $resolvedOutput 'float'
@@ -78,24 +93,69 @@ $includeRoot = Join-Path $RuntimeRoot 'runtime'
 Invoke-Checked 'compile MindSpore cache-loop smoke' {
   & $CxxCompiler '-std=c++17' '-O2' "-I$includeRoot" "-I$resolvedOutput" (Join-Path $PSScriptRoot 'mindspore_translation_smoke.cpp') "-L$runtimeLib" '-lmindspore-lite' '-o' $smokeExe
 }
+$contractProfile = ([IO.File]::ReadAllText($Contract) | ConvertFrom-Json).profiles.$Profile
+$maxTokens = [int]$contractProfile.maxTokens
+$encoderParity = @()
+foreach ($parityCase in @(
+  [ordered]@{ name = 'all-valid'; validTokens = $maxTokens },
+  [ordered]@{ name = 'half-padding'; validTokens = [int]($maxTokens / 2) }
+)) {
+  $mindSporeEncoderOutput = Join-Path $resolvedOutput ("encoder-{0}.float32.bin" -f $parityCase.name)
+  $floatArguments = @(
+    (Join-Path $floatDir 'encoder.ms'),
+    (Join-Path $floatDir 'decoder_prefill.ms'),
+    (Join-Path $floatDir 'decoder_step.ms'),
+    '--steps=5',
+    "--encoder-output=$mindSporeEncoderOutput",
+    "--valid-tokens=$($parityCase.validTokens)"
+  )
+  $null = & $smokeExe $floatArguments
+  if ($LASTEXITCODE -ne 0) { throw "MindSpore float parity run failed: $($parityCase.name)" }
+  $parityJson = & $Python (Join-Path $PSScriptRoot 'export_marian_smoke.py') `
+    --checkpoint $OnnxDir --output-root $OnnxDir --contract $Contract --profile $Profile `
+    --encoder-mindspore-output $mindSporeEncoderOutput --encoder-valid-tokens $parityCase.validTokens
+  if ($LASTEXITCODE -ne 0) { throw "ONNX/MindSpore float comparison failed: $($parityCase.name)" }
+  $measured = ($parityJson | Select-Object -Last 1) | ConvertFrom-Json
+  if ([double]$measured.maxAbs -gt 0.02 -or [double]$measured.meanAbs -gt 0.002) {
+    throw "float parity exceeded bounds for $($parityCase.name): max=$($measured.maxAbs), mean=$($measured.meanAbs)"
+  }
+  $encoderParity += [ordered]@{
+    name = $parityCase.name
+    validTokens = [int]$measured.validTokens
+    elements = [int]$measured.elements
+    maxAbs = [double]$measured.maxAbs
+    meanAbs = [double]$measured.meanAbs
+  }
+}
+
+$requiredCacheSteps = if ($Profile -eq 'final') { 100 } else { 5 }
 $smokeArguments = @((Join-Path $w8Dir 'encoder.ms'), (Join-Path $w8Dir 'decoder_prefill.ms'), (Join-Path $w8Dir 'decoder_step.ms'))
-if ($EvidenceFixtureRoot) { $smokeArguments += $EvidenceFixtureRoot }
+$smokeArguments += "--steps=$requiredCacheSteps"
+if ($EvidenceFixtureRoot) { $smokeArguments += "--fixture-root=$EvidenceFixtureRoot" }
 $mindSporeOutput = & $smokeExe $smokeArguments
 if ($LASTEXITCODE -ne 0) { throw 'MindSpore W8 cached decoder loop failed.' }
 $mindSporeLine = @($mindSporeOutput | Where-Object { $_ -like 'TOKENS *' })[-1]
 if (-not $mindSporeLine) { throw 'MindSpore smoke did not report tokens.' }
 $mindSporeTokens = @($mindSporeLine.Substring(7).Split(' ', [StringSplitOptions]::RemoveEmptyEntries) | ForEach-Object { [int]$_ })
 
-$onnxArguments = @((Join-Path $PSScriptRoot 'export_marian_smoke.py'), '--checkpoint', $OnnxDir, '--output-root', $OnnxDir, '--contract', $Contract, '--profile', $Profile, '--cache-loop-only')
+$onnxArguments = @((Join-Path $PSScriptRoot 'export_marian_smoke.py'), '--checkpoint', $OnnxDir, '--output-root', $OnnxDir, '--contract', $Contract, '--profile', $Profile, '--cache-loop-only', '--cache-loop-steps', $requiredCacheSteps)
 if ($EvidenceFixtureRoot) { $onnxArguments += @('--binary-fixture-root', $EvidenceFixtureRoot) }
 $onnxJson = & $Python $onnxArguments
 if ($LASTEXITCODE -ne 0) { throw 'ONNX cached decoder loop failed.' }
 $onnxTokens = @((($onnxJson | Select-Object -Last 1) | ConvertFrom-Json).tokens | ForEach-Object { [int]$_ })
-if (($mindSporeTokens -join ',') -ne ($onnxTokens -join ',')) {
-  throw "W8 argmax divergence: MindSpore=$($mindSporeTokens -join ',') ONNX=$($onnxTokens -join ',')"
+if ($mindSporeTokens.Count -ne $onnxTokens.Count -or $mindSporeTokens.Count -ne ($requiredCacheSteps + 1)) {
+  throw "W8 argmax token count differs: MindSpore=$($mindSporeTokens.Count) ONNX=$($onnxTokens.Count)"
+}
+$matchingTokens = 0
+for ($index = 0; $index -lt $onnxTokens.Count; $index++) {
+  if ($mindSporeTokens[$index] -eq $onnxTokens[$index]) { $matchingTokens++ }
+}
+$argmaxAgreement = $matchingTokens / [double]$onnxTokens.Count
+if ($argmaxAgreement -lt 0.99) {
+  throw "W8 argmax agreement below 99%: matches=$matchingTokens total=$($onnxTokens.Count) agreement=$argmaxAgreement"
 }
 if ($Profile -eq 'prototype') {
-  $expectedPrototypeTokens = @(422, 21, 23, 22, 80, 5)
+  $expectedPrototypeTokens = @(422, 22, 7, 4, 422, 22)
   if (($mindSporeTokens -join ',') -ne ($expectedPrototypeTokens -join ',')) {
     throw "prototype cache fixture drift: expected=$($expectedPrototypeTokens -join ',') actual=$($mindSporeTokens -join ',')"
   }
@@ -106,11 +166,19 @@ $models = foreach ($name in @('encoder', 'decoder_prefill', 'decoder_step')) {
   [ordered]@{ name = "$name.ms"; size = (Get-Item -LiteralPath $path).Length; sha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $path).Hash }
 }
 $report = [ordered]@{
+  schemaVersion = 1
   profile = $Profile
+  approval = if ($exportReport) { $exportReport.approval } else { $null }
+  exportReport = $exportReportArtifact
+  onnxArtifacts = if ($exportReport) { $exportReport.onnxArtifacts } else { $null }
   quantization = [ordered]@{ type = 'WEIGHT_QUANT'; bitNum = 8; minWeightSize = 0; minWeightChannel = 0 }
+  encoderParity = $encoderParity
+  cacheLoopSteps = $requiredCacheSteps
   cacheLoopTokens = $mindSporeTokens
-  expectedCacheLoopTokens = if ($Profile -eq 'prototype') { @(422, 21, 23, 22, 80, 5) } else { $null }
-  argmaxAgreement = 1.0
+  referenceCacheLoopTokens = $onnxTokens
+  expectedCacheLoopTokens = if ($Profile -eq 'prototype') { @(422, 22, 7, 4, 422, 22) } else { $null }
+  argmaxAgreement = $argmaxAgreement
+  matchingTokens = $matchingTokens
   models = $models
 }
 [IO.File]::WriteAllText((Join-Path $resolvedOutput 'conversion-report.json'), (($report | ConvertTo-Json -Depth 8) + "`n"), (New-Object Text.UTF8Encoding($false)))

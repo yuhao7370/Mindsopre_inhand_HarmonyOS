@@ -1,14 +1,19 @@
+import hashlib
 import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from tools.translation.export_marian_smoke import (
     ContractError,
+    PINNED_REVISION,
     _inspect_onnx,
+    _validate_checkpoint,
     _validate_stable_softmax,
     load_profile,
     validate_graph_contract,
+    verify_export_report,
 )
 from tools.translation.generate_mindspore_contract import DescriptorError, generate_header
 
@@ -18,6 +23,122 @@ ROOT = Path(__file__).parent
 
 
 class ExportContractTest(unittest.TestCase):
+    def test_final_checkpoint_revision_provenance_is_required_and_pinned(self):
+        profile = load_profile(CONTRACT, "prototype")
+        config = {
+            "vocab_size": 32001,
+            "decoder_vocab_size": 32001,
+            "d_model": 256,
+            "encoder_layers": 6,
+            "decoder_layers": 2,
+            "encoder_attention_heads": 8,
+            "decoder_attention_heads": 8,
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            checkpoint = Path(directory)
+            (checkpoint / "config.json").write_text(json.dumps(config), encoding="utf-8")
+            (checkpoint / "model.safetensors").write_bytes(b"weights")
+            provenance = checkpoint / "base_revision.txt"
+
+            provenance.write_text(PINNED_REVISION + "\n", encoding="utf-8")
+            _validate_checkpoint(checkpoint, profile, "prototype")
+
+            provenance.unlink()
+            with self.assertRaisesRegex(ContractError, "got None"):
+                _validate_checkpoint(checkpoint, profile, "prototype")
+
+            provenance.write_text("0" * 40 + "\n", encoding="utf-8")
+            with self.assertRaisesRegex(ContractError, "revision mismatch"):
+                _validate_checkpoint(checkpoint, profile, "prototype")
+
+    def test_final_checkpoint_is_bound_to_canonical_training_and_quality_gate_reports(self):
+        profile = load_profile(CONTRACT, "final")
+        config = {
+            "vocab_size": 32003,
+            "decoder_vocab_size": 32003,
+            "d_model": 256,
+            "encoder_layers": 6,
+            "decoder_layers": 2,
+            "encoder_attention_heads": 8,
+            "decoder_attention_heads": 8,
+        }
+
+        def canonical(value):
+            return (json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
+
+        def artifact(path):
+            payload = path.read_bytes()
+            return {"path": path.name, "bytes": len(payload), "sha256": hashlib.sha256(payload).hexdigest()}
+
+        with tempfile.TemporaryDirectory() as directory:
+            checkpoint = Path(directory) / "candidate-epoch1" / "selected"
+            checkpoint.mkdir(parents=True)
+            (checkpoint / "config.json").write_text(json.dumps(config), encoding="utf-8")
+            (checkpoint / "model.safetensors").write_bytes(b"approved-weights")
+            (checkpoint / "tokenizer.model").write_bytes(b"approved-tokenizer")
+            (checkpoint / "base_revision.txt").write_text(PINNED_REVISION + "\n", encoding="ascii")
+            candidate = {
+                "model_sha256": hashlib.sha256(b"approved-weights").hexdigest(),
+                "tokenizer_sha256": hashlib.sha256(b"approved-tokenizer").hexdigest(),
+            }
+            objective = {"contract": "c" * 64}
+            training = {
+                "schema_version": 1, "epoch": 1, "seed": 20260713, "plan_epoch_index": 0,
+                "optimizer_reset": True, "rescue_steps": 1406, "logical_batches": 5624,
+                "dropped_partial_logical_batches": 2, "validation_history": [],
+                "baseline_validation_loss": 3.7, "best_rescue_step": 1406,
+                "best_validation_loss": 3.6, "candidate_checkpoint": "candidate-epoch1/selected",
+                "candidate": candidate, "promotion_allowed": False,
+                "promotion_status": "pending_manual_and_flores_gate", "resumed": False,
+                "teacher_generation_gpu_seconds": 1.0, "probe_gpu_seconds": 1.0,
+                "rescue_gpu_seconds": 1.0, "epoch_gpu_seconds": 1.0,
+                "cumulative_gpu_seconds": 3.0, "gpuLedger": {},
+                "training_view_manifest_sha256": "a" * 64,
+                "distillation_manifest_sha256": "b" * 64, "peak_cuda_bytes": 1,
+                "last_progress": {}, "objective_hashes": objective,
+                "replayed_from_baseline": False, "replayed_optimizer_steps": 0,
+                "baseline_replay_receipt": None,
+            }
+            training_path = Path(directory) / "training-v1.json"
+            training_path.write_bytes(canonical(training))
+            gate = {
+                "schema_version": 1, "epoch2_allowed": True, "epoch2_launch_allowed": True,
+                "epoch2_status": "authorized", "promotion_allowed": True,
+                "candidate": candidate, "candidateEpoch": 1,
+                "trainingReport": artifact(training_path), "objectiveHashes": objective,
+                "manualAsset": {"path": "manual.jsonl", "bytes": 1, "sha256": "d" * 64},
+                "manualResults": {"path": "manual-results.jsonl", "bytes": 1, "sha256": "e" * 64},
+                "manual": {
+                    "zh-en": {"total": 50, "passed": 45, "fatal_corruptions": 0},
+                    "en-zh": {"total": 50, "passed": 45, "fatal_corruptions": 0},
+                },
+                "flores": {
+                    "repo": "openlanguagedata/flores_plus",
+                    "revision": "b3a5298db5721c8a682e7ef00a37fcc9ab522757",
+                    "files": [
+                        {"language": "zh", "path": "devtest/cmn_Hans.jsonl", "bytes": 1, "sha256": "f" * 64},
+                        {"language": "en", "path": "devtest/eng_Latn.jsonl", "bytes": 1, "sha256": "0" * 64},
+                    ],
+                    "metrics": {
+                        "zh-en": {"bleu": 19.0, "chrf2": 49.0},
+                        "en-zh": {"bleu": 17.0, "chrf2": 40.0},
+                    },
+                },
+            }
+            gate_path = Path(directory) / "gate-v1.json"
+            gate_path.write_bytes(canonical(gate))
+
+            approval = _validate_checkpoint(
+                checkpoint, profile, "final", training_path, gate_path
+            )
+            self.assertEqual(approval["candidate"], candidate)
+            with self.assertRaisesRegex(ContractError, "requires canonical"):
+                _validate_checkpoint(checkpoint, profile, "final")
+
+            (checkpoint / "model.safetensors").write_bytes(b"different")
+            with self.assertRaisesRegex(ContractError, "candidate differs"):
+                _validate_checkpoint(checkpoint, profile, "final", training_path, gate_path)
+
     def test_prototype_and_final_profiles_are_separate_and_use_inspected_cache_shapes(self):
         prototype = load_profile(CONTRACT, "prototype")
         final = load_profile(CONTRACT, "final")
@@ -66,8 +187,63 @@ class ExportContractTest(unittest.TestCase):
 
     def test_converter_enforces_pinned_prototype_token_fixture(self):
         source = (ROOT / "convert_mindspore.ps1").read_text(encoding="utf-8")
-        self.assertIn("@(422, 21, 23, 22, 80, 5)", source)
+        self.assertIn("@(422, 22, 7, 4, 422, 22)", source)
         self.assertIn("prototype cache fixture drift", source)
+
+    def test_final_converter_measures_float_parity_and_one_hundred_step_w8_agreement(self):
+        converter = (ROOT / "convert_mindspore.ps1").read_text(encoding="utf-8")
+        smoke = (ROOT / "mindspore_translation_smoke.cpp").read_text(encoding="utf-8")
+        exporter = (ROOT / "export_marian_smoke.py").read_text(encoding="utf-8")
+        self.assertIn("$requiredCacheSteps = if ($Profile -eq 'final') { 100 } else { 5 }", converter)
+        self.assertIn("if ($argmaxAgreement -lt 0.99)", converter)
+        self.assertNotIn("argmaxAgreement = 1.0", converter)
+        self.assertIn("encoderParity", converter)
+        self.assertIn("maxAbs", converter)
+        self.assertIn("meanAbs", converter)
+        self.assertIn("--steps=", converter)
+        self.assertIn("--encoder-output=", converter)
+        self.assertIn("--valid-tokens=", converter)
+        self.assertIn("position <= steps", smoke)
+        self.assertIn("encoder_mindspore_parity", exporter)
+        self.assertIn("--encoder-mindspore-output", exporter)
+        self.assertIn("--encoder-valid-tokens", exporter)
+        self.assertIn("$resolvedOutput.Equals($repoRoot", converter)
+        self.assertIn("--verify-export-report", converter)
+        self.assertIn("consumed != value.size()", smoke)
+
+    def test_export_report_binds_exact_onnx_files_and_rejects_tampering(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            artifacts = {}
+            for name in ("encoder", "decoder_prefill", "decoder_step"):
+                path = root / (name + ".onnx")
+                path.write_bytes(name.encode("ascii"))
+                artifacts[path.name] = {
+                    "path": path.name,
+                    "bytes": path.stat().st_size,
+                    "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+                }
+            graphs = {"encoder": {}, "decoder_prefill": {}, "decoder_step": {}}
+            report = {
+                "schemaVersion": 1, "profile": "prototype",
+                "checkpointRevision": PINNED_REVISION, "approval": None,
+                "vocabSize": 32001, "maxTokens": 256, "graphs": graphs,
+                "pytorchOnnxMaxAbsLimit": 0.03,
+                "decoderPytorchOnnxMaxAbsLimit": 0.03,
+                "stableSoftmax": ["ReduceMax", "Sub", "Exp", "ReduceSum", "Div"],
+                "onnxArtifacts": artifacts,
+            }
+            (root / "export-report.json").write_bytes(
+                (json.dumps(report, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
+            )
+            with mock.patch(
+                "tools.translation.export_marian_smoke.inspect_exports",
+                return_value={"profile": "prototype", "graphs": graphs},
+            ):
+                self.assertEqual(verify_export_report(root, CONTRACT, "prototype"), report)
+                (root / "encoder.onnx").write_bytes(b"tampered")
+                with self.assertRaisesRegex(ContractError, "does not bind"):
+                    verify_export_report(root, CONTRACT, "prototype")
 
     def test_contract_comparison_fails_closed_on_name_dtype_or_shape_change(self):
         expected = {

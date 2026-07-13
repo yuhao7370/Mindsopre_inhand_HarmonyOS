@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import os
@@ -13,12 +14,58 @@ from typing import Dict, Optional, Sequence
 
 PINNED_REPOSITORY = "Helsinki-NLP/opus-mt_tiny_zho-eng"
 PINNED_REVISION = "4ee3a9342aae4ca6fbae82c930b5dccff5dd68dd"
+FLORES_REPOSITORY = "openlanguagedata/flores_plus"
+FLORES_REVISION = "b3a5298db5721c8a682e7ef00a37fcc9ab522757"
+FLORES_PATHS = {"devtest/cmn_Hans.jsonl", "devtest/eng_Latn.jsonl"}
 PYTORCH_ONNX_MAX_ABS = 0.03
 DECODER_PYTORCH_ONNX_MAX_ABS = 0.03
 
 
 class ContractError(RuntimeError):
     pass
+
+
+def _canonical_json_bytes(value: object) -> bytes:
+    return (json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _file_artifact(path: Path) -> dict:
+    path = Path(path)
+    return {"path": path.name, "bytes": path.stat().st_size, "sha256": _sha256_file(path)}
+
+
+def _canonical_report(path: Path, label: str) -> dict:
+    path = Path(path)
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise ContractError(f"invalid {label}: {error}") from error
+    if not isinstance(value, dict) or path.read_bytes() != _canonical_json_bytes(value):
+        raise ContractError(f"{label} must be canonical JSON")
+    return value
+
+
+def _valid_artifact(value: object) -> bool:
+    return (
+        isinstance(value, dict)
+        and set(value) == {"path", "bytes", "sha256"}
+        and isinstance(value["path"], str)
+        and bool(value["path"])
+        and Path(value["path"]).name == value["path"]
+        and isinstance(value["bytes"], int)
+        and not isinstance(value["bytes"], bool)
+        and value["bytes"] > 0
+        and isinstance(value["sha256"], str)
+        and len(value["sha256"]) == 64
+    )
 
 
 def load_profile(contract_path: Path, profile_name: str) -> dict:
@@ -126,7 +173,151 @@ def _checkpoint_revision(checkpoint: Path) -> Optional[str]:
     return None
 
 
-def _validate_checkpoint(checkpoint: Path, profile: dict, profile_name: str) -> None:
+def _validate_candidate_approval(
+    checkpoint: Path,
+    training_report_path: Path,
+    quality_gate_report_path: Path,
+) -> dict:
+    training = _canonical_report(training_report_path, "training report")
+    gate = _canonical_report(quality_gate_report_path, "quality gate report")
+    training_keys = {
+        "schema_version", "epoch", "seed", "plan_epoch_index", "optimizer_reset",
+        "rescue_steps", "logical_batches", "dropped_partial_logical_batches",
+        "validation_history", "baseline_validation_loss", "best_rescue_step",
+        "best_validation_loss", "candidate_checkpoint", "candidate",
+        "promotion_allowed", "promotion_status", "resumed",
+        "teacher_generation_gpu_seconds", "probe_gpu_seconds", "rescue_gpu_seconds",
+        "epoch_gpu_seconds", "cumulative_gpu_seconds", "gpuLedger",
+        "training_view_manifest_sha256", "distillation_manifest_sha256",
+        "peak_cuda_bytes", "last_progress", "objective_hashes",
+        "replayed_from_baseline", "replayed_optimizer_steps", "baseline_replay_receipt",
+    }
+    gate_keys = {
+        "schema_version", "epoch2_allowed", "epoch2_launch_allowed", "epoch2_status",
+        "promotion_allowed", "candidate", "candidateEpoch", "trainingReport",
+        "objectiveHashes", "manualAsset", "manualResults", "manual", "flores",
+    }
+    if set(training) != training_keys or set(gate) != gate_keys:
+        raise ContractError("candidate approval report schema differs")
+    epoch = training.get("epoch")
+    candidate = training.get("candidate")
+    objective = training.get("objective_hashes")
+    if (
+        training.get("schema_version") != 1
+        or isinstance(epoch, bool)
+        or epoch not in (1, 2)
+        or training.get("candidate_checkpoint") != f"candidate-epoch{epoch}/selected"
+        or not isinstance(candidate, dict)
+        or set(candidate) != {"model_sha256", "tokenizer_sha256"}
+        or training.get("best_rescue_step") is None
+        or training.get("promotion_allowed") is not False
+        or training.get("promotion_status") != "pending_manual_and_flores_gate"
+        or not isinstance(training.get("replayed_from_baseline"), bool)
+        or isinstance(training.get("replayed_optimizer_steps"), bool)
+        or not isinstance(training.get("replayed_optimizer_steps"), int)
+        or training.get("replayed_optimizer_steps") < 0
+        or (
+            training.get("replayed_from_baseline")
+            and not _valid_artifact(training.get("baseline_replay_receipt"))
+        )
+        or (
+            not training.get("replayed_from_baseline")
+            and (training.get("replayed_optimizer_steps") != 0 or training.get("baseline_replay_receipt") is not None)
+        )
+        or not isinstance(objective, dict)
+        or not objective
+        or any(not isinstance(value, str) or len(value) != 64 for value in objective.values())
+    ):
+        raise ContractError("training report does not bind a strict-best candidate")
+    expected_candidate = {
+        "model_sha256": _sha256_file(Path(checkpoint) / "model.safetensors"),
+        "tokenizer_sha256": _sha256_file(Path(checkpoint) / "tokenizer.model"),
+    }
+    if candidate != expected_candidate:
+        raise ContractError("training report candidate differs from checkpoint")
+    manual = gate.get("manual")
+    manual_passed = (
+        isinstance(manual, dict)
+        and set(manual) == {"zh-en", "en-zh"}
+        and all(
+            isinstance(manual.get(direction), dict)
+            and set(manual[direction]) == {"total", "passed", "fatal_corruptions"}
+            and manual[direction]["total"] == 50
+            and isinstance(manual[direction]["passed"], int)
+            and not isinstance(manual[direction]["passed"], bool)
+            and 45 <= manual[direction]["passed"] <= 50
+            and manual[direction]["fatal_corruptions"] == 0
+            for direction in ("zh-en", "en-zh")
+        )
+    )
+    flores = gate.get("flores")
+    flores_passed = False
+    if isinstance(flores, dict) and set(flores) == {"repo", "revision", "files", "metrics"}:
+        files = flores.get("files")
+        metrics = flores.get("metrics")
+        if (
+            flores.get("repo") == FLORES_REPOSITORY
+            and flores.get("revision") == FLORES_REVISION
+            and isinstance(files, list)
+            and len(files) == 2
+            and all(
+                isinstance(item, dict)
+                and set(item) == {"language", "path", "bytes", "sha256"}
+                and item["path"] in FLORES_PATHS
+                and isinstance(item["bytes"], int)
+                and not isinstance(item["bytes"], bool)
+                and item["bytes"] > 0
+                and isinstance(item["sha256"], str)
+                and len(item["sha256"]) == 64
+                for item in files
+            )
+            and {item["path"] for item in files} == FLORES_PATHS
+            and isinstance(metrics, dict)
+            and set(metrics) == {"zh-en", "en-zh"}
+        ):
+            thresholds = {"zh-en": (19.0, 49.0), "en-zh": (17.0, 40.0)}
+            flores_passed = all(
+                isinstance(metrics.get(direction), dict)
+                and set(metrics[direction]) == {"bleu", "chrf2"}
+                and all(
+                    isinstance(metrics[direction][name], (int, float))
+                    and not isinstance(metrics[direction][name], bool)
+                    and math.isfinite(float(metrics[direction][name]))
+                    for name in ("bleu", "chrf2")
+                )
+                and float(metrics[direction]["bleu"]) >= thresholds[direction][0]
+                and float(metrics[direction]["chrf2"]) >= thresholds[direction][1]
+                for direction in ("zh-en", "en-zh")
+            )
+    if (
+        gate.get("schema_version") != 1
+        or gate.get("promotion_allowed") is not True
+        or gate.get("candidate") != candidate
+        or gate.get("candidateEpoch") != epoch
+        or gate.get("trainingReport") != _file_artifact(training_report_path)
+        or gate.get("objectiveHashes") != objective
+        or not _valid_artifact(gate.get("manualAsset"))
+        or not _valid_artifact(gate.get("manualResults"))
+        or not manual_passed
+        or not flores_passed
+    ):
+        raise ContractError("quality gate does not approve the exported candidate")
+    return {
+        "candidate": candidate,
+        "candidateEpoch": epoch,
+        "objectiveHashes": objective,
+        "trainingReport": _file_artifact(training_report_path),
+        "qualityGateReport": _file_artifact(quality_gate_report_path),
+    }
+
+
+def _validate_checkpoint(
+    checkpoint: Path,
+    profile: dict,
+    profile_name: str,
+    training_report_path: Optional[Path] = None,
+    quality_gate_report_path: Optional[Path] = None,
+) -> Optional[dict]:
     config_path = checkpoint / "config.json"
     if not config_path.is_file() or not (checkpoint / "model.safetensors").is_file():
         raise ContractError("checkpoint must contain config.json and model.safetensors")
@@ -146,6 +337,17 @@ def _validate_checkpoint(checkpoint: Path, profile: dict, profile_name: str) -> 
     revision = _checkpoint_revision(checkpoint)
     if revision != PINNED_REVISION:
         raise ContractError(f"checkpoint revision mismatch: expected {PINNED_REVISION}, got {revision}")
+    if profile_name == "final":
+        if training_report_path is None or quality_gate_report_path is None:
+            raise ContractError("final export requires canonical training and quality gate reports")
+        if not (checkpoint / "tokenizer.model").is_file():
+            raise ContractError("final checkpoint must contain tokenizer.model")
+        return _validate_candidate_approval(
+            checkpoint, Path(training_report_path), Path(quality_gate_report_path)
+        )
+    if training_report_path is not None or quality_gate_report_path is not None:
+        raise ContractError("prototype export rejects production approval reports")
+    return None
 
 
 def download_pinned_checkpoint(download_root: Path) -> Path:
@@ -325,13 +527,26 @@ def _export_one(torch, wrapper, inputs, names, output_names, path: Path, max_abs
     return actual
 
 
-def export_graphs(checkpoint: Path, output_root: Path, contract_path: Path, profile_name: str) -> dict:
+def export_graphs(
+    checkpoint: Path,
+    output_root: Path,
+    contract_path: Path,
+    profile_name: str,
+    training_report_path: Optional[Path] = None,
+    quality_gate_report_path: Optional[Path] = None,
+) -> dict:
     import numpy as np
     import torch
     from transformers import MarianMTModel
 
     profile = load_profile(contract_path, profile_name)
-    _validate_checkpoint(checkpoint, profile, profile_name)
+    approval = _validate_checkpoint(
+        checkpoint,
+        profile,
+        profile_name,
+        training_report_path,
+        quality_gate_report_path,
+    )
     output_root = output_root.resolve()
     repository_root = Path(__file__).resolve().parents[2]
     if output_root == repository_root or repository_root in output_root.parents:
@@ -393,16 +608,22 @@ def export_graphs(checkpoint: Path, output_root: Path, contract_path: Path, prof
         _validate_stable_softmax(nodes, graph_name, profile["stableSoftmaxChains"][graph_name])
         graph_inputs[graph_name] = actual
     report = {
+        "schemaVersion": 1,
         "profile": profile_name,
         "checkpointRevision": PINNED_REVISION,
+        "approval": approval,
         "vocabSize": vocab,
         "maxTokens": length,
         "graphs": graph_inputs,
         "pytorchOnnxMaxAbsLimit": PYTORCH_ONNX_MAX_ABS,
         "decoderPytorchOnnxMaxAbsLimit": DECODER_PYTORCH_ONNX_MAX_ABS,
         "stableSoftmax": ["ReduceMax", "Sub", "Exp", "ReduceSum", "Div"],
+        "onnxArtifacts": {
+            f"{name}.onnx": _file_artifact(output_root / f"{name}.onnx")
+            for name in ("encoder", "decoder_prefill", "decoder_step")
+        },
     }
-    (output_root / "export-report.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+    (output_root / "export-report.json").write_bytes(_canonical_json_bytes(report))
     return report
 
 
@@ -417,6 +638,116 @@ def inspect_exports(output_root: Path, contract_path: Path, profile_name: str) -
     return {"profile": profile_name, "graphs": inspected}
 
 
+def verify_export_report(output_root: Path, contract_path: Path, profile_name: str) -> dict:
+    output_root = Path(output_root)
+    report_path = output_root / "export-report.json"
+    report = _canonical_report(report_path, "export report")
+    expected_keys = {
+        "schemaVersion", "profile", "checkpointRevision", "approval", "vocabSize",
+        "maxTokens", "graphs", "pytorchOnnxMaxAbsLimit", "decoderPytorchOnnxMaxAbsLimit",
+        "stableSoftmax", "onnxArtifacts",
+    }
+    profile = load_profile(contract_path, profile_name)
+    inspected = inspect_exports(output_root, contract_path, profile_name)
+    expected_artifacts = {
+        f"{name}.onnx": _file_artifact(output_root / f"{name}.onnx")
+        for name in ("encoder", "decoder_prefill", "decoder_step")
+    }
+    if (
+        set(report) != expected_keys
+        or report.get("schemaVersion") != 1
+        or report.get("profile") != profile_name
+        or report.get("checkpointRevision") != PINNED_REVISION
+        or report.get("vocabSize") != profile["vocabSize"]
+        or report.get("maxTokens") != profile["maxTokens"]
+        or report.get("graphs") != inspected["graphs"]
+        or report.get("onnxArtifacts") != expected_artifacts
+    ):
+        raise ContractError("export report does not bind the inspected ONNX graphs")
+    approval = report.get("approval")
+    if profile_name == "final":
+        candidate = approval.get("candidate") if isinstance(approval, dict) else None
+        objective = approval.get("objectiveHashes") if isinstance(approval, dict) else None
+        artifacts = (
+            approval.get("trainingReport") if isinstance(approval, dict) else None,
+            approval.get("qualityGateReport") if isinstance(approval, dict) else None,
+        )
+        if (
+            not isinstance(approval, dict)
+            or set(approval) != {
+                "candidate", "candidateEpoch", "objectiveHashes",
+                "trainingReport", "qualityGateReport",
+            }
+            or not isinstance(candidate, dict)
+            or set(candidate) != {"model_sha256", "tokenizer_sha256"}
+            or any(
+                not isinstance(value, str)
+                or len(value) != 64
+                or any(character not in "0123456789abcdef" for character in value.lower())
+                for value in candidate.values()
+            )
+            or approval.get("candidateEpoch") not in (1, 2)
+            or not isinstance(objective, dict)
+            or not objective
+            or any(not isinstance(value, str) or len(value) != 64 for value in objective.values())
+            or any(
+                not isinstance(artifact, dict)
+                or set(artifact) != {"path", "bytes", "sha256"}
+                or not isinstance(artifact["path"], str)
+                or not artifact["path"]
+                or not isinstance(artifact["bytes"], int)
+                or artifact["bytes"] <= 0
+                or not isinstance(artifact["sha256"], str)
+                or len(artifact["sha256"]) != 64
+                for artifact in artifacts
+            )
+        ):
+            raise ContractError("final export report lacks candidate approval provenance")
+    elif approval is not None:
+        raise ContractError("prototype export report contains production approval provenance")
+    return report
+
+
+def encoder_mindspore_parity(
+    output_root: Path,
+    contract_path: Path,
+    profile_name: str,
+    mindspore_output: Path,
+    valid_tokens: int,
+) -> dict:
+    """Compare one float MindSpore encoder result with the matching ONNX run."""
+    import numpy as np
+    import onnxruntime as ort
+
+    profile = load_profile(contract_path, profile_name)
+    length = profile["maxTokens"]
+    if isinstance(valid_tokens, bool) or not isinstance(valid_tokens, int) or not 1 <= valid_tokens <= length:
+        raise ContractError("encoder valid-token count is outside the fixed contract")
+    session = ort.InferenceSession(
+        str(Path(output_root) / "encoder.onnx"), providers=["CPUExecutionProvider"]
+    )
+    input_ids = np.arange(length, dtype=np.int32).reshape(1, length)
+    attention_mask = np.zeros((1, length), dtype=np.int32)
+    attention_mask[:, :valid_tokens] = 1
+    reference = session.run(None, {"input_ids": input_ids, "attention_mask": attention_mask})[0].astype(
+        np.float32, copy=False
+    )
+    actual = np.fromfile(Path(mindspore_output), dtype=np.float32)
+    if actual.size != reference.size:
+        raise ContractError("MindSpore encoder parity output size differs")
+    actual = actual.reshape(reference.shape)
+    if not np.isfinite(reference).all() or not np.isfinite(actual).all():
+        raise ContractError("encoder parity contains non-finite values")
+    difference = np.abs(reference - actual)
+    return {
+        "profile": profile_name,
+        "validTokens": valid_tokens,
+        "elements": int(difference.size),
+        "maxAbs": float(difference.max()),
+        "meanAbs": float(difference.mean()),
+    }
+
+
 def onnx_cache_loop(
     output_root: Path,
     contract_path: Path,
@@ -429,6 +760,8 @@ def onnx_cache_loop(
 
     profile = load_profile(contract_path, profile_name)
     length = profile["maxTokens"]
+    if isinstance(steps, bool) or not isinstance(steps, int) or not 1 <= steps < length - 1:
+        raise ContractError("cache-loop steps are outside the fixed cache contract")
     sessions = {
         name: ort.InferenceSession(str(Path(output_root) / f"{name}.onnx"), providers=["CPUExecutionProvider"])
         for name in ("encoder", "decoder_prefill", "decoder_step")
@@ -510,17 +843,39 @@ def _parse(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument("--contract", required=True, type=Path)
     parser.add_argument("--profile", choices=("prototype", "final"), required=True)
     parser.add_argument("--inspect-only", action="store_true")
+    parser.add_argument("--verify-export-report", action="store_true")
     parser.add_argument("--cache-loop-only", action="store_true")
+    parser.add_argument("--cache-loop-steps", type=int, default=5)
     parser.add_argument("--binary-fixture-root", type=Path)
+    parser.add_argument("--encoder-mindspore-output", type=Path)
+    parser.add_argument("--encoder-valid-tokens", type=int)
+    parser.add_argument("--training-report", type=Path)
+    parser.add_argument("--quality-gate-report", type=Path)
     return parser.parse_args(argv)
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
     args = _parse(argv)
-    if args.cache_loop_only:
-        result = onnx_cache_loop(
-            args.output_root, args.contract, args.profile, binary_fixture_root=args.binary_fixture_root
+    if args.encoder_mindspore_output is not None:
+        if args.encoder_valid_tokens is None:
+            raise ContractError("--encoder-valid-tokens is required for encoder parity")
+        result = encoder_mindspore_parity(
+            args.output_root,
+            args.contract,
+            args.profile,
+            args.encoder_mindspore_output,
+            args.encoder_valid_tokens,
         )
+    elif args.cache_loop_only:
+        result = onnx_cache_loop(
+            args.output_root,
+            args.contract,
+            args.profile,
+            steps=args.cache_loop_steps,
+            binary_fixture_root=args.binary_fixture_root,
+        )
+    elif args.verify_export_report:
+        result = verify_export_report(args.output_root, args.contract, args.profile)
     elif args.inspect_only:
         result = inspect_exports(args.output_root, args.contract, args.profile)
     else:
@@ -529,7 +884,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             if args.download_root is None:
                 raise ContractError("provide --checkpoint or an explicit --download-root")
             checkpoint = download_pinned_checkpoint(args.download_root)
-        result = export_graphs(checkpoint, args.output_root, args.contract, args.profile)
+        result = export_graphs(
+            checkpoint,
+            args.output_root,
+            args.contract,
+            args.profile,
+            args.training_report,
+            args.quality_gate_report,
+        )
     print(json.dumps(result, sort_keys=True))
     return 0
 
