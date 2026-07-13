@@ -83,6 +83,45 @@ class TokenizerFixtureGeneratorTest(unittest.TestCase):
         self.assertTrue(cases["priority_english"]["chunks"][0]["sourceText"].endswith("."))
         self.assertTrue(cases["priority_space"]["chunks"][0]["sourceText"].endswith(" "))
 
+    def test_direct_decode_and_previous_owned_separators_match_pinned_contract(self):
+        fixture = build_fixture(MODEL)
+        decode_goldens = {
+            tuple(golden["pieceIds"]): golden["decoded"]
+            for golden in fixture["decodeGoldens"]
+        }
+        self.assertEqual(decode_goldens[(1,)], " \u2047 ")
+        self.assertEqual(decode_goldens[(1, 256)], " \u2047 B")
+        self.assertEqual(decode_goldens[(71, 1)], "A \u2047 ")
+        self.assertEqual(decode_goldens[(1, 1)], " \u2047  \u2047 ")
+        self.assertEqual(decode_goldens[(3, 1, 192)], " \u2047  world")
+        self.assertEqual(decode_goldens[(12249,)], "Hello")
+
+        cases = {case["name"]: case for case in fixture["cases"]}
+        for name in ("separator_whitespace_line", "separator_edges", "separator_punctuation"):
+            case = cases[name]
+            self.assertEqual(
+                "".join(
+                    chunk["separatorBefore"] + chunk["sourceText"] + chunk["separatorAfter"]
+                    for chunk in case["chunks"]
+                ),
+                case["text"],
+            )
+
+        whitespace = cases["separator_whitespace_line"]["chunks"]
+        self.assertEqual(whitespace[0]["separatorAfter"], "\n  \n")
+        self.assertEqual(whitespace[1]["separatorBefore"], "")
+
+        edges = cases["separator_edges"]["chunks"]
+        self.assertEqual(edges[0]["separatorBefore"], "\n")
+        self.assertEqual(edges[0]["separatorAfter"], "\r\n\r\n \t\r\n")
+        self.assertEqual(edges[-1]["separatorAfter"], "\n")
+
+        punctuation = cases["separator_punctuation"]["chunks"]
+        self.assertGreater(len(punctuation), 2)
+        self.assertTrue(punctuation[0]["sourceText"].endswith("\u3002"))
+        self.assertEqual(punctuation[-2]["separatorAfter"], "\r\n")
+        self.assertEqual(punctuation[-1]["separatorBefore"], "")
+
     def test_output_is_deterministic_and_rejects_wrong_model_bytes(self):
         fixture = build_fixture(MODEL)
         self.assertEqual(render_arkts_fixture(fixture), render_arkts_fixture(build_fixture(MODEL)))

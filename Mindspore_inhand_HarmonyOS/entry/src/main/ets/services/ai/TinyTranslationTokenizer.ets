@@ -251,6 +251,8 @@ class TranslationTokenizerRuntime {
 
   decode(ids: Array<number>): string {
     let encoded = '';
+    let removeLeadingDummySpace = false;
+    let emittedPiece = false;
     for (let index = 0; index < ids.length; index++) {
       const id = ids[index];
       if (id === TRANSLATION_EOS_ID) {
@@ -261,6 +263,7 @@ class TranslationTokenizerRuntime {
       }
       if (id === TRANSLATION_UNK_ID) {
         encoded += ` ${SENTENCEPIECE_UNKNOWN_REPLACEMENT} `;
+        emittedPiece = true;
         continue;
       }
       const piece = this.piecesById.get(id);
@@ -270,10 +273,14 @@ class TranslationTokenizerRuntime {
       if (piece.type === CONTROL_PIECE_TYPE) {
         continue;
       }
+      if (!emittedPiece && piece.text.startsWith(SENTENCEPIECE_SPACE)) {
+        removeLeadingDummySpace = true;
+      }
       encoded += piece.text;
+      emittedPiece = true;
     }
     let decoded = encoded.split(SENTENCEPIECE_SPACE).join(' ');
-    if (decoded.startsWith(' ')) {
+    if (removeLeadingDummySpace && decoded.startsWith(' ')) {
       decoded = decoded.substring(1);
     }
     return decoded;
@@ -300,13 +307,28 @@ export function encodeTranslationText(text: string, targetLanguage: string): Arr
   const directionId = target === 'en' ? TRANSLATION_TO_ENGLISH_ID : TRANSLATION_TO_CHINESE_ID;
   const chunks: Array<TranslationChunk> = [];
   const runs = splitPreservedNewlines(text);
-  let pendingSeparator = '';
+  let leadingSeparator = '';
   for (let runIndex = 0; runIndex < runs.length; runIndex++) {
-    pendingSeparator += runs[runIndex].separator;
+    const separator = runs[runIndex].separator;
+    if (separator.length > 0) {
+      if (chunks.length > 0) {
+        appendSeparatorAfter(chunks, separator);
+      } else {
+        leadingSeparator += separator;
+      }
+    }
     if (runs[runIndex].content.length === 0) {
       continue;
     }
     const sourceEncodings = splitContentByPriority(runtime, runs[runIndex].content);
+    if (sourceEncodings.length === 0) {
+      if (chunks.length > 0) {
+        appendSeparatorAfter(chunks, runs[runIndex].content);
+      } else {
+        leadingSeparator += runs[runIndex].content;
+      }
+      continue;
+    }
     for (let encodingIndex = 0; encodingIndex < sourceEncodings.length; encodingIndex++) {
       const sourceEncoding = sourceEncodings[encodingIndex];
       chunks.push(createChunk(
@@ -315,23 +337,11 @@ export function encodeTranslationText(text: string, targetLanguage: string): Arr
         sourceEncoding.encoded.pieces,
         sourceEncoding.encoded.pieceIds,
         directionId,
-        pendingSeparator,
+        leadingSeparator,
         ''
       ));
-      pendingSeparator = '';
+      leadingSeparator = '';
     }
-  }
-  if (pendingSeparator.length > 0 && chunks.length > 0) {
-    const last = chunks[chunks.length - 1];
-    chunks[chunks.length - 1] = createChunk(
-      last.sourceText,
-      last.normalized,
-      last.pieces,
-      last.pieceIds,
-      last.inputIds[0],
-      last.separatorBefore,
-      pendingSeparator
-    );
   }
   return chunks;
 }
@@ -474,6 +484,20 @@ function createChunk(
     separatorBefore: separatorBefore,
     separatorAfter: separatorAfter
   };
+}
+
+function appendSeparatorAfter(chunks: Array<TranslationChunk>, separator: string): void {
+  const lastIndex = chunks.length - 1;
+  const last = chunks[lastIndex];
+  chunks[lastIndex] = createChunk(
+    last.sourceText,
+    last.normalized,
+    last.pieces,
+    last.pieceIds,
+    last.inputIds[0],
+    last.separatorBefore,
+    last.separatorAfter + separator
+  );
 }
 
 function parseRuntimeTable(runtimeTable: string, testProfile: boolean): TranslationTokenizerRuntime {

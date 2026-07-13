@@ -8,6 +8,7 @@ import {
   translationTargetLanguageForText
 } from '../main/ets/services/ai/TinyTranslationTokenizer';
 import {
+  TOKENIZER_DECODE_GOLDENS,
   TOKENIZER_GOLDEN_CASES,
   TOKENIZER_RUNTIME_FIXTURE,
   TranslationTokenizerGoldenCase,
@@ -140,8 +141,10 @@ export default function translationModelUnitTest(): void {
 
       expect(chunks.length).assertEqual(3);
       expect(chunks[0].separatorBefore).assertEqual('');
-      expect(chunks[1].separatorBefore).assertEqual('\n\n');
-      expect(chunks[2].separatorBefore).assertEqual('\r\n');
+      expect(chunks[0].separatorAfter).assertEqual('\n\n');
+      expect(chunks[1].separatorBefore).assertEqual('');
+      expect(chunks[1].separatorAfter).assertEqual('\r\n');
+      expect(chunks[2].separatorBefore).assertEqual('');
       expect(chunks[2].separatorAfter).assertEqual('\n');
     });
 
@@ -160,6 +163,11 @@ export default function translationModelUnitTest(): void {
 
     it('decodeSkipsControlsAndUsesSentencePieceUnknownReplacement', 0, () => {
       configureTranslationTokenizerForTests(TOKENIZER_RUNTIME_FIXTURE);
+      for (let index = 0; index < TOKENIZER_DECODE_GOLDENS.length; index++) {
+        const golden = TOKENIZER_DECODE_GOLDENS[index];
+        expect(decodeTranslationTokens(golden.pieceIds)).assertEqual(golden.decoded);
+        expect(decodeTranslationTokens([32002].concat(golden.pieceIds))).assertEqual(golden.decoded);
+      }
       expect(decodeTranslationTokens([32002, 12249, 3, 1, 192, 0, 32000]))
         .assertEqual('Hello  \u2047  world');
       expect(decodeTranslationTokens([32001, 14627, 0, 32000, 12249])).assertEqual('\u4F60\u597D');
@@ -248,6 +256,31 @@ export default function translationModelUnitTest(): void {
         .assertTrue();
       const hard = encodeTranslationText(findGolden('priority_hard').text, 'en')[0].sourceText;
       expect(hard.endsWith('\u3002') || hard.endsWith('.') || hard.endsWith(' ')).assertFalse();
+    });
+
+    it('ownsNewlinesOnPreviousChunkAndPreservesWhitespaceOnlyLines', 0, () => {
+      configureTranslationTokenizerForTests(TOKENIZER_RUNTIME_FIXTURE);
+      const names: Array<string> = [
+        'separator_whitespace_line', 'separator_edges', 'separator_punctuation'
+      ];
+      for (let index = 0; index < names.length; index++) {
+        const golden = findGolden(names[index]);
+        const chunks = encodeTranslationText(golden.text, golden.target);
+        expect(reconstructedSource(chunks)).assertEqual(golden.text);
+        for (let chunkIndex = 1; chunkIndex < chunks.length; chunkIndex++) {
+          expect(chunks[chunkIndex].separatorBefore).assertEqual('');
+        }
+      }
+
+      const whitespace = encodeTranslationText(findGolden('separator_whitespace_line').text, 'zh');
+      expect(whitespace[0].separatorAfter).assertEqual('\n  \n');
+      const edges = encodeTranslationText(findGolden('separator_edges').text, 'zh');
+      expect(edges[0].separatorBefore).assertEqual('\n');
+      expect(edges[0].separatorAfter).assertEqual('\r\n\r\n \t\r\n');
+      expect(edges[edges.length - 1].separatorAfter).assertEqual('\n');
+      const punctuation = encodeTranslationText(findGolden('separator_punctuation').text, 'zh');
+      expect(punctuation[0].sourceText.endsWith('\u3002')).assertTrue();
+      expect(punctuation[punctuation.length - 2].separatorAfter).assertEqual('\r\n');
     });
   });
 }

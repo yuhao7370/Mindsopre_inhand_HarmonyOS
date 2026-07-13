@@ -139,3 +139,38 @@ therefore checks the generated Hypium result/error output rather than treating
   as verified for this remediation; the pre-remediation Task 5 commit's default
   HAP build remains the successful result recorded above.
 - Scoped `git diff --check` for the Task 5 files: exit 0.
+
+## Narrow re-review remediation
+
+The final narrow review's two remaining P1 cases were reproduced with new
+tests before implementation. The new Python contract test failed against the
+old generator because direct decode goldens were absent; the checked-in ArkTS
+tests simultaneously referenced that absent fixture contract and reversed the
+old following-chunk newline assertions.
+
+- Decoder dummy-prefix removal is now provenance-aware: it removes the first
+  decoded space only when the first emitted normal piece actually starts with
+  SentencePiece `▁`. A leading UNK (including after skipped controls) keeps its
+  intentional leading space. Pinned direct-ID goldens cover `[1]`, `[1,256]`,
+  known+UNK, consecutive UNKs, explicit whitespace-piece adjacency, and a
+  normal dummy-prefixed piece; the existing supplementary/BMP/run cases remain.
+- Inter-chunk newlines now append to the previous chunk's `separatorAfter`.
+  Only separators before the first translatable chunk use `separatorBefore`.
+  A zero-token whitespace-only middle line is preserved in the preceding
+  separator payload, so `a\n  \nb` and mixed LF/CRLF leading, consecutive,
+  whitespace-only, trailing, and punctuation-split inputs reconstruct exactly.
+
+Verification for this remediation:
+
+- `python -m unittest tools.translation.tokenizer_test_generator -v`: 4 tests,
+  exit 0, `OK`.
+- Host `hvigorw test --no-daemon`: exit 0,
+  `BUILD SUCCESSFUL in 1 min 38 s 723 ms`. The generated Hypium result artifact
+  reports `Tests run: 439, Failure: 0, Error: 0, Pass: 439, Ignore: 0`; all ten
+  `TranslationModelUnit` cases report `Success`.
+- `entry@ohosTest` HAP compile/package: exit 0,
+  `BUILD SUCCESSFUL in 46 s 649 ms`.
+- The final default HAP was intentionally skipped because the concurrent T3
+  cadence-500 training agent reported its 206 MB step-12000 resume-save and
+  validation window as I/O-busy. The prior default-HAP pending status remains.
+- Scoped `git diff --check` for the Task 5 files: exit 0.
