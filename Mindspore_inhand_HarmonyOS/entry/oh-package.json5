@@ -5,6 +5,8 @@
   "main": "",
   "author": "",
   "license": "",
-  "dependencies": {}
+  "dependencies": {
+    "libgesture_mnn.so": "file:./src/main/cpp/types/libgesture_mnn"
+  }
 }
 

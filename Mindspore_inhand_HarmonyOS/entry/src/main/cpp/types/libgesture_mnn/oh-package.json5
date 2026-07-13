@@ -1,0 +1,6 @@
+{
+  "name": "libgesture_mnn.so",
+  "version": "1.0.0",
+  "description": "Typed boundary for the local HMS gesture MNN runtime.",
+  "types": "./index.d.ts"
+}
