@@ -46,8 +46,8 @@ class DiagnosticTranslationTest(unittest.TestCase):
                 "teacherGenerationActualSeconds": 20.0,
                 "rescueActualSeconds": 8.0,
                 "cumulativeActualSeconds": 40.0,
-                "totalBudgetSeconds": 1000.0,
-                "remainingSeconds": 960.0,
+                "totalBudgetSeconds": 43200.0,
+                "remainingSeconds": 43160.0,
             },
             "objectiveHashes": {"fixture": "a" * 64},
             "sourceArtifacts": {
@@ -90,7 +90,7 @@ class DiagnosticTranslationTest(unittest.TestCase):
             "budgetRootProvenance": None,
             "priorEvidence": prior_artifact,
             "budgetReceipt": receipt_artifact,
-            "gpuLedger": evaluation_budget_snapshot(prior, elapsed, 1000.0),
+            "gpuLedger": evaluation_budget_snapshot(prior, elapsed, 43200.0),
             "peak_cuda_bytes": 1,
         }
 
@@ -138,7 +138,7 @@ class DiagnosticTranslationTest(unittest.TestCase):
                 provenance_artifact,
                 40.0,
                 5.0,
-                1000.0,
+                43200.0,
                 "synthetic failure",
             )
             terminal_path = root / "budget-terminal-v1.json"
@@ -148,6 +148,42 @@ class DiagnosticTranslationTest(unittest.TestCase):
             )
             terminal["cumulativeActualSeconds"] += 1
             self._write(terminal_path, terminal)
+            with self.assertRaises(DiagnosticEvaluationError):
+                load_budget_evidence(terminal_path)
+
+            forged = build_budget_terminal(
+                "translation_diagnostic_evaluation", "completed",
+                provenance_artifact, 0.0, 5.0, 43200.0, None,
+                provenance_artifact,
+            )
+            self._write(terminal_path, forged)
+            with self.assertRaises(DiagnosticEvaluationError):
+                load_budget_evidence(terminal_path)
+
+            forged = build_budget_terminal(
+                "translation_diagnostic_evaluation", "completed",
+                provenance_artifact, 40.0, 5.0, 43199.0, None,
+                provenance_artifact,
+            )
+            self._write(terminal_path, forged)
+            with self.assertRaises(DiagnosticEvaluationError):
+                load_budget_evidence(terminal_path)
+
+            missing = build_budget_terminal(
+                "translation_diagnostic_evaluation", "completed",
+                {"path": "missing.json", "bytes": 1, "sha256": "9" * 64},
+                40.0, 5.0, 43200.0, None, provenance_artifact,
+            )
+            self._write(terminal_path, missing)
+            with self.assertRaises(DiagnosticEvaluationError):
+                load_budget_evidence(terminal_path)
+
+            cycle = build_budget_terminal(
+                "translation_diagnostic_evaluation", "completed",
+                {"path": terminal_path.name, "bytes": 1, "sha256": "8" * 64},
+                40.0, 5.0, 43200.0, None, provenance_artifact,
+            )
+            self._write(terminal_path, cycle)
             with self.assertRaises(DiagnosticEvaluationError):
                 load_budget_evidence(terminal_path)
 
@@ -209,61 +245,228 @@ class DiagnosticTranslationTest(unittest.TestCase):
     def test_comparison_marks_sequence_gain_and_nll_regression_per_direction(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            provenance_path = root / "diagnostic-provenance-v1.json"
-            provenance_artifact = self._write(
-                provenance_path, self._diagnostic_provenance()
-            )
+
+            def artifact(path, rows=None):
+                value = {
+                    "path": path.name,
+                    "bytes": path.stat().st_size,
+                    "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+                }
+                if rows is not None:
+                    value["rows"] = rows
+                return value
+
+            baseline_checkpoint = root / "baseline-checkpoint"
+            diagnostic_checkpoint = root / "diagnostic-checkpoint"
+            baseline_checkpoint.mkdir()
+            diagnostic_checkpoint.mkdir()
+            baseline_model = baseline_checkpoint / "model.safetensors"
+            diagnostic_model = diagnostic_checkpoint / "model.safetensors"
+            tokenizer_path = root / "tokenizer.model"
+            baseline_model.write_bytes(b"baseline model fixture")
+            diagnostic_model.write_bytes(b"diagnostic model fixture")
+            tokenizer_path.write_bytes(b"tokenizer fixture")
+
+            dataset_root = root / "dataset"
+            dataset_root.mkdir()
+            dataset_outputs = {}
+            test_rows = {}
+            for direction, direction_id in (("zh-en", 32001), ("en-zh", 32002)):
+                for split in ("train", "validation", "test"):
+                    count = 5000 if split == "test" else 1
+                    rows = [
+                        {
+                            "source": "%s source %d" % (direction, index),
+                            "target": "%s target %d" % (direction, index),
+                            "direction_id": direction_id,
+                        }
+                        for index in range(1, count + 1)
+                    ]
+                    name = "%s.%s.jsonl" % (direction, split)
+                    path = dataset_root / name
+                    path.write_bytes(b"".join(
+                        json.dumps(
+                            row, ensure_ascii=False, separators=(",", ":")
+                        ).encode("utf-8") + b"\n"
+                        for row in rows
+                    ))
+                    dataset_outputs[name] = {
+                        **artifact(path), "count": count,
+                    }
+                    if split == "test":
+                        test_rows[direction] = rows
+            dataset_manifest_path = root / "dataset-manifest-v1.json"
+            dataset_manifest_artifact = self._write(dataset_manifest_path, {
+                "schema_version": 1,
+                "dataset": {
+                    "repo": "Mxode/BiST",
+                    "revision": "aca6be897afc319f779009379c8b849c1eb8d63e",
+                },
+                "outputs": dataset_outputs,
+            })
+            manual_path = root / "manual.jsonl"
+            manual_path.write_bytes(b"{}\n" * 100)
+            manual_artifact = artifact(manual_path, rows=100)
+
+            provenance = self._diagnostic_provenance()
+            provenance["checkpoint"] = {
+                "model": artifact(diagnostic_model),
+                "tokenizer": artifact(tokenizer_path),
+            }
+            provenance_path = diagnostic_checkpoint / "diagnostic-provenance-v1.json"
+            provenance_artifact = self._write(provenance_path, provenance)
             prior_path = root / "prior-budget-v1.json"
             prior = build_budget_terminal(
                 "translation_diagnostic_reconciliation", "completed",
-                provenance_artifact, 40.0, 1.0, 1000.0, None,
+                provenance_artifact, 40.0, 1.0, 43200.0, None,
             )
             prior_artifact = self._write(prior_path, prior)
-            baseline_receipt_path = root / "baseline-budget-v1.json"
+
+            baseline_root = root / "baseline-evaluation"
+            diagnostic_root = root / "diagnostic-evaluation"
+            baseline_root.mkdir()
+            diagnostic_root.mkdir()
+            baseline_receipt_path = baseline_root / "budget-terminal-v1.json"
             baseline_receipt = build_budget_terminal(
                 "translation_diagnostic_evaluation", "completed",
-                prior_artifact, 41.0, 1.0, 1000.0, None, provenance_artifact,
+                prior_artifact, 41.0, 1.0, 43200.0, None, provenance_artifact,
             )
             baseline_receipt_artifact = self._write(
                 baseline_receipt_path, baseline_receipt
             )
-            baseline_path = root / "baseline.json"
-            baseline = self._evaluation_report(
-                "baseline", STUDENT_SHA256, "4" * 64, prior_artifact,
-                baseline_receipt_artifact, 41.0, 1.0, None,
-            )
-            baseline["budgetRootProvenance"] = provenance_artifact
-            self._write(baseline_path, baseline)
-            diagnostic_receipt_path = root / "diagnostic-budget-v1.json"
+            diagnostic_receipt_path = diagnostic_root / "budget-terminal-v1.json"
             diagnostic_receipt = build_budget_terminal(
                 "translation_diagnostic_evaluation", "completed",
-                baseline_receipt_artifact, 42.0, 2.0, 1000.0, None,
+                baseline_receipt_artifact, 42.0, 2.0, 43200.0, None,
                 provenance_artifact,
             )
             diagnostic_receipt_artifact = self._write(
                 diagnostic_receipt_path, diagnostic_receipt
             )
-            diagnostic_path = root / "diagnostic.json"
+
+            metric_values = {
+                ("baseline", "13a"): {
+                    "bleu": 21.0, "chrf2": 46.0,
+                    "bleu_signature": "b", "chrf2_signature": "c",
+                },
+                ("baseline", "zh"): {
+                    "bleu": 16.0, "chrf2": 36.0,
+                    "bleu_signature": "b", "chrf2_signature": "c",
+                },
+                ("diagnostic", "13a"): {
+                    "bleu": 22.0, "chrf2": 47.0,
+                    "bleu_signature": "b", "chrf2_signature": "c",
+                },
+                ("diagnostic", "zh"): {
+                    "bleu": 17.0, "chrf2": 37.0,
+                    "bleu_signature": "b", "chrf2_signature": "c",
+                },
+            }
+
+            def write_bist_outputs(label, output_root):
+                path = output_root / "bist-test-outputs-v1.jsonl"
+                with path.open("wb") as stream:
+                    for direction in ("zh-en", "en-zh"):
+                        for index, row in enumerate(test_rows[direction], 1):
+                            stream.write(canonical_json_bytes({
+                                "direction": direction,
+                                "index": index,
+                                "source": row["source"],
+                                "reference": row["target"],
+                                "output": "%s: %s" % (label, row["target"]),
+                            }))
+                return artifact(path, rows=10000)
+
+            baseline_bist = write_bist_outputs("baseline", baseline_root)
+            diagnostic_bist = write_bist_outputs("diagnostic", diagnostic_root)
+            baseline_results_path = baseline_root / "manual-results-raw-v1.jsonl"
+            diagnostic_results_path = diagnostic_root / "manual-results-raw-v1.jsonl"
+            baseline_results_path.write_bytes(b"{}\n" * 100)
+            diagnostic_results_path.write_bytes(b"{}\n" * 100)
+
+            baseline_path = baseline_root / "diagnostic-evaluation-v1.json"
+            baseline = self._evaluation_report(
+                "baseline", STUDENT_SHA256, artifact(tokenizer_path)["sha256"], prior_artifact,
+                baseline_receipt_artifact, 41.0, 1.0, None,
+            )
+            baseline["budgetRootProvenance"] = provenance_artifact
+            baseline["checkpoint"]["model"]["bytes"] = baseline_model.stat().st_size
+            baseline["checkpoint"]["tokenizer"] = artifact(tokenizer_path)
+            baseline["dataset"]["manifest"] = dataset_manifest_artifact
+            baseline["bistOutputs"] = baseline_bist
+            baseline["manual"]["asset"] = manual_artifact
+            baseline["manual"]["results"] = artifact(
+                baseline_results_path, rows=100
+            )
+            self._write(baseline_path, baseline)
+            diagnostic_path = diagnostic_root / "diagnostic-evaluation-v1.json"
             diagnostic = self._evaluation_report(
-                "diagnostic", "d" * 64, "4" * 64,
+                "diagnostic", artifact(diagnostic_model)["sha256"],
+                artifact(tokenizer_path)["sha256"],
                 baseline_receipt_artifact, diagnostic_receipt_artifact,
                 42.0, 2.0, provenance_artifact,
             )
             diagnostic["budgetRootProvenance"] = provenance_artifact
-            self._write(diagnostic_path, diagnostic)
-            report = build_checkpoint_comparison(
-                baseline_path, diagnostic_path, provenance_path, prior_path
+            diagnostic["checkpoint"] = {
+                "model": artifact(diagnostic_model),
+                "tokenizer": artifact(tokenizer_path),
+            }
+            diagnostic["dataset"]["manifest"] = dataset_manifest_artifact
+            diagnostic["bistOutputs"] = diagnostic_bist
+            diagnostic["manual"]["asset"] = manual_artifact
+            diagnostic["manual"]["results"] = artifact(
+                diagnostic_results_path, rows=100
             )
-            self.assertTrue(report["sequence_metrics_improved"])
-            self.assertTrue(report["validation_nll_regressed"])
-            self.assertEqual(report["directions"]["en-zh"]["bleu_delta"], 1.0)
+            self._write(diagnostic_path, diagnostic)
 
-            forged = {"label": "diagnostic", "bist_test": diagnostic["bist_test"], "directional_validation_loss": diagnostic["directional_validation_loss"]}
-            diagnostic_path.write_bytes(canonical_json_bytes(forged))
-            with self.assertRaises(DiagnosticEvaluationError):
-                build_checkpoint_comparison(
-                    baseline_path, diagnostic_path, provenance_path, prior_path
-                )
+            real_artifact = __import__(
+                "tools.translation.diagnose_translation", fromlist=["_artifact"]
+            )._artifact
+
+            def pinned_artifact(path):
+                value = real_artifact(path)
+                if Path(path).resolve() == baseline_model.resolve():
+                    value["sha256"] = STUDENT_SHA256
+                return value
+
+            def recompute(outputs, unused_references, tokenizer):
+                return metric_values[(outputs[0].split(":", 1)[0], tokenizer)]
+
+            arguments = (
+                baseline_path, diagnostic_path, provenance_path, prior_path,
+                baseline_checkpoint, tokenizer_path, dataset_root,
+                dataset_manifest_path, manual_path,
+            )
+            with mock.patch(
+                "tools.translation.diagnose_translation._artifact",
+                side_effect=pinned_artifact,
+            ), mock.patch(
+                "tools.translation.diagnose_translation.corpus_metrics",
+                side_effect=recompute,
+            ):
+                report = build_checkpoint_comparison(*arguments)
+                self.assertTrue(report["sequence_metrics_improved"])
+                self.assertTrue(report["validation_nll_regressed"])
+                self.assertEqual(report["directions"]["en-zh"]["bleu_delta"], 1.0)
+
+                diagnostic["bist_test"]["en-zh"]["bleu"] = 999.0
+                diagnostic_path.write_bytes(canonical_json_bytes(diagnostic))
+                with self.assertRaises(DiagnosticEvaluationError):
+                    build_checkpoint_comparison(*arguments)
+
+                diagnostic["bist_test"]["en-zh"]["bleu"] = 17.0
+                diagnostic_path.write_bytes(canonical_json_bytes(diagnostic))
+                (diagnostic_root / diagnostic_bist["path"]).unlink()
+                with self.assertRaises(DiagnosticEvaluationError):
+                    build_checkpoint_comparison(*arguments)
+
+                diagnostic_path.write_bytes(canonical_json_bytes({
+                    "label": "diagnostic",
+                    "bist_test": diagnostic["bist_test"],
+                    "directional_validation_loss": diagnostic["directional_validation_loss"],
+                }))
+                with self.assertRaises(DiagnosticEvaluationError):
+                    build_checkpoint_comparison(*arguments)
 
 
 if __name__ == "__main__":

@@ -15,6 +15,9 @@ from typing import Dict, Optional, Sequence
 PINNED_REPOSITORY = "Helsinki-NLP/opus-mt_tiny_zho-eng"
 PINNED_REVISION = "4ee3a9342aae4ca6fbae82c930b5dccff5dd68dd"
 PROTOTYPE_MODEL_SHA256 = "e285c15744265535ce9cbcbb59e4144e2e7c0e6f113f05ca092f8c41f1f6b28a"
+REJECTED_DIAGNOSTIC_MODEL_SHA256S = frozenset({
+    "c28e7f7f8af8009d634795d2fd012a891695bf59dc134ddf7e50516da9831237",
+})
 FLORES_REPOSITORY = "openlanguagedata/flores_plus"
 FLORES_REVISION = "b3a5298db5721c8a682e7ef00a37fcc9ab522757"
 FLORES_PATHS = {"devtest/cmn_Hans.jsonl", "devtest/eng_Latn.jsonl"}
@@ -322,6 +325,9 @@ def _validate_checkpoint(
     config_path = checkpoint / "config.json"
     if not config_path.is_file() or not (checkpoint / "model.safetensors").is_file():
         raise ContractError("checkpoint must contain config.json and model.safetensors")
+    model_sha256 = _sha256_file(checkpoint / "model.safetensors")
+    if model_sha256 in REJECTED_DIAGNOSTIC_MODEL_SHA256S:
+        raise ContractError("all export profiles reject known rejected diagnostic models")
     config = json.loads(config_path.read_text(encoding="utf-8"))
     expected = {
         "vocab_size": profile["vocabSize"],
@@ -348,7 +354,7 @@ def _validate_checkpoint(
         )
     if training_report_path is not None or quality_gate_report_path is not None:
         raise ContractError("prototype export rejects production approval reports")
-    if _sha256_file(checkpoint / "model.safetensors") != PROTOTYPE_MODEL_SHA256:
+    if model_sha256 != PROTOTYPE_MODEL_SHA256:
         raise ContractError("prototype checkpoint model is outside the pinned allowlist")
     return None
 

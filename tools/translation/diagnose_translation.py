@@ -21,6 +21,7 @@ from tools.translation.evaluate_translation import (
     translate_texts,
 )
 from tools.translation.train_bidirectional import (
+    TrainingContractError,
     _forward_loss,
     _load_json,
     _memmap_batch,
@@ -33,6 +34,7 @@ from tools.translation.train_rescue import DIAGNOSTIC_STATUS
 
 
 DIRECTION_IDS = {"zh-en": 32001, "en-zh": 32002}
+TOTAL_GPU_BUDGET_SECONDS = 43200.0
 
 
 class DiagnosticEvaluationError(RuntimeError):
@@ -194,64 +196,130 @@ def _validate_diagnostic_provenance(path):
         remaining = _number(ledger["remainingSeconds"], "remaining")
     except KeyError as error:
         raise DiagnosticEvaluationError("diagnostic provenance ledger differs") from error
-    if components != cumulative or total - cumulative != remaining or remaining < 0:
+    if (
+        components != cumulative
+        or total != TOTAL_GPU_BUDGET_SECONDS
+        or total - cumulative != remaining
+        or remaining < 0
+    ):
         raise DiagnosticEvaluationError("diagnostic provenance ledger arithmetic differs")
     return provenance
 
 
-def load_budget_evidence(path):
-    path = Path(path)
-    value = _canonical_load(path, "budget evidence")
-    if isinstance(value, dict) and value.get("status") == DIAGNOSTIC_STATUS:
-        provenance = _validate_diagnostic_provenance(path)
-        ledger = provenance["gpuLedger"]
-        return {
-            "artifact": _artifact(path),
-            "rootEvidence": _artifact(path),
-            "cumulativeActualSeconds": float(ledger["cumulativeActualSeconds"]),
-            "totalBudgetSeconds": float(ledger["totalBudgetSeconds"]),
-        }
-    expected = {
-        "schema_version", "stage", "status", "priorEvidence", "rootEvidence",
-        "priorCumulativeSeconds", "evaluationActualSeconds",
-        "cumulativeActualSeconds", "totalBudgetSeconds", "remainingSeconds",
-        "error",
-    }
-    if (
-        not isinstance(value, dict)
-        or set(value) != expected
-        or value.get("schema_version") != 1
-        or value.get("status") not in {"completed", "failed"}
-        or not isinstance(value.get("stage"), str)
-        or not value["stage"]
-        or not _valid_artifact(value.get("priorEvidence"))
-        or not _valid_artifact(value.get("rootEvidence"))
-        or (value["status"] == "completed" and value.get("error") is not None)
-        or (
-            value["status"] == "failed"
-            and (not isinstance(value.get("error"), str) or not value["error"])
-        )
-    ):
-        raise DiagnosticEvaluationError("budget evidence contract differs")
-    prior = _number(value["priorCumulativeSeconds"], "prior")
-    elapsed = _number(value["evaluationActualSeconds"], "elapsed")
-    cumulative = _number(value["cumulativeActualSeconds"], "cumulative")
-    total = _number(value["totalBudgetSeconds"], "total")
-    remaining = _number(value["remainingSeconds"], "remaining")
-    if (
-        prior < 0
-        or elapsed < 0
-        or total <= 0
-        or prior + elapsed != cumulative
-        or total - cumulative != remaining
-    ):
-        raise DiagnosticEvaluationError("budget evidence arithmetic differs")
-    return {
-        "artifact": _artifact(path),
-        "rootEvidence": value["rootEvidence"],
-        "cumulativeActualSeconds": cumulative,
-        "totalBudgetSeconds": total,
-    }
+def load_budget_evidence(path, supporting_evidence_paths=()):
+    path = Path(path).resolve()
+    if isinstance(supporting_evidence_paths, (str, Path)):
+        supporting_evidence_paths = (supporting_evidence_paths,)
+    registry = {}
+
+    def artifact_key(value):
+        return value["path"], value["bytes"], value["sha256"]
+
+    def register(candidate):
+        candidate = Path(candidate).resolve()
+        if not candidate.is_file():
+            raise DiagnosticEvaluationError("budget evidence file is missing")
+        artifact = _artifact(candidate)
+        key = artifact_key(artifact)
+        existing = registry.get(key)
+        if existing is not None and existing != candidate:
+            raise DiagnosticEvaluationError("budget evidence artifact is ambiguous")
+        registry[key] = candidate
+        return candidate
+
+    register(path)
+    for candidate in supporting_evidence_paths:
+        register(candidate)
+    cache = {}
+    active = set()
+
+    def resolve_reference(owner, artifact):
+        sibling = owner.parent / artifact["path"]
+        if sibling.is_file() and _artifact(sibling) == artifact:
+            register(sibling)
+            return sibling.resolve()
+        resolved = registry.get(artifact_key(artifact))
+        if resolved is None:
+            raise DiagnosticEvaluationError(
+                "budget evidence reference is missing or has the wrong hash"
+            )
+        return resolved
+
+    def visit(candidate):
+        candidate = Path(candidate).resolve()
+        if candidate in active:
+            raise DiagnosticEvaluationError("budget evidence chain contains a cycle")
+        if candidate in cache:
+            return cache[candidate]
+        active.add(candidate)
+        try:
+            value = _canonical_load(candidate, "budget evidence")
+            artifact = _artifact(candidate)
+            if isinstance(value, dict) and value.get("status") == DIAGNOSTIC_STATUS:
+                provenance = _validate_diagnostic_provenance(candidate)
+                ledger = provenance["gpuLedger"]
+                result = {
+                    "artifact": artifact,
+                    "rootEvidence": artifact,
+                    "cumulativeActualSeconds": float(ledger["cumulativeActualSeconds"]),
+                    "totalBudgetSeconds": float(ledger["totalBudgetSeconds"]),
+                }
+            else:
+                expected = {
+                    "schema_version", "stage", "status", "priorEvidence", "rootEvidence",
+                    "priorCumulativeSeconds", "evaluationActualSeconds",
+                    "cumulativeActualSeconds", "totalBudgetSeconds", "remainingSeconds",
+                    "error",
+                }
+                if (
+                    not isinstance(value, dict)
+                    or set(value) != expected
+                    or value.get("schema_version") != 1
+                    or value.get("status") not in {"completed", "failed"}
+                    or not isinstance(value.get("stage"), str)
+                    or not value["stage"]
+                    or not _valid_artifact(value.get("priorEvidence"))
+                    or not _valid_artifact(value.get("rootEvidence"))
+                    or (value["status"] == "completed" and value.get("error") is not None)
+                    or (
+                        value["status"] == "failed"
+                        and (not isinstance(value.get("error"), str) or not value["error"])
+                    )
+                ):
+                    raise DiagnosticEvaluationError("budget evidence contract differs")
+                prior = _number(value["priorCumulativeSeconds"], "prior")
+                elapsed = _number(value["evaluationActualSeconds"], "elapsed")
+                cumulative = _number(value["cumulativeActualSeconds"], "cumulative")
+                total = _number(value["totalBudgetSeconds"], "total")
+                remaining = _number(value["remainingSeconds"], "remaining")
+                prior_evidence = visit(resolve_reference(candidate, value["priorEvidence"]))
+                root_evidence = visit(resolve_reference(candidate, value["rootEvidence"]))
+                if (
+                    prior < 0
+                    or elapsed < 0
+                    or total != TOTAL_GPU_BUDGET_SECONDS
+                    or prior + elapsed != cumulative
+                    or total - cumulative != remaining
+                    or remaining < 0
+                    or prior != prior_evidence["cumulativeActualSeconds"]
+                    or total != prior_evidence["totalBudgetSeconds"]
+                    or value["rootEvidence"] != root_evidence["artifact"]
+                    or root_evidence["rootEvidence"] != root_evidence["artifact"]
+                    or prior_evidence["rootEvidence"] != root_evidence["artifact"]
+                ):
+                    raise DiagnosticEvaluationError("budget evidence chain differs")
+                result = {
+                    "artifact": artifact,
+                    "rootEvidence": root_evidence["artifact"],
+                    "cumulativeActualSeconds": cumulative,
+                    "totalBudgetSeconds": total,
+                }
+            cache[candidate] = result
+            return result
+        finally:
+            active.remove(candidate)
+
+    return visit(path)
 
 
 def load_bist_rows(path, direction, expected_count):
@@ -362,10 +430,12 @@ def evaluate_checkpoint(
     if not isinstance(label, str) or not label:
         raise DiagnosticEvaluationError("checkpoint label is empty")
     checkpoint_dir = Path(checkpoint_dir).resolve()
-    prior_evidence = load_budget_evidence(prior_evidence_path)
     budget_root_provenance_path = Path(budget_root_provenance_path).resolve()
     _validate_diagnostic_provenance(budget_root_provenance_path)
     budget_root_artifact = _artifact(budget_root_provenance_path)
+    prior_evidence = load_budget_evidence(
+        prior_evidence_path, (budget_root_provenance_path,)
+    )
     if prior_evidence["rootEvidence"] != budget_root_artifact:
         raise DiagnosticEvaluationError("prior budget evidence root differs")
     diagnostic_provenance = None
@@ -551,7 +621,83 @@ def _valid_row_artifact(value, rows):
     )
 
 
-def _validate_evaluation_report(path, expected_label):
+def _require_artifact(path, expected, label, rows=None):
+    path = Path(path).resolve()
+    base = expected
+    if rows is not None:
+        if not _valid_row_artifact(expected, rows):
+            raise DiagnosticEvaluationError("%s artifact schema differs" % label)
+        base = {name: expected[name] for name in ("path", "bytes", "sha256")}
+    if not path.is_file() or _artifact(path) != base:
+        raise DiagnosticEvaluationError("%s file is missing or has the wrong hash" % label)
+    return path
+
+
+def _verified_bist_metrics(report_path, report, dataset_root, dataset_manifest):
+    output_path = _require_artifact(
+        Path(report_path).parent / report["bistOutputs"]["path"],
+        report["bistOutputs"],
+        "BiST output",
+        rows=10000,
+    )
+    expected_rows = {}
+    for direction in ("zh-en", "en-zh"):
+        artifact = dataset_manifest["outputs"][direction + ".test.jsonl"]
+        expected_rows[direction] = load_bist_rows(
+            Path(dataset_root) / artifact["path"], direction, 5000
+        )
+    outputs = {"zh-en": [], "en-zh": []}
+    references = {"zh-en": [], "en-zh": []}
+    counts = {"zh-en": 0, "en-zh": 0}
+    try:
+        with output_path.open("rb") as stream:
+            for raw in stream:
+                row = json.loads(raw.decode("utf-8"))
+                direction = row.get("direction") if isinstance(row, dict) else None
+                if direction not in outputs:
+                    raise DiagnosticEvaluationError("BiST output direction differs")
+                counts[direction] += 1
+                index = counts[direction]
+                expected = expected_rows[direction][index - 1] if index <= 5000 else None
+                if (
+                    raw != canonical_json_bytes(row)
+                    or set(row) != {"direction", "index", "source", "reference", "output"}
+                    or row["index"] != index
+                    or expected is None
+                    or row["source"] != expected["source"]
+                    or row["reference"] != expected["target"]
+                    or not isinstance(row["output"], str)
+                ):
+                    raise DiagnosticEvaluationError("BiST output row differs")
+                outputs[direction].append(row["output"])
+                references[direction].append(row["reference"])
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise DiagnosticEvaluationError("cannot read BiST output") from error
+    if counts != {"zh-en": 5000, "en-zh": 5000}:
+        raise DiagnosticEvaluationError("BiST output row count differs")
+    try:
+        return {
+            direction: corpus_metrics(
+                outputs[direction],
+                references[direction],
+                tokenizer="13a" if direction == "zh-en" else "zh",
+            )
+            for direction in ("zh-en", "en-zh")
+        }
+    except Exception as error:
+        raise DiagnosticEvaluationError("cannot recompute pinned BiST metrics") from error
+
+
+def _validate_evaluation_report(
+    path,
+    expected_label,
+    checkpoint_dir,
+    tokenizer_model,
+    dataset_root,
+    dataset_manifest_path,
+    manual_path,
+    budget_support_paths,
+):
     path = Path(path).resolve()
     report = _canonical_load(path, "%s evaluation report" % expected_label)
     expected_keys = {
@@ -593,6 +739,48 @@ def _validate_evaluation_report(path, expected_label):
         or report["peak_cuda_bytes"] < 0
     ):
         raise DiagnosticEvaluationError("%s evaluation report contract differs" % expected_label)
+    checkpoint_dir = Path(checkpoint_dir).resolve()
+    tokenizer_model = Path(tokenizer_model).resolve()
+    dataset_manifest_path = Path(dataset_manifest_path).resolve()
+    manual_path = Path(manual_path).resolve()
+    _require_artifact(
+        checkpoint_dir / "model.safetensors",
+        report["checkpoint"]["model"],
+        "%s checkpoint model" % expected_label,
+    )
+    _require_artifact(
+        tokenizer_model,
+        report["checkpoint"]["tokenizer"],
+        "%s checkpoint tokenizer" % expected_label,
+    )
+    _require_artifact(
+        dataset_manifest_path,
+        report["dataset"]["manifest"],
+        "%s dataset manifest" % expected_label,
+    )
+    _require_artifact(
+        manual_path,
+        report["manual"]["asset"],
+        "%s manual asset" % expected_label,
+        rows=100,
+    )
+    _require_artifact(
+        path.parent / report["manual"]["results"]["path"],
+        report["manual"]["results"],
+        "%s manual results" % expected_label,
+        rows=100,
+    )
+    dataset_manifest = _canonical_load(dataset_manifest_path, "BiST dataset manifest")
+    if (
+        not isinstance(dataset_manifest, dict)
+        or dataset_manifest.get("dataset")
+        != {"repo": report["dataset"]["repo"], "revision": report["dataset"]["revision"]}
+    ):
+        raise DiagnosticEvaluationError("BiST dataset manifest pin differs")
+    try:
+        verify_dataset_inputs(dataset_root, dataset_manifest)
+    except (OSError, TrainingContractError) as error:
+        raise DiagnosticEvaluationError("BiST dataset artifact verification failed") from error
     if (
         not isinstance(report.get("directional_validation_loss"), dict)
         or set(report["directional_validation_loss"]) != {"zh-en", "en-zh"}
@@ -614,6 +802,11 @@ def _validate_evaluation_report(path, expected_label):
             raise DiagnosticEvaluationError("evaluation metric contract differs")
         _number(metrics["bleu"], "BLEU")
         _number(metrics["chrf2"], "chrF2")
+    recomputed_metrics = _verified_bist_metrics(
+        path, report, dataset_root, dataset_manifest
+    )
+    if report["bist_test"] != recomputed_metrics:
+        raise DiagnosticEvaluationError("reported BiST metrics differ from raw outputs")
     ledger = report.get("gpuLedger")
     if not isinstance(ledger, dict) or set(ledger) != {
         "priorCumulativeSeconds", "evaluationActualSeconds",
@@ -631,7 +824,7 @@ def _validate_evaluation_report(path, expected_label):
     if not receipt_path.is_file() or _artifact(receipt_path) != report["budgetReceipt"]:
         raise DiagnosticEvaluationError("evaluation budget receipt hash differs")
     receipt = _canonical_load(receipt_path, "evaluation budget receipt")
-    receipt_evidence = load_budget_evidence(receipt_path)
+    receipt_evidence = load_budget_evidence(receipt_path, budget_support_paths)
     if (
         receipt.get("status") != "completed"
         or receipt.get("priorEvidence") != report["priorEvidence"]
@@ -656,16 +849,39 @@ def build_checkpoint_comparison(
     diagnostic_report_path,
     diagnostic_provenance_path,
     baseline_prior_evidence_path,
+    baseline_checkpoint_dir,
+    tokenizer_model,
+    dataset_root,
+    dataset_manifest_path,
+    manual_path,
 ):
     baseline_path = Path(baseline_report_path).resolve()
     diagnostic_path = Path(diagnostic_report_path).resolve()
     provenance_path = Path(diagnostic_provenance_path).resolve()
     prior_path = Path(baseline_prior_evidence_path).resolve()
-    baseline = _validate_evaluation_report(baseline_path, "baseline")
-    diagnostic = _validate_evaluation_report(diagnostic_path, "diagnostic")
     provenance = _validate_diagnostic_provenance(provenance_path)
-    prior = load_budget_evidence(prior_path)
+    prior = load_budget_evidence(prior_path, (provenance_path,))
+    baseline = _validate_evaluation_report(
+        baseline_path,
+        "baseline",
+        baseline_checkpoint_dir,
+        tokenizer_model,
+        dataset_root,
+        dataset_manifest_path,
+        manual_path,
+        (provenance_path, prior_path),
+    )
     baseline_receipt_path = baseline_path.parent / baseline["budgetReceipt"]["path"]
+    diagnostic = _validate_evaluation_report(
+        diagnostic_path,
+        "diagnostic",
+        provenance_path.parent,
+        tokenizer_model,
+        dataset_root,
+        dataset_manifest_path,
+        manual_path,
+        (provenance_path, prior_path, baseline_receipt_path),
+    )
     if (
         baseline["priorEvidence"] != prior["artifact"]
         or prior["rootEvidence"] != _artifact(provenance_path)
@@ -763,6 +979,11 @@ def build_parser():
     compare.add_argument("--diagnostic-summary", required=True, type=Path)
     compare.add_argument("--diagnostic-provenance", required=True, type=Path)
     compare.add_argument("--baseline-prior-evidence", required=True, type=Path)
+    compare.add_argument("--baseline-checkpoint", required=True, type=Path)
+    compare.add_argument("--tokenizer-model", required=True, type=Path)
+    compare.add_argument("--dataset-root", required=True, type=Path)
+    compare.add_argument("--dataset-manifest", required=True, type=Path)
+    compare.add_argument("--manual", required=True, type=Path)
     compare.add_argument("--output", required=True, type=Path)
     return parser
 
@@ -789,6 +1010,11 @@ def main(argv=None):
             args.diagnostic_summary,
             args.diagnostic_provenance,
             args.baseline_prior_evidence,
+            args.baseline_checkpoint,
+            args.tokenizer_model,
+            args.dataset_root,
+            args.dataset_manifest,
+            args.manual,
         )
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_bytes(canonical_json_bytes(report))

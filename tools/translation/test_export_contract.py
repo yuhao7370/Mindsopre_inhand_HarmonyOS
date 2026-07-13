@@ -25,6 +25,40 @@ ROOT = Path(__file__).parent
 
 class ExportContractTest(unittest.TestCase):
     def test_final_checkpoint_revision_provenance_is_required_and_pinned(self):
+        rejected = "c28e7f7f8af8009d634795d2fd012a891695bf59dc134ddf7e50516da9831237"
+        configs = {
+            "prototype": 32001,
+            "final": 32003,
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for profile_name, vocab_size in configs.items():
+                with self.subTest(profile=profile_name):
+                    checkpoint = root / profile_name
+                    checkpoint.mkdir()
+                    (checkpoint / "config.json").write_text(json.dumps({
+                        "vocab_size": vocab_size,
+                        "decoder_vocab_size": vocab_size,
+                        "d_model": 256,
+                        "encoder_layers": 6,
+                        "decoder_layers": 2,
+                        "encoder_attention_heads": 8,
+                        "decoder_attention_heads": 8,
+                    }), encoding="utf-8")
+                    (checkpoint / "model.safetensors").write_bytes(b"diagnostic")
+                    (checkpoint / "base_revision.txt").write_text(
+                        PINNED_REVISION + "\n", encoding="ascii"
+                    )
+                    with mock.patch(
+                        "tools.translation.export_marian_smoke._sha256_file",
+                        return_value=rejected,
+                    ):
+                        with self.assertRaisesRegex(ContractError, "rejected diagnostic"):
+                            _validate_checkpoint(
+                                checkpoint,
+                                load_profile(CONTRACT, profile_name),
+                                profile_name,
+                            )
         profile = load_profile(CONTRACT, "prototype")
         config = {
             "vocab_size": 32001,
