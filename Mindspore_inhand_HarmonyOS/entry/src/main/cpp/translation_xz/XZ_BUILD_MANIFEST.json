@@ -1,0 +1,55 @@
+{
+    "schemaVersion":  1,
+    "upstream":  {
+                     "url":  "https://github.com/tukaani-project/xz/releases/download/v5.8.3/xz-5.8.3.tar.xz",
+                     "version":  "5.8.3",
+                     "tagCommit":  "4b73f2ec19a99ef465282fbce633e8deb33691b3",
+                     "sourceSha256":  "FFF1FFCF2B0DA84D308A14DE513A1AA23D4E9AA3464D17E64B9714BFDD0BBFB6",
+                     "licenseFile":  "COPYING"
+                 },
+    "toolchain":  {
+                      "sdk":  "6.1.1",
+                      "apiLevel":  24,
+                      "abi":  "arm64-v8a",
+                      "jobs":  1
+                  },
+    "build":  {
+                  "cmakeFlags":  {
+                                     "BUILD_SHARED_LIBS":  "OFF",
+                                     "BUILD_TESTING":  "OFF",
+                                     "CMAKE_BUILD_TYPE":  "Release",
+                                     "CMAKE_POSITION_INDEPENDENT_CODE":  "ON",
+                                     "OHOS_ARCH":  "arm64-v8a",
+                                     "OHOS_PLATFORM_LEVEL":  "24",
+                                     "XZ_ARM64_CRC32":  "OFF",
+                                     "XZ_DECODERS":  "lzma1;lzma2",
+                                     "XZ_DOC":  "OFF",
+                                     "XZ_ENCODERS":  "",
+                                     "XZ_LZIP_DECODER":  "OFF",
+                                     "XZ_MICROLZMA_DECODER":  "OFF",
+                                     "XZ_MICROLZMA_ENCODER":  "OFF",
+                                     "XZ_NLS":  "OFF",
+                                     "XZ_SMALL":  "ON",
+                                     "XZ_THREADS":  "no",
+                                     "XZ_TOOL_LZMADEC":  "OFF",
+                                     "XZ_TOOL_LZMAINFO":  "OFF",
+                                     "XZ_TOOL_SCRIPTS":  "OFF",
+                                     "XZ_TOOL_XZ":  "OFF",
+                                     "XZ_TOOL_XZDEC":  "OFF"
+                                 },
+                  "target":  "liblzma",
+                  "wrapperTarget":  "translation_archive"
+              },
+    "artifacts":  {
+                      "liblzma":  {
+                                      "path":  "third_party/xz/lib/arm64-v8a/liblzma.a",
+                                      "size":  155728,
+                                      "sha256":  "CDF9871EA661091FD47B20FBA2156C6669BA990928E84C5780847F0EDA7AFAE5"
+                                  },
+                      "napi":  {
+                                   "path":  "entry/libs/arm64-v8a/libtranslation_archive.so",
+                                   "size":  263392,
+                                   "sha256":  "34596A10A1423ECDD9C0386EF9C65D6DC6CCFC3084A6C52F3AE263FD01FE6EC4"
+                               }
+                  }
+}
