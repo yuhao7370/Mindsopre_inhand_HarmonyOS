@@ -16,6 +16,7 @@ from tools.translation.prepare_bist import (
     build_result_manifest,
     direction_row,
     load_config,
+    main,
     ensure_tokenizer,
     normalize_pair,
     prepare_from_provider,
@@ -89,6 +90,99 @@ def row_for_direction_bucket(direction, bucket, index=0):
 
 
 class PrepareBistTest(unittest.TestCase):
+    def _run_main_with_manifest_publish_failure(self, root, fail_restore):
+        output = root / "published"
+        output.mkdir()
+        names = [
+            f"{direction}.{split}.jsonl"
+            for direction in ("zh-en", "en-zh")
+            for split in ("train", "validation", "test")
+        ]
+        expected = {}
+        outputs = {}
+        for index, name in enumerate(names):
+            payload = f"old-{index}".encode()
+            (output / name).write_bytes(payload)
+            expected[name] = payload
+            outputs[name] = {"path": name}
+        result_manifest = root / "bist-v1.json"
+        expected_manifest = b"old-manifest"
+        result_manifest.write_bytes(expected_manifest)
+
+        def prepare(_provider, _processor, _shards, staging, _config):
+            for index, name in enumerate(names):
+                (staging / name).write_bytes(f"new-{index}".encode())
+            return {"outputs": outputs, "consumed_shards": []}
+
+        real_replace = os.replace
+        publish_calls = 0
+
+        def fail_manifest_publish(source, destination):
+            nonlocal publish_calls
+            publish_calls += 1
+            if publish_calls == 14:
+                raise OSError("injected manifest publish failure")
+            real_replace(source, destination)
+
+        real_publish_transaction = publish_transaction
+
+        def inject_publish(staging, publications, replace_func=None):
+            del replace_func
+            return real_publish_transaction(
+                staging, publications, replace_func=fail_manifest_publish
+            )
+
+        restore_calls = 0
+
+        def restore(source, destination):
+            nonlocal restore_calls
+            restore_calls += 1
+            if fail_restore and restore_calls == 1:
+                raise OSError("injected backup restore failure")
+            real_replace(source, destination)
+
+        arguments = [
+            "--config", str(root / "config.json"),
+            "--source-manifest", str(root / "source.json"),
+            "--cache-dir", str(root / "cache"),
+            "--output-dir", str(output),
+            "--tokenizer-cache-dir", str(root / "tokenizer"),
+            "--result-manifest", str(result_manifest),
+            "--offline",
+        ]
+        with mock.patch(
+                    "tools.translation.prepare_bist.load_config",
+                    return_value={"tokenizer": {}},
+                ), \
+                mock.patch(
+                    "tools.translation.prepare_bist._load_source_manifest",
+                    return_value={"shards": []},
+                ), \
+                mock.patch("tools.translation.prepare_bist.ensure_tokenizer", return_value=root / "source.spm"), \
+                mock.patch(
+                    "tools.translation.prepare_bist.SentencePieceTextProcessor.from_model",
+                    return_value=object(),
+                ), \
+                mock.patch(
+                    "tools.translation.prepare_bist.HuggingFaceParquetProvider",
+                    return_value=SimpleNamespace(downloaded=set()),
+                ), \
+                mock.patch("tools.translation.prepare_bist._prepare_into", side_effect=prepare), \
+                mock.patch(
+                    "tools.translation.prepare_bist.build_result_manifest",
+                    return_value={"schema_version": 1},
+                ), \
+                mock.patch(
+                    "tools.translation.prepare_bist.publish_transaction",
+                    side_effect=inject_publish,
+                ), \
+                mock.patch("tools.translation.prepare_bist.os.replace", side_effect=restore):
+            try:
+                main(arguments)
+            except Exception as error:
+                return error, output, result_manifest, expected, expected_manifest
+        self.fail("injected publication failure did not raise")
+
     def test_implementation_hash_is_canonical_across_checkout_line_endings(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -650,6 +744,35 @@ class PrepareBistTest(unittest.TestCase):
                 )
             self.assertEqual({name: (output / name).read_bytes() for name in names}, expected)
             self.assertEqual(result_manifest.read_bytes(), expected_manifest)
+
+    def test_incomplete_rollback_preserves_recovery_directory_and_backup(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            error, output, result_manifest, expected, expected_manifest = (
+                self._run_main_with_manifest_publish_failure(root, fail_restore=True)
+            )
+            self.assertIsInstance(error, DatasetError)
+            recovery = error.recovery_path
+            self.assertIn(str(recovery), str(error))
+            self.assertTrue(recovery.is_dir())
+            self.assertFalse(result_manifest.exists())
+            self.assertEqual((recovery / "000006.bak").read_bytes(), expected_manifest)
+            self.assertEqual(
+                {name: (output / name).read_bytes() for name in expected}, expected
+            )
+
+    def test_complete_rollback_still_cleans_staging(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            error, output, result_manifest, expected, expected_manifest = (
+                self._run_main_with_manifest_publish_failure(root, fail_restore=False)
+            )
+            self.assertRegex(str(error), "manifest publish")
+            self.assertEqual(
+                {name: (output / name).read_bytes() for name in expected}, expected
+            )
+            self.assertEqual(result_manifest.read_bytes(), expected_manifest)
+            self.assertEqual(list(root.glob(".published.staging-*")), [])
 
 
 if __name__ == "__main__":

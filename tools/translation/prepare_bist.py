@@ -44,6 +44,15 @@ class DatasetError(RuntimeError):
     pass
 
 
+class PublicationRecoveryError(DatasetError):
+    def __init__(self, recovery_path):
+        self.recovery_path = Path(recovery_path)
+        super().__init__(
+            "publication failed and rollback was incomplete; recovery directory preserved at %s"
+            % self.recovery_path
+        )
+
+
 def _reject_existing_links(path, label):
     absolute = Path(path).absolute()
     current = Path(absolute.anchor)
@@ -627,7 +636,7 @@ def _prepare_into(provider, processor, shards, output_root, config):
 
 def publish_transaction(staging_root, publications, replace_func=os.replace):
     """Publish staged files with backups and rollback for flat-file consumers."""
-    staging_root = _safe_exact_path(staging_root, "publication staging")
+    staging_root = _require_outside_repository(staging_root, "publication staging")
     backup_root = _safe_child(staging_root, ".publication-backup", "publication backup")
     backup_root.mkdir()
     states = []
@@ -663,7 +672,7 @@ def publish_transaction(staging_root, publications, replace_func=os.replace):
             except Exception as error:
                 rollback_errors.append(error)
         if rollback_errors:
-            raise DatasetError("publication failed and rollback was incomplete") from rollback_errors[0]
+            raise PublicationRecoveryError(backup_root) from rollback_errors[0]
         shutil.rmtree(str(_safe_child(staging_root, backup_root.name, "publication backup cleanup")))
         raise
     shutil.rmtree(str(_safe_child(staging_root, backup_root.name, "publication backup cleanup")))
@@ -687,6 +696,7 @@ def _cleanup_staging(staging):
 def prepare_from_provider(provider, processor, shards, output_root, config):
     """Prepare and atomically publish six files while preserving existing outputs on failure."""
     output_root, staging = _create_staging(output_root)
+    cleanup_staging = True
     try:
         preparation = _prepare_into(provider, processor, shards, staging, config)
         publications = [
@@ -695,8 +705,12 @@ def prepare_from_provider(provider, processor, shards, output_root, config):
         ]
         publish_transaction(staging, publications)
         return preparation
+    except PublicationRecoveryError:
+        cleanup_staging = False
+        raise
     finally:
-        _cleanup_staging(staging)
+        if cleanup_staging:
+            _cleanup_staging(staging)
 
 
 def publish_prepared_result(
@@ -786,6 +800,7 @@ def main(argv=None):
         args.cache_dir, offline=args.offline, verbose=True
     )
     output_root, staging = _create_staging(args.output_dir)
+    cleanup_staging = True
     try:
         preparation = _prepare_into(
             provider, processor, source_manifest["shards"], staging, config
@@ -802,8 +817,12 @@ def main(argv=None):
         publish_prepared_result(
             staging, output_root, args.result_manifest, preparation, result
         )
+    except PublicationRecoveryError:
+        cleanup_staging = False
+        raise
     finally:
-        _cleanup_staging(staging)
+        if cleanup_staging:
+            _cleanup_staging(staging)
     downloaded_bytes = sum(
         shard["size"] for shard in source_manifest["shards"] if shard["path"] in provider.downloaded
     )

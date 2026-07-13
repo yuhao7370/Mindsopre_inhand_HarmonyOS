@@ -235,7 +235,7 @@
   },
   "implementation": {
     "script": "prepare_bist.py",
-    "script_sha256": "0ef1b97e500c3c6f872e670ca1e05713216d9223c56872e8bb6cde00c6af9059",
+    "script_sha256": "035c939641cd76487f42a9f29efaca68d2a6d48c4528a63ad7514b7c077b942b",
     "config": "config/training-v1.json",
     "config_sha256": "9fd7f341548567854b38878270de5403ccfca50d9337dfad55db6ecfd29b1b3c"
   },
