@@ -2,6 +2,7 @@
 param(
   [string]$StageRoot = '',
   [string]$PackageManifestPath = '',
+  [string]$NativeDecompressorPath = '',
   [string]$Python = 'python'
 )
 
@@ -16,8 +17,12 @@ if (-not $StageRoot) {
 if (-not $PackageManifestPath) {
   $PackageManifestPath = Join-Path $repositoryRoot 'tools\translation\manifests\final-package-v1.json'
 }
+if (-not $NativeDecompressorPath) {
+  $NativeDecompressorPath = Join-Path $projectRoot 'entry\libs\arm64-v8a\libtranslation_archive.so'
+}
 $StageRoot = [IO.Path]::GetFullPath($StageRoot)
 $PackageManifestPath = [IO.Path]::GetFullPath($PackageManifestPath)
+$NativeDecompressorPath = [IO.Path]::GetFullPath($NativeDecompressorPath)
 $runtimeManifestPath = Join-Path $StageRoot 'manifest.json'
 $archivePath = Join-Path $StageRoot 'translation-models.tar.xz'
 $packageVerifier = Join-Path $repositoryRoot 'tools\translation\verify_translation_package.py'
@@ -100,14 +105,15 @@ function Invoke-Checked([string]$Executable, [string[]]$Arguments, [string]$Labe
 if (-not (Test-Path -LiteralPath $StageRoot -PathType Container)) {
   throw "Missing translation asset directory: $StageRoot"
 }
-foreach ($path in @($PackageManifestPath, $runtimeManifestPath, $archivePath, $packageVerifier)) {
+foreach ($path in @($PackageManifestPath, $runtimeManifestPath, $archivePath, $NativeDecompressorPath, $packageVerifier)) {
   if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Missing translation package input: $path" }
 }
 
 Push-Location $repositoryRoot
 try {
   $packageResult = Invoke-Checked $Python @(
-    $packageVerifier, '--manifest', $PackageManifestPath, '--stage', $StageRoot
+    $packageVerifier, '--manifest', $PackageManifestPath, '--stage', $StageRoot,
+    '--decompressor', $NativeDecompressorPath
   ) 'Task 1 translation package verifier'
 } finally {
   Pop-Location

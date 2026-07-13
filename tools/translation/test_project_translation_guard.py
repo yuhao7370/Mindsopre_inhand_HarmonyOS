@@ -8,11 +8,12 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from tools.translation.build_translation_archive import build_tar
+from tools.translation.final_package_test_fixture import build_final_package_fixture
 
 
 ROOT = Path(__file__).resolve().parents[2]
 GUARD = ROOT / "Mindspore_inhand_HarmonyOS" / "scripts" / "verify-translation-model.ps1"
+BUILD_HAP = ROOT / "Mindspore_inhand_HarmonyOS" / "scripts" / "build-hap.ps1"
 POWERSHELL = Path(os.environ.get("SystemRoot", r"C:\Windows")) / "System32" / "WindowsPowerShell" / "v1.0" / "powershell.exe"
 FILES_BY_ROLE = {
     "archive": "translation-models.tar.xz",
@@ -30,103 +31,61 @@ def _sha(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def _tensor(name, dtype, shape):
-    return {"name": name, "dtype": dtype, "shape": shape}
-
-
-def _graphs(member_manifest):
-    members = {item["name"]: item for item in member_manifest["members"]}
-    float32 = "FLOAT32"
-    cache_one = [1, 8, 1, 32]
-    cache_cross = [1, 8, 128, 32]
-    cache_past = [1, 8, 127, 32]
-    return [
-        {
-            "file": "encoder.ms", "size": members["encoder.ms"]["size"], "sha256": members["encoder.ms"]["sha256"],
-            "inputs": [_tensor("input_ids", "INT32", [1, 128]), _tensor("attention_mask", "INT32", [1, 128])],
-            "outputs": [_tensor("last_hidden_state", float32, [1, 128, 256])],
-        },
-        {
-            "file": "decoder_prefill.ms", "size": members["decoder_prefill.ms"]["size"], "sha256": members["decoder_prefill.ms"]["sha256"],
-            "inputs": [
-                _tensor("decoder_input_ids", "INT32", [1, 1]),
-                _tensor("encoder_hidden_states", float32, [1, 128, 256]),
-                _tensor("encoder_attention_mask", "INT32", [1, 128]),
-            ],
-            "outputs": [_tensor("logits", float32, [1, 32003])] + [
-                _tensor(f"{kind}_{layer}", float32, cache_one if kind.startswith("self") else cache_cross)
-                for layer in range(2) for kind in ("self_key", "self_value", "cross_key", "cross_value")
-            ],
-        },
-        {
-            "file": "decoder_step.ms", "size": members["decoder_step.ms"]["size"], "sha256": members["decoder_step.ms"]["sha256"],
-            "inputs": [
-                _tensor("decoder_input_ids", "INT32", [1, 1]),
-                _tensor("position_id", "INT32", [1]),
-                _tensor("self_attention_mask", "INT32", [1, 128]),
-                _tensor("cross_attention_mask", "INT32", [1, 128]),
-            ] + [
-                _tensor(f"{kind}_{layer}", float32, cache_past if kind.startswith("past") else cache_cross)
-                for layer in range(2) for kind in ("past_key", "past_value", "cross_key", "cross_value")
-            ],
-            "outputs": [_tensor("logits", float32, [1, 32003])] + [
-                _tensor(f"new_{kind}_{layer}", float32, cache_one)
-                for layer in range(2) for kind in ("key", "value")
-            ],
-        },
-    ]
-
-
 class ProjectTranslationGuardTest(unittest.TestCase):
+    def test_external_native_guard_contract_and_deferred_build_hap_activation_order(self):
+        guard_source = GUARD.read_text(encoding="utf-8")
+        self.assertIn("[string]$NativeDecompressorPath", guard_source)
+        self.assertIn("'--decompressor'", guard_source)
+
+        build_source = BUILD_HAP.read_text(encoding="utf-8")
+        self.assertNotIn("verify-translation-model.ps1", build_source)
+        ensure_index = build_source.index("ensure-mindspore-models.ps1")
+        hvigor_index = build_source.index("$hvigor =")
+        self.assertLess(ensure_index, hvigor_index)
+        future_source = build_source.replace(
+            "$hvigor =",
+            "& (Join-Path $PSScriptRoot 'verify-translation-model.ps1')\n$hvigor =",
+            1,
+        )
+        guard_index = future_source.index("verify-translation-model.ps1")
+        future_hvigor_index = future_source.index("$hvigor =")
+        self.assertLess(ensure_index, guard_index)
+        self.assertLess(guard_index, future_hvigor_index)
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)
-        self.stage = self.root / "stage"
-        self.models = self.root / "models"
-        self.stage.mkdir()
-        self.models.mkdir()
-        for index, name in enumerate(("encoder.ms", "decoder_prefill.ms", "decoder_step.ms"), 1):
-            (self.models / name).write_bytes((name.encode("ascii") + b"\0") * index)
-        tar_path = self.root / "models.tar"
-        member_manifest = build_tar(self.models, tar_path)
-        archive = self.stage / "translation-models.tar.xz"
-        archive.write_bytes(lzma.compress(tar_path.read_bytes(), format=lzma.FORMAT_XZ, check=lzma.CHECK_CRC64, preset=9))
-        runtime_manifest = {
-            "schemaVersion": 1,
-            "vocabulary": {"size": 32003, "eos": 0, "unk": 1, "pad": 32000, "decoderStart": 32000, "toEnglish": 32001, "toChinese": 32002},
-            "archive": {"file": archive.name, "size": archive.stat().st_size, "sha256": _sha(archive), "cacheKey": "ARCHIVE_SHA256"},
-            "graphs": _graphs(member_manifest),
-        }
-        (self.stage / "manifest.json").write_text(json.dumps(runtime_manifest, separators=(",", ":")), encoding="utf-8")
-        for name, payload in {
-            "tokenizer.model": b"tokenizer", "vocab.json": b"{}", "tokenizer_runtime.json": b"{}",
-            "LICENSES.md": b"fixture", "SHA256SUMS": b"fixture", "libtranslation_archive.so": b"fixture",
-        }.items():
-            (self.stage / name).write_bytes(payload)
-        self.package_manifest = self.root / "package.json"
-        self._refresh_package_manifest()
+        fixture = build_final_package_fixture(self.root)
+        self.stage = fixture["stage"]
+        self.decompressor = fixture["decompressor"]
+        self.package_manifest = fixture["packageManifest"]
+        self.tar_record = fixture["archiveManifest"]["tar"]
 
     def tearDown(self):
         self.temp.cleanup()
 
     def _refresh_package_manifest(self):
-        role_by_name = {name: role for role, name in FILES_BY_ROLE.items()}
-        assets = [{"role": role_by_name[path.name], "path": path.name, "size": path.stat().st_size, "sha256": _sha(path)}
-                  for path in sorted(self.stage.iterdir(), key=lambda item: item.name)]
-        package = {
-            "schemaVersion": 1, "mode": "final", "limitBytes": 35 * 1024 * 1024,
-            "assets": assets, "allowances": [],
-            "evidence": {
-                "sourceEvidence": {"tar": {"size": 1, "sha256": "0" * 64}, "archive": {"size": 1, "sha256": "1" * 64}},
-                "canonicalRebuild": {"tar": {"size": 1, "sha256": "2" * 64}, "archive": {"size": 1, "sha256": "3" * 64}},
-            },
+        checksum_names = sorted(set(FILES_BY_ROLE.values()) - {"SHA256SUMS", "libtranslation_archive.so"})
+        (self.stage / "SHA256SUMS").write_bytes("".join(
+            "%s  %s\n" % (_sha(self.stage / name).upper(), name) for name in checksum_names
+        ).encode("ascii"))
+        package = json.loads(self.package_manifest.read_text(encoding="utf-8"))
+        for asset in package["assets"]:
+            path = self.decompressor if asset["role"] == "decompressor" else self.stage / asset["path"]
+            asset.update({"size": path.stat().st_size, "sha256": _sha(path)})
+        archive = self.stage / "translation-models.tar.xz"
+        evidence = {
+            "tar": self.tar_record,
+            "archive": {"size": archive.stat().st_size, "sha256": _sha(archive)},
         }
+        package["evidence"] = {"sourceEvidence": evidence, "canonicalRebuild": json.loads(json.dumps(evidence))}
         self.package_manifest.write_text(json.dumps(package), encoding="utf-8")
 
     def _run(self):
         return subprocess.run([
             str(POWERSHELL), "-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
             "-File", str(GUARD), "-StageRoot", str(self.stage), "-PackageManifestPath", str(self.package_manifest),
+            "-NativeDecompressorPath", str(self.decompressor),
             "-Python", sys.executable,
         ], cwd=ROOT, text=True, capture_output=True)
 
@@ -175,6 +134,18 @@ class ProjectTranslationGuardTest(unittest.TestCase):
                 result = self._run()
                 self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
                 archive.write_bytes(original)
+
+    def test_rejects_external_native_mutation_and_rawfile_duplicate(self):
+        original = self.decompressor.read_bytes()
+        self.decompressor.write_bytes(b"mutated native")
+        mutated = self._run()
+        self.assertNotEqual(mutated.returncode, 0, mutated.stdout + mutated.stderr)
+
+        self.decompressor.write_bytes(original)
+        duplicate = self.stage / self.decompressor.name
+        duplicate.write_bytes(original)
+        duplicated = self._run()
+        self.assertNotEqual(duplicated.returncode, 0, duplicated.stdout + duplicated.stderr)
 
 
 if __name__ == "__main__":

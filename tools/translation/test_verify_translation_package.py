@@ -1,10 +1,12 @@
 import hashlib
+import inspect
 import json
 import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
 
+from tools.translation.final_package_test_fixture import build_final_package_fixture
 from tools.translation.verify_translation_package import PackageError, verify_package
 
 
@@ -33,12 +35,13 @@ class TranslationPackageTest(unittest.TestCase):
         self.stage.mkdir()
         for role, name in PROTOTYPE_ASSETS.items():
             (self.stage / name).write_bytes(role.encode("ascii"))
+        self.decompressor = self.root / REQUIRED_ASSETS["decompressor"]
         self.manifest_path = self.root / "package.json"
 
     def tearDown(self):
         self.temp.cleanup()
 
-    def _manifest(self, *, mode="prototype", allowance=5):
+    def _manifest(self, *, mode="prototype", allowance=5, include_decompressor=False):
         roles_by_name = {name: role for role, name in REQUIRED_ASSETS.items()}
         assets = []
         for path in sorted(self.stage.iterdir(), key=lambda item: item.name):
@@ -48,6 +51,14 @@ class TranslationPackageTest(unittest.TestCase):
                 "size": path.stat().st_size,
                 "sha256": _sha256(path),
             })
+        if include_decompressor:
+            assets.append({
+                "role": "decompressor",
+                "path": self.decompressor.name,
+                "size": self.decompressor.stat().st_size,
+                "sha256": _sha256(self.decompressor),
+            })
+            assets.sort(key=lambda asset: asset["path"])
         manifest = {
             "schemaVersion": 1,
             "mode": mode,
@@ -65,6 +76,19 @@ class TranslationPackageTest(unittest.TestCase):
                 },
             },
         }
+        if mode == "final":
+            manifest["evidence"].update({
+                "qualityGateReport": {"path": "gate-v1.json", "bytes": 1, "sha256": "4" * 64},
+                "conversionReport": {"path": "conversion-report.json", "bytes": 1, "sha256": "5" * 64},
+                "approval": {
+                    "candidate": {
+                        "model_sha256": "6" * 64,
+                        "tokenizer_sha256": "e5528e885e876c18a3c0beef124842798138b688da3ca0e64425047c8c574190",
+                    },
+                    "candidateEpoch": 1,
+                    "objectiveHashes": {"contract": "7" * 64},
+                },
+            })
         if allowance:
             manifest["allowances"].append({
                 "name": "ohos-liblzma-decompressor",
@@ -77,8 +101,13 @@ class TranslationPackageTest(unittest.TestCase):
     def _write_manifest(self, manifest):
         self.manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
 
-    def _make_final_stage(self):
-        (self.stage / REQUIRED_ASSETS["decompressor"]).write_bytes(b"decompressor")
+    def _make_decompressor(self):
+        self.decompressor.write_bytes(b"decompressor")
+
+    def _authentic_final(self, suffix):
+        root = self.root / suffix
+        root.mkdir()
+        return build_final_package_fixture(root)
 
     def test_verifier_hashes_every_staged_asset_and_counts_prototype_allowance(self):
         self._manifest()
@@ -111,28 +140,50 @@ class TranslationPackageTest(unittest.TestCase):
             verify_package(self.manifest_path, self.stage)
 
     def test_final_mode_rejects_allowances_and_accepts_complete_real_files(self):
-        self._make_final_stage()
-        self._manifest(mode="final", allowance=5)
+        fixture = self._authentic_final("final-allowance")
+        manifest_path = fixture["packageManifest"]
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["allowances"] = [{
+            "name": "ohos-liblzma-decompressor", "bytes": 5, "prototypeOnly": True,
+        }]
+        manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
         with self.assertRaisesRegex(PackageError, "allowance"):
-            verify_package(self.manifest_path, self.stage)
+            verify_package(manifest_path, fixture["stage"], fixture["decompressor"])
 
-        self._manifest(mode="final", allowance=0)
-        result = verify_package(self.manifest_path, self.stage)
+        manifest["allowances"] = []
+        manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+        result = verify_package(manifest_path, fixture["stage"], fixture["decompressor"])
         self.assertEqual(result["allowanceBytes"], 0)
+
+    def test_final_mode_verifies_external_decompressor_and_rejects_rawfile_duplicate(self):
+        self.assertIn("decompressor_path", inspect.signature(verify_package).parameters)
+        fixture = self._authentic_final("final-native")
+        result = verify_package(fixture["packageManifest"], fixture["stage"], fixture["decompressor"])
+        self.assertEqual(
+            result["assetBytes"],
+            sum(path.stat().st_size for path in fixture["stage"].iterdir())
+            + fixture["decompressor"].stat().st_size,
+        )
+
+        duplicate = fixture["stage"] / fixture["decompressor"].name
+        duplicate.write_bytes(fixture["decompressor"].read_bytes())
+        with self.assertRaisesRegex(PackageError, "unexpected|duplicate"):
+            verify_package(fixture["packageManifest"], fixture["stage"], fixture["decompressor"])
 
     def test_final_mode_rejects_removal_of_every_required_asset(self):
         for role, name in REQUIRED_ASSETS.items():
             with self.subTest(role=role):
-                self._make_final_stage()
-                manifest = self._manifest(mode="final", allowance=0)
-                (self.stage / name).unlink()
+                self._make_decompressor()
+                manifest = self._manifest(mode="final", allowance=0, include_decompressor=True)
+                path = self.decompressor if role == "decompressor" else self.stage / name
+                path.unlink()
                 try:
                     manifest["assets"] = [asset for asset in manifest["assets"] if asset["role"] != role]
                     self._write_manifest(manifest)
                     with self.assertRaisesRegex(PackageError, "required|missing"):
-                        verify_package(self.manifest_path, self.stage)
+                        verify_package(self.manifest_path, self.stage, self.decompressor)
                 finally:
-                    (self.stage / name).write_bytes(role.encode("ascii"))
+                    path.write_bytes(role.encode("ascii"))
 
     def test_prototype_mode_rejects_removal_of_every_non_decompressor_asset(self):
         for role, name in PROTOTYPE_ASSETS.items():
@@ -148,9 +199,9 @@ class TranslationPackageTest(unittest.TestCase):
                     (self.stage / name).write_bytes(role.encode("ascii"))
 
     def test_prototype_may_ship_real_decompressor_instead_of_allowance(self):
-        self._make_final_stage()
-        self._manifest(allowance=0)
-        result = verify_package(self.manifest_path, self.stage)
+        self._make_decompressor()
+        self._manifest(allowance=0, include_decompressor=True)
+        result = verify_package(self.manifest_path, self.stage, self.decompressor)
         self.assertEqual(result["allowanceBytes"], 0)
 
     def test_prototype_requires_exactly_one_decompressor_source(self):
@@ -158,10 +209,10 @@ class TranslationPackageTest(unittest.TestCase):
         with self.assertRaisesRegex(PackageError, "decompressor|allowance"):
             verify_package(self.manifest_path, self.stage)
 
-        self._make_final_stage()
-        self._manifest(allowance=5)
+        self._make_decompressor()
+        self._manifest(allowance=5, include_decompressor=True)
         with self.assertRaisesRegex(PackageError, "decompressor|allowance"):
-            verify_package(self.manifest_path, self.stage)
+            verify_package(self.manifest_path, self.stage, self.decompressor)
 
     def test_prototype_rejects_unknown_or_multiple_allowance_names(self):
         manifest = self._manifest()
