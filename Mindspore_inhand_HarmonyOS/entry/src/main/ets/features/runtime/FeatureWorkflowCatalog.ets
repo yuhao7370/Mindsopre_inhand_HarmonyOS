@@ -478,6 +478,13 @@ export function shouldShowLiveGestureCameraOverlay(workflow: FeatureWorkflow | u
   return workflow?.aiMethod === 'detectGesture' && workflow.liveMode;
 }
 
+export function shouldMirrorLiveGestureCameraOverlay(
+  workflow: FeatureWorkflow | undefined,
+  liveCameraPosition: LiveCameraPosition
+): boolean {
+  return shouldShowLiveGestureCameraOverlay(workflow) && liveCameraPosition === 'front';
+}
+
 export function shouldShowLiveObjectDetectionCameraOverlay(workflow: FeatureWorkflow | undefined): boolean {
   return workflow?.aiMethod === 'detectObjects' && workflow.liveMode;
 }

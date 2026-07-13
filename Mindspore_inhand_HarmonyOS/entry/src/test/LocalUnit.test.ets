@@ -86,6 +86,9 @@ import {
   localGestureDetectionMaxGestureCount
 } from '../main/ets/services/ai/GestureService';
 import {
+  hmsGestureConfidenceThresholdForLiveMode
+} from '../main/ets/services/ai/HmsGestureModelDetector';
+import {
   DanceFrameData,
   DanceSkeletonPoints,
   danceFrameFromPoints,
@@ -359,6 +362,7 @@ import {
   shouldAllowRuntimeInputChange,
   shouldClearRuntimeResultAtWorkflowStart,
   shouldKeepScreenOnForWorkflow,
+  shouldMirrorLiveGestureCameraOverlay,
   shouldShowCopyTextAction,
   shouldShowResultSaveAction,
   shouldShowLiveClassificationCameraOverlay,
@@ -3544,6 +3548,16 @@ export default function localUnitTest() {
       expect(shouldMirrorSegmentationForeground(undefined, 'front')).assertFalse();
     });
 
+    it('mirrorsGestureOverlayOnlyForFrontCameraLiveWorkflow', 0, () => {
+      const gestureLive: FeatureWorkflow = workflowForRoute(AppRoute.GESTURE_LIVE.name)!;
+      const gestureStill: FeatureWorkflow = workflowForRoute(AppRoute.GESTURE_STILL.name)!;
+
+      expect(shouldMirrorLiveGestureCameraOverlay(gestureLive, 'front')).assertTrue();
+      expect(shouldMirrorLiveGestureCameraOverlay(gestureLive, 'back')).assertFalse();
+      expect(shouldMirrorLiveGestureCameraOverlay(gestureStill, 'front')).assertFalse();
+      expect(shouldMirrorLiveGestureCameraOverlay(undefined, 'front')).assertFalse();
+    });
+
     it('showsAndroidCopyButtonForTextWorkflowsEvenWhenContentIsEmpty', 0, () => {
       const textRecognition: FeatureWorkflow = workflowForRoute(AppRoute.TEXT_RECOGNITION.name)!;
       const textTranslation: FeatureWorkflow = workflowForRoute(AppRoute.TEXT_TRANSLATION.name)!;
@@ -5325,6 +5339,29 @@ export default function localUnitTest() {
       expect(box.top.toFixed(1)).assertEqual('0.0');
       expect(box.width.toFixed(1)).assertEqual('60.0');
       expect(box.height.toFixed(1)).assertEqual('100.0');
+    });
+
+    it('usesAndroidHmsGestureThresholdsForStillAndLiveProduction', 0, () => {
+      expect(hmsGestureConfidenceThresholdForLiveMode(false)).assertEqual(0.6);
+      expect(hmsGestureConfidenceThresholdForLiveMode(true)).assertEqual(0.1);
+    });
+
+    it('mirrorsOnlyFrontCameraLiveGestureRectangleHorizontally', 0, () => {
+      const rectangle: GestureRectangle = {
+        left: 10,
+        top: 5,
+        width: 60,
+        height: 20
+      };
+
+      const stillBox = gestureRectanglePercent(rectangle, 100, 50);
+      const frontLiveBox = gestureRectanglePercent(rectangle, 100, 50, true);
+
+      expect(stillBox.left).assertEqual(10);
+      expect(frontLiveBox.left).assertEqual(30);
+      expect(frontLiveBox.top).assertEqual(stillBox.top);
+      expect(frontLiveBox.width).assertEqual(stillBox.width);
+      expect(frontLiveBox.height).assertEqual(stillBox.height);
     });
 
     it('aiServiceReportsGestureFailureWithI18nKey', 0, async () => {

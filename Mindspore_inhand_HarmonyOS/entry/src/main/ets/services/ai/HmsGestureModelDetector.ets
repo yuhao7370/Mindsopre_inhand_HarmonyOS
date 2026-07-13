@@ -28,6 +28,10 @@ export const hmsGestureModelRawfilePath: string = 'models/gesture/GestureDetecto
 export const hmsGestureStillConfidenceThreshold: number = 0.6;
 export const hmsGestureLiveConfidenceThreshold: number = 0.1;
 
+export function hmsGestureConfidenceThresholdForLiveMode(liveMode: boolean): number {
+  return liveMode ? hmsGestureLiveConfidenceThreshold : hmsGestureStillConfidenceThreshold;
+}
+
 export interface HmsGesturePixelMap {
   getImageInfo(): Promise<image.ImageInfo>;
   readPixelsToBuffer(buffer: ArrayBuffer): Promise<void>;

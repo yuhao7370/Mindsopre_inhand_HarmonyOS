@@ -32,6 +32,7 @@ import {
   shouldClearRuntimeResultAtWorkflowStart,
   shouldKeepScreenOnForWorkflow,
   shouldMirrorSegmentationForeground,
+  shouldMirrorLiveGestureCameraOverlay,
   shouldShowCopyTextAction,
   shouldShowLiveClassificationCameraOverlay,
   liveClassificationEmptyPromptKey,
@@ -2092,7 +2093,8 @@ struct FeatureRuntimePage {
     return gestureRectanglePercent(
       gesture.rect,
       this.gestureImageWidth,
-      this.gestureImageHeight
+      this.gestureImageHeight,
+      shouldMirrorLiveGestureCameraOverlay(workflowForRoute(this.routeName), this.liveCameraPosition)
     );
   }
 

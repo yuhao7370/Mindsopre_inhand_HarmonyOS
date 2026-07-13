@@ -70,8 +70,7 @@ import {
 import {
   HmsGestureImageLoader,
   HmsGestureModelDetector,
-  hmsGestureLiveConfidenceThreshold,
-  hmsGestureStillConfidenceThreshold
+  hmsGestureConfidenceThresholdForLiveMode
 } from './HmsGestureModelDetector';
 import { HmsGestureNativeSessionFactory } from './HmsGestureNativeSession';
 import {
@@ -487,7 +486,7 @@ export function createHarmonyHmsGestureService(
     resourceManager: options.resourceManager,
     nativeSessionFactory: options.hmsGestureNativeSessionFactory,
     imageLoader: options.hmsGestureImageLoader,
-    confidenceThreshold: workflow.liveMode ? hmsGestureLiveConfidenceThreshold : hmsGestureStillConfidenceThreshold
+    confidenceThreshold: hmsGestureConfidenceThresholdForLiveMode(workflow.liveMode)
   });
   return new GestureService({
     runner: new AndroidGestureModelRunner(detector)

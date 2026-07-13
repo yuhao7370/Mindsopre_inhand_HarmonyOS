@@ -523,7 +523,8 @@ export function gestureCategoryForImageClassificationLabel(label: string): numbe
 export function gestureRectanglePercent(
   rectangle: GestureRectangle,
   imageWidth: number,
-  imageHeight: number
+  imageHeight: number,
+  mirrorHorizontally: boolean = false
 ): GestureRectanglePercent {
   if (imageWidth <= 0 || imageHeight <= 0) {
     return {
@@ -538,10 +539,11 @@ export function gestureRectanglePercent(
   const top = gesturePercent(rectangle.top, imageHeight);
   const right = gesturePercent(rectangle.left + rectangle.width, imageWidth);
   const bottom = gesturePercent(rectangle.top + rectangle.height, imageHeight);
+  const width = Math.max(0, right - left);
   return {
-    left: left,
+    left: mirrorHorizontally ? 100 - left - width : left,
     top: top,
-    width: Math.max(0, right - left),
+    width: width,
     height: Math.max(0, bottom - top)
   };
 }
