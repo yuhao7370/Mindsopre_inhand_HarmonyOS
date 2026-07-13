@@ -7211,6 +7211,49 @@ export default function localUnitTest() {
       expect(runner.stopCount).assertEqual(1);
     });
 
+    it('runtimeAiServiceSessionInvalidationRejectsEveryPendingSameRouteWaiter', 0, async () => {
+      const session = new RuntimeAiServiceSession();
+      const workflow: FeatureWorkflow = workflowForRoute(AppRoute.GESTURE_STILL.name)!;
+      const staleRunner = new StoppingGestureRunner();
+      const staleService = new DefaultAiService({
+        gestureService: new GestureService({ runner: staleRunner })
+      });
+      let resolveCreation: ((service: DefaultAiService) => void) | undefined = undefined;
+      const creation = new Promise<DefaultAiService>((resolve: (value: DefaultAiService) => void) => {
+        resolveCreation = resolve;
+      });
+      let creates = 0;
+      const creator = (): Promise<DefaultAiService> => {
+        creates++;
+        return creation;
+      };
+
+      const first = session.getOrCreate(workflow, creator).then(
+        (_service: DefaultAiService): boolean => false,
+        (_error: Error): boolean => true
+      );
+      const second = session.getOrCreate(workflow, creator).then(
+        (_service: DefaultAiService): boolean => false,
+        (_error: Error): boolean => true
+      );
+      expect(creates).assertEqual(1);
+      session.invalidate();
+      resolveCreation!(staleService);
+
+      expect(await first).assertTrue();
+      expect(await second).assertTrue();
+      await Promise.resolve();
+      expect(staleRunner.stopCount).assertEqual(1);
+
+      const freshService = new DefaultAiService();
+      const fresh = await session.getOrCreate(workflow, async (): Promise<DefaultAiService> => {
+        creates++;
+        return freshService;
+      });
+      expect(fresh === freshService).assertTrue();
+      expect(creates).assertEqual(2);
+    });
+
     it('runtimeAiServiceSessionCreatesAgainForDifferentRoute', 0, async () => {
       const session = new RuntimeAiServiceSession();
       const firstWorkflow: FeatureWorkflow = workflowForRoute(AppRoute.OBJECT_CAMERA.name)!;

@@ -14,23 +14,25 @@ export class RuntimeAiServiceSession {
     }
     if (this.servicePromise === undefined) {
       this.routeName = workflow.routeName;
-      const generation = ++this.generation;
-      const created = creator();
-      this.servicePromise = created;
-      try {
-        const service = await created;
-        if (this.servicePromise !== created || this.generation !== generation) {
-          throw new Error('runtime ai service invalidated');
-        }
-        return service;
-      } catch (_) {
-        if (this.servicePromise === created) {
-          this.invalidate();
-        }
-        throw new Error('runtime ai service creation failed');
-      }
+      this.generation++;
+      this.servicePromise = creator();
     }
-    return await this.servicePromise;
+    const pending = this.servicePromise;
+    const generation = this.generation;
+    const routeName = this.routeName;
+    try {
+      const service = await pending;
+      if (this.servicePromise !== pending || this.generation !== generation ||
+        this.routeName !== routeName || routeName !== workflow.routeName) {
+        throw new Error('runtime ai service invalidated');
+      }
+      return service;
+    } catch (_) {
+      if (this.servicePromise === pending && this.generation === generation && this.routeName === routeName) {
+        this.invalidate();
+      }
+      throw new Error('runtime ai service creation failed');
+    }
   }
 
   invalidate(): void {
