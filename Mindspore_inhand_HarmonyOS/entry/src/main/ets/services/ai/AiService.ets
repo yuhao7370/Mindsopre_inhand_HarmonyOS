@@ -40,7 +40,6 @@ import {
   SceneDetectionService
 } from './SceneDetectionService';
 import {
-  LocalTextTranslationRunner,
   TextRecognitionResult,
   TextRecognitionService,
   hasMeaningfulText,
@@ -205,7 +204,7 @@ export class DefaultAiService {
   private readonly objectDetectionService?: ObjectDetectionService;
   private readonly styleTransferService?: StyleTransferService;
   private readonly textRecognitionService?: TextRecognitionService;
-  private readonly textTranslationService: TextTranslationService;
+  private readonly textTranslationService?: TextTranslationService;
   private readonly segmentationService?: SegmentationService;
   private readonly poseService?: PoseService;
   private readonly gestureService?: GestureService;
@@ -220,9 +219,7 @@ export class DefaultAiService {
     this.objectDetectionService = options?.objectDetectionService;
     this.styleTransferService = options?.styleTransferService;
     this.textRecognitionService = options?.textRecognitionService;
-    this.textTranslationService = options?.textTranslationService ?? new TextTranslationService({
-      runner: new LocalTextTranslationRunner()
-    });
+    this.textTranslationService = options?.textTranslationService;
     this.segmentationService = options?.segmentationService;
     this.poseService = options?.poseService;
     this.gestureService = options?.gestureService;
@@ -536,6 +533,9 @@ export class DefaultAiService {
       };
     }
 
+    if (this.textTranslationService === undefined) {
+      return this.pendingAdapterResult('translateText');
+    }
     const result: TextTranslationResult = await this.textTranslationService.translateText(text);
     if (!result.ok) {
       return {

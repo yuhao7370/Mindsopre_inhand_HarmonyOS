@@ -266,46 +266,37 @@ Current HarmonyOS behavior:
   input; the obsolete `liveCamera` input kind and its translation-only runtime
   branches have been removed, so Camera always follows the normal still-image
   OCR flow on this page.
-- The default HarmonyOS runtime and low-level `DefaultAiService` include a
-  small offline dictionary fallback for common demo phrases in Chinese and
-  English, including the app name, Experience subtitle, app intro, College
-  summary copy, permission/status copy, Android/HMS feature help sentences for
-  the bundled vision demos, HMS short title labels such as `PoseNet` and
-  `Summary`, Android/HMS prompt and failure copy, short action/status labels
-  such as `detect`, `video`, `copy`, `SAVE`, and `Copied successfully`,
-  Text Translation page hint/status copy such as
-  `Please enter the content to be translated` and `Offline Translation`, the
-  main shell tab, Experience header/section labels, hidden Me action labels,
-  College navigation, view action, and footer labels, Custom Model page
-  action/help/output copy, Style Transfer
-  page prompts/actions/failure copy, scene/object result labels such as
-  `Scene Count`, `Score`, `Inference Time:`, `human`, and `traffic signal`,
-  and Android title strings that use parenthesized or hyphenated separators
-  such as `Object Detection(Photo)` and `Real-time translation`. It can compose known
-  adjacent phrases such as `Hello, MindSpore!` and preserves Android's default
-  target-language rule (`zh` text translates to `en`, other text translates to
-  `zh`).
-- This fallback is not equivalent to HMS cloud translation. Known phrases use
-  the explicit offline-demo completion status. Unknown phrases use the
-  dedicated offline-dictionary unsupported status instead of suggesting that a
-  general translation service failed or inventing output.
-- A real translation runner can still be injected and keeps the normal
-  Android-compatible completion/failure messages. Without one, known typed or
-  OCR-recognized phrases use the bundled local fallback while unknown phrases
-  preserve the source text in result details, rows, and copy action.
+- The production runtime constructs `MindSporeLiteTranslationRunner` for both
+  typed text and OCR output. Both inputs share the same loaded runner and keep
+  Android's default target-language rule (`zh` text translates to `en`, other
+  text translates to `zh`).
+- `LocalTextTranslationRunner` remains available only through explicit
+  legacy/demo test injection. It is no longer an implicit `DefaultAiService` or
+  runtime-factory fallback, so production does not substitute a finite
+  dictionary for arbitrary input.
+- Successful local-model results use the normal Android-compatible completion
+  message and expose `runtimeSource=localModel`. The copy action returns the
+  translated text, and source/translated newlines remain exact through typed
+  and OCR flows.
+- The translation workflow no longer requests Internet. The application-level
+  Internet declaration remains for unrelated web/help and resource features.
+- The final bilingual archive, runtime manifest, and tokenizer assets are not
+  checked in at this checkpoint. Production requests therefore report the
+  normal model translation failure while preserving source text; they do not
+  crash, call a cloud service, or fall back to the demo dictionary.
 - Blank typed text and blank OCR output are treated as missing or failed input
   instead of successful empty translation/recognition results.
 - Image-based translation only exposes the result snapshot save action after a
-  translated-text row exists. Unknown local-fallback phrases still preserve the
-  OCR source text for copying, but no longer create a misleading translated
-  snapshot.
+  translated-text row exists. Model failures preserve the OCR source text for
+  copying but do not create a misleading translated snapshot.
 - In the API 24 phone SDK, `CoreVisionKit` can supply OCR but not translation;
   `NaturalLanguageKit` does not expose a general typed/OCR text translation API;
   and `DataAugmentationKit`'s available capability is not a replacement for the
-  Android `MLRemoteTranslator` flow. General translation beyond the small,
-  explicitly documented offline dictionary remains blocked on an external
-  translation service or an authorized on-device translation model, followed
-  by phone validation.
+  Android `MLRemoteTranslator` flow. Host tests use injected runners or model
+  sessions and do not establish real offline translation quality, latency, or
+  device inference. The HAP model-package guard and target inference tests stay
+  deferred until the final verified assets exist; enabling that guard now
+  would correctly reject the asset-incomplete package.
 
 ## Model File Overrides
 

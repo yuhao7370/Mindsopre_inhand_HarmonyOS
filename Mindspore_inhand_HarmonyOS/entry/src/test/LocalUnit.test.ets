@@ -29,6 +29,7 @@ import {
   TextRecognitionService,
   TextTranslationResult,
   TextTranslationRunner,
+  TextTranslationRuntimeSource,
   TextTranslationService,
   textRecognitionOutputFromBlocks,
   translationLanguagePairSupportsTarget,
@@ -266,6 +267,8 @@ import {
 } from '../main/ets/services/ai/ImageClassificationRuntimeFactory';
 import { RuntimeAiServiceSession } from '../main/ets/services/ai/RuntimeAiServiceSession';
 import { RuntimeRequestGeneration } from '../main/ets/features/runtime/RuntimeRequestGeneration';
+import { configureTranslationTokenizerForTests } from '../main/ets/services/ai/TinyTranslationTokenizer';
+import { TOKENIZER_RUNTIME_FIXTURE } from './TranslationTokenizerFixture';
 import {
   RuntimePixelMapOwner,
   clearRuntimePixelMapState
@@ -1117,9 +1120,11 @@ class FixedTextTranslationRunner implements TextTranslationRunner {
   readonly seenTexts: Array<string> = [];
   readonly seenTargetLanguages: Array<string> = [];
   private readonly translatedText: string;
+  private readonly runtimeSource?: TextTranslationRuntimeSource;
 
-  constructor(translatedText: string) {
+  constructor(translatedText: string, runtimeSource?: TextTranslationRuntimeSource) {
     this.translatedText = translatedText;
+    this.runtimeSource = runtimeSource;
   }
 
   async translate(text: string, targetLanguage: string): Promise<TextTranslationResult> {
@@ -1129,7 +1134,8 @@ class FixedTextTranslationRunner implements TextTranslationRunner {
       ok: true,
       sourceText: text,
       translatedText: this.translatedText,
-      targetLanguage: targetLanguage
+      targetLanguage: targetLanguage,
+      runtimeSource: this.runtimeSource
     };
   }
 }
@@ -3398,7 +3404,7 @@ export default function localUnitTest() {
       expect(isInputPreparationRequestCurrent(7, 7)).assertTrue();
       expect(isInputPreparationRequestCurrent(6, 7)).assertFalse();
       expect(hasAppStringKey('feature_input_live_translation')).assertTrue();
-      expect(translation.requiredPermissions.indexOf('internet') >= 0).assertTrue();
+      expect(translation.requiredPermissions.indexOf('internet')).assertEqual(-1);
 
       const portraitSegmentation: FeatureWorkflow = workflowForRoute(AppRoute.PORTRAIT_SEGMENTATION.name)!;
       expect(portraitSegmentation.aiMethod).assertEqual('segmentPerson');
@@ -4193,7 +4199,7 @@ export default function localUnitTest() {
       expect(runner.seenTexts.length).assertEqual(0);
     });
 
-    it('defaultAiServiceReportsKnownLocalTranslationAsOfflineDemo', 0, async () => {
+    it('defaultAiServiceDoesNotUseLegacyDictionaryWithoutExplicitInjection', 0, async () => {
       const workflow = workflowForRoute(AppRoute.TEXT_TRANSLATION.name);
       expect(workflow !== undefined).assertTrue();
 
@@ -4201,12 +4207,8 @@ export default function localUnitTest() {
         text: 'Hello, MindSpore!'
       });
 
-      expect(result.ok).assertTrue();
-      expect(result.code).assertEqual('TEXT_TRANSLATION_DONE');
-      expect(result.messageKey).assertEqual('feature_runtime_text_translation_offline_done');
-      expect(result.detailText.indexOf('targetLanguage=zh') >= 0).assertTrue();
-      expect(result.detailText.indexOf('translated=\u4F60\u597D\u6607\u601D') >= 0).assertTrue();
-      expect(copyableTextForAiResult('translateText', aiRunResultRows(result))).assertEqual('\u4F60\u597D\u6607\u601D');
+      expect(result.ok).assertFalse();
+      expect(result.code).assertEqual('NATIVE_ADAPTER_PENDING');
     });
 
     it('callerOwnedPixelMapReleasesExactlyOnceAfterSuccessfulUse', 0, async () => {
@@ -4245,7 +4247,7 @@ export default function localUnitTest() {
       expect(pixelMap.releaseCount).assertEqual(1);
     });
 
-    it('defaultAiServiceReportsUnknownLocalTranslationAsOfflineUnsupported', 0, async () => {
+    it('defaultAiServiceDoesNotExposeLegacyDictionaryFailureMessaging', 0, async () => {
       const workflow = workflowForRoute(AppRoute.TEXT_TRANSLATION.name);
       expect(workflow !== undefined).assertTrue();
 
@@ -4254,8 +4256,8 @@ export default function localUnitTest() {
       });
 
       expect(result.ok).assertFalse();
-      expect(result.code).assertEqual('TEXT_TRANSLATION_FAILED');
-      expect(result.messageKey).assertEqual('feature_runtime_text_translation_offline_unsupported');
+      expect(result.code).assertEqual('NATIVE_ADAPTER_PENDING');
+      expect(result.messageKey).assertEqual('feature_runtime_pending_adapter');
     });
 
     it('aiServiceUsesAndroidTargetLanguageRuleForTextTranslation', 0, async () => {
@@ -4304,7 +4306,7 @@ export default function localUnitTest() {
         blockCount: 1,
         executionMs: 8
       });
-      const translationRunner: FixedTextTranslationRunner = new FixedTextTranslationRunner('hello');
+      const translationRunner: FixedTextTranslationRunner = new FixedTextTranslationRunner('hello', 'localModel');
 
       const result = await new DefaultAiService({
         textRecognitionService: new TextRecognitionService({ runner: recognitionRunner }),
@@ -4320,7 +4322,7 @@ export default function localUnitTest() {
       expect(translationRunner.seenTargetLanguages[0]).assertEqual('en');
     });
 
-    it('aiServiceRecognizesImageTextBeforeDefaultLocalTranslation', 0, async () => {
+    it('aiServiceRecognizesImageTextBeforeInjectedLocalModelTranslation', 0, async () => {
       const workflow = workflowForRoute(AppRoute.TEXT_TRANSLATION.name);
       expect(workflow !== undefined).assertTrue();
       const recognitionRunner = new FixedTextRecognitionRunner({
@@ -4330,16 +4332,18 @@ export default function localUnitTest() {
         blockCount: 1,
         executionMs: 8
       });
+      const translationRunner = new FixedTextTranslationRunner('\u6607\u601D', 'localModel');
 
       const result = await new DefaultAiService({
-        textRecognitionService: new TextRecognitionService({ runner: recognitionRunner })
+        textRecognitionService: new TextRecognitionService({ runner: recognitionRunner }),
+        textTranslationService: new TextTranslationService({ runner: translationRunner })
       }).run(workflow!, {
         imageUri: 'file://selected/text.jpg'
       });
 
       expect(result.ok).assertTrue();
       expect(result.code).assertEqual('TEXT_TRANSLATION_DONE');
-      expect(result.messageKey).assertEqual('feature_runtime_text_translation_offline_done');
+      expect(result.messageKey).assertEqual('feature_runtime_text_translation_done');
       expect(result.detailText.indexOf('targetLanguage=zh') >= 0).assertTrue();
       expect(result.detailText.indexOf('source=MindSpore') >= 0).assertTrue();
       expect(result.detailText.indexOf('translated=\u6607\u601D') >= 0).assertTrue();
@@ -4348,6 +4352,7 @@ export default function localUnitTest() {
       expect(aiRunResultRows(result)[1].value).assertEqual('MindSpore\n');
       expect(copyableTextForAiResult('translateText', aiRunResultRows(result))).assertEqual('\u6607\u601D');
       expect(recognitionRunner.seenImageUris[0]).assertEqual('file://selected/text.jpg');
+      expect(translationRunner.seenTexts[0]).assertEqual('MindSpore\n');
     });
 
     it('copyableTextForTranslationReturnsTranslatedTextLikeAndroidCopyButton', 0, async () => {
@@ -7859,34 +7864,75 @@ export default function localUnitTest() {
       expect(runner.seenImageUris[0]).assertEqual('file://selected/ocr.jpg');
     });
 
-    it('runtimeFactoryInjectsOcrAndTranslatorForImageTranslationWorkflow', 0, async () => {
+    it('runtimeFactorySharesInjectedLocalModelRunnerForDirectTextAndOcr', 0, async () => {
       const workflow = workflowForRoute(AppRoute.TEXT_TRANSLATION.name);
       expect(workflow !== undefined).assertTrue();
       const recognitionRunner: FixedTextRecognitionRunner = new FixedTextRecognitionRunner({
         ok: true,
-        text: '你好\n',
-        lineCount: 1,
+        text: 'second arbitrary OCR line\nkeeps newline\n',
+        lineCount: 2,
         blockCount: 1,
         executionMs: 7
       });
-      const translationRunner: FixedTextTranslationRunner = new FixedTextTranslationRunner('hello');
+      const translationRunner: FixedTextTranslationRunner =
+        new FixedTextTranslationRunner('translated line one\ntranslated line two\n', 'localModel');
       const service = await createRuntimeAiServiceForWorkflow(workflow!, {
         resourceManager: new ThrowingRawfileContentReader(),
         textRecognitionRunner: recognitionRunner,
         textTranslationRunner: translationRunner
       });
 
-      const result: AiRunResult = await service.run(workflow!, {
+      const directResult: AiRunResult = await service.run(workflow!, {
+        text: 'first arbitrary unmapped sentence'
+      });
+      const ocrResult: AiRunResult = await service.run(workflow!, {
         imageUri: 'file://selected/translation.jpg'
       });
 
-      expect(result.ok).assertTrue();
-      expect(result.code).assertEqual('TEXT_TRANSLATION_DONE');
+      expect(directResult.code).assertEqual('TEXT_TRANSLATION_DONE');
+      expect(ocrResult.code).assertEqual('TEXT_TRANSLATION_DONE');
       expect(recognitionRunner.seenImageUris[0]).assertEqual('file://selected/translation.jpg');
-      expect(translationRunner.seenTexts[0]).assertEqual('你好\n');
+      expect(translationRunner.seenTexts[0]).assertEqual('first arbitrary unmapped sentence');
+      expect(translationRunner.seenTexts[1]).assertEqual('second arbitrary OCR line\nkeeps newline\n');
+      expect(copyableTextForAiResult('translateText', aiRunResultRows(ocrResult)))
+        .assertEqual('translated line one\ntranslated line two\n');
+      if (directResult.data?.kind === 'textTranslation') {
+        expect(directResult.data.result.runtimeSource).assertEqual('localModel');
+      } else {
+        expect(false).assertTrue();
+      }
+      if (ocrResult.data?.kind === 'textTranslation') {
+        expect(ocrResult.data.result.runtimeSource).assertEqual('localModel');
+      } else {
+        expect(false).assertTrue();
+      }
     });
 
-    it('runtimeFactoryUsesLocalFallbackForImageTranslationWithoutTranslator', 0, async () => {
+    it('translationRepeatedClicksShareRunnerWhileGenerationSuppressesStaleAndPageExit', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.TEXT_TRANSLATION.name)!;
+      const runner = new FixedTextTranslationRunner('translated', 'localModel');
+      const service = await createRuntimeAiServiceForWorkflow(workflow, {
+        resourceManager: new ThrowingRawfileContentReader(),
+        textTranslationRunner: runner
+      });
+      const generation = new RuntimeRequestGeneration();
+      const firstGeneration = generation.begin();
+      const results = await Promise.all([
+        service.run(workflow, { text: 'first click' }),
+        service.run(workflow, { text: 'second click' })
+      ]);
+      const secondGeneration = generation.begin();
+
+      expect(results[0].code).assertEqual('TEXT_TRANSLATION_DONE');
+      expect(results[1].code).assertEqual('TEXT_TRANSLATION_DONE');
+      expect(runner.seenTexts.join(',')).assertEqual('first click,second click');
+      expect(generation.isCurrent(firstGeneration)).assertFalse();
+      expect(generation.isCurrent(secondGeneration)).assertTrue();
+      generation.invalidate();
+      expect(generation.isCurrent(secondGeneration)).assertFalse();
+    });
+
+    it('runtimeFactoryFailsOcrTranslationHonestlyWhenModelAssetIsMissing', 0, async () => {
       const workflow = workflowForRoute(AppRoute.TEXT_TRANSLATION.name);
       expect(workflow !== undefined).assertTrue();
       const recognitionRunner: FixedTextRecognitionRunner = new FixedTextRecognitionRunner({
@@ -7905,15 +7951,16 @@ export default function localUnitTest() {
         imageUri: 'file://selected/translation.jpg'
       });
 
-      expect(result.ok).assertTrue();
-      expect(result.code).assertEqual('TEXT_TRANSLATION_DONE');
+      expect(result.ok).assertFalse();
+      expect(result.code).assertEqual('TEXT_TRANSLATION_FAILED');
+      expect(result.messageKey).assertEqual('feature_runtime_text_translation_failed');
       expect(result.detailText.indexOf('source=\u4F60\u597D') >= 0).assertTrue();
-      expect(result.detailText.indexOf('translated=hello') >= 0).assertTrue();
+      expect(result.detailText.indexOf('translated=') >= 0).assertTrue();
       expect(recognitionRunner.seenImageUris[0]).assertEqual('file://selected/translation.jpg');
-      expect(translationSnapshotTranslatedTextReady(aiRunResultRows(result))).assertTrue();
+      expect(translationSnapshotTranslatedTextReady(aiRunResultRows(result))).assertFalse();
     });
 
-    it('runtimeFactoryUsesLocalFallbackForTypedTranslationWithoutTranslator', 0, async () => {
+    it('runtimeFactoryFailsTypedTranslationHonestlyWhenModelAssetIsMissing', 0, async () => {
       const workflow = workflowForRoute(AppRoute.TEXT_TRANSLATION.name);
       expect(workflow !== undefined).assertTrue();
       const service = await createRuntimeAiServiceForWorkflow(workflow!, {
@@ -7924,9 +7971,31 @@ export default function localUnitTest() {
         text: 'MindSpore'
       });
 
-      expect(result.ok).assertTrue();
-      expect(result.code).assertEqual('TEXT_TRANSLATION_DONE');
-      expect(result.detailText.indexOf('translated=\u6607\u601D') >= 0).assertTrue();
+      expect(result.ok).assertFalse();
+      expect(result.code).assertEqual('TEXT_TRANSLATION_FAILED');
+      expect(result.messageKey).assertEqual('feature_runtime_text_translation_failed');
+      expect(result.detailText.indexOf('source=MindSpore') >= 0).assertTrue();
+      expect(result.detailText.indexOf('translated=') >= 0).assertTrue();
+    });
+
+    it('runtimeFactoryConstructsModelRunnerWithInjectedHostBundleFactory', 0, async () => {
+      resetHarmonyRuntimeAiServiceCachesForTests();
+      configureTranslationTokenizerForTests(TOKENIZER_RUNTIME_FIXTURE);
+      const workflow = workflowForRoute(AppRoute.TEXT_TRANSLATION.name)!;
+      let bundleFactoryCalls = 0;
+      const service = await createRuntimeAiServiceForWorkflow(workflow, {
+        resourceManager: new ThrowingRawfileContentReader(),
+        translationModelBundleFactory: async () => {
+          bundleFactoryCalls++;
+          throw new Error('host bundle unavailable');
+        }
+      });
+
+      const result = await service.run(workflow, { text: 'arbitrary host sentence' });
+
+      expect(result.code).assertEqual('TEXT_TRANSLATION_FAILED');
+      expect(result.messageKey).assertEqual('feature_runtime_text_translation_failed');
+      expect(bundleFactoryCalls).assertEqual(1);
     });
 
     it('runtimeFactoryLoadsAndroidLanguagePairsForLocalTextTranslation', 0, async () => {
@@ -7938,7 +8007,8 @@ export default function localUnitTest() {
       ]);
       const reader: FixedRawfileContentReader = new FixedRawfileContentReader(languagePairContent);
       const service = await createRuntimeAiServiceForWorkflow(workflow!, {
-        resourceManager: reader
+        resourceManager: reader,
+        textTranslationRunner: new FixedTextTranslationRunner('\u6607\u601D', 'localModel')
       });
 
       const result: AiRunResult = await service.run(workflow!, {
@@ -8189,7 +8259,7 @@ export default function localUnitTest() {
           'human\nautomobile\ntraffic signal');
     });
 
-    it('runtimeFactoryLocalFallbackFailsUnknownTranslationHonestly', 0, async () => {
+    it('runtimeFactoryDoesNotFallBackToDictionaryForArbitraryText', 0, async () => {
       const workflow = workflowForRoute(AppRoute.TEXT_TRANSLATION.name);
       expect(workflow !== undefined).assertTrue();
       const service = await createRuntimeAiServiceForWorkflow(workflow!, {
@@ -8202,14 +8272,14 @@ export default function localUnitTest() {
 
       expect(result.ok).assertFalse();
       expect(result.code).assertEqual('TEXT_TRANSLATION_FAILED');
-      expect(result.messageKey).assertEqual('feature_runtime_text_translation_offline_unsupported');
+      expect(result.messageKey).assertEqual('feature_runtime_text_translation_failed');
       expect(result.detailText.indexOf('source=unmapped phrase') >= 0).assertTrue();
       expect(result.detailText.indexOf('translated=') >= 0).assertTrue();
       expect(aiRunResultRows(result)[1].value).assertEqual('unmapped phrase');
       expect(copyableTextForAiResult('translateText', aiRunResultRows(result))).assertEqual('unmapped phrase');
     });
 
-    it('runtimeFactoryLocalFallbackPreservesOcrSourceWhenUnknownTranslationFails', 0, async () => {
+    it('runtimeFactoryModelFailurePreservesOcrSourceWithoutFallback', 0, async () => {
       const workflow = workflowForRoute(AppRoute.TEXT_TRANSLATION.name);
       expect(workflow !== undefined).assertTrue();
       const recognitionRunner: FixedTextRecognitionRunner = new FixedTextRecognitionRunner({
@@ -8230,6 +8300,7 @@ export default function localUnitTest() {
 
       expect(result.ok).assertFalse();
       expect(result.code).assertEqual('TEXT_TRANSLATION_FAILED');
+      expect(result.messageKey).assertEqual('feature_runtime_text_translation_failed');
       expect(aiRunResultRows(result)[1].value).assertEqual('unmapped phrase\n');
       expect(translationSnapshotTranslatedTextReady(aiRunResultRows(result))).assertFalse();
       expect(shouldShowTranslationSnapshotSaveAction(

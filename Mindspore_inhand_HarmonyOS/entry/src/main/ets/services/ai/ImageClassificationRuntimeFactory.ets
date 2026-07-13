@@ -47,7 +47,14 @@ import {
   parseObjectCategoryLabels
 } from './ObjectDetectionService';
 import { MindSporeLiteModelRunner, RawfileContentReader } from './MindSporeLiteModelRunner';
-import { resetTranslationModelCacheForTests } from './MindSporeLiteTranslationRunner';
+import {
+  MindSporeLiteTranslationRunner,
+  productionTranslationModelBundleFactory,
+  resetTranslationModelCacheForTests,
+  TranslationModelBundleFactory,
+  TranslationModelResourceManager,
+  TranslationRawFileDescriptor
+} from './MindSporeLiteTranslationRunner';
 import {
   HarmonySubjectSegmentationRunner,
   SegmentationAndroidScene,
@@ -84,7 +91,6 @@ import {
 } from './SceneDetectionService';
 import {
   HarmonyTextRecognitionRunner,
-  LocalTextTranslationRunner,
   parseTranslationLanguagePairs,
   TextRecognitionRunner,
   TextRecognitionService,
@@ -109,6 +115,9 @@ export interface HarmonyImageClassificationRuntimeOptions {
   readonly styleTransferTensorRunner?: StyleTransferTensorRunner;
   readonly textRecognitionRunner?: TextRecognitionRunner;
   readonly textTranslationRunner?: TextTranslationRunner;
+  readonly translationModelBundleFactory?: TranslationModelBundleFactory;
+  readonly translationModelResourceManager?: TranslationModelResourceManager;
+  readonly translationModelCacheRoot?: string;
   readonly segmentationRunner?: SegmentationRunner;
   readonly poseRunner?: PoseRunner;
   readonly gestureRunner?: GestureRunner;
@@ -149,7 +158,18 @@ export class HarmonyRawfileContentReader implements RawfileContentReader {
   async getRawFileContent(path: string): Promise<Uint8Array> {
     return this.resourceManager.getRawFileContent(path);
   }
+
+  async getRawFd(path: string): Promise<TranslationRawFileDescriptor> {
+    return await this.resourceManager.getRawFd(path);
+  }
+
+  async closeRawFd(path: string): Promise<void> {
+    await this.resourceManager.closeRawFd(path);
+  }
 }
+
+export const harmonyTranslationModelCacheRoot: string =
+  '/data/storage/el2/base/haps/entry/cache/translation';
 
 export function cachedHarmonyDefaultAiServiceForResourceManager(
   resourceManager: RawfileContentReader
@@ -438,8 +458,15 @@ export async function createHarmonyTextTranslationService(
   options: HarmonyImageClassificationRuntimeOptions
 ): Promise<TextTranslationService> {
   const languagePairs = await loadOptionalTranslationLanguagePairs(options.resourceManager);
+  const bundleFactory = options.translationModelBundleFactory ?? productionTranslationModelBundleFactory({
+    resourceManager: options.translationModelResourceManager ??
+      options.resourceManager as TranslationModelResourceManager,
+    cacheRoot: options.translationModelCacheRoot ?? harmonyTranslationModelCacheRoot
+  });
   return new TextTranslationService({
-    runner: options.textTranslationRunner ?? new LocalTextTranslationRunner(),
+    runner: options.textTranslationRunner ?? new MindSporeLiteTranslationRunner({
+      bundleFactory: bundleFactory
+    }),
     languagePairs: languagePairs
   });
 }
