@@ -91,3 +91,51 @@ greedy decoder integration, and on-device inference remain the explicitly later
 tasks; no device-runtime or translation-quality claim is made here.
 
 DONE
+
+## Fresh-review remediation
+
+The fresh review identified three P1 gaps in `df7e64e`; the remediation uses
+new failing generator/Hypium tests before production changes:
+
+- The fixture now declares `TTOK1_TEST` and can only be configured through the
+  explicit test-profile API. Production `TTOK1` requires the pinned declared
+  count of 32,000, every unique contiguous source ID `0..31999`, PAD `32000`
+  outside the piece table, exact EOS/UNK text and types, NORMAL type for all
+  other source pieces, unique piece text, finite scores, valid codepoints, and
+  a non-empty/unique-source normalization table. A generated synthetic 32K
+  smoke and declared-count/missing/duplicate/out-of-range/non-finite/type/map
+  corruption negatives exercise the production path.
+- Adjacent Viterbi unknown nodes are coalesced into the single unknown run
+  emitted by pinned SentencePiece. Unknown decoding emits ` ⁇ ` before dummy
+  whitespace removal, reproducing both `A ⁇ B` and doubled spaces where an
+  explicit `▁` also surrounds UNK. Supplementary, adjacency/whitespace, BMP
+  private-use, and boundary-sensitive unknown goldens are generated from the
+  pinned model.
+- Long non-newline runs select the last fitting boundary by strict category
+  priority: Chinese `。！？；`, English `.?!;`, ASCII space/tab, then a
+  Unicode-safe hard cut. The delimiter remains in the previous chunk. Each
+  chunk retains its exact `sourceText`, allowing tests to prove byte-for-string
+  reconstruction together with the original `LF`/`CRLF` separator fields.
+
+RED evidence includes generator failures for absent `TTOK1_TEST` and absent
+unknown/priority cases, plus `UnitTestArkTS` failures for the absent explicit
+test API/source-text contract. An intermediate Hypium execution also exposed
+that Hvigor may exit zero while logging a failed assertion; final verification
+therefore checks the generated Hypium result/error output rather than treating
+`BUILD SUCCESSFUL` alone as a pass.
+
+### Fresh-review verification
+
+- `python -m unittest tools.translation.tokenizer_test_generator -v`: 3 tests,
+  exit 0, `OK`.
+- Host `hvigorw test --no-daemon`: exit 0, `BUILD SUCCESSFUL in 52 s 297 ms`.
+  The complete output contains no `ERROR: Error in ...` Hypium failure line.
+  The Windows Hvigor adapter suppresses Hypium's `console.info` summary, so an
+  exact numeric pass/failure/error count is not claimed here.
+- `entry@ohosTest` HAP compile/package: exit 0,
+  `BUILD SUCCESSFUL in 1 min 2 s 529 ms`.
+- The final default-HAP build was attempted twice but produced no output before
+  the 120 s and 180 s command timeouts (exit 124). It is therefore not claimed
+  as verified for this remediation; the pre-remediation Task 5 commit's default
+  HAP build remains the successful result recorded above.
+- Scoped `git diff --check` for the Task 5 files: exit 0.

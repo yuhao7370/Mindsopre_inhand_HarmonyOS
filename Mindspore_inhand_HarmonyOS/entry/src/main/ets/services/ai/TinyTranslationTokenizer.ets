@@ -1,4 +1,5 @@
 const TOKENIZER_TABLE_VERSION = 'TTOK1';
+const TOKENIZER_TEST_TABLE_VERSION = 'TTOK1_TEST';
 const PINNED_MODEL_SHA256 = 'e5528a5c3685d08f8868902d31febeb763eea8519f9997f43b05964b02554640';
 
 export const TRANSLATION_EOS_ID: number = 0;
@@ -18,6 +19,7 @@ const CONTROL_PIECE_TYPE = 3;
 export type TranslationTargetLanguage = 'en' | 'zh';
 
 export interface TranslationChunk {
+  readonly sourceText: string;
   readonly normalized: string;
   readonly pieces: Array<string>;
   readonly pieceIds: Array<number>;
@@ -48,6 +50,11 @@ interface EncodedPieces {
 interface PreservedTextRun {
   readonly separator: string;
   readonly content: string;
+}
+
+interface SourceEncoding {
+  readonly sourceText: string;
+  readonly encoded: EncodedPieces;
 }
 
 class TranslationTokenizerRuntime {
@@ -227,7 +234,19 @@ class TranslationTokenizerRuntime {
       pieceIds.unshift(piece.id);
       position = previous;
     }
-    return { normalized: normalized, pieces: pieces, pieceIds: pieceIds };
+    const mergedPieces: Array<string> = [];
+    const mergedPieceIds: Array<number> = [];
+    for (let index = 0; index < pieceIds.length; index++) {
+      const last = mergedPieceIds.length - 1;
+      if (pieceIds[index] === TRANSLATION_UNK_ID && last >= 0 &&
+        mergedPieceIds[last] === TRANSLATION_UNK_ID) {
+        mergedPieces[last] += pieces[index];
+      } else {
+        mergedPieces.push(pieces[index]);
+        mergedPieceIds.push(pieceIds[index]);
+      }
+    }
+    return { normalized: normalized, pieces: mergedPieces, pieceIds: mergedPieceIds };
   }
 
   decode(ids: Array<number>): string {
@@ -241,7 +260,7 @@ class TranslationTokenizerRuntime {
         continue;
       }
       if (id === TRANSLATION_UNK_ID) {
-        encoded += SENTENCEPIECE_UNKNOWN_REPLACEMENT;
+        encoded += ` ${SENTENCEPIECE_UNKNOWN_REPLACEMENT} `;
         continue;
       }
       const piece = this.piecesById.get(id);
@@ -264,7 +283,11 @@ class TranslationTokenizerRuntime {
 let configuredRuntime: TranslationTokenizerRuntime | undefined = undefined;
 
 export function configureTranslationTokenizer(runtimeTable: string): void {
-  configuredRuntime = parseRuntimeTable(runtimeTable);
+  configuredRuntime = parseRuntimeTable(runtimeTable, false);
+}
+
+export function configureTranslationTokenizerForTests(runtimeTable: string): void {
+  configuredRuntime = parseRuntimeTable(runtimeTable, true);
 }
 
 export function resetTranslationTokenizerForTests(): void {
@@ -283,18 +306,14 @@ export function encodeTranslationText(text: string, targetLanguage: string): Arr
     if (runs[runIndex].content.length === 0) {
       continue;
     }
-    const encoded = runtime.encode(runs[runIndex].content);
-    if (encoded.pieceIds.length === 0) {
-      continue;
-    }
-    for (let offset = 0; offset < encoded.pieceIds.length; offset += TRANSLATION_PIECE_CAPACITY) {
-      const end = Math.min(offset + TRANSLATION_PIECE_CAPACITY, encoded.pieceIds.length);
-      const pieceIds = encoded.pieceIds.slice(offset, end);
-      const pieces = encoded.pieces.slice(offset, end);
+    const sourceEncodings = splitContentByPriority(runtime, runs[runIndex].content);
+    for (let encodingIndex = 0; encodingIndex < sourceEncodings.length; encodingIndex++) {
+      const sourceEncoding = sourceEncodings[encodingIndex];
       chunks.push(createChunk(
-        pieces.join(''),
-        pieces,
-        pieceIds,
+        sourceEncoding.sourceText,
+        sourceEncoding.encoded.normalized,
+        sourceEncoding.encoded.pieces,
+        sourceEncoding.encoded.pieceIds,
         directionId,
         pendingSeparator,
         ''
@@ -305,6 +324,7 @@ export function encodeTranslationText(text: string, targetLanguage: string): Arr
   if (pendingSeparator.length > 0 && chunks.length > 0) {
     const last = chunks[chunks.length - 1];
     chunks[chunks.length - 1] = createChunk(
+      last.sourceText,
       last.normalized,
       last.pieces,
       last.pieceIds,
@@ -353,7 +373,78 @@ function updateBestPath(
   }
 }
 
+function splitContentByPriority(
+  runtime: TranslationTokenizerRuntime,
+  content: string
+): Array<SourceEncoding> {
+  const chunks: Array<SourceEncoding> = [];
+  let remaining = content;
+  const boundaryGroups: Array<string> = ['\u3002\uFF01\uFF1F\uFF1B', '.?!;', ' \t'];
+  while (remaining.length > 0) {
+    const whole = runtime.encode(remaining);
+    if (whole.pieceIds.length === 0) {
+      if (chunks.length > 0) {
+        const last = chunks[chunks.length - 1];
+        chunks[chunks.length - 1] = {
+          sourceText: last.sourceText + remaining,
+          encoded: last.encoded
+        };
+      }
+      break;
+    }
+    if (whole.pieceIds.length <= TRANSLATION_PIECE_CAPACITY) {
+      chunks.push({ sourceText: remaining, encoded: whole });
+      break;
+    }
+
+    let cut = 0;
+    for (let groupIndex = 0; groupIndex < boundaryGroups.length; groupIndex++) {
+      cut = lastFittingCut(runtime, remaining, boundaryGroups[groupIndex], true);
+      if (cut > 0) {
+        break;
+      }
+    }
+    if (cut === 0) {
+      cut = lastFittingCut(runtime, remaining, '', false);
+    }
+    if (cut === 0) {
+      throw new Error('Tokenizer cannot split input within 126 pieces');
+    }
+    const sourceText = remaining.substring(0, cut);
+    const encoded = runtime.encode(sourceText);
+    chunks.push({ sourceText: sourceText, encoded: encoded });
+    remaining = remaining.substring(cut);
+  }
+  return chunks;
+}
+
+function lastFittingCut(
+  runtime: TranslationTokenizerRuntime,
+  text: string,
+  boundarySymbols: string,
+  filterBoundaries: boolean
+): number {
+  const cuts: Array<number> = [];
+  let index = 0;
+  while (index < text.length) {
+    const length = unicodeSymbolLengthAt(text, index);
+    const symbol = text.substring(index, index + length);
+    index += length;
+    if (!filterBoundaries || boundarySymbols.indexOf(symbol) >= 0) {
+      cuts.push(index);
+    }
+  }
+  for (let cutIndex = cuts.length - 1; cutIndex >= 0; cutIndex--) {
+    const encoded = runtime.encode(text.substring(0, cuts[cutIndex]));
+    if (encoded.pieceIds.length > 0 && encoded.pieceIds.length <= TRANSLATION_PIECE_CAPACITY) {
+      return cuts[cutIndex];
+    }
+  }
+  return 0;
+}
+
 function createChunk(
+  sourceText: string,
   normalized: string,
   pieces: Array<string>,
   pieceIds: Array<number>,
@@ -374,6 +465,7 @@ function createChunk(
     attentionMask.push(0);
   }
   return {
+    sourceText: sourceText,
     normalized: normalized,
     pieces: pieces,
     pieceIds: pieceIds,
@@ -384,13 +476,14 @@ function createChunk(
   };
 }
 
-function parseRuntimeTable(runtimeTable: string): TranslationTokenizerRuntime {
+function parseRuntimeTable(runtimeTable: string, testProfile: boolean): TranslationTokenizerRuntime {
   const lines = runtimeTable.split('\n');
   if (lines.length < 3) {
     throw new Error('Tokenizer runtime table is incomplete');
   }
   const header = lines[0].split('\t');
-  if (header.length !== 8 || header[0] !== TOKENIZER_TABLE_VERSION || header[1] !== PINNED_MODEL_SHA256) {
+  const expectedVersion = testProfile ? TOKENIZER_TEST_TABLE_VERSION : TOKENIZER_TABLE_VERSION;
+  if (header.length !== 8 || header[0] !== expectedVersion || header[1] !== PINNED_MODEL_SHA256) {
     throw new Error('Tokenizer runtime table header is invalid');
   }
   const vocabularySize = parseDecimalInteger(header[2], 'vocabulary size');
@@ -405,6 +498,7 @@ function parseRuntimeTable(runtimeTable: string): TranslationTokenizerRuntime {
   const normalizationSources = new Set<string>();
   const pieces: Array<RuntimePiece> = [];
   const pieceIds = new Set<number>();
+  const pieceTexts = new Set<string>();
   for (let lineIndex = 1; lineIndex < lines.length; lineIndex++) {
     if (lines[lineIndex].length === 0) {
       continue;
@@ -425,20 +519,54 @@ function parseRuntimeTable(runtimeTable: string): TranslationTokenizerRuntime {
       const score = Number(fields[2]);
       const type = parseDecimalInteger(fields[3], 'piece type');
       const text = decodeCodepoints(fields[4]);
-      if (id < 0 || id >= vocabularySize || pieceIds.has(id) || !Number.isFinite(score) || text.length === 0 ||
+      if (id < 0 || id >= vocabularySize || pieceIds.has(id) || pieceTexts.has(text) ||
+        !Number.isFinite(score) || text.length === 0 ||
         (type !== NORMAL_PIECE_TYPE && type !== UNKNOWN_PIECE_TYPE && type !== CONTROL_PIECE_TYPE)) {
         throw new Error('Tokenizer piece is invalid');
       }
       pieceIds.add(id);
+      pieceTexts.add(text);
       pieces.push({ id: id, score: score, type: type, text: text });
       continue;
     }
     throw new Error(`Tokenizer runtime table line ${lineIndex + 1} is invalid`);
   }
-  if (!pieceIds.has(TRANSLATION_EOS_ID) || !pieceIds.has(TRANSLATION_UNK_ID)) {
+  if (normalizationRules.length === 0 || !pieceIds.has(TRANSLATION_EOS_ID) ||
+    !pieceIds.has(TRANSLATION_UNK_ID)) {
     throw new Error('Tokenizer runtime table lacks required pieces');
   }
+  const eosPiece = piecesById(pieces, TRANSLATION_EOS_ID);
+  const unknownPiece = piecesById(pieces, TRANSLATION_UNK_ID);
+  if (eosPiece.type !== CONTROL_PIECE_TYPE || eosPiece.text !== '</s>' ||
+    unknownPiece.type !== UNKNOWN_PIECE_TYPE || unknownPiece.text !== '<unk>' ||
+    TRANSLATION_PAD_ID !== vocabularySize) {
+    throw new Error('Tokenizer special-piece contract is invalid');
+  }
+  if (!testProfile) {
+    if (pieceIds.size !== vocabularySize) {
+      throw new Error('Tokenizer production table must contain every source piece');
+    }
+    for (let id = 0; id < vocabularySize; id++) {
+      if (!pieceIds.has(id)) {
+        throw new Error(`Tokenizer production table lacks piece ID ${id}`);
+      }
+    }
+    for (let index = 0; index < pieces.length; index++) {
+      if (pieces[index].id >= 2 && pieces[index].type !== NORMAL_PIECE_TYPE) {
+        throw new Error(`Tokenizer production piece ${pieces[index].id} has an invalid type`);
+      }
+    }
+  }
   return new TranslationTokenizerRuntime(minimumScore, normalizationRules, pieces);
+}
+
+function piecesById(pieces: Array<RuntimePiece>, id: number): RuntimePiece {
+  for (let index = 0; index < pieces.length; index++) {
+    if (pieces[index].id === id) {
+      return pieces[index];
+    }
+  }
+  throw new Error(`Tokenizer piece ID ${id} is absent`);
 }
 
 function parseDecimalInteger(value: string, label: string): number {

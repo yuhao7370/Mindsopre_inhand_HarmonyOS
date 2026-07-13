@@ -32,7 +32,56 @@ class TokenizerFixtureGeneratorTest(unittest.TestCase):
         self.assertEqual(fixture["directions"], {"toEnglish": 32001, "toChinese": 32002})
         self.assertLess(len(fixture["runtime"]["pieces"]), 32000)
         self.assertGreater(len(fixture["runtime"]["normalizationRules"]), 0)
+        self.assertTrue(fixture["runtimeTable"].startswith("TTOK1_TEST\t"))
         self.assertEqual(ARKTS_FIXTURE.read_text(encoding="utf-8"), render_arkts_fixture(fixture))
+
+    def test_unknown_runs_and_priority_chunks_match_pinned_sentencepiece(self):
+        fixture = build_fixture(MODEL)
+        cases = {case["name"]: case for case in fixture["cases"]}
+        self.assertTrue(
+            {
+                "unknown_run",
+                "unknown_bmp_run",
+                "unknown_adjacency",
+                "unknown_boundary_128",
+                "priority_mixed",
+                "priority_english",
+                "priority_space",
+            }
+            <= cases.keys()
+        )
+
+        unknown_run = cases["unknown_run"]["chunks"][0]
+        self.assertEqual(unknown_run["pieceIds"], [71, 1, 256])
+        self.assertEqual(unknown_run["pieces"], ["\u2581A", "\U0001f9ea\U0001f9ec", "B"])
+        self.assertEqual(unknown_run["decoded"], "A \u2047 B")
+
+        bmp_run = cases["unknown_bmp_run"]["chunks"][0]
+        self.assertEqual(bmp_run["pieceIds"], [71, 1, 256])
+        self.assertEqual(bmp_run["pieces"], ["\u2581A", "\ue000\ue001", "B"])
+        self.assertEqual(bmp_run["decoded"], "A \u2047 B")
+
+        adjacency = cases["unknown_adjacency"]["chunks"][0]
+        self.assertEqual(adjacency["pieceIds"].count(1), 2)
+        self.assertIn("\u2047", adjacency["decoded"])
+
+        unknown_boundary = cases["unknown_boundary_128"]
+        self.assertEqual(len(unknown_boundary["chunks"]), 1)
+        self.assertEqual(len(unknown_boundary["chunks"][0]["pieceIds"]), 126)
+        self.assertEqual(unknown_boundary["chunks"][0]["pieceIds"].count(1), 1)
+
+        for name in ("priority_mixed", "priority_english", "priority_space"):
+            case = cases[name]
+            reconstructed = "".join(
+                chunk["separatorBefore"] + chunk["sourceText"] + chunk["separatorAfter"]
+                for chunk in case["chunks"]
+            )
+            self.assertEqual(reconstructed, case["text"])
+            self.assertTrue(all(len(chunk["pieceIds"]) <= 126 for chunk in case["chunks"]))
+
+        self.assertTrue(cases["priority_mixed"]["chunks"][0]["sourceText"].endswith("\u3002"))
+        self.assertTrue(cases["priority_english"]["chunks"][0]["sourceText"].endswith("."))
+        self.assertTrue(cases["priority_space"]["chunks"][0]["sourceText"].endswith(" "))
 
     def test_output_is_deterministic_and_rejects_wrong_model_bytes(self):
         fixture = build_fixture(MODEL)

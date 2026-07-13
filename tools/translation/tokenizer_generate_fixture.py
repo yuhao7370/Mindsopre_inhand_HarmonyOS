@@ -28,11 +28,19 @@ CASE_NAMES = (
     "ascii_punctuation",
     "repeated_whitespace",
     "unknown_unicode",
+    "unknown_run",
+    "unknown_bmp_run",
+    "unknown_adjacency",
+    "unknown_boundary_128",
     "boundary_127",
     "boundary_128",
     "boundary_129",
     "multiple_newlines",
     "combining_nfkc",
+    "priority_mixed",
+    "priority_english",
+    "priority_space",
+    "priority_hard",
 )
 
 
@@ -45,11 +53,19 @@ def _case_definitions() -> List[Tuple[str, str, str]]:
         ("ascii_punctuation", "Wait... really?!; yes.", "zh"),
         ("repeated_whitespace", "  Hello\t   world  ", "zh"),
         ("unknown_unicode", "Hello \U0001f9ea world", "zh"),
+        ("unknown_run", "A\U0001f9ea\U0001f9ecB", "zh"),
+        ("unknown_bmp_run", "A\ue000\ue001B", "zh"),
+        ("unknown_adjacency", "\U0001f9eaA \U0001f9ec", "zh"),
+        ("unknown_boundary_128", "x " * 123 + "A\U0001f9ea\U0001f9ecB", "zh"),
         ("boundary_127", " ".join(["x"] * 125), "zh"),
         ("boundary_128", " ".join(["x"] * 126), "zh"),
         ("boundary_129", " ".join(["x"] * 127), "zh"),
         ("multiple_newlines", "\u4f60\u597d\n\nHello\r\n\u4e16\u754c\n", "en"),
         ("combining_nfkc", "e\u0301", "zh"),
+        ("priority_mixed", "x " * 90 + "\u3002 " + "x " * 25 + ". " + "x " * 80 + "x", "zh"),
+        ("priority_english", "x " * 90 + ". " + "x " * 105 + "x", "zh"),
+        ("priority_space", "x " * 200 + "x", "zh"),
+        ("priority_hard", "\u4f60" * 200, "en"),
     ]
 
 
@@ -177,22 +193,21 @@ def _build_chunks(
         pending_separator += separator
         if not content:
             continue
-        normalized = processor.normalize(content)
-        if not normalized:
+        if not processor.normalize(content):
             continue
         normalized_inputs.append(content)
-        pieces = processor.encode(content, out_type=str)
-        piece_ids = processor.encode(content, out_type=int)
-        if len(pieces) != len(piece_ids):
-            raise ValueError("SentencePiece returned inconsistent pieces and IDs")
-        for offset in range(0, len(piece_ids), PIECE_CAPACITY):
-            chunk_pieces = pieces[offset : offset + PIECE_CAPACITY]
-            chunk_ids = piece_ids[offset : offset + PIECE_CAPACITY]
+        for source_chunk in _split_content_by_priority(processor, content):
+            chunk_pieces = processor.encode(source_chunk, out_type=str)
+            chunk_ids = processor.encode(source_chunk, out_type=int)
+            if len(chunk_pieces) != len(chunk_ids) or len(chunk_ids) > PIECE_CAPACITY:
+                raise ValueError("SentencePiece returned an invalid fixture chunk")
             chunks.append(
                 {
-                    "normalized": "".join(chunk_pieces),
+                    "sourceText": source_chunk,
+                    "normalized": processor.normalize(source_chunk),
                     "pieces": chunk_pieces,
                     "pieceIds": chunk_ids,
+                    "decoded": processor.decode(chunk_ids),
                     "separatorBefore": pending_separator,
                     "separatorAfter": "",
                 }
@@ -206,12 +221,52 @@ def _build_chunks(
     return chunks
 
 
+def _split_content_by_priority(
+    processor: sentencepiece.SentencePieceProcessor,
+    content: str,
+) -> List[str]:
+    chunks: List[str] = []
+    remaining = content
+    predicates = (
+        lambda character: character in "\u3002\uff01\uff1f\uff1b",
+        lambda character: character in ".?!;",
+        lambda character: character in " \t",
+    )
+    while remaining:
+        if len(processor.encode(remaining, out_type=int)) <= PIECE_CAPACITY:
+            chunks.append(remaining)
+            break
+        cut = 0
+        for predicate in predicates:
+            for index in range(len(remaining) - 1, -1, -1):
+                if not predicate(remaining[index]):
+                    continue
+                candidate = remaining[: index + 1]
+                token_count = len(processor.encode(candidate, out_type=int))
+                if 0 < token_count <= PIECE_CAPACITY:
+                    cut = index + 1
+                    break
+            if cut > 0:
+                break
+        if cut == 0:
+            for index in range(len(remaining), 0, -1):
+                token_count = len(processor.encode(remaining[:index], out_type=int))
+                if 0 < token_count <= PIECE_CAPACITY:
+                    cut = index
+                    break
+        if cut == 0:
+            raise ValueError("unable to split tokenizer fixture within 126 pieces")
+        chunks.append(remaining[:cut])
+        remaining = remaining[cut:]
+    return chunks
+
+
 def _render_runtime_table(runtime: dict) -> str:
     header = runtime["header"]
     lines = [
         "\t".join(
             [
-                "TTOK1",
+                "TTOK1_TEST",
                 header["modelSha256"],
                 str(header["vocabSize"]),
                 str(header["unknownId"]),
@@ -321,9 +376,11 @@ def render_arkts_fixture(fixture: dict) -> str:
     cases = json.dumps(fixture["cases"], ensure_ascii=True, separators=(",", ":"))
     return f"""// Generated by tools/translation/tokenizer_generate_fixture.py. Do not edit.
 export interface TranslationTokenizerGoldenChunk {{
+  readonly sourceText: string;
   readonly normalized: string;
   readonly pieces: Array<string>;
   readonly pieceIds: Array<number>;
+  readonly decoded: string;
   readonly separatorBefore: string;
   readonly separatorAfter: string;
   readonly directionId: number;
