@@ -249,6 +249,8 @@ Tokenizer 固定为基线 `source.spm` 的 SentencePiece Unigram，不再混用�
 
 上述三个 ONNX 图必须在完整训练开始前通过 MindSpore converter 与桌面 benchmark smoke。原型同时执行 8-bit weight quantization 并记录三个 `.ms` 的总大小；若按最终 32,003 vocab 推算明显超过 35 MiB，必须先解决重复 embedding/LM head/decoder 权重或重新设计单包共享结构，不能把体积问题推迟到完整训练后。若固定 cache 更新仍产生不支持算子，本设计的翻译里程碑失败并重新评审图结构；不允许在实施中静默改成另一套 Native runtime。
 
+Encoder 原型已证明 Transformers 通用动态 mask 和原生 Softmax 导出会分别触发 MindSpore shape 推断失败与第 5 层 NaN。三个导出 wrapper 因此统一直接构造固定 additive mask，并把 Softmax 展开为 `ReduceMax → Sub → Exp → ReduceSum → Div`。已通过的 encoder 参考误差为：全有效 mask `max_abs=0.0071133`、半 padding `max_abs=0.0146904`；最终三图对 PyTorch/ONNX 的 MindSpore 输出门槛统一设为 `max_abs <= 0.02`、`mean_abs <= 0.002` 且无 NaN/Inf。
+
 ### 5.3 训练和导出交付物
 
 仓库内允许包含：
@@ -258,6 +260,7 @@ Tokenizer 固定为基线 `source.spm` 的 SentencePiece Unigram，不再混用�
 - `translation/decoder_step.ms`
 - `translation/tokenizer.model`
 - `translation/vocab.json`
+- `translation/tokenizer_runtime.json`，包含 32,000 个 piece 的 ID、score、type 以及 `nmt_nfkc` 规范化映射，供 ArkTS 使用
 - `translation/manifest.json`
 - `translation/LICENSES.md`
 - `translation/SHA256SUMS`
