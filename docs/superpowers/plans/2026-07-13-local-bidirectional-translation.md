@@ -4,9 +4,9 @@
 
 **Goal:** Replace the finite offline phrase dictionary with one compact, fully local Chinese↔English translation model that handles arbitrary new text and OCR output on HarmonyOS.
 
-**Architecture:** Train one direction-token-conditioned tiny Marian checkpoint, export fixed-shape encoder/prefill/decode graphs, weight-quantize them for MindSpore Lite, and drive SentencePiece plus greedy KV-cache decoding from ArkTS. The existing `TextTranslationRunner`, Android target-language rule, OCR chaining, copy behavior, and request-generation protection remain intact. Full training and production wiring are gated on all three ONNX→MindSpore prototype graphs passing converter, benchmark, finite-value, multi-token cache, and 35 MiB package-size checks.
+**Architecture:** Train one direction-token-conditioned tiny Marian checkpoint, export fixed-shape encoder/prefill/decode graphs, weight-quantize them for MindSpore Lite, ship the three W8 graphs as one verified solid `translation-models.tar.xz`, and drive SentencePiece plus greedy KV-cache decoding from ArkTS. A narrow pinned `liblzma` utility extracts the archive to app-private storage; it is not a second ML runtime. The existing `TextTranslationRunner`, Android target-language rule, OCR chaining, copy behavior, and request-generation protection remain intact. The three-graph prototype has passed converter, benchmark, finite-value and five-token cache execution; full training and production wiring remain gated on bilingual quality, final W8 agreement, archive integrity, HAP asset size and target-device checks.
 
-**Tech Stack:** Python 3.9, PyTorch, Transformers, ONNX opset 17, MindSpore Lite 2.8 converter/benchmark, SentencePiece Unigram, BiST, FLORES+, ArkTS, `@kit.MindSporeLiteKit`, Hypium, DevEco/Hvigor.
+**Tech Stack:** Python 3.9, PyTorch, Transformers, ONNX opset 17, MindSpore Lite 2.8 converter/benchmark, SentencePiece Unigram, BiST, FLORES+, ArkTS, `@kit.MindSporeLiteKit`, pinned XZ Utils 5.8.3/minimal static `liblzma`, NAPI, Hypium, DevEco/Hvigor.
 
 ## Global Constraints
 
@@ -17,7 +17,8 @@
 - Tokenizer is SentencePiece Unigram with `nmt_nfkc`, dummy prefix, whitespace removal, and escaped whitespace.
 - Input/output maximum is 128 tokens; fixed shapes only; 2 decoder layers, 8 heads, head dimension 32.
 - Greedy decoding and argmax stay in ArkTS; no beam search.
-- Total packaged translation model assets must be ≤35 MiB.
+- The complete shipped translation asset set in the HAP—one W8 archive, tokenizer/runtime assets, manifest/licenses/hashes, and the small decompressor—must be ≤35 MiB. The three raw `.ms` files, float/ONNX/checkpoint artifacts are not shipped.
+- App-private extracted graphs may total about 55.5 MiB; track private-cache disk and runtime RSS separately from the shipped-asset gate.
 - Never treat `LocalTextTranslationRunner` output as production model inference.
 - Preserve unrelated user changes, especially `docs/harmonyos-platform-differences.md`.
 
@@ -27,11 +28,14 @@
 
 - `tools/translation/requirements.lock.txt`: pinned host ML dependencies.
 - `tools/translation/export_marian_smoke.py`: fixed encoder/prefill/decode wrappers and ONNX export.
-- `tools/translation/convert_mindspore.ps1`: converter, quantization, benchmark, tensor contract, and size gate.
+- `tools/translation/convert_mindspore.ps1`: converter, quantization, benchmark, tensor contract, and W8 quality gate.
+- `tools/translation/build_translation_archive.py`: reproducible solid TAR/XZ archive builder and strict member manifest.
+- `tools/translation/build_xz_ohos.ps1`: pinned XZ source download/hash/build/import verification.
 - `tools/translation/prepare_bist.py`: deterministic dataset filtering/splitting.
 - `tools/translation/train_bidirectional.py`: bounded bidirectional fine-tuning.
 - `tools/translation/evaluate_translation.py`: FLORES+/manual metrics and report.
-- `Mindspore_inhand_HarmonyOS/entry/src/main/resources/rawfile/models/translation/`: three models, tokenizer, manifest, hashes, and notices.
+- `Mindspore_inhand_HarmonyOS/entry/src/main/resources/rawfile/models/translation/`: one W8 `translation-models.tar.xz`, tokenizer/runtime assets, manifest, hashes, and notices; never the three raw graphs.
+- `Mindspore_inhand_HarmonyOS/entry/src/main/cpp/translation_xz/`: narrow bounded streaming decompressor and NAPI wrapper.
 - `Mindspore_inhand_HarmonyOS/entry/src/main/ets/services/ai/TinyTranslationTokenizer.ets`: normalization, segmentation, IDs, and decode.
 - `Mindspore_inhand_HarmonyOS/entry/src/main/ets/services/ai/TranslationModelManifest.ets`: asset paths, token/tensor contract, and manifest validation.
 - `Mindspore_inhand_HarmonyOS/entry/src/main/ets/services/ai/MindSporeLiteTranslationRunner.ets`: model cache and autoregressive state machine.
@@ -49,7 +53,7 @@
 
 **Interfaces:**
 - Produces: fixed ONNX and `.ms` prototype graphs with the exact names/shapes from the design spec.
-- Gate: all graphs convert, benchmark, remain finite, decode multiple tokens, and estimate ≤35 MiB packaged quantized size.
+- Gate: all graphs convert, benchmark, remain finite, decode multiple tokens, and prove that the complete compressed shipped asset set can remain ≤35 MiB without degrading below W8.
 
 - [ ] **Step 1: Lock the tensor contract before exporting**
 
@@ -91,13 +95,27 @@ Expected: converter exit 0; benchmark exit 0; output `FLOAT32 [1,128,256]` with 
 
 - [ ] **Step 4: Export and convert prefill/step**
 
-Use fixed full-size cache tensors `[1,8,128,32]` and an explicit integer `decoder_position` update. Run `decoder_step` for at least five tokens with one retained cross cache and evolving self caches. Assert every logits/cache output is finite and matches PyTorch/ONNX Runtime within `1e-4` before quantization.
+Use fixed full-size cache tensors `[1,8,128,32]` and an explicit integer `decoder_position` update. The final converter command for prefill/step must set NCHW input and output flags. Run `decoder_step` for at least five tokens with one retained cross cache and evolving self caches. Assert every logits/cache output is finite and matches PyTorch/ONNX Runtime within `1e-4` before quantization.
+
+Measured prototype evidence: stable-softmax encoder, prefill, and fixed-cache step all convert and execute; the five-token MindSpore sequence exactly matches ONNX Runtime. Encoder all-mask error is `max/mean 0.0071133/0.0007997`; half-padding is `0.0146904/0.0010149`. This is graph/runtime feasibility evidence only, not final bilingual quality.
 
 - [ ] **Step 5: Run weight quantization and the package-size gate**
 
-Use the exact 8-bit config from the design spec. Require ≥99% token argmax agreement over 100 fixture steps and total `encoder.ms + decoder_prefill.ms + decoder_step.ms <= 35 MiB`. If either gate fails, stop this plan before Task 2 and revise the graph/package design in the approved spec.
+Use the exact fixed-bit W8 config from the design spec. Prototype measurements are: float `100.169 MiB`; fixed W8 `58,161,928 B / 55.468 MiB`, finite and five-token exact; dynamic W8 `56,629,192 B / 54.006 MiB`; W4 `32,877,504 B / 31.354 MiB`; mixed `30,739,720 B / 29.316 MiB`. W4 and mixed diverge tokens badly and are quality NO; there is no 4-bit/mixed production fallback. W8 is the only quality candidate even though its raw three-file sum is not a valid ≤35 MiB gate.
 
-- [ ] **Step 6: Commit the reproducible smoke harness**
+For the final trained checkpoint, require ≥99% token argmax agreement over 100 fixture steps. Build one solid W8 `translation-models.tar.xz`, then require the complete shipped HAP translation asset set—including archive, tokenizer/runtime, manifest/licenses/hashes, and decompressor—to be ≤35 MiB. Do not ship the three raw `.ms` files or float/ONNX/checkpoint artifacts.
+
+- [ ] **Step 6: Reproduce and guard the archive**
+
+Pin XZ Utils 5.8.3 source SHA-256 `FFF1FFCF2B0DA84D308A14DE513A1AA23D4E9AA3464D17E64B9714BFDD0BBFB6` and tag commit `4b73f2ec19a99ef465282fbce633e8deb33691b3`; explicitly reject compromised 5.6.0/5.6.1. The evidence archive is `25,073,516 B`, SHA-256 `1DBB6BA66FC7F5FBA777F38960E1D56FBC0AAB793C30B068020D1DCD0773BC7F`; its TAR is `58,173,440 B`, SHA-256 `D305ED7D1FE5DF6E1019078646D3D8D9F43D4514345D166011BF2A70F95FBB84`. Its W8 members are:
+
+- `encoder_fixed_stable_w8.ms`: `16,109,400 B`, SHA-256 `317DB84237D67206AEC036CF4A5B6F8212E5F116C3682C1B3E1ED7916460B558`.
+- `decoder_prefill1_stable_w8_nchw.ms`: `21,138,552 B`, SHA-256 `FBCBCBC50C89740EE4851BBE0DC397973F1A2905473237F0934E12497BF4084C`.
+- `decoder_step_fixedcache_stable_w8_nchw.ms`: `20,913,976 B`, SHA-256 `333704F597B2C28CEB37DE7E61CBAA3B503D45FA84EA2D81F0A328408D8B4C33`.
+
+This archive proves packaging only; generate the final archive only after bidirectional training and quality gates pass.
+
+- [ ] **Step 7: Commit the reproducible smoke harness**
 
 ```powershell
 git add tools/translation
@@ -193,9 +211,7 @@ git commit -m "feat: train tiny bidirectional translator"
 ### Task 4: Export, Quantize, and Commit the Final Model Package
 
 **Files:**
-- Create: `Mindspore_inhand_HarmonyOS/entry/src/main/resources/rawfile/models/translation/encoder.ms`
-- Create: `Mindspore_inhand_HarmonyOS/entry/src/main/resources/rawfile/models/translation/decoder_prefill.ms`
-- Create: `Mindspore_inhand_HarmonyOS/entry/src/main/resources/rawfile/models/translation/decoder_step.ms`
+- Create: `Mindspore_inhand_HarmonyOS/entry/src/main/resources/rawfile/models/translation/translation-models.tar.xz`
 - Create: `Mindspore_inhand_HarmonyOS/entry/src/main/resources/rawfile/models/translation/tokenizer.model`
 - Create: `Mindspore_inhand_HarmonyOS/entry/src/main/resources/rawfile/models/translation/vocab.json`
 - Create: `Mindspore_inhand_HarmonyOS/entry/src/main/resources/rawfile/models/translation/tokenizer_runtime.json`
@@ -203,27 +219,43 @@ git commit -m "feat: train tiny bidirectional translator"
 - Create: `Mindspore_inhand_HarmonyOS/entry/src/main/resources/rawfile/models/translation/SHA256SUMS`
 - Create: `Mindspore_inhand_HarmonyOS/entry/src/main/resources/rawfile/models/translation/LICENSES.md`
 - Create: `Mindspore_inhand_HarmonyOS/scripts/verify-translation-model.ps1`
+- Create: `tools/translation/build_translation_archive.py`
+- Create: `tools/translation/test_build_translation_archive.py`
+- Create: `tools/translation/build_xz_ohos.ps1`
+- Create: `Mindspore_inhand_HarmonyOS/entry/src/main/cpp/translation_xz/CMakeLists.txt`
+- Create: `Mindspore_inhand_HarmonyOS/entry/src/main/cpp/translation_xz/translation_xz_extract.cpp`
+- Create: `Mindspore_inhand_HarmonyOS/entry/src/main/cpp/translation_xz/translation_xz_napi.cpp`
+- Create: `Mindspore_inhand_HarmonyOS/entry/src/main/ets/native/translation_xz/index.d.ts`
 
 **Interfaces:**
 - Produces: complete local runtime assets and a build-stopping integrity guard.
 
 - [ ] **Step 1: Run Task 1 export/conversion against the trained checkpoint**
 
-Require float ONNX/PyTorch agreement, float `.ms` benchmark success, quantized ≥99% token agreement, exact tensor contract, and ≤35 MiB final graph total.
+Require float ONNX/PyTorch agreement, float `.ms` benchmark success, W8 ≥99% token agreement over 100 steps, exact tensor contract, and the approved FLORES+/manual bilingual quality gates. Use NCHW input/output converter flags for both cache graphs. Do not generate the final archive before these gates pass.
 
 - [ ] **Step 2: Write and run the failing project asset guard**
 
-Before copying assets, add a PowerShell guard that reads `manifest.json`, hashes every file, checks vocab/token IDs/tensor names/shapes, and exits nonzero. Expected first run: missing asset failure.
+Before copying assets, add a PowerShell guard that reads `manifest.json`, hashes every shipped file, checks archive/tokenizer/runtime/license contracts and total shipped translation assets `<=35 MiB`, and exits nonzero. The manifest must still describe the three extracted graph names, exact tensor contracts, sizes, and SHA-256 values. Expected first run: missing asset failure.
 
 - [ ] **Step 3: Copy only runtime assets and rerun the guard**
 
-Include identical `source.spm`/`target.spm` once as `tokenizer.model`, the extended vocab, a generated `tokenizer_runtime.json` with every piece ID/score/type plus the compiled `nmt_nfkc` normalization map, all three quantized graphs, fixed revisions/licenses, quality metrics, and file hashes.
+Include identical `source.spm`/`target.spm` once as `tokenizer.model`, the extended vocab, a generated `tokenizer_runtime.json` with every piece ID/score/type plus the compiled `nmt_nfkc` normalization map, one reproducible solid W8 archive, fixed revisions/licenses, quality metrics, and file hashes. Exclude the three raw `.ms`, float/ONNX/checkpoint artifacts, and every W4/mixed candidate.
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 4: Build and verify the bounded native extractor**
+
+Build only minimal static `liblzma` with encoders, tools, and threads disabled; the arm64 API24 compile/link probe is GO. Stream rawfile FD/range into an app-private temp directory/file with compressed cap 32 MiB, output cap 60 MiB, liblzma memory cap 68 MiB, required CRC64, and no concatenated stream or trailing data. Strictly allow exactly regular `encoder.ms`, `decoder_prefill.ms`, and `decoder_step.ms`; reject links, paths, duplicates, extras, or any size/SHA mismatch. Atomically rename only after complete verification, clean partials, and key the cache by archive SHA.
+
+- [ ] **Step 5: Commit**
 
 ```powershell
 git add Mindspore_inhand_HarmonyOS/entry/src/main/resources/rawfile/models/translation `
-  Mindspore_inhand_HarmonyOS/scripts/verify-translation-model.ps1
+  Mindspore_inhand_HarmonyOS/scripts/verify-translation-model.ps1 `
+  Mindspore_inhand_HarmonyOS/entry/src/main/cpp/translation_xz `
+  Mindspore_inhand_HarmonyOS/entry/src/main/ets/native/translation_xz `
+  tools/translation/build_translation_archive.py `
+  tools/translation/test_build_translation_archive.py `
+  tools/translation/build_xz_ohos.ps1
 git commit -m "feat: add tiny bidirectional translation model"
 ```
 
@@ -285,7 +317,7 @@ Expected: missing runner/session and `localModel` type failure.
 
 - [ ] **Step 3: Implement exact model loading and decode loop**
 
-Validate `manifest.json` through `TranslationModelManifest.ets`. Load three rawfiles once with a module-level promise and `mindSporeLite.loadModelFromBuffer`, find tensors by manifest name, set typed buffers, execute encoder→prefill→step, perform ArkTS argmax, decode each chunk, and join separators. Return `ok:false` for empty output, model/tensor errors, NaN/Inf, or unsupported target. Export `resetTranslationModelCacheForTests()` and call it from the existing runtime cache reset hook.
+Validate `manifest.json` through `TranslationModelManifest.ets`. Ask the narrow native utility to stream, verify, and atomically cache the archive, then load the three verified app-private model files once with a module-level promise. Find tensors by manifest name, set typed buffers, execute encoder→prefill→step, perform ArkTS argmax, decode each chunk, and join separators. ArkTS remains responsible for tokenizer and greedy decoding; `liblzma` does decompression only. Return `ok:false` for archive/extraction, empty output, model/tensor, NaN/Inf, or unsupported-target errors. Export `resetTranslationModelCacheForTests()` and call it from the existing runtime cache reset hook.
 
 - [ ] **Step 4: Run GREEN and commit**
 
@@ -324,7 +356,7 @@ Assert default translation uses an injected local-model session, arbitrary unmap
 
 - [ ] **Step 3: Verify OCR and page lifecycle**
 
-Test image/camera OCR auto-translation, empty OCR, OCR failure versus translation failure, copy, repeated clicks, old-generation suppression, page exit, exact newline preservation, and operation with network disabled. Add target-side tests that load all three real `.ms` files, decode at least five tokens in both directions, and assert contract/finite outputs.
+Test image/camera OCR auto-translation, empty OCR, OCR failure versus translation failure, copy, repeated clicks, old-generation suppression, page exit, exact newline preservation, and operation with network disabled. Add target-side tests that extract the real archive, validate all three `.ms` files, decode at least five tokens in both directions, and assert contract/finite outputs. Also test archive SHA cache reuse, interrupted extraction cleanup, CRC/member/path/duplicate/trailing-data rejection, and size/memory caps.
 
 - [ ] **Step 4: Run complete verification**
 
@@ -341,7 +373,7 @@ Expected: model guard PASS, `Failure: 0, Error: 0`, HAP build PASS, no whitespac
 
 - [ ] **Step 5: Install and verify on target**
 
-With Wi-Fi and cellular disabled, translate at least 20 new sentences in each direction plus gallery/camera OCR. On Mate 60 Pro require cold load ≤3 seconds, 32 output tokens ≤5 seconds, peak RSS delta ≤250 MiB, and total translation assets ≤35 MiB.
+With Wi-Fi and cellular disabled, translate at least 20 new sentences in each direction plus gallery/camera OCR. On Mate 60 Pro measure real archive extraction and require cold load ≤3 seconds, 32 output tokens ≤5 seconds, and peak RSS delta ≤250 MiB. Require the complete HAP translation asset set ≤35 MiB; record the separate app-private extracted-cache disk usage (about 55.5 MiB). Until this arm64 target run exists, cold load, latency, RSS, extraction and private-cache measurements remain pending; host numbers are not device proof.
 
 - [ ] **Step 6: Commit**
 
