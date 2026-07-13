@@ -70,9 +70,13 @@ foreach ($name in @('encoder', 'decoder_prefill', 'decoder_step')) {
 }
 
 $smokeExe = Join-Path $resolvedOutput 'mindspore_translation_smoke.exe'
+$descriptorHeader = Join-Path $resolvedOutput 'translation_runtime_contract.h'
+Invoke-Checked 'generate MindSpore runtime descriptor contract' {
+  & $Python (Join-Path $PSScriptRoot 'generate_mindspore_contract.py') --contract $Contract --profile $Profile --output $descriptorHeader
+}
 $includeRoot = Join-Path $RuntimeRoot 'runtime'
 Invoke-Checked 'compile MindSpore cache-loop smoke' {
-  & $CxxCompiler '-std=c++17' '-O2' "-I$includeRoot" (Join-Path $PSScriptRoot 'mindspore_translation_smoke.cpp') "-L$runtimeLib" '-lmindspore-lite' '-o' $smokeExe
+  & $CxxCompiler '-std=c++17' '-O2' "-I$includeRoot" "-I$resolvedOutput" (Join-Path $PSScriptRoot 'mindspore_translation_smoke.cpp') "-L$runtimeLib" '-lmindspore-lite' '-o' $smokeExe
 }
 $smokeArguments = @((Join-Path $w8Dir 'encoder.ms'), (Join-Path $w8Dir 'decoder_prefill.ms'), (Join-Path $w8Dir 'decoder_step.ms'))
 if ($EvidenceFixtureRoot) { $smokeArguments += $EvidenceFixtureRoot }

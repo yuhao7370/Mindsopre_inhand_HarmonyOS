@@ -89,6 +89,17 @@ class TranslationArchiveTest(unittest.TestCase):
             self.assertEqual(member.mode, 0o644)
         self.assertEqual(verify_tar(tar_path, manifest), manifest)
 
+    def test_verifier_rejects_appended_zero_bytes_and_records(self):
+        tar_path = self.root / "canonical.tar"
+        manifest = build_tar(self.models, tar_path)
+        canonical = tar_path.read_bytes()
+        for suffix in (b"\0", b"\0" * tarfile.RECORDSIZE):
+            with self.subTest(extra_bytes=len(suffix)):
+                mutated = self.root / f"zero-tail-{len(suffix)}.tar"
+                mutated.write_bytes(canonical + suffix)
+                with self.assertRaisesRegex(ArchiveError, "canonical length"):
+                    verify_tar(mutated, manifest)
+
     def test_verifier_rejects_extra_link_path_duplicate_and_trailing_xz_data(self):
         tar_path = self.root / "bad.tar"
         with tarfile.open(tar_path, "w", format=tarfile.USTAR_FORMAT) as archive:

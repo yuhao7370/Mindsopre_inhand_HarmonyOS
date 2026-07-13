@@ -12,6 +12,18 @@ from typing import Optional, Sequence
 
 
 PACKAGE_LIMIT_BYTES = 35 * 1024 * 1024
+REQUIRED_ASSETS = {
+    "archive": "translation-models.tar.xz",
+    "tokenizer": "tokenizer.model",
+    "vocabulary": "vocab.json",
+    "tokenizer-runtime": "tokenizer_runtime.json",
+    "manifest": "manifest.json",
+    "licenses": "LICENSES.md",
+    "checksums": "SHA256SUMS",
+    "decompressor": "libtranslation_archive.so",
+}
+PROTOTYPE_REQUIRED_ROLES = set(REQUIRED_ASSETS) - {"decompressor"}
+DECOMPRESSOR_ALLOWANCE = "ohos-liblzma-decompressor"
 
 
 class PackageError(RuntimeError):
@@ -79,44 +91,32 @@ def verify_package(manifest_path: Path, stage_root: Path) -> dict:
         raise PackageError("staging root must be a regular directory")
 
     expected_paths = []
-    asset_bytes = 0
+    asset_roles = set()
     for asset in manifest["assets"]:
-        if not isinstance(asset, dict) or set(asset) != {"path", "size", "sha256"}:
+        if not isinstance(asset, dict) or set(asset) != {"role", "path", "size", "sha256"}:
             raise PackageError("invalid asset schema")
+        role = asset["role"]
+        if not isinstance(role, str) or role not in REQUIRED_ASSETS:
+            raise PackageError(f"unknown asset role: {role!r}")
         relative = _safe_path(asset["path"])
         relative_text = relative.as_posix()
+        if relative_text != REQUIRED_ASSETS[role]:
+            raise PackageError(f"asset role {role!r} requires path {REQUIRED_ASSETS[role]!r}")
+        if role in asset_roles:
+            raise PackageError(f"duplicate asset role: {role}")
         if relative_text in expected_paths:
             raise PackageError(f"duplicate asset: {relative_text}")
+        asset_roles.add(role)
         expected_paths.append(relative_text)
         if not isinstance(asset["size"], int) or asset["size"] < 0:
             raise PackageError(f"invalid asset size: {relative_text}")
         if not isinstance(asset["sha256"], str) or not re.fullmatch(r"[0-9a-fA-F]{64}", asset["sha256"]):
             raise PackageError(f"invalid asset hash: {relative_text}")
-        path = stage_root.joinpath(*relative.parts)
-        if not path.exists():
-            raise PackageError(f"missing asset: {relative_text}")
-        if not path.is_file() or path.is_symlink():
-            raise PackageError(f"asset is not a regular file: {relative_text}")
-        size = path.stat().st_size
-        if size != asset["size"]:
-            raise PackageError(f"asset size mismatch: {relative_text}")
-        if _sha256(path).lower() != asset["sha256"].lower():
-            raise PackageError(f"asset hash mismatch: {relative_text}")
-        asset_bytes += size
 
-    if expected_paths != sorted(expected_paths):
-        raise PackageError("asset paths must be sorted")
-    actual_paths = sorted(
-        path.relative_to(stage_root).as_posix()
-        for path in stage_root.rglob("*")
-        if path.is_file() or path.is_symlink()
-    )
-    if actual_paths != sorted(expected_paths):
-        unexpected = sorted(set(actual_paths) - set(expected_paths))
-        missing = sorted(set(expected_paths) - set(actual_paths))
-        if unexpected:
-            raise PackageError(f"unexpected staged assets: {unexpected}")
-        raise PackageError(f"missing staged assets: {missing}")
+    required_roles = set(REQUIRED_ASSETS) if manifest["mode"] == "final" else PROTOTYPE_REQUIRED_ROLES
+    missing_roles = sorted(required_roles - asset_roles)
+    if missing_roles:
+        raise PackageError(f"missing required asset roles: {missing_roles}")
 
     allowance_bytes = 0
     allowance_names = set()
@@ -125,6 +125,8 @@ def verify_package(manifest_path: Path, stage_root: Path) -> dict:
             raise PackageError("invalid allowance schema")
         if manifest["mode"] != "prototype" or allowance["prototypeOnly"] is not True:
             raise PackageError("allowances are prototype-only")
+        if allowance["name"] != DECOMPRESSOR_ALLOWANCE:
+            raise PackageError(f"unknown allowance: {allowance['name']!r}")
         if allowance["name"] in allowance_names:
             raise PackageError("duplicate allowance")
         allowance_names.add(allowance["name"])
@@ -133,6 +135,38 @@ def verify_package(manifest_path: Path, stage_root: Path) -> dict:
         allowance_bytes += allowance["bytes"]
     if manifest["mode"] == "final" and manifest["allowances"]:
         raise PackageError("final package rejects allowances")
+    if manifest["mode"] == "prototype":
+        has_decompressor = "decompressor" in asset_roles
+        if has_decompressor == bool(manifest["allowances"]):
+            raise PackageError("prototype package requires either the decompressor asset or exactly one allowance")
+
+    if expected_paths != sorted(expected_paths):
+        raise PackageError("asset paths must be sorted")
+    actual_paths = sorted(path.relative_to(stage_root).as_posix() for path in stage_root.rglob("*"))
+    if actual_paths != sorted(expected_paths):
+        unexpected = sorted(set(actual_paths) - set(expected_paths))
+        missing = sorted(set(expected_paths) - set(actual_paths))
+        if unexpected:
+            raise PackageError(f"unexpected staged assets: {unexpected}")
+        raise PackageError(f"missing staged assets: {missing}")
+
+    asset_bytes = 0
+    for asset in manifest["assets"]:
+        relative = PurePosixPath(asset["path"])
+        relative_text = relative.as_posix()
+        path = stage_root.joinpath(*relative.parts)
+        if path.is_symlink():
+            raise PackageError(f"asset is not a regular file: {relative_text}")
+        if not path.exists():
+            raise PackageError(f"missing asset: {relative_text}")
+        if not path.is_file():
+            raise PackageError(f"asset is not a regular file: {relative_text}")
+        size = path.stat().st_size
+        if size != asset["size"]:
+            raise PackageError(f"asset size mismatch: {relative_text}")
+        if _sha256(path).lower() != asset["sha256"].lower():
+            raise PackageError(f"asset hash mismatch: {relative_text}")
+        asset_bytes += size
 
     total = asset_bytes + allowance_bytes
     if total > PACKAGE_LIMIT_BYTES:

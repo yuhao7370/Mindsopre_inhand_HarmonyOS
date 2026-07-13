@@ -41,7 +41,7 @@ def validate_graph_contract(expected: dict, actual: dict, graph_name: str) -> No
         )
 
 
-def _inspect_onnx(path: Path) -> tuple[dict, list[str]]:
+def _inspect_onnx(path: Path) -> tuple[dict, list[dict]]:
     import onnx
 
     model = onnx.load(str(path))
@@ -64,16 +64,56 @@ def _inspect_onnx(path: Path) -> tuple[dict, list[str]]:
 
     inputs = [value for value in model.graph.input if value.name not in initializer_names]
     contract = {"inputs": tensor_map(inputs), "outputs": tensor_map(model.graph.output)}
-    return contract, [node.op_type for node in model.graph.node]
+    nodes = [
+        {"opType": node.op_type, "inputs": list(node.input), "outputs": list(node.output)}
+        for node in model.graph.node
+    ]
+    return contract, nodes
 
 
-def _validate_stable_softmax(operators: list[str], graph_name: str) -> None:
+def _validate_stable_softmax(nodes: list[dict], graph_name: str, expected_chains: int) -> None:
+    operators = [node["opType"] for node in nodes]
     if "Softmax" in operators:
         raise ContractError(f"{graph_name} contains forbidden native Softmax")
-    required = {"ReduceMax", "Sub", "Exp", "ReduceSum", "Div"}
-    missing = sorted(required - set(operators))
-    if missing:
-        raise ContractError(f"{graph_name} stable softmax operators missing: {missing}")
+    for operator in ("ReduceMax", "Exp", "ReduceSum", "Div"):
+        if operators.count(operator) != expected_chains:
+            raise ContractError(
+                f"{graph_name} stable softmax dataflow expected {expected_chains} {operator} nodes, "
+                f"got {operators.count(operator)}"
+            )
+
+    producers = {}
+    for node in nodes:
+        for output in node["outputs"]:
+            if output in producers:
+                raise ContractError(f"{graph_name} stable softmax dataflow has duplicate producer: {output}")
+            producers[output] = node
+
+    chains = 0
+    for divide in (node for node in nodes if node["opType"] == "Div"):
+        if len(divide["inputs"]) != 2:
+            continue
+        exponent = producers.get(divide["inputs"][0])
+        denominator = producers.get(divide["inputs"][1])
+        if not exponent or exponent["opType"] != "Exp" or not denominator or denominator["opType"] != "ReduceSum":
+            continue
+        if len(exponent["inputs"]) != 1 or len(exponent["outputs"]) != 1:
+            continue
+        if not denominator["inputs"] or denominator["inputs"][0] != exponent["outputs"][0]:
+            continue
+        subtract = producers.get(exponent["inputs"][0])
+        if not subtract or subtract["opType"] != "Sub" or len(subtract["inputs"]) != 2:
+            continue
+        maximum = producers.get(subtract["inputs"][1])
+        if not maximum or maximum["opType"] != "ReduceMax" or len(maximum["inputs"]) != 1:
+            continue
+        if subtract["inputs"][0] != maximum["inputs"][0]:
+            continue
+        chains += 1
+    if chains != expected_chains:
+        raise ContractError(
+            f"{graph_name} stable softmax dataflow expected {expected_chains} complete chains, got {chains}"
+        )
 
 
 def _checkpoint_revision(checkpoint: Path) -> Optional[str]:
@@ -348,9 +388,9 @@ def export_graphs(checkpoint: Path, output_root: Path, contract_path: Path, prof
     )
 
     for graph_name in ("encoder", "decoder_prefill", "decoder_step"):
-        actual, operators = _inspect_onnx(output_root / f"{graph_name}.onnx")
+        actual, nodes = _inspect_onnx(output_root / f"{graph_name}.onnx")
         validate_graph_contract(profile["graphs"][graph_name], actual, graph_name)
-        _validate_stable_softmax(operators, graph_name)
+        _validate_stable_softmax(nodes, graph_name, profile["stableSoftmaxChains"][graph_name])
         graph_inputs[graph_name] = actual
     report = {
         "profile": profile_name,
@@ -370,9 +410,9 @@ def inspect_exports(output_root: Path, contract_path: Path, profile_name: str) -
     profile = load_profile(contract_path, profile_name)
     inspected = {}
     for graph_name in ("encoder", "decoder_prefill", "decoder_step"):
-        actual, operators = _inspect_onnx(Path(output_root) / f"{graph_name}.onnx")
+        actual, nodes = _inspect_onnx(Path(output_root) / f"{graph_name}.onnx")
         validate_graph_contract(profile["graphs"][graph_name], actual, graph_name)
-        _validate_stable_softmax(operators, graph_name)
+        _validate_stable_softmax(nodes, graph_name, profile["stableSoftmaxChains"][graph_name])
         inspected[graph_name] = actual
     return {"profile": profile_name, "graphs": inspected}
 

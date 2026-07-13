@@ -11,6 +11,7 @@
       "maxTokens": 256,
       "onnxFloatingDtype": "FLOAT16",
       "mindsporeFloatingDtype": "FLOAT32",
+      "stableSoftmaxChains": {"encoder": 6, "decoder_prefill": 4, "decoder_step": 4},
       "graphs": {
         "encoder": {
           "inputs": {
@@ -70,6 +71,7 @@
       "maxTokens": 128,
       "onnxFloatingDtype": "FLOAT16",
       "mindsporeFloatingDtype": "FLOAT32",
+      "stableSoftmaxChains": {"encoder": 6, "decoder_prefill": 4, "decoder_step": 4},
       "graphs": {
         "encoder": {
           "inputs": {

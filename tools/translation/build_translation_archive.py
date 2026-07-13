@@ -136,7 +136,11 @@ def verify_tar(path: Path, manifest: dict) -> dict:
                 data_end = member.offset_data + ((member.size + 511) // 512) * 512
     except (tarfile.TarError, EOFError) as error:
         raise ArchiveError(f"invalid TAR: {error}") from error
-    if len(raw) < data_end + 1024 or any(raw[data_end:]):
+    minimum_length = data_end + 2 * tarfile.BLOCKSIZE
+    canonical_length = ((minimum_length + tarfile.RECORDSIZE - 1) // tarfile.RECORDSIZE) * tarfile.RECORDSIZE
+    if len(raw) != canonical_length:
+        raise ArchiveError(f"TAR canonical length mismatch: expected {canonical_length}, got {len(raw)}")
+    if any(raw[data_end:]):
         raise ArchiveError("TAR has non-zero trailing data")
     return manifest
 

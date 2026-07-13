@@ -3,7 +3,6 @@
 #include <cstring>
 #include <iostream>
 #include <fstream>
-#include <initializer_list>
 #include <memory>
 #include <stdexcept>
 #include <string>
@@ -11,20 +10,10 @@
 
 #include "include/api/context.h"
 #include "include/api/model.h"
+#include "translation_runtime_contract.h"
 
 using mindspore::DataType;
 using mindspore::MSTensor;
-
-static void RequireNames(const std::string &label, const std::vector<MSTensor> &tensors,
-                         std::initializer_list<const char *> required) {
-  std::vector<std::string> actual;
-  actual.reserve(tensors.size());
-  for (const auto &tensor : tensors) actual.push_back(tensor.Name());
-  std::vector<std::string> expected(required.begin(), required.end());
-  std::sort(actual.begin(), actual.end());
-  std::sort(expected.begin(), expected.end());
-  if (actual != expected) throw std::runtime_error(label + " tensor name contract mismatch");
-}
 
 static MSTensor &Find(std::vector<MSTensor> &tensors, const std::string &name) {
   auto it = std::find_if(tensors.begin(), tensors.end(), [&](const MSTensor &tensor) { return tensor.Name() == name; });
@@ -36,6 +25,21 @@ static const MSTensor &Find(const std::vector<MSTensor> &tensors, const std::str
   auto it = std::find_if(tensors.begin(), tensors.end(), [&](const MSTensor &tensor) { return tensor.Name() == name; });
   if (it == tensors.end()) throw std::runtime_error("missing tensor: " + name);
   return *it;
+}
+
+static void RequireDescriptors(
+    const std::string &label, const std::vector<MSTensor> &tensors,
+    const std::vector<translation_contract::TensorDescriptor> &expected) {
+  if (tensors.size() != expected.size()) throw std::runtime_error(label + " tensor count contract mismatch");
+  for (const auto &descriptor : expected) {
+    const auto &tensor = Find(tensors, descriptor.name);
+    if (tensor.DataType() != descriptor.dtype) {
+      throw std::runtime_error(label + " tensor dtype contract mismatch: " + descriptor.name);
+    }
+    if (tensor.Shape() != descriptor.shape) {
+      throw std::runtime_error(label + " tensor shape contract mismatch: " + descriptor.name);
+    }
+  }
 }
 
 static void FillI32(MSTensor &tensor, int32_t value) {
@@ -149,7 +153,7 @@ int main(int argc, char **argv) try {
   auto step = Build(argv[3], context);
 
   auto encoder_inputs = encoder.GetInputs();
-  RequireNames("encoder inputs", encoder_inputs, {"input_ids", "attention_mask"});
+  RequireDescriptors("encoder inputs", encoder_inputs, translation_contract::kEncoderInputs);
   auto &encoder_ids = Find(encoder_inputs, "input_ids");
   auto *encoder_id_data = static_cast<int32_t *>(encoder_ids.MutableData());
   for (int64_t index = 0; index < encoder_ids.ElementNum(); ++index) encoder_id_data[index] = static_cast<int32_t>(index);
@@ -160,12 +164,11 @@ int main(int argc, char **argv) try {
   std::vector<MSTensor> encoder_outputs;
   auto status = encoder.Predict(encoder_inputs, &encoder_outputs);
   if (!status.IsOk()) throw std::runtime_error(status.ToString());
-  RequireNames("encoder outputs", encoder_outputs, {"last_hidden_state"});
+  RequireDescriptors("encoder outputs", encoder_outputs, translation_contract::kEncoderOutputs);
   CheckFinite(encoder_outputs);
 
   auto prefill_inputs = prefill.GetInputs();
-  RequireNames("prefill inputs", prefill_inputs,
-               {"decoder_input_ids", "encoder_hidden_states", "encoder_attention_mask"});
+  RequireDescriptors("prefill inputs", prefill_inputs, translation_contract::kDecoderPrefillInputs);
   FillI32(Find(prefill_inputs, "decoder_input_ids"), 32000);
   auto &prefill_mask = Find(prefill_inputs, "encoder_attention_mask");
   FillI32(prefill_mask, 0);
@@ -181,18 +184,13 @@ int main(int argc, char **argv) try {
   std::vector<MSTensor> prefill_outputs;
   status = prefill.Predict(prefill_inputs, &prefill_outputs);
   if (!status.IsOk()) throw std::runtime_error(status.ToString());
-  RequireNames("prefill outputs", prefill_outputs,
-               {"logits", "self_key_0", "self_value_0", "cross_key_0", "cross_value_0", "self_key_1",
-                "self_value_1", "cross_key_1", "cross_value_1"});
+  RequireDescriptors("prefill outputs", prefill_outputs, translation_contract::kDecoderPrefillOutputs);
   CheckFinite(prefill_outputs);
 
   int32_t token = Argmax(Find(prefill_outputs, "logits"));
   std::vector<int32_t> tokens{token};
   auto step_inputs = step.GetInputs();
-  RequireNames("step inputs", step_inputs,
-               {"decoder_input_ids", "position_id", "self_attention_mask", "cross_attention_mask", "past_key_0",
-                "past_value_0", "cross_key_0", "cross_value_0", "past_key_1", "past_value_1", "cross_key_1",
-                "cross_value_1"});
+  RequireDescriptors("step inputs", step_inputs, translation_contract::kDecoderStepInputs);
   auto &step_cross_mask = Find(step_inputs, "cross_attention_mask");
   FillI32(step_cross_mask, 0);
   std::fill(static_cast<int32_t *>(step_cross_mask.MutableData()),
@@ -240,7 +238,7 @@ int main(int argc, char **argv) try {
     std::vector<MSTensor> step_outputs;
     status = step.Predict(step_inputs, &step_outputs);
     if (!status.IsOk()) throw std::runtime_error(status.ToString());
-    RequireNames("step outputs", step_outputs, {"logits", "new_key_0", "new_value_0", "new_key_1", "new_value_1"});
+    RequireDescriptors("step outputs", step_outputs, translation_contract::kDecoderStepOutputs);
     CheckFinite(step_outputs);
     token = Argmax(Find(step_outputs, "logits"));
     tokens.push_back(token);
