@@ -252,6 +252,7 @@ import {
   cachedRuntimeAiServiceForWorkflow,
   createHarmonyDefaultAiService,
   createRuntimeAiServiceForWorkflow,
+  HarmonyImageClassificationRuntimeOptions,
   imageCategoryLabelRawfilePathForLocale,
   objectCategoryLabelRawfilePathForLocale,
   rawfileAsciiContentToText,
@@ -1543,6 +1544,22 @@ class FixedAndroidGestureModelDetector implements AndroidGestureModelDetector {
 class RejectingAndroidGestureModelDetector implements AndroidGestureModelDetector {
   async detectAndroidGestures(_imageUri: string): Promise<AndroidGestureModelResult> {
     throw new Error('android gesture model failed');
+  }
+}
+
+class StoppingGestureRunner implements GestureRunner {
+  stopCount: number = 0;
+
+  async detectGesture(_imageUri: string): Promise<GestureResult> {
+    return {
+      ok: true,
+      gestures: [{ category: 10, label: 'Fist', score: 0.9 }],
+      executionMs: 1
+    };
+  }
+
+  stop(): void {
+    this.stopCount++;
   }
 }
 
@@ -7151,6 +7168,49 @@ export default function localUnitTest() {
       expect(creates).assertEqual(2);
     });
 
+    it('runtimeAiServiceSessionInvalidationStopsCachedGestureServiceExactlyOnce', 0, async () => {
+      const session = new RuntimeAiServiceSession();
+      const workflow: FeatureWorkflow = workflowForRoute(AppRoute.GESTURE_STILL.name)!;
+      const runner = new StoppingGestureRunner();
+      const service = new DefaultAiService({
+        gestureService: new GestureService({ runner: runner })
+      });
+      await session.getOrCreate(workflow, async (): Promise<DefaultAiService> => service);
+
+      session.invalidate();
+      session.invalidate();
+      await Promise.resolve();
+
+      expect(runner.stopCount).assertEqual(1);
+    });
+
+    it('runtimeAiServiceSessionInvalidationStopsPendingGestureServiceAndDoesNotReturnIt', 0, async () => {
+      const session = new RuntimeAiServiceSession();
+      const workflow: FeatureWorkflow = workflowForRoute(AppRoute.GESTURE_STILL.name)!;
+      const runner = new StoppingGestureRunner();
+      const service = new DefaultAiService({
+        gestureService: new GestureService({ runner: runner })
+      });
+      let resolveCreation: ((service: DefaultAiService) => void) | undefined = undefined;
+      const creation = new Promise<DefaultAiService>((resolve: (value: DefaultAiService) => void) => {
+        resolveCreation = resolve;
+      });
+      const requested = session.getOrCreate(workflow, (): Promise<DefaultAiService> => creation);
+
+      session.invalidate();
+      resolveCreation!(service);
+      let rejected = false;
+      try {
+        await requested;
+      } catch (_) {
+        rejected = true;
+      }
+      await Promise.resolve();
+
+      expect(rejected).assertTrue();
+      expect(runner.stopCount).assertEqual(1);
+    });
+
     it('runtimeAiServiceSessionCreatesAgainForDifferentRoute', 0, async () => {
       const session = new RuntimeAiServiceSession();
       const firstWorkflow: FeatureWorkflow = workflowForRoute(AppRoute.OBJECT_CAMERA.name)!;
@@ -7510,60 +7570,7 @@ export default function localUnitTest() {
       expect(estimator.seenImageUris.length).assertEqual(0);
     });
 
-    it('runtimeFactoryRejectsUntrustedClassificationLabelsAsGesturesByDefault', 0, async () => {
-      const workflow = workflowForRoute(AppRoute.GESTURE_STILL.name);
-      expect(workflow !== undefined).assertTrue();
-      const labelContent: Uint8Array = new Uint8Array([
-        103, 111, 108, 100, 102, 105, 115, 104, 10,
-        98, 111, 120, 105, 110, 103, 95, 103, 108, 111, 118, 101
-      ]);
-      const service = await createRuntimeAiServiceForWorkflow(workflow!, {
-        resourceManager: new FixedRawfileContentReader(labelContent),
-        inputPreprocessor: new FixedInputPreprocessor(new ArrayBuffer(12)),
-        tensorRunner: new FixedTensorRunner([0.1, 0.91])
-      });
-
-      const result = await service.run(workflow!, {
-        imageUri: 'file://selected/hand.jpg'
-      });
-
-      expect(result.ok).assertFalse();
-      expect(result.code).assertEqual('GESTURE_DETECTION_FAILED');
-      expect(result.messageKey).assertEqual('feature_runtime_gesture_failed');
-    });
-
-    it('runtimeFactoryPassesGestureRegionEstimatorToLocalGestureService', 0, async () => {
-      const workflow = workflowForRoute(AppRoute.GESTURE_STILL.name);
-      expect(workflow !== undefined).assertTrue();
-      const labelContent: Uint8Array = new Uint8Array([
-        103, 111, 108, 100, 102, 105, 115, 104, 10,
-        98, 111, 120, 105, 110, 103, 95, 103, 108, 111, 118, 101
-      ]);
-      const estimatedRect: GestureRectangle = {
-        left: 4,
-        top: 5,
-        width: 6,
-        height: 7
-      };
-      const estimator = new FixedGestureRegionEstimator(estimatedRect, 20, 30);
-      const service = await createRuntimeAiServiceForWorkflow(workflow!, {
-        resourceManager: new FixedRawfileContentReader(labelContent),
-        inputPreprocessor: new FixedInputPreprocessor(new ArrayBuffer(12)),
-        tensorRunner: new FixedTensorRunner([0.1, 0.91]),
-        trustedGestureModelLabels: true,
-        gestureRegionEstimator: estimator
-      });
-
-      const result = await service.run(workflow!, {
-        imageUri: 'file://selected/hand-estimated.jpg'
-      });
-
-      expect(result.ok).assertTrue();
-      expect(estimator.seenImageUris[0]).assertEqual('file://selected/hand-estimated.jpg');
-      expect(result.detailText.indexOf('Fist 91.00% [4,5,6,7]') >= 0).assertTrue();
-    });
-
-    it('cachedRuntimeFactoryReportsGestureRunnerUnavailableWithoutLoadingImageNetLabels', 0, async () => {
+    it('cachedRuntimeFactoryUsesProductionGestureRouteWithoutLoadingImageNetLabels', 0, async () => {
       resetHarmonyRuntimeAiServiceCachesForTests();
       const workflow = workflowForRoute(AppRoute.GESTURE_LIVE.name);
       expect(workflow !== undefined).assertTrue();
@@ -7578,9 +7585,10 @@ export default function localUnitTest() {
       });
 
       expect(result.ok).assertFalse();
-      expect(result.code).assertEqual('NATIVE_ADAPTER_PENDING');
-      expect(result.messageKey).assertEqual('feature_runtime_gesture_runner_unavailable');
-      expect(resourceManager.seenPaths.length).assertEqual(0);
+      expect(result.code).assertEqual('GESTURE_DETECTION_FAILED');
+      expect(result.messageKey).assertEqual('feature_runtime_gesture_failed');
+      expect(resourceManager.seenPaths.length).assertEqual(1);
+      expect(resourceManager.seenPaths[0]).assertEqual('models/gesture/GestureDetector.ms');
     });
 
     it('runtimeFactoryInjectsLocalSceneDetectionServiceByDefault', 0, async () => {
@@ -8177,6 +8185,30 @@ export default function localUnitTest() {
       expect(result.ok).assertTrue();
       expect(result.code).assertEqual('GESTURE_DETECTION_DONE');
       expect(runner.seenImageUris[0]).assertEqual('file://selected/gesture.jpg');
+    });
+
+    it('runtimeFactoryUsesInjectedAndroidGestureDetectorWithoutImageNetLabels', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.GESTURE_STILL.name)!;
+      const resourceManager = new FixedRawfileContentReader(new Uint8Array([102, 105, 115, 116]));
+      const detector = new FixedAndroidGestureModelDetector({
+        gestures: [{ category: 10, score: 0.91 }],
+        imageWidth: 320,
+        imageHeight: 240,
+        executionMs: 6
+      });
+      const options: HarmonyImageClassificationRuntimeOptions = {
+        resourceManager: resourceManager,
+        androidGestureModelDetector: detector
+      };
+
+      const service = await createRuntimeAiServiceForWorkflow(workflow, options);
+      const result = await service.run(workflow, {
+        imageUri: 'file://selected/gesture.jpg'
+      });
+
+      expect(result.code).assertEqual('GESTURE_DETECTION_DONE');
+      expect(detector.seenImageUris.length).assertEqual(1);
+      expect(resourceManager.seenPaths.length).assertEqual(0);
     });
 
     it('runtimeFactoryInjectsSceneDetectionServiceForSceneWorkflow', 0, async () => {

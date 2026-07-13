@@ -35,6 +35,7 @@ export interface GestureResult {
 
 export interface GestureRunner {
   detectGesture(imageUri: string): Promise<GestureResult>;
+  stop?(): void | Promise<void>;
 }
 
 export interface AndroidGestureModelDetection {
@@ -52,6 +53,7 @@ export interface AndroidGestureModelResult {
 
 export interface AndroidGestureModelDetector {
   detectAndroidGestures(imageUri: string): Promise<AndroidGestureModelResult>;
+  stop?(): void | Promise<void>;
 }
 
 export interface GestureRegionEstimate {
@@ -115,6 +117,7 @@ const localGestureCategoryMaps: Array<LocalGestureCategoryMap> = [
 
 export class GestureService {
   private readonly runner: GestureRunner;
+  private stopPromise: Promise<void> | undefined = undefined;
 
   constructor(options: GestureServiceOptions) {
     this.runner = options.runner;
@@ -131,6 +134,13 @@ export class GestureService {
         executionMs: Date.now() - startMs
       };
     }
+  }
+
+  stop(): Promise<void> {
+    if (this.stopPromise === undefined) {
+      this.stopPromise = stopGestureRunner(this.runner);
+    }
+    return this.stopPromise;
   }
 }
 
@@ -200,6 +210,7 @@ export class ImageClassificationGestureRunner implements GestureRunner {
 
 export class AndroidGestureModelRunner implements GestureRunner {
   private readonly detector: AndroidGestureModelDetector;
+  private stopPromise: Promise<void> | undefined = undefined;
 
   constructor(detector: AndroidGestureModelDetector) {
     this.detector = detector;
@@ -224,6 +235,33 @@ export class AndroidGestureModelRunner implements GestureRunner {
         executionMs: Date.now() - startMs
       };
     }
+  }
+
+  stop(): Promise<void> {
+    if (this.stopPromise === undefined) {
+      this.stopPromise = stopAndroidGestureModelDetector(this.detector);
+    }
+    return this.stopPromise;
+  }
+}
+
+async function stopGestureRunner(runner: GestureRunner): Promise<void> {
+  if (runner.stop === undefined) {
+    return;
+  }
+  try {
+    await runner.stop();
+  } catch (_) {
+  }
+}
+
+async function stopAndroidGestureModelDetector(detector: AndroidGestureModelDetector): Promise<void> {
+  if (detector.stop === undefined) {
+    return;
+  }
+  try {
+    await detector.stop();
+  } catch (_) {
   }
 }
 

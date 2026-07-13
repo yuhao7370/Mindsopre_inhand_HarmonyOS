@@ -1,4 +1,7 @@
 import { describe, it, expect } from '@ohos/hypium';
+import { image } from '@kit.ImageKit';
+import { AppRoute } from '../main/ets/app/AppRoutes';
+import { workflowForRoute } from '../main/ets/features/runtime/FeatureWorkflowCatalog';
 import { gestureInputFromRgba } from '../main/ets/services/ai/HmsGesturePreprocessor';
 import {
   HmsGestureOutputTensor,
@@ -6,7 +9,24 @@ import {
   decodeHmsGestureOutputs,
   hmsGestureBoxesExceedNmsThreshold
 } from '../main/ets/services/ai/HmsGestureYoloDecoder';
-import { AndroidGestureModelDetection, GestureRectangle } from '../main/ets/services/ai/GestureService';
+import {
+  AndroidGestureModelDetection,
+  AndroidGestureModelRunner,
+  GestureRectangle
+} from '../main/ets/services/ai/GestureService';
+import {
+  HmsGestureImageLoader,
+  HmsGestureModelDetector,
+  HmsGestureOpenedImage,
+  HmsGesturePixelMap,
+  hmsGestureModelRawfilePath
+} from '../main/ets/services/ai/HmsGestureModelDetector';
+import {
+  HmsGestureModelInfo,
+  HmsGestureNativeSession
+} from '../main/ets/services/ai/HmsGestureNativeSession';
+import { createRuntimeAiServiceForWorkflow } from '../main/ets/services/ai/ImageClassificationRuntimeFactory';
+import { RawfileContentReader } from '../main/ets/services/ai/MindSporeLiteModelRunner';
 
 interface GestureScaleFixture {
   readonly name: string;
@@ -109,8 +129,241 @@ function totalFinite(values: Float32Array): boolean {
   return true;
 }
 
+class RecordingGestureRawfileReader implements RawfileContentReader {
+  readonly seenPaths: Array<string> = [];
+
+  async getRawFileContent(path: string): Promise<Uint8Array> {
+    this.seenPaths.push(path);
+    return new Uint8Array([1, 2, 3]);
+  }
+}
+
+class FakeGestureImageLoader implements HmsGestureImageLoader {
+  readonly seenUris: Array<string> = [];
+  readCount: number = 0;
+  pixelMapReleaseCount: number = 0;
+  closeCount: number = 0;
+  readonly width: number;
+  readonly height: number;
+
+  constructor(width: number = 2, height: number = 2) {
+    this.width = width;
+    this.height = height;
+  }
+
+  async open(imageUri: string): Promise<HmsGestureOpenedImage> {
+    this.seenUris.push(imageUri);
+    return new FakeGestureOpenedImage(this);
+  }
+}
+
+class FakeGestureOpenedImage implements HmsGestureOpenedImage {
+  readonly pixelMap: HmsGesturePixelMap;
+  private readonly owner: FakeGestureImageLoader;
+
+  constructor(owner: FakeGestureImageLoader) {
+    this.owner = owner;
+    this.pixelMap = new FakeGesturePixelMap(owner);
+  }
+
+  async close(): Promise<void> {
+    this.owner.closeCount++;
+  }
+}
+
+class FakeGesturePixelMap implements HmsGesturePixelMap {
+  private readonly owner: FakeGestureImageLoader;
+
+  constructor(owner: FakeGestureImageLoader) {
+    this.owner = owner;
+  }
+
+  async getImageInfo(): Promise<image.ImageInfo> {
+    return {
+      size: {
+        width: this.owner.width,
+        height: this.owner.height
+      }
+    } as image.ImageInfo;
+  }
+
+  async readPixelsToBuffer(buffer: ArrayBuffer): Promise<void> {
+    this.owner.readCount++;
+    const rgba = new Uint8Array(buffer);
+    for (let index = 0; index < rgba.length; index += 4) {
+      rgba[index] = 10;
+      rgba[index + 1] = 20;
+      rgba[index + 2] = 30;
+      rgba[index + 3] = 255;
+    }
+  }
+
+  async release(): Promise<void> {
+    this.owner.pixelMapReleaseCount++;
+  }
+}
+
+class FakeGestureNativeSession implements HmsGestureNativeSession {
+  loadCount: number = 0;
+  predictCount: number = 0;
+  releaseCount: number = 0;
+  maxConcurrentPredictions: number = 0;
+  private activePredictions: number = 0;
+  readonly outputs: HmsGestureOutputs;
+  readonly modelInfo: HmsGestureModelInfo;
+  readonly rejectPrediction: boolean;
+
+  constructor(
+    outputs: HmsGestureOutputs,
+    modelInfo: HmsGestureModelInfo = { inputName: 'data', inputShape: [1, 3, 224, 224] },
+    rejectPrediction: boolean = false
+  ) {
+    this.outputs = outputs;
+    this.modelInfo = modelInfo;
+    this.rejectPrediction = rejectPrediction;
+  }
+
+  loadModel(_modelBytes: Uint8Array): HmsGestureModelInfo {
+    this.loadCount++;
+    return this.modelInfo;
+  }
+
+  async predict(_input: Float32Array): Promise<HmsGestureOutputs> {
+    this.predictCount++;
+    this.activePredictions++;
+    this.maxConcurrentPredictions = Math.max(this.maxConcurrentPredictions, this.activePredictions);
+    await Promise.resolve();
+    this.activePredictions--;
+    if (this.rejectPrediction) {
+      throw new Error('native prediction failed');
+    }
+    return this.outputs;
+  }
+
+  release(): void {
+    this.releaseCount++;
+  }
+}
+
 export default function gestureModelUnitTest(): void {
   describe('GestureModelUnit', () => {
+    it('hmsGestureDetectorLoadsOnceSerializesPredictionsAndStopsIdempotently', 0, async () => {
+      const outputs = blankOutputs();
+      setPrediction(mutableTensor(outputs, 'layer113-conv-hand'), 28, 0, 10, 10, 11);
+      const nativeSession = new FakeGestureNativeSession(outputs);
+      const reader = new RecordingGestureRawfileReader();
+      const imageLoader = new FakeGestureImageLoader(320, 240);
+      const detector = new HmsGestureModelDetector({
+        resourceManager: reader,
+        nativeSessionFactory: async (): Promise<HmsGestureNativeSession> => nativeSession,
+        imageLoader: imageLoader
+      });
+
+      const firstPromise = detector.detectAndroidGestures('file://selected/first.jpg');
+      const secondPromise = detector.detectAndroidGestures('file://selected/second.jpg');
+      const first = await firstPromise;
+      const second = await secondPromise;
+
+      expect(reader.seenPaths.length).assertEqual(1);
+      expect(reader.seenPaths[0]).assertEqual(hmsGestureModelRawfilePath);
+      expect(nativeSession.loadCount).assertEqual(1);
+      expect(nativeSession.predictCount).assertEqual(2);
+      expect(nativeSession.maxConcurrentPredictions).assertEqual(1);
+      expect(imageLoader.readCount).assertEqual(2);
+      expect(imageLoader.pixelMapReleaseCount).assertEqual(2);
+      expect(imageLoader.closeCount).assertEqual(2);
+      expect(first.imageWidth).assertEqual(320);
+      expect(first.imageHeight).assertEqual(240);
+      expect(first.gestures[0].category).assertEqual(11);
+      expect(second.gestures[0].category).assertEqual(11);
+
+      await detector.stop();
+      await detector.stop();
+      expect(nativeSession.releaseCount).assertEqual(1);
+      const stopped = await new AndroidGestureModelRunner(detector).detectGesture('file://selected/stopped.jpg');
+      expect(stopped.ok).assertFalse();
+      expect(nativeSession.predictCount).assertEqual(2);
+    });
+
+    it('hmsGestureDetectorReportsModelNativeAndDecodeFailuresHonestly', 0, async () => {
+      const invalidModelSession = new FakeGestureNativeSession(blankOutputs(), {
+        inputName: 'wrong',
+        inputShape: [1, 3, 224, 224]
+      });
+      const invalidModelDetector = new HmsGestureModelDetector({
+        resourceManager: new RecordingGestureRawfileReader(),
+        nativeSessionFactory: async (): Promise<HmsGestureNativeSession> => invalidModelSession,
+        imageLoader: new FakeGestureImageLoader()
+      });
+      const invalidModel = await new AndroidGestureModelRunner(invalidModelDetector)
+        .detectGesture('file://selected/model.jpg');
+
+      const nativeImageLoader = new FakeGestureImageLoader();
+      const nativeSession = new FakeGestureNativeSession(
+        blankOutputs(),
+        { inputName: 'data', inputShape: [1, 3, 224, 224] },
+        true
+      );
+      const nativeDetector = new HmsGestureModelDetector({
+        resourceManager: new RecordingGestureRawfileReader(),
+        nativeSessionFactory: async (): Promise<HmsGestureNativeSession> => nativeSession,
+        imageLoader: nativeImageLoader
+      });
+      const nativeFailure = await new AndroidGestureModelRunner(nativeDetector)
+        .detectGesture('file://selected/native.jpg');
+
+      const malformedOutputs = blankOutputs();
+      malformedOutputs.tensors[0].name = 'wrong-output';
+      const decodeImageLoader = new FakeGestureImageLoader();
+      const decodeDetector = new HmsGestureModelDetector({
+        resourceManager: new RecordingGestureRawfileReader(),
+        nativeSessionFactory: async (): Promise<HmsGestureNativeSession> =>
+          new FakeGestureNativeSession(malformedOutputs),
+        imageLoader: decodeImageLoader
+      });
+      const decodeFailure = await new AndroidGestureModelRunner(decodeDetector)
+        .detectGesture('file://selected/decode.jpg');
+
+      expect(invalidModel.ok).assertFalse();
+      expect(invalidModelSession.releaseCount).assertEqual(1);
+      expect(nativeFailure.ok).assertFalse();
+      expect(nativeImageLoader.pixelMapReleaseCount).assertEqual(1);
+      expect(decodeFailure.ok).assertFalse();
+      expect(decodeImageLoader.pixelMapReleaseCount).assertEqual(1);
+    });
+
+    it('runtimeFactoryUsesStillGestureThresholdPointSix', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.GESTURE_STILL.name)!;
+      const outputs = blankOutputs();
+      setPrediction(mutableTensor(outputs, 'layer89-conv-hand'), 7, 0, 2, 3, 10, 0, 0);
+      const service = await createRuntimeAiServiceForWorkflow(workflow, {
+        resourceManager: new RecordingGestureRawfileReader(),
+        hmsGestureNativeSessionFactory: async (): Promise<HmsGestureNativeSession> =>
+          new FakeGestureNativeSession(outputs),
+        hmsGestureImageLoader: new FakeGestureImageLoader()
+      });
+
+      const result = await service.run(workflow, { imageUri: 'file://selected/still.jpg' });
+
+      expect(result.code).assertEqual('GESTURE_DETECTION_FAILED');
+    });
+
+    it('runtimeFactoryUsesLiveGestureThresholdPointOne', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.GESTURE_LIVE.name)!;
+      const outputs = blankOutputs();
+      setPrediction(mutableTensor(outputs, 'layer89-conv-hand'), 7, 0, 2, 3, 10, 0, 0);
+      const service = await createRuntimeAiServiceForWorkflow(workflow, {
+        resourceManager: new RecordingGestureRawfileReader(),
+        hmsGestureNativeSessionFactory: async (): Promise<HmsGestureNativeSession> =>
+          new FakeGestureNativeSession(outputs),
+        hmsGestureImageLoader: new FakeGestureImageLoader()
+      });
+
+      const result = await service.run(workflow, { imageUri: 'file://selected/live.jpg' });
+
+      expect(result.code).assertEqual('GESTURE_DETECTION_DONE');
+    });
+
     it('stretchesRgbaToBgrPlanar224WithMnnRoundedNearestSampling', 0, () => {
       const rgba = new Uint8Array([
         10, 20, 30, 255, 40, 50, 60, 255,

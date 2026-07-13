@@ -210,6 +210,7 @@ export class DefaultAiService {
   private readonly poseService?: PoseService;
   private readonly gestureService?: GestureService;
   private readonly sceneDetectionService?: SceneDetectionService;
+  private stopPromise: Promise<void> | undefined = undefined;
 
   constructor(options?: AiServiceOptions) {
     this.imageClassificationService = options?.imageClassificationService ?? new ImageClassificationService({
@@ -266,6 +267,23 @@ export class DefaultAiService {
       messageKey: 'feature_runtime_pending_adapter',
       detailText: ''
     };
+  }
+
+  stop(): Promise<void> {
+    if (this.stopPromise === undefined) {
+      this.stopPromise = this.stopGestureService();
+    }
+    return this.stopPromise;
+  }
+
+  private async stopGestureService(): Promise<void> {
+    if (this.gestureService === undefined) {
+      return;
+    }
+    try {
+      await this.gestureService.stop();
+    } catch (_) {
+    }
   }
 
   private async detectGesture(inputs: AiRunInputs): Promise<AiRunResult> {

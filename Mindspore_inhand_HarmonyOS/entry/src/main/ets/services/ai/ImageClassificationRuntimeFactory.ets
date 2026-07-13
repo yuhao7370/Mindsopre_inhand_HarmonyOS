@@ -59,12 +59,21 @@ import {
   PoseService
 } from './PoseService';
 import {
+  AndroidGestureModelDetector,
+  AndroidGestureModelRunner,
   HarmonyGestureRegionEstimator,
   ImageClassificationGestureRunner,
   GestureRegionEstimator,
   GestureRunner,
   GestureService
 } from './GestureService';
+import {
+  HmsGestureImageLoader,
+  HmsGestureModelDetector,
+  hmsGestureLiveConfidenceThreshold,
+  hmsGestureStillConfidenceThreshold
+} from './HmsGestureModelDetector';
+import { HmsGestureNativeSessionFactory } from './HmsGestureNativeSession';
 import {
   ImageClassificationSceneDetectionRunner,
   parseSceneDetectionLabels,
@@ -103,6 +112,9 @@ export interface HarmonyImageClassificationRuntimeOptions {
   readonly segmentationRunner?: SegmentationRunner;
   readonly poseRunner?: PoseRunner;
   readonly gestureRunner?: GestureRunner;
+  readonly androidGestureModelDetector?: AndroidGestureModelDetector;
+  readonly hmsGestureNativeSessionFactory?: HmsGestureNativeSessionFactory;
+  readonly hmsGestureImageLoader?: HmsGestureImageLoader;
   readonly trustedGestureModelLabels?: boolean;
   readonly gestureRegionEstimator?: GestureRegionEstimator;
   readonly sceneDetectionRunner?: SceneDetectionRunner;
@@ -242,7 +254,9 @@ export async function cachedRuntimeAiServiceForWorkflow(
     });
   }
   if (workflow.aiMethod === 'detectGesture') {
-    return new DefaultAiService();
+    return createRuntimeAiServiceForWorkflow(workflow, {
+      resourceManager: resourceManager
+    });
   }
   if (workflow.aiMethod === 'detectScene') {
     return cachedHarmonyLocalSceneDetectionAiServiceForResourceManager(resourceManager);
@@ -302,7 +316,7 @@ export async function createRuntimeAiServiceForWorkflow(
       });
     }
     return new DefaultAiService({
-      gestureService: await createHarmonyLocalGestureService(options)
+      gestureService: createHarmonyHmsGestureService(options, workflow)
     });
   }
   if (workflow.aiMethod === 'detectScene') {
@@ -462,6 +476,21 @@ export function createHarmonyPoseService(
 export function createHarmonyGestureService(runner: GestureRunner): GestureService {
   return new GestureService({
     runner: runner
+  });
+}
+
+export function createHarmonyHmsGestureService(
+  options: HarmonyImageClassificationRuntimeOptions,
+  workflow: FeatureWorkflow
+): GestureService {
+  const detector = options.androidGestureModelDetector ?? new HmsGestureModelDetector({
+    resourceManager: options.resourceManager,
+    nativeSessionFactory: options.hmsGestureNativeSessionFactory,
+    imageLoader: options.hmsGestureImageLoader,
+    confidenceThreshold: workflow.liveMode ? hmsGestureLiveConfidenceThreshold : hmsGestureStillConfidenceThreshold
+  });
+  return new GestureService({
+    runner: new AndroidGestureModelRunner(detector)
   });
 }
 
