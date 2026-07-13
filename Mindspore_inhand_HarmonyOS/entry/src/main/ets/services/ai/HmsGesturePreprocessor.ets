@@ -9,9 +9,9 @@ export function gestureInputFromRgba(rgba: Uint8Array, width: number, height: nu
   const planeSize = hmsGestureInputSize * hmsGestureInputSize;
   const input = new Float32Array(planeSize * 3);
   for (let targetY = 0; targetY < hmsGestureInputSize; targetY++) {
-    const sourceY = Math.floor(targetY * height / hmsGestureInputSize);
+    const sourceY = Math.min(height - 1, Math.round(targetY * height / hmsGestureInputSize));
     for (let targetX = 0; targetX < hmsGestureInputSize; targetX++) {
-      const sourceX = Math.floor(targetX * width / hmsGestureInputSize);
+      const sourceX = Math.min(width - 1, Math.round(targetX * width / hmsGestureInputSize));
       const sourceOffset = (sourceY * width + sourceX) * 4;
       const targetOffset = targetY * hmsGestureInputSize + targetX;
       input[targetOffset] = rgba[sourceOffset + 2] / 255;

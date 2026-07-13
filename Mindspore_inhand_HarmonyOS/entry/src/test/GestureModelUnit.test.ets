@@ -3,9 +3,10 @@ import { gestureInputFromRgba } from '../main/ets/services/ai/HmsGesturePreproce
 import {
   HmsGestureOutputTensor,
   HmsGestureOutputs,
-  decodeHmsGestureOutputs
+  decodeHmsGestureOutputs,
+  hmsGestureBoxesExceedNmsThreshold
 } from '../main/ets/services/ai/HmsGestureYoloDecoder';
-import { AndroidGestureModelDetection } from '../main/ets/services/ai/GestureService';
+import { AndroidGestureModelDetection, GestureRectangle } from '../main/ets/services/ai/GestureService';
 
 interface GestureScaleFixture {
   readonly name: string;
@@ -110,7 +111,7 @@ function totalFinite(values: Float32Array): boolean {
 
 export default function gestureModelUnitTest(): void {
   describe('GestureModelUnit', () => {
-    it('stretchesRgbaToBgrPlanar224WithNearestSampling', 0, () => {
+    it('stretchesRgbaToBgrPlanar224WithMnnRoundedNearestSampling', 0, () => {
       const rgba = new Uint8Array([
         10, 20, 30, 255, 40, 50, 60, 255,
         70, 80, 90, 255, 100, 110, 120, 255
@@ -121,14 +122,44 @@ export default function gestureModelUnitTest(): void {
 
       expect(input.length).assertEqual(150528);
       assertNear(input[0], 30 / 255);
-      assertNear(input[111], 30 / 255);
-      assertNear(input[112], 60 / 255);
-      assertNear(input[111 * 224 + 111], 30 / 255);
-      assertNear(input[112 * 224 + 112], 120 / 255);
+      // Pinned MNN nearest uses clamp(round(target * sourceLength / 224)); 2x2 changes at 56, not 112.
+      assertNear(input[55], 30 / 255);
+      assertNear(input[56], 60 / 255);
+      assertNear(input[55 * 224], 30 / 255);
+      assertNear(input[56 * 224], 90 / 255);
+      assertNear(input[56 * 224 + 56], 120 / 255);
       assertNear(input[planeSize], 20 / 255);
       assertNear(input[planeSize * 2], 10 / 255);
       assertNear(input[input.length - 1], 100 / 255);
       expect(totalFinite(input)).assertTrue();
+    });
+
+    it('roundsAndClampsNearestCoordinatesForNonSquareDownscale', 0, () => {
+      const width = 335;
+      const height = 225;
+      const rgba = new Uint8Array(width * height * 4);
+      for (let sourceY = 0; sourceY < height; sourceY++) {
+        for (let sourceX = 0; sourceX < width; sourceX++) {
+          const offset = (sourceY * width + sourceX) * 4;
+          rgba[offset] = sourceX % 256;
+          rgba[offset + 1] = sourceY % 256;
+          rgba[offset + 2] = (sourceX + sourceY) % 256;
+          rgba[offset + 3] = 255;
+        }
+      }
+
+      const input = gestureInputFromRgba(rgba, width, height);
+      const planeSize = 224 * 224;
+      const targetOffset = 112 * 224 + 2;
+
+      // round(2*335/224)=3 and round(112*225/224)=113; floor would select (2,112).
+      assertNear(input[targetOffset], 116 / 255);
+      assertNear(input[planeSize + targetOffset], 113 / 255);
+      assertNear(input[planeSize * 2 + targetOffset], 3 / 255);
+      // The last target coordinate rounds to the last valid source coordinate and remains clamped.
+      assertNear(input[planeSize - 1], 46 / 255);
+      assertNear(input[planeSize * 2 - 1], 224 / 255);
+      assertNear(input[input.length - 1], 78 / 255);
     });
 
     it('rejectsInvalidPreprocessDimensionsAndLengths', 0, () => {
@@ -142,6 +173,7 @@ export default function gestureModelUnitTest(): void {
       const outputs = blankOutputs();
       setPrediction(mutableTensor(outputs, 'layer89-conv-hand'), 7, 0, 2, 3, 14, 0, 0);
 
+      // HMS 2.1.0.300 arm64 resolveBox 0x3243c-0x32458 rejects only score < threshold.
       const detections = decodeHmsGestureOutputs(outputs, 448, 112, 0.25);
 
       expect(detections.length).assertEqual(1);
@@ -181,18 +213,16 @@ export default function gestureModelUnitTest(): void {
       assertNear(detection.rect?.height ?? -1, 33.25);
     });
 
-    it('suppressesSameClassAtNmsBoundaryAndKeepsJustBelowBoundary', 0, () => {
-      const atBoundary = blankOutputs();
-      const atValues = mutableTensor(atBoundary, 'layer113-conv-hand');
-      setPrediction(atValues, 28, 0, 5, 8, 4, 10, 10);
-      setPrediction(atValues, 28, 0, 6, 8, 4, 9, 9, -0.40187445282936096);
-      expect(decodeHmsGestureOutputs(atBoundary, 224, 224, 0.9).length).assertEqual(1);
+    it('suppressesNmsOnlyAboveExactIouBoundary', 0, () => {
+      const reference: GestureRectangle = { left: 0, top: 0, width: 20, height: 10 };
+      const exact: GestureRectangle = { left: 0, top: 0, width: 9, height: 10 };
+      const above: GestureRectangle = { left: 0, top: 0, width: 9.000000000000002, height: 10 };
+      const below: GestureRectangle = { left: 0, top: 0, width: 8.999999999999998, height: 10 };
 
-      const belowBoundary = blankOutputs();
-      const belowValues = mutableTensor(belowBoundary, 'layer113-conv-hand');
-      setPrediction(belowValues, 28, 0, 5, 8, 4, 10, 10);
-      setPrediction(belowValues, 28, 0, 6, 8, 4, 9, 9, -0.39246997237205505);
-      expect(decodeHmsGestureOutputs(belowBoundary, 224, 224, 0.9).length).assertEqual(2);
+      // Containment makes IoU width/20: exact is 9/20 == 0.45; adjacent doubles bracket it.
+      expect(hmsGestureBoxesExceedNmsThreshold(reference, exact)).assertFalse();
+      expect(hmsGestureBoxesExceedNmsThreshold(reference, above)).assertTrue();
+      expect(hmsGestureBoxesExceedNmsThreshold(reference, below)).assertFalse();
     });
 
     it('retainsOverlappingCrossClassDetections', 0, () => {

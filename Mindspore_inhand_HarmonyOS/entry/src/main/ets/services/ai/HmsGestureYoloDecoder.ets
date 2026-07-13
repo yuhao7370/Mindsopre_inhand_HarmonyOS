@@ -138,6 +138,7 @@ function decodeScale(
         }
         const classLogit = tensorValue(values, planeSize, channelBase + 5 + category, cellIndex);
         const score = sigmoid(objectnessLogit) * sigmoid(classLogit);
+        // HMS 2.1.0.300 arm64 resolveBox 0x3243c-0x32458 rejects only score < threshold.
         if (!Number.isFinite(score) || score < threshold) {
           continue;
         }
@@ -253,7 +254,7 @@ function classLocalNms(candidates: Array<GestureCandidate>): Array<GestureCandid
     let suppressed = false;
     for (let keptIndex = 0; keptIndex < kept.length; keptIndex++) {
       if (kept[keptIndex].category === candidate.category &&
-        intersectionOverUnion(kept[keptIndex].rect, candidate.rect) >= nmsThreshold) {
+        hmsGestureBoxesExceedNmsThreshold(kept[keptIndex].rect, candidate.rect)) {
         suppressed = true;
         break;
       }
@@ -263,6 +264,10 @@ function classLocalNms(candidates: Array<GestureCandidate>): Array<GestureCandid
     }
   }
   return kept;
+}
+
+export function hmsGestureBoxesExceedNmsThreshold(left: GestureRectangle, right: GestureRectangle): boolean {
+  return intersectionOverUnion(left, right) > nmsThreshold;
 }
 
 function intersectionOverUnion(left: GestureRectangle, right: GestureRectangle): number {
