@@ -1,2 +1,4 @@
 /Mindspore_inhand/
 .superpowers/
+__pycache__/
+*.py[cod]
