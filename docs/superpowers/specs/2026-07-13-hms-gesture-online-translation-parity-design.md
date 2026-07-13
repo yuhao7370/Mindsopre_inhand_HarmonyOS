@@ -229,7 +229,7 @@ Tokenizer 固定为基线 `source.spm` 的 SentencePiece Unigram，不再混用�
 6. SentencePiece 解码并按原始分隔结构拼接。
 7. 新请求到来或页面销毁时递增 generation；旧推理结果不得回写 UI。
 
-模型和 tokenizer 由 `MindSporeLiteTextTranslationRunner` 单例缓存。张量契约固定如下，导出脚本必须用这些名称，manifest 和运行时同时校验：
+模型和 tokenizer 由 `MindSporeLiteTranslationRunner` 单例缓存。张量契约固定如下，导出脚本必须用这些名称，manifest 和运行时同时校验：
 
 `encoder.ms`：
 
@@ -327,9 +327,9 @@ entry/src/main/ets/
     HmsGesturePreprocessor.ets
     HmsGestureYoloDecoder.ets
     HmsGestureNms.ets
-  ai/translation/
+  services/ai/
     TinyTranslationTokenizer.ets
-    MindSporeLiteTextTranslationRunner.ets
+    MindSporeLiteTranslationRunner.ets
     TranslationModelManifest.ets
   native/gesture_mnn/
     index.d.ts

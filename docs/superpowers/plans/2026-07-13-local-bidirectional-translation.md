@@ -47,6 +47,11 @@
 - Create: `tools/translation/requirements.lock.txt`
 - Create: `tools/translation/export_marian_smoke.py`
 - Create: `tools/translation/convert_mindspore.ps1`
+- Create: `tools/translation/build_translation_archive.py`
+- Create: `tools/translation/test_build_translation_archive.py`
+- Create: `tools/translation/verify_translation_package.py`
+- Create: `tools/translation/test_verify_translation_package.py`
+- Create: `tools/translation/manifests/prototype-package-v1.json`
 - Create: `tools/translation/contracts/translation-v1.json`
 - Create: `tools/translation/fixtures/smoke.zh.txt`
 - Create: `tools/translation/fixtures/smoke.en.txt`
@@ -107,7 +112,11 @@ For the final trained checkpoint, require ≥99% token argmax agreement over 100
 
 - [ ] **Step 6: Reproduce and guard the archive**
 
-Pin XZ Utils 5.8.3 source SHA-256 `FFF1FFCF2B0DA84D308A14DE513A1AA23D4E9AA3464D17E64B9714BFDD0BBFB6` and tag commit `4b73f2ec19a99ef465282fbce633e8deb33691b3`; explicitly reject compromised 5.6.0/5.6.1. The evidence archive is `25,073,516 B`, SHA-256 `1DBB6BA66FC7F5FBA777F38960E1D56FBC0AAB793C30B068020D1DCD0773BC7F`; its TAR is `58,173,440 B`, SHA-256 `D305ED7D1FE5DF6E1019078646D3D8D9F43D4514345D166011BF2A70F95FBB84`. Its W8 members are:
+Implement and test `build_translation_archive.py` here, before any task consumes it. It must create a deterministic TAR containing exactly canonical `encoder.ms`, `decoder_prefill.ms`, and `decoder_step.ms`, normalize member order/metadata, invoke an explicitly supplied host XZ Utils 5.8.3 executable as one solid CRC64 stream, and verify the resulting stream plus exact member names/sizes/SHA values. Reject other XZ versions, concatenated/trailing streams, links, paths, duplicates, and extras. Build twice in separate temporary directories and require byte-identical TAR and `.tar.xz` hashes.
+
+Implement `verify_translation_package.py` and its tests in the same task. `prototype-package-v1.json` records the measured archive and actual prototype tokenizer/runtime/manifest/license/hash assets plus the reserved decompressor allowance; the verifier must sum the complete staged HAP translation asset set and fail above 35 MiB. Task 4 must rerun the same verifier over actual final assets with no allowance substituted for a real file. Pin XZ Utils 5.8.3 source SHA-256 `FFF1FFCF2B0DA84D308A14DE513A1AA23D4E9AA3464D17E64B9714BFDD0BBFB6` and tag commit `4b73f2ec19a99ef465282fbce633e8deb33691b3`; explicitly reject compromised 5.6.0/5.6.1. Task 1 may invoke a verified host XZ binary; the OHOS static `liblzma` build/import belongs to Task 4.
+
+The evidence archive is `25,073,516 B`, SHA-256 `1DBB6BA66FC7F5FBA777F38960E1D56FBC0AAB793C30B068020D1DCD0773BC7F`; its TAR is `58,173,440 B`, SHA-256 `D305ED7D1FE5DF6E1019078646D3D8D9F43D4514345D166011BF2A70F95FBB84`. Its W8 members are:
 
 - `encoder_fixed_stable_w8.ms`: `16,109,400 B`, SHA-256 `317DB84237D67206AEC036CF4A5B6F8212E5F116C3682C1B3E1ED7916460B558`.
 - `decoder_prefill1_stable_w8_nchw.ms`: `21,138,552 B`, SHA-256 `FBCBCBC50C89740EE4851BBE0DC397973F1A2905473237F0934E12497BF4084C`.
@@ -219,8 +228,6 @@ git commit -m "feat: train tiny bidirectional translator"
 - Create: `Mindspore_inhand_HarmonyOS/entry/src/main/resources/rawfile/models/translation/SHA256SUMS`
 - Create: `Mindspore_inhand_HarmonyOS/entry/src/main/resources/rawfile/models/translation/LICENSES.md`
 - Create: `Mindspore_inhand_HarmonyOS/scripts/verify-translation-model.ps1`
-- Create: `tools/translation/build_translation_archive.py`
-- Create: `tools/translation/test_build_translation_archive.py`
 - Create: `tools/translation/build_xz_ohos.ps1`
 - Create: `Mindspore_inhand_HarmonyOS/entry/src/main/cpp/translation_xz/CMakeLists.txt`
 - Create: `Mindspore_inhand_HarmonyOS/entry/src/main/cpp/translation_xz/translation_xz_extract.cpp`
@@ -236,15 +243,15 @@ Require float ONNX/PyTorch agreement, float `.ms` benchmark success, W8 ≥99% t
 
 - [ ] **Step 2: Write and run the failing project asset guard**
 
-Before copying assets, add a PowerShell guard that reads `manifest.json`, hashes every shipped file, checks archive/tokenizer/runtime/license contracts and total shipped translation assets `<=35 MiB`, and exits nonzero. The manifest must still describe the three extracted graph names, exact tensor contracts, sizes, and SHA-256 values. Expected first run: missing asset failure.
+Before copying assets, add a thin project PowerShell guard that invokes Task 1's `verify_translation_package.py` for archive/member/package integrity and then checks the Harmony manifest's vocab/token IDs and tensor names/shapes. Do not reimplement archive construction or package-size accounting in Task 4. The manifest must still describe the three extracted graph names, exact tensor contracts, sizes, and SHA-256 values. Expected first run: missing asset failure.
 
-- [ ] **Step 3: Copy only runtime assets and rerun the guard**
-
-Include identical `source.spm`/`target.spm` once as `tokenizer.model`, the extended vocab, a generated `tokenizer_runtime.json` with every piece ID/score/type plus the compiled `nmt_nfkc` normalization map, one reproducible solid W8 archive, fixed revisions/licenses, quality metrics, and file hashes. Exclude the three raw `.ms`, float/ONNX/checkpoint artifacts, and every W4/mixed candidate.
-
-- [ ] **Step 4: Build and verify the bounded native extractor**
+- [ ] **Step 3: Build and verify the bounded native extractor**
 
 Build only minimal static `liblzma` with encoders, tools, and threads disabled; the arm64 API24 compile/link probe is GO. Stream rawfile FD/range into an app-private temp directory/file with compressed cap 32 MiB, output cap 60 MiB, liblzma memory cap 68 MiB, required CRC64, and no concatenated stream or trailing data. Strictly allow exactly regular `encoder.ms`, `decoder_prefill.ms`, and `decoder_step.ms`; reject links, paths, duplicates, extras, or any size/SHA mismatch. Atomically rename only after complete verification, clean partials, and key the cache by archive SHA.
+
+- [ ] **Step 4: Copy only final runtime assets and rerun the guard**
+
+Reuse Task 1's `build_translation_archive.py` against the final trained W8 graphs; do not create a second builder or packaging path. Copy identical `source.spm`/`target.spm` once as `tokenizer.model`, the extended vocab, a generated `tokenizer_runtime.json` with every piece ID/score/type plus the compiled `nmt_nfkc` normalization map, the resulting solid W8 archive, fixed revisions/licenses, quality metrics, and file hashes. Rerun Task 1's package verifier over the actual final archive, tokenizer/runtime, manifest/licenses/hashes, and built decompressor; no prototype size reservation is accepted at this gate. Exclude the three raw `.ms`, float/ONNX/checkpoint artifacts, and every W4/mixed candidate.
 
 - [ ] **Step 5: Commit**
 
@@ -253,8 +260,6 @@ git add Mindspore_inhand_HarmonyOS/entry/src/main/resources/rawfile/models/trans
   Mindspore_inhand_HarmonyOS/scripts/verify-translation-model.ps1 `
   Mindspore_inhand_HarmonyOS/entry/src/main/cpp/translation_xz `
   Mindspore_inhand_HarmonyOS/entry/src/main/ets/native/translation_xz `
-  tools/translation/build_translation_archive.py `
-  tools/translation/test_build_translation_archive.py `
   tools/translation/build_xz_ohos.ps1
 git commit -m "feat: add tiny bidirectional translation model"
 ```
