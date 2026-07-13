@@ -20,6 +20,25 @@ model in an application.
 The import script verifies the AAR before extraction and verifies the extracted
 model before copying only that model into the HarmonyOS rawfile directory.
 
+## Embedded rights statement
+
+The hash-verified AAR contains
+`assets/kpms-unpack/open_source_software_statment.xml` (the filename is spelled
+that way upstream). Its gesture entry records:
+
+- Notice version and gesture item version: `2.0.5.300`
+- Notice update time: `2020-10-30`
+- Software: `ml-computer-vision-gesture-apk`
+- Copyright: `Copyright (c) 2019-present, Huawei, Inc. All rights reserved.`
+- License type/reference: `ml-computer-vision-gesture-apk/LICENSE`
+- License text: `xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx` (placeholder text)
+
+The embedded `2.0.5.300` version differs from the downloaded AAR coordinate
+`2.1.0.300`. The embedded all-rights-reserved statement and placeholder license
+text do not establish permission for public redistribution. They are recorded
+here so that a future publication or product licensing review can resolve the
+discrepancy against authoritative Huawei terms.
+
 ## Verified format and contract
 
 Despite its `.ms` suffix, the file is an Alibaba MNN FlatBuffer rather than a
