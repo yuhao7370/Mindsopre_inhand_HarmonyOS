@@ -7,6 +7,7 @@ import json
 import math
 import os
 import random
+import shutil
 import sys
 import time
 from pathlib import Path
@@ -50,6 +51,11 @@ from tools.translation.train_bidirectional import (
 
 BASELINE_LOSS = 3.7039039318084717
 CANDIDATE_DIR = "candidate-epoch1"
+DIAGNOSTIC_DIR = "diagnostic-epoch1-final"
+DIAGNOSTIC_STATUS = "REJECTED_NOT_PROMOTABLE"
+REJECTED_DIAGNOSTIC_MODEL_SHA256S = frozenset({
+    "c28e7f7f8af8009d634795d2fd012a891695bf59dc134ddf7e50516da9831237",
+})
 ATOMIC_REPLACE_ATTEMPTS = 20
 ATOMIC_REPLACE_RETRY_SECONDS = 0.05
 
@@ -668,6 +674,280 @@ def _verify_training_replay_receipt(training, training_report_path, objective_ha
         or receipt_path.read_bytes() != canonical_json_bytes(receipt)
     ):
         raise DistillationError("baseline replay receipt content differs")
+
+
+def validate_final_diagnostic_bundle(
+    state,
+    progress_path,
+    training_report_path,
+    expected_objective_hashes,
+    distillation_config,
+    teacher_generation_seconds,
+):
+    """Validate the rejected epoch-one final state without making it a candidate."""
+    progress_path = Path(progress_path)
+    training_report_path = Path(training_report_path)
+    progress = _load_json(progress_path)
+    training = _load_json(training_report_path)
+    progress_keys = {
+        "schema_version", "rescue_step", "loss", "learning_rate",
+        "rescue_gpu_seconds", "cumulative_gpu_seconds", "objective_hashes",
+    }
+    training_keys = {
+        "schema_version", "epoch", "seed", "plan_epoch_index", "optimizer_reset",
+        "rescue_steps", "logical_batches", "dropped_partial_logical_batches",
+        "validation_history", "baseline_validation_loss", "best_rescue_step",
+        "best_validation_loss", "candidate_checkpoint", "candidate", "promotion_allowed",
+        "promotion_status", "resumed", "teacher_generation_gpu_seconds",
+        "probe_gpu_seconds", "rescue_gpu_seconds", "epoch_gpu_seconds",
+        "cumulative_gpu_seconds", "gpuLedger", "training_view_manifest_sha256",
+        "distillation_manifest_sha256", "peak_cuda_bytes", "last_progress",
+        "objective_hashes", "replayed_from_baseline", "replayed_optimizer_steps",
+        "baseline_replay_receipt",
+    }
+    if (
+        not isinstance(expected_objective_hashes, dict)
+        or not expected_objective_hashes
+        or any(not _is_sha256(value) for value in expected_objective_hashes.values())
+        or not isinstance(progress, dict)
+        or set(progress) != progress_keys
+        or progress.get("schema_version") != 1
+        or progress.get("rescue_step") != 1406
+        or progress.get("objective_hashes") != expected_objective_hashes
+        or progress_path.read_bytes() != canonical_json_bytes(progress)
+        or not isinstance(training, dict)
+        or set(training) != training_keys
+        or training.get("schema_version") != 1
+        or training.get("epoch") != 1
+        or training.get("seed") != distillation_config["seed"]
+        or training.get("plan_epoch_index") != 0
+        or training.get("optimizer_reset") is not True
+        or training.get("rescue_steps") != 1406
+        or training.get("logical_batches") != 5624
+        or training.get("dropped_partial_logical_batches") != 2
+        or training.get("baseline_validation_loss") != BASELINE_LOSS
+        or training.get("best_rescue_step") is not None
+        or training.get("best_validation_loss") != BASELINE_LOSS
+        or training.get("candidate_checkpoint") is not None
+        or training.get("candidate") is not None
+        or training.get("promotion_allowed") is not False
+        or training.get("promotion_status") != "pending_manual_and_flores_gate"
+        or training.get("objective_hashes") != expected_objective_hashes
+        or training.get("last_progress") != progress
+        or training_report_path.read_bytes() != canonical_json_bytes(training)
+        or training.get("replayed_from_baseline") is not True
+        or isinstance(training.get("replayed_optimizer_steps"), bool)
+        or not isinstance(training.get("replayed_optimizer_steps"), int)
+        or training.get("replayed_optimizer_steps") < 1
+        or training.get("replayed_optimizer_steps") > 1406
+    ):
+        raise DistillationError("final diagnostic report/progress contract differs")
+    step, state_elapsed, history, best_loss, best_step = validate_rescue_resume_state(
+        state,
+        1406,
+        expected_objective_hashes,
+        expected_epoch=0,
+        expected_baseline_loss=BASELINE_LOSS,
+    )
+    if (
+        step != 1406
+        or state_elapsed != training.get("rescue_gpu_seconds")
+        or history != training.get("validation_history")
+        or best_loss != BASELINE_LOSS
+        or best_step is not None
+        or not isinstance(state.get("model"), dict)
+        or not state["model"]
+        or not isinstance(state.get("optimizer"), dict)
+        or not isinstance(state.get("scaler"), dict)
+    ):
+        raise DistillationError("final diagnostic resume state differs")
+    if (
+        not isinstance(history, list)
+        or [item.get("rescue_step") for item in history] != [500, 1000, 1406]
+        or any(item.get("loss", 0) < BASELINE_LOSS for item in history)
+    ):
+        raise DistillationError("final diagnostic validation history differs")
+    elapsed = training["rescue_gpu_seconds"]
+    progress_elapsed = progress.get("rescue_gpu_seconds")
+    if (
+        isinstance(elapsed, bool)
+        or not isinstance(elapsed, (int, float))
+        or not math.isfinite(elapsed)
+        or elapsed < 0
+        or isinstance(progress_elapsed, bool)
+        or not isinstance(progress_elapsed, (int, float))
+        or not math.isfinite(progress_elapsed)
+        or progress_elapsed < 0
+        or progress_elapsed > elapsed
+    ):
+        raise DistillationError("final diagnostic elapsed floor differs")
+    ledger = rescue_budget_snapshot(
+        distillation_config, teacher_generation_seconds, elapsed
+    )
+    progress_ledger = rescue_budget_snapshot(
+        distillation_config, teacher_generation_seconds, progress_elapsed
+    )
+    if (
+        training.get("teacher_generation_gpu_seconds") != teacher_generation_seconds
+        or training.get("probe_gpu_seconds")
+        != distillation_config["gpuLedger"]["probeActualSeconds"]
+        or training.get("epoch_gpu_seconds") != elapsed
+        or training.get("gpuLedger") != ledger
+        or training.get("cumulative_gpu_seconds") != ledger["cumulativeActualSeconds"]
+        or progress.get("cumulative_gpu_seconds")
+        != progress_ledger["cumulativeActualSeconds"]
+        or training.get("training_view_manifest_sha256")
+        != expected_objective_hashes.get("training_view_manifest")
+        or training.get("distillation_manifest_sha256")
+        != expected_objective_hashes.get("distillation_manifest")
+        or not isinstance(training.get("peak_cuda_bytes"), int)
+        or isinstance(training.get("peak_cuda_bytes"), bool)
+        or training.get("peak_cuda_bytes") < 0
+    ):
+        raise DistillationError("final diagnostic cumulative ledger differs")
+    _verify_training_replay_receipt(
+        training, training_report_path, expected_objective_hashes
+    )
+    return {
+        "status": DIAGNOSTIC_STATUS,
+        "gate_eligible": False,
+        "final_rescue_step": 1406,
+        "resume_epoch_index": 0,
+        "validation_history": history,
+        "baseline_validation_loss": BASELINE_LOSS,
+        "gpuLedger": ledger,
+        "objectiveHashes": expected_objective_hashes,
+        "sourceArtifacts": {
+            "progress": _file_artifact(progress_path),
+            "trainingReport": _file_artifact(training_report_path),
+            "baselineReplayReceipt": training["baseline_replay_receipt"],
+        },
+    }
+
+
+def _reject_diagnostic_checkpoint_for_gate(checkpoint_dir):
+    checkpoint_dir = Path(checkpoint_dir).resolve()
+    if DIAGNOSTIC_DIR in checkpoint_dir.parts:
+        raise DistillationError("diagnostic checkpoint is never gate eligible")
+    provenance_path = checkpoint_dir / "diagnostic-provenance-v1.json"
+    if provenance_path.is_file():
+        raise DistillationError("diagnostic checkpoint is never gate eligible")
+    model_path = checkpoint_dir / "model.safetensors"
+    if not model_path.is_file():
+        raise DistillationError("gate checkpoint model is missing")
+    if _sha256_file(model_path)[1] in REJECTED_DIAGNOSTIC_MODEL_SHA256S:
+        raise DistillationError("rejected diagnostic model hash is never gate eligible")
+
+
+def materialize_final_diagnostic(
+    distillation_config,
+    training_config,
+    dataset_manifest,
+    rescue_view,
+    training_view_manifest,
+    distillation_manifest,
+    offline_verification_one,
+    offline_verification_two,
+    baseline_checkpoint,
+    artifact_root,
+):
+    """Materialize final rejected weights for diagnostics, never promotion."""
+    artifact_root = Path(artifact_root).resolve()
+    output_root = artifact_root / DIAGNOSTIC_DIR
+    temporary_root = artifact_root / (DIAGNOSTIC_DIR + ".partial")
+    if output_root.exists() or temporary_root.exists():
+        raise DistillationError("diagnostic materialization output already exists")
+    bundle = verify_rescue_bundle(
+        distillation_config,
+        rescue_view,
+        training_view_manifest,
+        distillation_manifest,
+        offline_verification_one,
+        offline_verification_two,
+    )
+    baseline_checkpoint = Path(baseline_checkpoint).resolve()
+    if (
+        _sha256_file(baseline_checkpoint / "model.safetensors")[1] != STUDENT_SHA256
+        or _sha256_file(baseline_checkpoint / "tokenizer.model")[1]
+        != distillation_config["student"]["tokenizer_sha256"]
+    ):
+        raise DistillationError("diagnostic baseline checkpoint differs")
+    objective_hashes = build_rescue_objective_hashes(
+        distillation_config,
+        training_config,
+        dataset_manifest,
+        rescue_view,
+        training_view_manifest,
+        distillation_manifest,
+        offline_verification_one,
+        offline_verification_two,
+        baseline_checkpoint,
+        1,
+    )
+    resume_path = artifact_root / "resume.pt"
+    progress_path = artifact_root / "progress-v1.json"
+    training_report_path = artifact_root / "training-v1.json"
+    if any(
+        not path.is_file()
+        for path in (resume_path, progress_path, training_report_path)
+    ) or any(
+        Path(str(path) + ".partial").exists()
+        for path in (resume_path, progress_path, training_report_path)
+    ):
+        raise DistillationError("final diagnostic source artifacts differ")
+    try:
+        import torch
+        from transformers import MarianMTModel
+    except ImportError as error:
+        raise DistillationError("diagnostic materialization requires pinned T3 dependencies") from error
+    state = torch.load(resume_path, map_location="cpu", weights_only=False)
+    evidence = validate_final_diagnostic_bundle(
+        state,
+        progress_path,
+        training_report_path,
+        objective_hashes,
+        distillation_config,
+        bundle["teacher_generation_gpu_seconds"],
+    )
+    model = MarianMTModel.from_pretrained(
+        str(baseline_checkpoint), local_files_only=True
+    )
+    model.load_state_dict(state["model"], strict=True)
+    temporary_root.mkdir(parents=False)
+    try:
+        model.save_pretrained(
+            temporary_root, safe_serialization=True, max_shard_size="1GB"
+        )
+        shutil.copyfile(
+            baseline_checkpoint / "tokenizer.model",
+            temporary_root / "tokenizer.model",
+        )
+        provenance = {
+            "schema_version": 1,
+            **evidence,
+            "reason": "final epoch-one weights did not beat baseline validation loss",
+            "checkpoint": {
+                "model": _file_artifact(temporary_root / "model.safetensors"),
+                "tokenizer": _file_artifact(temporary_root / "tokenizer.model"),
+            },
+        }
+        (temporary_root / "diagnostic-provenance-v1.json").write_bytes(
+            canonical_json_bytes(provenance)
+        )
+        os.replace(temporary_root, output_root)
+    except Exception:
+        shutil.rmtree(temporary_root, ignore_errors=True)
+        raise
+    return {
+        "schema_version": 1,
+        "status": DIAGNOSTIC_STATUS,
+        "gate_eligible": False,
+        "path": output_root.name,
+        "provenance": _file_artifact(
+            output_root / "diagnostic-provenance-v1.json"
+        ),
+        "checkpoint": provenance["checkpoint"],
+    }
 
 
 def verify_epoch2_authorization(
@@ -1493,6 +1773,17 @@ def build_parser():
     gate.add_argument("--training-report", required=True, type=Path)
     gate.add_argument("--flores-root", type=Path)
     gate.add_argument("--output", required=True, type=Path)
+    diagnostic = commands.add_parser("materialize-diagnostic")
+    diagnostic.add_argument("--distillation-config", required=True, type=Path)
+    diagnostic.add_argument("--training-config", required=True, type=Path)
+    diagnostic.add_argument("--dataset-manifest", required=True, type=Path)
+    diagnostic.add_argument("--rescue-view", required=True, type=Path)
+    diagnostic.add_argument("--training-view-manifest", required=True, type=Path)
+    diagnostic.add_argument("--distillation-manifest", required=True, type=Path)
+    diagnostic.add_argument("--offline-verification-one", required=True, type=Path)
+    diagnostic.add_argument("--offline-verification-two", required=True, type=Path)
+    diagnostic.add_argument("--baseline-checkpoint", required=True, type=Path)
+    diagnostic.add_argument("--artifact-root", required=True, type=Path)
     return parser
 
 
@@ -1500,6 +1791,7 @@ def main(argv=None):
     args = build_parser().parse_args(argv)
     distillation_config = load_distillation_config(args.distillation_config)
     if args.command == "gate":
+        _reject_diagnostic_checkpoint_for_gate(args.candidate_checkpoint)
         candidate = {
             "model_sha256": _sha256_file(args.candidate_checkpoint / "model.safetensors")[1],
             "tokenizer_sha256": _sha256_file(args.candidate_checkpoint / "tokenizer.model")[1],
@@ -1562,6 +1854,19 @@ def main(argv=None):
         )
         args.output.parent.mkdir(parents=True, exist_ok=True)
         _write_atomic_json(args.output, report)
+    elif args.command == "materialize-diagnostic":
+        report = materialize_final_diagnostic(
+            distillation_config,
+            load_training_config(args.training_config),
+            _load_json(args.dataset_manifest),
+            args.rescue_view,
+            args.training_view_manifest,
+            args.distillation_manifest,
+            args.offline_verification_one,
+            args.offline_verification_two,
+            args.baseline_checkpoint,
+            args.artifact_root,
+        )
     else:
         report = run_rescue_epoch(
             distillation_config,

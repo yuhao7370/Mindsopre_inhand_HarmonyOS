@@ -8,6 +8,7 @@ from unittest import mock
 from tools.translation.export_marian_smoke import (
     ContractError,
     PINNED_REVISION,
+    PROTOTYPE_MODEL_SHA256,
     _inspect_onnx,
     _validate_checkpoint,
     _validate_stable_softmax,
@@ -41,7 +42,14 @@ class ExportContractTest(unittest.TestCase):
             provenance = checkpoint / "base_revision.txt"
 
             provenance.write_text(PINNED_REVISION + "\n", encoding="utf-8")
-            _validate_checkpoint(checkpoint, profile, "prototype")
+            with mock.patch(
+                "tools.translation.export_marian_smoke._sha256_file",
+                return_value=PROTOTYPE_MODEL_SHA256,
+            ):
+                _validate_checkpoint(checkpoint, profile, "prototype")
+
+            with self.assertRaisesRegex(ContractError, "allowlist"):
+                _validate_checkpoint(checkpoint, profile, "prototype")
 
             provenance.unlink()
             with self.assertRaisesRegex(ContractError, "got None"):

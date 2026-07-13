@@ -15,8 +15,13 @@ from tools.translation.distill_en_zh import (
     materialize_training_view,
 )
 from tools.translation.train_rescue import (
+    BASELINE_LOSS,
     CANDIDATE_DIR,
+    DIAGNOSTIC_DIR,
+    DIAGNOSTIC_STATUS,
+    REJECTED_DIAGNOSTIC_MODEL_SHA256S,
     ATOMIC_REPLACE_ATTEMPTS,
+    _reject_diagnostic_checkpoint_for_gate,
     _write_atomic_json,
     build_rescue_objective_hashes,
     checked_rescue_budget_snapshot,
@@ -27,6 +32,7 @@ from tools.translation.train_rescue import (
     summarize_audited_manual_results,
     validate_rescue_resume_state,
     validate_baseline_replay,
+    validate_final_diagnostic_bundle,
     verify_epoch2_authorization,
     verify_rescue_bundle,
 )
@@ -43,6 +49,157 @@ class FakeStudentProcessor:
 
 
 class RescueContractTest(unittest.TestCase):
+    def _final_diagnostic_fixture(self, root):
+        config = load_distillation_config(CONFIG)
+        objective = {
+            "fixture": "a" * 64,
+            "training_view_manifest": "c" * 64,
+            "distillation_manifest": "d" * 64,
+        }
+        progress = {
+            "schema_version": 1,
+            "rescue_step": 1406,
+            "loss": 4.0,
+            "learning_rate": 1e-5,
+            "rescue_gpu_seconds": 20.0,
+            "cumulative_gpu_seconds": rescue_budget_snapshot(config, 100.0, 20.0)["cumulativeActualSeconds"],
+            "objective_hashes": objective,
+        }
+        progress_path = root / "progress-v1.json"
+        progress_path.write_bytes(canonical_json_bytes(progress))
+        receipt = {
+            "schema_version": 1,
+            "mode": "explicit_replay_from_baseline",
+            "progress": {"path": "progress-v1.json", "bytes": 123, "sha256": "b" * 64},
+            "elapsed_floor_seconds": 5.0,
+            "replayed_optimizer_steps": 4,
+            "objective_hashes": objective,
+        }
+        receipt_path = root / "baseline-replay-v1.json"
+        receipt_path.write_bytes(canonical_json_bytes(receipt))
+        receipt_artifact = {
+            "path": receipt_path.name,
+            "bytes": receipt_path.stat().st_size,
+            "sha256": hashlib.sha256(receipt_path.read_bytes()).hexdigest(),
+        }
+        history = [
+            {"rescue_step": 500, "loss": BASELINE_LOSS + 0.03},
+            {"rescue_step": 1000, "loss": BASELINE_LOSS + 0.02},
+            {"rescue_step": 1406, "loss": BASELINE_LOSS + 0.01},
+        ]
+        final_elapsed = 21.0
+        ledger = rescue_budget_snapshot(config, 100.0, final_elapsed)
+        training = {
+            "schema_version": 1,
+            "epoch": 1,
+            "seed": config["seed"],
+            "plan_epoch_index": 0,
+            "optimizer_reset": True,
+            "rescue_steps": 1406,
+            "logical_batches": 5624,
+            "dropped_partial_logical_batches": 2,
+            "validation_history": history,
+            "baseline_validation_loss": BASELINE_LOSS,
+            "best_rescue_step": None,
+            "best_validation_loss": BASELINE_LOSS,
+            "candidate_checkpoint": None,
+            "candidate": None,
+            "promotion_allowed": False,
+            "promotion_status": "pending_manual_and_flores_gate",
+            "resumed": False,
+            "replayed_from_baseline": True,
+            "replayed_optimizer_steps": 4,
+            "baseline_replay_receipt": receipt_artifact,
+            "teacher_generation_gpu_seconds": 100.0,
+            "probe_gpu_seconds": config["gpuLedger"]["probeActualSeconds"],
+            "rescue_gpu_seconds": final_elapsed,
+            "epoch_gpu_seconds": final_elapsed,
+            "cumulative_gpu_seconds": ledger["cumulativeActualSeconds"],
+            "gpuLedger": ledger,
+            "training_view_manifest_sha256": "c" * 64,
+            "distillation_manifest_sha256": "d" * 64,
+            "peak_cuda_bytes": 1,
+            "last_progress": progress,
+            "objective_hashes": objective,
+        }
+        training_path = root / "training-v1.json"
+        training_path.write_bytes(canonical_json_bytes(training))
+        state = {
+            "schema_version": 1,
+            "model": {"weight": object()},
+            "optimizer": {},
+            "scaler": {},
+            "rescue_step": 1406,
+            "epoch": 0,
+            "next_group": 1406,
+            "elapsed_seconds": final_elapsed,
+            "python_random_state": object(),
+            "torch_random_state": object(),
+            "cuda_random_state": object(),
+            "validation_history": history,
+            "best_loss": BASELINE_LOSS,
+            "best_step": None,
+            "objective_hashes": objective,
+        }
+        return config, objective, state, progress_path, training_path
+
+    def test_final_diagnostic_bundle_is_strict_and_non_promotable(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            config, objective, state, progress, training = self._final_diagnostic_fixture(root)
+            evidence = validate_final_diagnostic_bundle(
+                state, progress, training, objective, config, 100.0
+            )
+            self.assertEqual(evidence["status"], DIAGNOSTIC_STATUS)
+            self.assertFalse(evidence["gate_eligible"])
+            self.assertEqual(evidence["final_rescue_step"], 1406)
+
+            for mutation in (
+                {**state, "epoch": 1},
+                {**state, "rescue_step": 1405},
+                {**state, "objective_hashes": {"fixture": "f" * 64}},
+                {**state, "elapsed_seconds": 22.0},
+            ):
+                with self.assertRaises(DistillationError):
+                    validate_final_diagnostic_bundle(
+                        mutation, progress, training, objective, config, 100.0
+                    )
+
+            changed = json.loads(training.read_text(encoding="utf-8"))
+            changed["gpuLedger"]["cumulativeActualSeconds"] += 1
+            training.write_bytes(canonical_json_bytes(changed))
+            with self.assertRaises(DistillationError):
+                validate_final_diagnostic_bundle(
+                    state, progress, training, objective, config, 100.0
+                )
+
+    def test_gate_rejects_diagnostic_checkpoint_by_path_and_provenance(self):
+        self.assertEqual(DIAGNOSTIC_DIR, "diagnostic-epoch1-final")
+        self.assertNotIn("candidate", DIAGNOSTIC_DIR)
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            diagnostic = root / DIAGNOSTIC_DIR
+            diagnostic.mkdir()
+            with self.assertRaises(DistillationError):
+                _reject_diagnostic_checkpoint_for_gate(diagnostic)
+
+            renamed = root / "renamed"
+            renamed.mkdir()
+            (renamed / "diagnostic-provenance-v1.json").write_bytes(
+                canonical_json_bytes({"status": DIAGNOSTIC_STATUS, "gate_eligible": False})
+            )
+            with self.assertRaises(DistillationError):
+                _reject_diagnostic_checkpoint_for_gate(renamed)
+
+            (renamed / "diagnostic-provenance-v1.json").unlink()
+            (renamed / "model.safetensors").write_bytes(b"renamed diagnostic")
+            with mock.patch(
+                "tools.translation.train_rescue._sha256_file",
+                return_value=(len(b"renamed diagnostic"), next(iter(REJECTED_DIAGNOSTIC_MODEL_SHA256S))),
+            ):
+                with self.assertRaises(DistillationError):
+                    _reject_diagnostic_checkpoint_for_gate(renamed)
+
     def test_atomic_writer_retries_only_transient_permission_conflicts(self):
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / "atomic.json"

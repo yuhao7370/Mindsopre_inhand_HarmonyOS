@@ -14,6 +14,7 @@ from typing import Dict, Optional, Sequence
 
 PINNED_REPOSITORY = "Helsinki-NLP/opus-mt_tiny_zho-eng"
 PINNED_REVISION = "4ee3a9342aae4ca6fbae82c930b5dccff5dd68dd"
+PROTOTYPE_MODEL_SHA256 = "e285c15744265535ce9cbcbb59e4144e2e7c0e6f113f05ca092f8c41f1f6b28a"
 FLORES_REPOSITORY = "openlanguagedata/flores_plus"
 FLORES_REVISION = "b3a5298db5721c8a682e7ef00a37fcc9ab522757"
 FLORES_PATHS = {"devtest/cmn_Hans.jsonl", "devtest/eng_Latn.jsonl"}
@@ -347,6 +348,8 @@ def _validate_checkpoint(
         )
     if training_report_path is not None or quality_gate_report_path is not None:
         raise ContractError("prototype export rejects production approval reports")
+    if _sha256_file(checkpoint / "model.safetensors") != PROTOTYPE_MODEL_SHA256:
+        raise ContractError("prototype checkpoint model is outside the pinned allowlist")
     return None
 
 
