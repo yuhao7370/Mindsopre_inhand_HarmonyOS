@@ -48,8 +48,8 @@
                                   },
                       "napi":  {
                                    "path":  "entry/libs/arm64-v8a/libtranslation_archive.so",
-                                   "size":  263392,
-                                   "sha256":  "34596A10A1423ECDD9C0386EF9C65D6DC6CCFC3084A6C52F3AE263FD01FE6EC4"
+                                   "size":  263408,
+                                   "sha256":  "5BFA5B2DAFC68FDC0753BB2D606E2BF40B6695D6D76982064DA2C39271028764"
                                }
                   }
 }

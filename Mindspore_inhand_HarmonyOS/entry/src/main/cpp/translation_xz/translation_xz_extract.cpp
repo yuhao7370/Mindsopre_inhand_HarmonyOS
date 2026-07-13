@@ -23,6 +23,18 @@ namespace {
 constexpr uint64_t kMaxCompressedBytes = 32 * 1024 * 1024;
 constexpr uint64_t kMaxOutputBytes = 60 * 1024 * 1024;
 constexpr uint64_t kLzmaMemoryLimit = 68 * 1024 * 1024;
+constexpr bool FitsOutputAddition(uint64_t accumulated, uint64_t member) noexcept
+{
+    return member != 0 && member <= kMaxOutputBytes && accumulated <= kMaxOutputBytes &&
+        member <= kMaxOutputBytes - accumulated;
+}
+static_assert(!FitsOutputAddition(0, kMaxOutputBytes + 1));
+static_assert(!FitsOutputAddition(kMaxOutputBytes - 1, 2));
+static_assert(!FitsOutputAddition(0, 9007199254740991ULL));
+static_assert(FitsOutputAddition(0, kMaxOutputBytes));
+static_assert(FitsOutputAddition(0, 1) && FitsOutputAddition(1, 1) &&
+    FitsOutputAddition(2, kMaxOutputBytes - 2));
+static_assert(!FitsOutputAddition(kMaxOutputBytes, 1));
 constexpr size_t kTarBlockSize = 512;
 constexpr size_t kIoBufferSize = 64 * 1024;
 constexpr std::array<const char*, 3> kAllowedMembers = {
@@ -376,8 +388,8 @@ void ValidateRequest(const TranslationArchiveRequest& request)
     uint64_t memberBytes = 0;
     for (size_t index = 0; index < request.members.size(); ++index) {
         const auto& member = request.members[index];
-        if (member.name != kAllowedMembers[index] || member.size == 0 || !IsSha256(member.sha256) ||
-            memberBytes > kMaxOutputBytes - member.size) {
+        if (member.name != kAllowedMembers[index] || !IsSha256(member.sha256) ||
+            !FitsOutputAddition(memberBytes, member.size)) {
             throw std::invalid_argument("Invalid model member contract.");
         }
         memberBytes += member.size;

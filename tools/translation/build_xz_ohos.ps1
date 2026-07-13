@@ -160,15 +160,6 @@ if ($VerifyOnly) {
 
 if (-not $CacheRoot) { $CacheRoot = Join-Path $env:LOCALAPPDATA "MindsporeInhand\xz-ohos-$xzVersion" }
 $CacheRoot = [IO.Path]::GetFullPath($CacheRoot)
-$sourceRoot = Join-Path $CacheRoot 'source'
-$buildRoot = Join-Path $CacheRoot 'build-arm64-v8a-api24'
-$wrapperBuild = Join-Path $CacheRoot 'wrapper-arm64-v8a-api24'
-$cachePrefix = $CacheRoot.TrimEnd('\') + '\'
-foreach ($path in @($sourceRoot, $buildRoot, $wrapperBuild)) {
-  if (-not ([IO.Path]::GetFullPath($path)).StartsWith($cachePrefix, [StringComparison]::OrdinalIgnoreCase)) {
-    throw 'XZ source/build paths escaped the script-owned cache.'
-  }
-}
 [IO.Directory]::CreateDirectory($CacheRoot) | Out-Null
 
 if (-not $SourceArchive) {
@@ -191,22 +182,25 @@ if ((Get-FileHash -LiteralPath $SourceArchive -Algorithm SHA256).Hash -cne $xzSo
   throw "XZ source SHA-256 mismatch: $SourceArchive"
 }
 
-if (-not (Test-Path -LiteralPath (Join-Path $sourceRoot 'CMakeLists.txt') -PathType Leaf)) {
-  if (Test-Path -LiteralPath $sourceRoot) { throw "Refusing to replace incomplete XZ source cache: $sourceRoot" }
-  $staging = Join-Path $CacheRoot ("source.partial." + [guid]::NewGuid().ToString('N'))
-  try {
-    [IO.Directory]::CreateDirectory($staging) | Out-Null
-    Push-Location $staging
-    try {
-      Invoke-Captured 'tar.exe' @('-xJf', $SourceArchive, '--strip-components=1') | Out-Null
-    } finally {
-      Pop-Location
-    }
-    Move-Item -LiteralPath $staging -Destination $sourceRoot
-  } finally {
-    if (Test-Path -LiteralPath $staging) { Remove-Item -LiteralPath $staging -Recurse -Force }
+$runRoot = Join-Path $CacheRoot ('run.' + [guid]::NewGuid().ToString('N'))
+$sourceRoot = Join-Path $runRoot 'source'
+$buildRoot = Join-Path $runRoot 'build-arm64-v8a-api24'
+$wrapperBuild = Join-Path $runRoot 'wrapper-arm64-v8a-api24'
+$cachePrefix = $CacheRoot.TrimEnd('\') + '\'
+foreach ($path in @($runRoot, $sourceRoot, $buildRoot, $wrapperBuild)) {
+  if (-not ([IO.Path]::GetFullPath($path)).StartsWith($cachePrefix, [StringComparison]::OrdinalIgnoreCase)) {
+    throw 'XZ source/build paths escaped the script-owned cache.'
   }
 }
+
+try {
+  [IO.Directory]::CreateDirectory($sourceRoot) | Out-Null
+  Push-Location $sourceRoot
+  try {
+    Invoke-Captured 'tar.exe' @('-xJf', $SourceArchive, '--strip-components=1') | Out-Null
+  } finally {
+    Pop-Location
+  }
 $versionHeader = Get-Content -LiteralPath (Join-Path $sourceRoot 'src\liblzma\api\lzma\version.h') -Raw
 if ($versionHeader -notmatch '#define LZMA_VERSION_MAJOR 5' -or
     $versionHeader -notmatch '#define LZMA_VERSION_MINOR 8' -or
@@ -267,3 +261,6 @@ $manifest = [ordered]@{
 }
 [IO.File]::WriteAllText($manifestPath, (($manifest | ConvertTo-Json -Depth 8) + "`n"), [Text.UTF8Encoding]::new($false))
 Assert-Imported $tools
+} finally {
+  if (Test-Path -LiteralPath $runRoot) { Remove-Item -LiteralPath $runRoot -Recurse -Force }
+}
