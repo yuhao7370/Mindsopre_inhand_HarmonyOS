@@ -1,0 +1,3 @@
+# Preserve pinned upstream bytes; their SHA-256 values are part of the build manifest.
+entry/src/main/cpp/include/MNN/** -text -diff
+entry/src/main/cpp/third_party/MNN/LICENSE.txt -text -diff
