@@ -8911,6 +8911,7 @@ export default function localUnitTest() {
         .assertEqual('front');
       expect(initialLiveCameraPositionForWorkflow(workflowForRoute(AppRoute.IMAGE_CAMERA.name)!)).assertEqual('back');
       expect(initialLiveCameraPositionForWorkflow(workflowForRoute(AppRoute.OBJECT_CAMERA.name)!)).assertEqual('back');
+      expect(initialLiveCameraPositionForWorkflow(workflowForRoute(AppRoute.GESTURE_LIVE.name)!)).assertEqual('back');
       expect(initialLiveCameraPositionForWorkflow(workflowForRoute(AppRoute.LIVE_SKELETON.name)!)).assertEqual('back');
       expect(initialLiveCameraPositionForWorkflow(undefined)).assertEqual('back');
     });

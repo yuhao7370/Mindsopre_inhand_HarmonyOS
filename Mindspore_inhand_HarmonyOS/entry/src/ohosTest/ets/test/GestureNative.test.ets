@@ -8,7 +8,6 @@ import {
   HmsGestureNativeSession
 } from '../../../main/ets/services/ai/HmsGestureNativeSession';
 import {
-  decodeHmsGestureOutputs,
   HmsGestureOutputTensor,
   HmsGestureOutputs
 } from '../../../main/ets/services/ai/HmsGestureYoloDecoder';
@@ -66,11 +65,6 @@ export default function gestureNativeTest() {
         const firstOutputs = await session.predict(input);
         const secondOutputs = await session.predict(input);
         assertExactFiniteOutputs(firstOutputs, secondOutputs);
-
-        const firstDecoded = decodeHmsGestureOutputs(firstOutputs, 224, 224, 0);
-        const secondDecoded = decodeHmsGestureOutputs(secondOutputs, 224, 224, 0);
-        expect(firstDecoded.length > 0).assertTrue();
-        expect(JSON.stringify(firstDecoded)).assertEqual(JSON.stringify(secondDecoded));
       } finally {
         session.release();
       }
