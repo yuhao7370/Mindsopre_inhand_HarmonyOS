@@ -31,3 +31,14 @@ The focused tests cover strict manifest fields/tokens/tensors, encoder/prefill/s
 - No translation model/archive asset larger than 1 MiB was introduced by T6.
 
 The initial default HAP packaging attempt reached successful ArkTS compilation but failed with `spawn java ENOENT`; adding the DevEco JBR `bin` directory to `PATH` fixed the environment-only packaging failure.
+
+## P1 review follow-up
+
+- Added adapter-level fake `MSTensor` coverage for unknown dtype, wrong shape, wrong `elementNum`, short/oversized `dataSize`, missing/extra/duplicate outputs, and short/oversized backing buffers.
+- Production output binding now validates the complete collection, exact names, uniqueness, dtype, shape, runtime element count, and byte size before calling any `getData()`. Shape products and product-by-four byte sizes use overflow-safe checked arithmetic.
+- Added a FIFO request queue owned by each loaded bundle. The complete encode/decode request holds it across encoder, prefill, and every step call, so mutable singleton MindSpore inputs cannot interleave.
+- Prediction rejection releases the queue, reset schedules close through the same queue, and tests prove the next request completes without deadlock or mixed output.
+- RED after adding the adapter tests: `Tests run: 453, Failure: 1, Error: 0, Pass: 452, Ignore: 0` (`rejectsAllInvalidProductionOutputMetadataBeforeReadingAnyBuffer`).
+- Final GREEN after the review fixes: `Tests run: 453, Failure: 0, Error: 0, Pass: 453, Ignore: 0`; `TranslationModelUnit` 24/24.
+- Final default HAP and ohosTest HAP builds both succeeded. Each contains exactly one `libs/arm64-v8a/libtranslation_archive.so` member.
+- Final `git diff --check` passed with only Git's line-ending conversion notices. No final translation model asset was added by this follow-up.

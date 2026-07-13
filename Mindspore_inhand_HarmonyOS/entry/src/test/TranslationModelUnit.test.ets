@@ -1,4 +1,5 @@
 import { describe, it, expect } from '@ohos/hypium';
+import { mindSporeLite } from '@kit.MindSporeLiteKit';
 import {
   TranslationChunk,
   configureTranslationTokenizer,
@@ -21,11 +22,15 @@ import {
   parseTranslationModelManifest
 } from '../main/ets/services/ai/TranslationModelManifest';
 import {
+  createMindSporeLiteTranslationTensorSessionForTests,
   MindSporeLiteTranslationRunner,
   productionTranslationModelBundleFactory,
+  TranslationMindSporeModel,
+  TranslationMindSporeTensor,
   TranslationModelBundle,
   TranslationModelResourceManager,
   TranslationRawFileDescriptor,
+  TranslationRequestQueue,
   TranslationTensor,
   TranslationTensorSession,
   resetTranslationModelCacheForTests
@@ -359,8 +364,178 @@ class MissingTranslationResources implements TranslationModelResourceManager {
   }
 }
 
+class FakeMindSporeTensor implements TranslationMindSporeTensor {
+  name: string;
+  shape: Array<number>;
+  elementNum: number;
+  dataSize: number;
+  dtype: mindSporeLite.DataType;
+  getDataCalls: number = 0;
+  setDataCalls: number = 0;
+  private data: ArrayBuffer;
+
+  constructor(
+    name: string,
+    shape: Array<number>,
+    elementNum: number,
+    dataSize: number,
+    dtype: mindSporeLite.DataType,
+    data: ArrayBuffer
+  ) {
+    this.name = name;
+    this.shape = shape;
+    this.elementNum = elementNum;
+    this.dataSize = dataSize;
+    this.dtype = dtype;
+    this.data = data;
+  }
+
+  getData(): ArrayBuffer {
+    this.getDataCalls++;
+    return this.data;
+  }
+
+  setData(data: ArrayBuffer): void {
+    this.setDataCalls++;
+    const copy = new ArrayBuffer(data.byteLength);
+    new Uint8Array(copy).set(new Uint8Array(data));
+    this.data = copy;
+  }
+}
+
+class FakeMindSporeModel implements TranslationMindSporeModel {
+  readonly inputs: Array<FakeMindSporeTensor>;
+  readonly outputsByCall: Array<Array<FakeMindSporeTensor>>;
+  predictCalls: number = 0;
+  failFirstPredict: boolean = false;
+  private firstPredictGate: Promise<void> | undefined = undefined;
+  private firstPredictResolver: (() => void) | undefined = undefined;
+
+  constructor(
+    inputs: Array<FakeMindSporeTensor>,
+    outputsByCall: Array<Array<FakeMindSporeTensor>>
+  ) {
+    this.inputs = inputs;
+    this.outputsByCall = outputsByCall;
+  }
+
+  getInputs(): Array<TranslationMindSporeTensor> {
+    return this.inputs;
+  }
+
+  blockFirstPredict(): void {
+    this.firstPredictGate = new Promise<void>((resolve: () => void) => {
+      this.firstPredictResolver = resolve;
+    });
+  }
+
+  releaseFirstPredict(): void {
+    if (this.firstPredictResolver !== undefined) {
+      this.firstPredictResolver();
+      this.firstPredictResolver = undefined;
+    }
+  }
+
+  async predict(_inputs: Array<TranslationMindSporeTensor>): Promise<Array<TranslationMindSporeTensor>> {
+    this.predictCalls++;
+    if (this.predictCalls === 1 && this.firstPredictGate !== undefined) {
+      await this.firstPredictGate;
+    }
+    if (this.predictCalls === 1 && this.failFirstPredict) {
+      throw new Error('scripted prediction failure');
+    }
+    const outputIndex = Math.min(this.predictCalls - 1, this.outputsByCall.length - 1);
+    return this.outputsByCall[outputIndex];
+  }
+}
+
+function manifestElementCount(tensor: TranslationTensorManifest): number {
+  let count = 1;
+  for (let index = 0; index < tensor.shape.length; index++) {
+    count *= tensor.shape[index];
+  }
+  return count;
+}
+
+function fakeMindSporeTensor(
+  tensor: TranslationTensorManifest,
+  token: number = -1
+): FakeMindSporeTensor {
+  const count = manifestElementCount(tensor);
+  const buffer = new ArrayBuffer(count * 4);
+  if (token >= 0 && tensor.name === 'logits') {
+    const logits = new Float32Array(buffer);
+    logits.fill(-1000);
+    logits[token] = 1;
+  }
+  return new FakeMindSporeTensor(
+    tensor.name,
+    tensor.shape.slice(),
+    count,
+    count * 4,
+    tensor.dtype === 'INT32' ?
+      mindSporeLite.DataType.NUMBER_TYPE_INT32 : mindSporeLite.DataType.NUMBER_TYPE_FLOAT32,
+    buffer
+  );
+}
+
+function fakeMindSporeTensors(
+  tensors: Array<TranslationTensorManifest>,
+  token: number = -1
+): Array<FakeMindSporeTensor> {
+  const result: Array<FakeMindSporeTensor> = [];
+  for (let index = 0; index < tensors.length; index++) {
+    result.push(fakeMindSporeTensor(tensors[index], token));
+  }
+  return result;
+}
+
+function encoderTranslationInputs(): Array<TranslationTensor> {
+  return [
+    outputTensor('input_ids', 'INT32', [1, 128], new Int32Array(128)),
+    outputTensor('attention_mask', 'INT32', [1, 128], new Int32Array(128))
+  ];
+}
+
+function fakeAdapterSession(
+  manifest: TranslationModelManifest,
+  encoder: FakeMindSporeModel,
+  prefill?: FakeMindSporeModel,
+  step?: FakeMindSporeModel
+): TranslationTensorSession {
+  const prefillModel = prefill ?? new FakeMindSporeModel(
+    fakeMindSporeTensors(manifest.graphs[1].inputs),
+    [fakeMindSporeTensors(manifest.graphs[1].outputs, 0)]
+  );
+  const stepModel = step ?? new FakeMindSporeModel(
+    fakeMindSporeTensors(manifest.graphs[2].inputs),
+    [fakeMindSporeTensors(manifest.graphs[2].outputs, 0)]
+  );
+  return createMindSporeLiteTranslationTensorSessionForTests(manifest, encoder, prefillModel, stepModel);
+}
+
+async function expectEncoderRunRejected(session: TranslationTensorSession): Promise<void> {
+  let rejected = false;
+  try {
+    await session.run('encoder', encoderTranslationInputs());
+  } catch (_) {
+    rejected = true;
+  }
+  expect(rejected).assertTrue();
+}
+
+async function flushTranslationMicrotasks(): Promise<void> {
+  for (let index = 0; index < 12; index++) {
+    await Promise.resolve();
+  }
+}
+
 function bundleFor(session: TranslationTensorSession): TranslationModelBundle {
-  return { manifest: validTranslationManifest(), session: session };
+  return {
+    manifest: validTranslationManifest(),
+    session: session,
+    requestQueue: new TranslationRequestQueue()
+  };
 }
 
 function runnerFor(session: TranslationTensorSession): MindSporeLiteTranslationRunner {
@@ -385,6 +560,174 @@ export default function translationModelUnitTest(): void {
       assertThrows((): void => {
         parseTranslationModelManifest(valid.replace('"schemaVersion":1', '"schemaVersion":1,"extra":1'));
       });
+    });
+
+    it('rejectsAllInvalidProductionOutputMetadataBeforeReadingAnyBuffer', 0, async () => {
+      const modes: Array<string> = [
+        'unknownDtype', 'shape', 'elementNum', 'shortDataSize', 'oversizedDataSize',
+        'missing', 'extra', 'duplicate'
+      ];
+      for (let modeIndex = 0; modeIndex < modes.length; modeIndex++) {
+        const manifest = validTranslationManifest();
+        const expected = manifest.graphs[0].outputs[0];
+        const valid = fakeMindSporeTensor(expected);
+        const outputs: Array<FakeMindSporeTensor> = [valid];
+        if (modes[modeIndex] === 'unknownDtype') {
+          valid.dtype = mindSporeLite.DataType.TYPE_UNKNOWN;
+        } else if (modes[modeIndex] === 'shape') {
+          valid.shape = [1, 32768];
+        } else if (modes[modeIndex] === 'elementNum') {
+          valid.elementNum--;
+        } else if (modes[modeIndex] === 'shortDataSize') {
+          valid.dataSize -= 4;
+        } else if (modes[modeIndex] === 'oversizedDataSize') {
+          valid.dataSize += 4;
+        } else if (modes[modeIndex] === 'missing') {
+          outputs.pop();
+        } else if (modes[modeIndex] === 'extra') {
+          outputs.push(new FakeMindSporeTensor(
+            'extra', [1], 1, 4, mindSporeLite.DataType.NUMBER_TYPE_FLOAT32, new ArrayBuffer(4)
+          ));
+        } else if (modes[modeIndex] === 'duplicate') {
+          manifest.graphs[0].outputs.push(manifestTensor('second_output', 'FLOAT32', [1]));
+          outputs.push(fakeMindSporeTensor(expected));
+        }
+        const encoder = new FakeMindSporeModel(
+          fakeMindSporeTensors(manifest.graphs[0].inputs),
+          [outputs]
+        );
+        await expectEncoderRunRejected(fakeAdapterSession(manifest, encoder));
+        for (let outputIndex = 0; outputIndex < outputs.length; outputIndex++) {
+          expect(outputs[outputIndex].getDataCalls).assertEqual(0);
+        }
+      }
+    });
+
+    it('rejectsShortAndOversizedProductionOutputBuffersAfterOneBoundedRead', 0, async () => {
+      const byteDeltas: Array<number> = [-4, 4];
+      for (let deltaIndex = 0; deltaIndex < byteDeltas.length; deltaIndex++) {
+        const manifest = validTranslationManifest();
+        const expected = manifest.graphs[0].outputs[0];
+        const count = manifestElementCount(expected);
+        const output = new FakeMindSporeTensor(
+          expected.name,
+          expected.shape.slice(),
+          count,
+          count * 4,
+          mindSporeLite.DataType.NUMBER_TYPE_FLOAT32,
+          new ArrayBuffer(count * 4 + byteDeltas[deltaIndex])
+        );
+        const encoder = new FakeMindSporeModel(
+          fakeMindSporeTensors(manifest.graphs[0].inputs),
+          [[output]]
+        );
+        await expectEncoderRunRejected(fakeAdapterSession(manifest, encoder));
+        expect(output.getDataCalls).assertEqual(1);
+      }
+    });
+
+    it('serializesProductionModelMutationAcrossTheWholeTranslationRequest', 0, async () => {
+      resetTranslationModelCacheForTests();
+      configureTranslationTokenizerForTests(TOKENIZER_RUNTIME_FIXTURE);
+      const manifest = validTranslationManifest();
+      const firstEncoderOutput = fakeMindSporeTensors(manifest.graphs[0].outputs);
+      const secondEncoderOutput = fakeMindSporeTensors(manifest.graphs[0].outputs);
+      const encoder = new FakeMindSporeModel(
+        fakeMindSporeTensors(manifest.graphs[0].inputs),
+        [firstEncoderOutput, secondEncoderOutput]
+      );
+      const prefill = new FakeMindSporeModel(
+        fakeMindSporeTensors(manifest.graphs[1].inputs),
+        [
+          fakeMindSporeTensors(manifest.graphs[1].outputs, 12249),
+          fakeMindSporeTensors(manifest.graphs[1].outputs, 192)
+        ]
+      );
+      prefill.blockFirstPredict();
+      const step = new FakeMindSporeModel(
+        fakeMindSporeTensors(manifest.graphs[2].inputs),
+        [
+          fakeMindSporeTensors(manifest.graphs[2].outputs, 0),
+          fakeMindSporeTensors(manifest.graphs[2].outputs, 0)
+        ]
+      );
+      const session = fakeAdapterSession(manifest, encoder, prefill, step);
+      const bundle: TranslationModelBundle = {
+        manifest: manifest,
+        session: session,
+        requestQueue: new TranslationRequestQueue()
+      };
+      const runner = new MindSporeLiteTranslationRunner({
+        bundleFactory: async (): Promise<TranslationModelBundle> => bundle
+      });
+
+      const firstResultPromise = runner.translate('first', 'zh');
+      const secondResultPromise = runner.translate('second', 'zh');
+      await flushTranslationMicrotasks();
+      expect(encoder.predictCalls).assertEqual(1);
+      expect(encoder.inputs[0].setDataCalls).assertEqual(1);
+      expect(encoder.inputs[1].setDataCalls).assertEqual(1);
+      expect(firstEncoderOutput[0].getDataCalls).assertEqual(1);
+      expect(prefill.predictCalls).assertEqual(1);
+      expect(prefill.inputs[0].setDataCalls).assertEqual(1);
+      resetTranslationModelCacheForTests();
+      prefill.releaseFirstPredict();
+
+      const results = await Promise.all([firstResultPromise, secondResultPromise]);
+      expect(results[0].ok).assertTrue();
+      expect(results[1].ok).assertTrue();
+      expect(results[0].translatedText).assertEqual(decodeTranslationTokens([12249]));
+      expect(results[1].translatedText).assertEqual(decodeTranslationTokens([192]));
+      expect(encoder.predictCalls).assertEqual(2);
+      expect(prefill.predictCalls).assertEqual(2);
+      expect(step.predictCalls).assertEqual(2);
+      expect(encoder.inputs[0].setDataCalls).assertEqual(2);
+      await flushTranslationMicrotasks();
+      await expectEncoderRunRejected(session);
+    });
+
+    it('releasesProductionRequestQueueAfterPredictionFailure', 0, async () => {
+      resetTranslationModelCacheForTests();
+      configureTranslationTokenizerForTests(TOKENIZER_RUNTIME_FIXTURE);
+      const manifest = validTranslationManifest();
+      const encoder = new FakeMindSporeModel(
+        fakeMindSporeTensors(manifest.graphs[0].inputs),
+        [
+          fakeMindSporeTensors(manifest.graphs[0].outputs),
+          fakeMindSporeTensors(manifest.graphs[0].outputs)
+        ]
+      );
+      const prefill = new FakeMindSporeModel(
+        fakeMindSporeTensors(manifest.graphs[1].inputs),
+        [
+          fakeMindSporeTensors(manifest.graphs[1].outputs, 12249),
+          fakeMindSporeTensors(manifest.graphs[1].outputs, 192)
+        ]
+      );
+      prefill.failFirstPredict = true;
+      const step = new FakeMindSporeModel(
+        fakeMindSporeTensors(manifest.graphs[2].inputs),
+        [fakeMindSporeTensors(manifest.graphs[2].outputs, 0)]
+      );
+      const session = fakeAdapterSession(manifest, encoder, prefill, step);
+      const bundle: TranslationModelBundle = {
+        manifest: manifest,
+        session: session,
+        requestQueue: new TranslationRequestQueue()
+      };
+      const runner = new MindSporeLiteTranslationRunner({
+        bundleFactory: async (): Promise<TranslationModelBundle> => bundle
+      });
+
+      const results = await Promise.all([
+        runner.translate('first', 'zh'), runner.translate('second', 'zh')
+      ]);
+      expect(results[0].ok).assertFalse();
+      expect(results[1].ok).assertTrue();
+      expect(results[1].translatedText).assertEqual(decodeTranslationTokens([192]));
+      expect(encoder.predictCalls).assertEqual(2);
+      expect(prefill.predictCalls).assertEqual(2);
+      expect(step.predictCalls).assertEqual(1);
     });
 
     it('runsEncoderPrefillAndStepWithExactCacheEvolution', 0, async () => {
@@ -497,7 +840,7 @@ export default function translationModelUnitTest(): void {
       expect(results[1].ok).assertTrue();
       expect(loadCalls).assertEqual(1);
       resetTranslationModelCacheForTests();
-      await Promise.resolve();
+      await flushTranslationMicrotasks();
       expect(shared.closeCalls).assertEqual(1);
 
       let retryCalls = 0;

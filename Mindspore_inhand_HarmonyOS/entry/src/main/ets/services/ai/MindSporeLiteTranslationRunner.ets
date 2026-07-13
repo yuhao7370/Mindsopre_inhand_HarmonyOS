@@ -35,9 +35,20 @@ export interface TranslationTensorSession {
   close(): Promise<void>;
 }
 
+export class TranslationRequestQueue {
+  private tail: Promise<void> = Promise.resolve();
+
+  runExclusive<T>(operation: () => Promise<T>): Promise<T> {
+    const result = this.tail.then(operation, operation);
+    this.tail = result.then((): void => {}, (): void => {});
+    return result;
+  }
+}
+
 export interface TranslationModelBundle {
   readonly manifest: TranslationModelManifest;
   readonly session: TranslationTensorSession;
+  readonly requestQueue: TranslationRequestQueue;
 }
 
 export type TranslationModelBundleFactory = () => Promise<TranslationModelBundle>;
@@ -103,28 +114,39 @@ export class MindSporeLiteTranslationRunner implements TextTranslationRunner {
         return failedTranslation(text, targetLanguage);
       }
       const bundle = await cachedTranslationBundle(this.bundleFactory);
-      let translatedText = '';
-      for (let index = 0; index < chunks.length; index++) {
-        const decoded = await decodeChunk(bundle, chunks[index]);
-        if (decoded.length === 0) {
-          return failedTranslation(text, targetLanguage);
-        }
-        translatedText += chunks[index].separatorBefore + decoded + chunks[index].separatorAfter;
-      }
-      if (translatedText.trim().length === 0) {
-        return failedTranslation(text, targetLanguage);
-      }
-      return {
-        ok: true,
-        sourceText: text,
-        translatedText: translatedText,
-        targetLanguage: targetLanguage,
-        runtimeSource: 'localModel'
-      };
+      return await bundle.requestQueue.runExclusive(async (): Promise<TextTranslationResult> => {
+        return await translateChunks(bundle, chunks, text, targetLanguage);
+      });
     } catch (_) {
       return failedTranslation(text, targetLanguage);
     }
   }
+}
+
+async function translateChunks(
+  bundle: TranslationModelBundle,
+  chunks: Array<TranslationChunk>,
+  text: string,
+  targetLanguage: string
+): Promise<TextTranslationResult> {
+  let translatedText = '';
+  for (let index = 0; index < chunks.length; index++) {
+    const decoded = await decodeChunk(bundle, chunks[index]);
+    if (decoded.length === 0) {
+      return failedTranslation(text, targetLanguage);
+    }
+    translatedText += chunks[index].separatorBefore + decoded + chunks[index].separatorAfter;
+  }
+  if (translatedText.trim().length === 0) {
+    return failedTranslation(text, targetLanguage);
+  }
+  return {
+    ok: true,
+    sourceText: text,
+    translatedText: translatedText,
+    targetLanguage: targetLanguage,
+    runtimeSource: 'localModel'
+  };
 }
 
 export function productionTranslationModelBundleFactory(
@@ -177,7 +199,13 @@ async function loadProductionTranslationModelBundle(
   );
   return {
     manifest: manifest,
-    session: new MindSporeLiteTranslationTensorSession(manifest, encoder, prefill, step)
+    session: new MindSporeLiteTranslationTensorSession(
+      manifest,
+      new TranslationMindSporeModelAdapter(encoder),
+      new TranslationMindSporeModelAdapter(prefill),
+      new TranslationMindSporeModelAdapter(step)
+    ),
+    requestQueue: new TranslationRequestQueue()
   };
 }
 
@@ -187,7 +215,7 @@ export function resetTranslationModelCacheForTests(): void {
   cachedBundlePromise = undefined;
   if (promise !== undefined) {
     promise.then(async (bundle: TranslationModelBundle): Promise<void> => {
-      await closeSession(bundle.session);
+      await closeBundle(bundle);
     }).catch((): void => {});
   }
 }
@@ -200,7 +228,7 @@ async function cachedTranslationBundle(factory: TranslationModelBundleFactory): 
   let promise: Promise<TranslationModelBundle>;
   promise = factory().then(async (bundle: TranslationModelBundle): Promise<TranslationModelBundle> => {
     if (generation !== cacheGeneration || cachedBundlePromise !== promise) {
-      await closeSession(bundle.session);
+      await closeBundle(bundle);
       throw new Error('Translation model load was reset.');
     }
     return bundle;
@@ -414,25 +442,81 @@ function sameShape(actual: Array<number>, expected: Array<number>): boolean {
 }
 
 function elementCount(shape: Array<number>): number {
+  return checkedElementCount(shape, 'translation tensor shape');
+}
+
+function checkedElementCount(shape: Array<number>, path: string): number {
   let count = 1;
   for (let index = 0; index < shape.length; index++) {
+    if (!Number.isInteger(shape[index]) || shape[index] <= 0 || count > 9007199254740991 / shape[index]) {
+      throw new Error(`${path} element count overflows.`);
+    }
     count *= shape[index];
   }
   return count;
 }
 
+function checkedDataSize(elementCount: number, bytesPerElement: number, path: string): number {
+  if (!Number.isInteger(elementCount) || elementCount < 0 ||
+    !Number.isInteger(bytesPerElement) || bytesPerElement <= 0 ||
+    elementCount > 9007199254740991 / bytesPerElement) {
+    throw new Error(`${path} byte size overflows.`);
+  }
+  return elementCount * bytesPerElement;
+}
+
+export interface TranslationMindSporeTensor {
+  readonly name: string;
+  readonly shape: Array<number>;
+  readonly elementNum: number;
+  readonly dataSize: number;
+  readonly dtype: mindSporeLite.DataType;
+  getData(): ArrayBuffer;
+  setData(data: ArrayBuffer): void;
+}
+
+export interface TranslationMindSporeModel {
+  getInputs(): Array<TranslationMindSporeTensor>;
+  predict(inputs: Array<TranslationMindSporeTensor>): Promise<Array<TranslationMindSporeTensor>>;
+}
+
+export function createMindSporeLiteTranslationTensorSessionForTests(
+  manifest: TranslationModelManifest,
+  encoder: TranslationMindSporeModel,
+  prefill: TranslationMindSporeModel,
+  step: TranslationMindSporeModel
+): TranslationTensorSession {
+  return new MindSporeLiteTranslationTensorSession(manifest, encoder, prefill, step);
+}
+
+class TranslationMindSporeModelAdapter implements TranslationMindSporeModel {
+  private readonly model: mindSporeLite.Model;
+
+  constructor(model: mindSporeLite.Model) {
+    this.model = model;
+  }
+
+  getInputs(): Array<TranslationMindSporeTensor> {
+    return this.model.getInputs();
+  }
+
+  async predict(inputs: Array<TranslationMindSporeTensor>): Promise<Array<TranslationMindSporeTensor>> {
+    return await this.model.predict(inputs as Array<mindSporeLite.MSTensor>);
+  }
+}
+
 class MindSporeLiteTranslationTensorSession implements TranslationTensorSession {
   private readonly manifest: TranslationModelManifest;
-  private readonly encoder: mindSporeLite.Model;
-  private readonly prefill: mindSporeLite.Model;
-  private readonly step: mindSporeLite.Model;
+  private readonly encoder: TranslationMindSporeModel;
+  private readonly prefill: TranslationMindSporeModel;
+  private readonly step: TranslationMindSporeModel;
   private closed: boolean = false;
 
   constructor(
     manifest: TranslationModelManifest,
-    encoder: mindSporeLite.Model,
-    prefill: mindSporeLite.Model,
-    step: mindSporeLite.Model
+    encoder: TranslationMindSporeModel,
+    prefill: TranslationMindSporeModel,
+    step: TranslationMindSporeModel
   ) {
     this.manifest = manifest;
     this.encoder = encoder;
@@ -451,18 +535,14 @@ class MindSporeLiteTranslationTensorSession implements TranslationTensorSession 
     const graphManifest = this.manifestForGraph(graph);
     const runtimeInputs = bindModelInputs(model, graphManifest, inputs, graph);
     const outputs = await model.predict(runtimeInputs);
-    const converted: Array<TranslationTensor> = [];
-    for (let index = 0; index < outputs.length; index++) {
-      converted.push(translationTensorFromMindSpore(outputs[index]));
-    }
-    return converted;
+    return bindModelOutputs(outputs, graphManifest, graph);
   }
 
   async close(): Promise<void> {
     this.closed = true;
   }
 
-  private modelForGraph(graph: TranslationGraphName): mindSporeLite.Model {
+  private modelForGraph(graph: TranslationGraphName): TranslationMindSporeModel {
     if (graph === 'encoder') {
       return this.encoder;
     }
@@ -484,7 +564,7 @@ class MindSporeLiteTranslationTensorSession implements TranslationTensorSession 
 }
 
 function validateModelInputContract(
-  model: mindSporeLite.Model,
+  model: TranslationMindSporeModel,
   graph: TranslationGraphManifest,
   graphName: string
 ): void {
@@ -502,11 +582,11 @@ function validateModelInputContract(
 }
 
 function bindModelInputs(
-  model: mindSporeLite.Model,
+  model: TranslationMindSporeModel,
   graph: TranslationGraphManifest,
   inputs: Array<TranslationTensor>,
   graphName: string
-): Array<mindSporeLite.MSTensor> {
+): Array<TranslationMindSporeTensor> {
   const runtimeInputs = model.getInputs();
   if (inputs.length !== graph.inputs.length || runtimeInputs.length !== graph.inputs.length) {
     throw new Error(`${graphName} input count mismatch.`);
@@ -531,20 +611,60 @@ function bindModelInputs(
 }
 
 function validateMindSporeTensorMetadata(
-  actual: mindSporeLite.MSTensor,
+  actual: TranslationMindSporeTensor,
   expected: TranslationTensorManifest,
   path: string
 ): void {
-  const count = elementCount(expected.shape);
+  const count = checkedElementCount(expected.shape, `${path}.shape`);
+  const dataSize = checkedDataSize(count, 4, path);
   if (actual.dtype !== mindSporeDataType(expected.dtype) || !sameShape(actual.shape, expected.shape) ||
-    actual.elementNum !== count || actual.dataSize !== count * 4) {
+    actual.elementNum !== count || actual.dataSize !== dataSize) {
     throw new Error(`${path} runtime tensor contract mismatch.`);
   }
 }
 
-function translationTensorFromMindSpore(tensor: mindSporeLite.MSTensor): TranslationTensor {
+function bindModelOutputs(
+  outputs: Array<TranslationMindSporeTensor>,
+  graph: TranslationGraphManifest,
+  graphName: string
+): Array<TranslationTensor> {
+  if (outputs.length !== graph.outputs.length) {
+    throw new Error(`${graphName} output count mismatch.`);
+  }
+  for (let index = 0; index < outputs.length; index++) {
+    const expected = findTensorManifest(graph.outputs, outputs[index].name);
+    if (expected === undefined || countNamedMindSporeTensors(outputs, outputs[index].name) !== 1) {
+      throw new Error(`${graphName} returned an unexpected or duplicate output.`);
+    }
+    validateMindSporeTensorMetadata(outputs[index], expected, `${graphName}.${outputs[index].name}`);
+  }
+
+  const bound: Array<TranslationTensor> = [];
+  for (let index = 0; index < graph.outputs.length; index++) {
+    const output = findMindSporeTensor(outputs, graph.outputs[index].name);
+    if (output === undefined) {
+      throw new Error(`${graphName} output ${graph.outputs[index].name} is missing.`);
+    }
+    bound.push(translationTensorFromMindSpore(
+      output,
+      graph.outputs[index],
+      `${graphName}.${graph.outputs[index].name}`
+    ));
+  }
+  return bound;
+}
+
+function translationTensorFromMindSpore(
+  tensor: TranslationMindSporeTensor,
+  expected: TranslationTensorManifest,
+  path: string
+): TranslationTensor {
   const dtype = translationDataType(tensor.dtype);
   const buffer = tensor.getData();
+  const expectedBytes = checkedDataSize(checkedElementCount(expected.shape, `${path}.shape`), 4, path);
+  if (buffer.byteLength !== expectedBytes) {
+    throw new Error(`${path} output buffer size mismatch.`);
+  }
   let data: Int32Array | Float32Array;
   if (dtype === 'INT32') {
     data = new Int32Array(copyArrayBuffer(buffer));
@@ -598,6 +718,18 @@ function findTranslationTensor(
   return undefined;
 }
 
+function findMindSporeTensor(
+  tensors: Array<TranslationMindSporeTensor>,
+  name: string
+): TranslationMindSporeTensor | undefined {
+  for (let index = 0; index < tensors.length; index++) {
+    if (tensors[index].name === name) {
+      return tensors[index];
+    }
+  }
+  return undefined;
+}
+
 function countNamedTranslationTensors(tensors: Array<TranslationTensor>, name: string): number {
   let count = 0;
   for (let index = 0; index < tensors.length; index++) {
@@ -608,7 +740,7 @@ function countNamedTranslationTensors(tensors: Array<TranslationTensor>, name: s
   return count;
 }
 
-function countNamedMindSporeTensors(tensors: Array<mindSporeLite.MSTensor>, name: string): number {
+function countNamedMindSporeTensors(tensors: Array<TranslationMindSporeTensor>, name: string): number {
   let count = 0;
   for (let index = 0; index < tensors.length; index++) {
     if (tensors[index].name === name) {
@@ -674,6 +806,12 @@ async function closeSession(session: TranslationTensorSession): Promise<void> {
     await session.close();
   } catch (_) {
   }
+}
+
+async function closeBundle(bundle: TranslationModelBundle): Promise<void> {
+  await bundle.requestQueue.runExclusive(async (): Promise<void> => {
+    await closeSession(bundle.session);
+  });
 }
 
 function failedTranslation(sourceText: string, targetLanguage: string): TextTranslationResult {
