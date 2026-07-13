@@ -1,0 +1,97 @@
+{
+  "schema_version": 4,
+  "seed": 20260713,
+  "teacher": {
+    "repo": "Helsinki-NLP/opus-mt-en-zh",
+    "revision": "408d9bc410a388e1d9aef112a2daba955b945255",
+    "license": "apache-2.0",
+    "prefix": ">>cmn_Hans<<"
+  },
+  "student": {
+    "checkpoint_step": 16878,
+    "model_sha256": "a7603325361de12f35ebc660c861c648a1f7293b31174280b32bbea34d9f491a",
+    "tokenizer_sha256": "e5528a5c3685d08f8868902d31febeb763eea8519f9997f43b05964b02554640"
+  },
+  "data": {
+    "repo": "Mxode/BiST",
+    "revision": "aca6be897afc319f779009379c8b849c1eb8d63e",
+    "source_file": "en-zh.train.jsonl",
+    "source_rows": 90000,
+    "source_bytes": 36670761,
+    "source_sha256": "20b908acd71a734f8252c383c5cd2f0bf476214809d0f64cfcc50c1cb5e5670e"
+  },
+  "generation": {
+    "precision": "fp16",
+    "num_beams": 4,
+    "do_sample": false,
+    "renormalize_logits": true,
+    "max_tokens": 128,
+    "probe_rows": 128,
+    "selected_batch": 64,
+    "batch_candidates": [256, 128, 64, 32, 16, 8, 4, 2, 1]
+  },
+  "target_validation": {
+    "student_decoder_max_tokens": 128,
+    "reject_controls": true,
+    "reject_degenerate_repetition": true,
+    "latin_residue_diagnostic_only": true
+  },
+  "validationPolicy": {
+    "teacherTargetValidation": "sourceTargetConservative",
+    "originalFallbackValidation": "targetContractOnly",
+    "originalPreservationWarnings": "sourceTargetConservativeAuditOnly",
+    "hardFailDefinition": "teacherFailedAndOriginalTargetContractFailed",
+    "rationale": "strict source-target regex can falsely reject valid dates and Chinese-number translations; original targets preserve the approved T2 corpus and warnings remain audit-only"
+  },
+  "rescue_training": {
+    "precision": "fp16",
+    "device": "cuda",
+    "microbatch_per_direction": 32,
+    "physical_microbatch": 32,
+    "gradient_accumulation": 4,
+    "learning_rate": 0.00001,
+    "weight_decay": 0.01,
+    "label_smoothing": 0.1,
+    "warmup_optimizer_steps": 100,
+    "evaluate_rescue_steps": [500, 1000],
+    "max_epochs": 2,
+    "optimizer_reset": true
+  },
+  "budget": {
+    "previous_gpu_seconds": 13924.157,
+    "total_gpu_seconds": 43200,
+    "rescue_reserve_seconds": 2400,
+    "include_teacher_generation": true,
+    "include_rescue_training": true
+  },
+  "gpuLedger": {
+    "measurement": "observed monotonic wall seconds for GPU probe calls plus retained teacher-load, warmup, failed-retry process wall",
+    "probeEntries": [
+      {"name": "initial-fp32-batch64", "seconds": 43.78100000001723},
+      {"name": "precision-v1-fp16", "seconds": 20.68699999997625},
+      {"name": "precision-v1-fp32", "seconds": 32.84299999999348},
+      {"name": "capacity-fp16-batch256", "seconds": 58.90700000000652},
+      {"name": "precision-v2-fp16", "seconds": 21.70299999997951},
+      {"name": "precision-v2-fp32", "seconds": 54.96899999998277},
+      {"name": "sorted-fp16-batch64", "seconds": 73.92200000002049},
+      {"name": "sorted-fp16-batch128", "seconds": 83.70299999997951},
+      {"name": "teacher-load-warmup-failed-retry-process-wall", "seconds": 287.385}
+    ],
+    "measuredProbeEntriesSeconds": 390.515,
+    "observedTeacherLoadWarmupRetrySeconds": 287.385,
+    "probeActualSeconds": 677.9
+  },
+  "epoch2_gate": {
+    "en-zh_min_passed": 33,
+    "en-zh_max_fatal": 2,
+    "zh-en_min_passed": 32
+  },
+  "promotion_gate": {
+    "manual_min_passed_per_direction": 45,
+    "manual_max_fatal_per_direction": 0,
+    "flores_zh-en_bleu": 19.0,
+    "flores_zh-en_chrf2": 49.0,
+    "flores_en-zh_bleu": 17.0,
+    "flores_en-zh_chrf2": 40.0
+  }
+}
