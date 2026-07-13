@@ -51,6 +51,8 @@ Assert-Contains $napi '150528' 'input length validation'
 Assert-Contains $napi 'RejectBeforeQueue' 'checked synchronous rejection'
 Assert-Contains $napi 'SettleAsyncOrFatal' 'guaranteed async settlement'
 Assert-Contains $napi 'CleanupPredictWork' 'single async cleanup path'
+Assert-Contains $napi 'DeleteUnqueuedWorkOrFatal' 'terminal pre-queue cleanup path'
+Assert-Contains $napi 'work\.reset\(\);\s*if \(status != napi_ok\) \{\s*FatalNapi' 'context release before pre-queue fatal'
 Assert-Contains $napi 'napi_fatal_error' 'unrecoverable NAPI terminal path'
 Assert-Contains $napi 'LoadModelBoundary' 'loadModel exception barrier'
 Assert-Contains $napi 'PredictBoundary' 'predict exception barrier'
@@ -68,6 +70,14 @@ Assert-Contains $session 'hostOutput\.elementSize\(\)\) != expectedElementCount'
 Assert-Contains $session 'std::vector<uint8_t>\(\)\.swap\(modelBytes_\)' 'no-throw retained-byte release'
 if ((Get-Content -LiteralPath $session -Raw) -match 'shrink_to_fit') {
   throw 'release() must not call potentially-throwing shrink_to_fit().'
+}
+$napiContent = Get-Content -LiteralPath $napi -Raw
+$preQueueCleanupCalls = [regex]::Matches($napiContent, 'DeleteUnqueuedWorkOrFatal\(env, work\);').Count
+if ($preQueueCleanupCalls -ne 2) {
+  throw "Expected exactly two create/queue cleanup calls, got $preQueueCleanupCalls."
+}
+if ($napiContent -match 'EstablishExceptionOrFatal\(env, "Could not delete unqueued gesture async work') {
+  throw 'Pre-queue async-work deletion failure must be fatal after releasing owned context.'
 }
 
 if (-not (Test-Path -LiteralPath $LibraryPath -PathType Leaf)) {

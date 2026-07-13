@@ -156,6 +156,17 @@ struct PredictWork {
     std::exception_ptr error;
 };
 
+void DeleteUnqueuedWorkOrFatal(napi_env env, std::unique_ptr<PredictWork>& work) noexcept
+{
+    napi_async_work asyncWork = work->work;
+    work->work = nullptr;
+    const napi_status status = asyncWork == nullptr ? napi_ok : napi_delete_async_work(env, asyncWork);
+    work.reset();
+    if (status != napi_ok) {
+        FatalNapi("gesture_mnn predict", "Could not delete unqueued gesture async work.");
+    }
+}
+
 void ExecutePredict(napi_env, void* raw) noexcept
 {
     auto* work = static_cast<PredictWork*>(raw);
@@ -280,21 +291,12 @@ napi_value PredictImpl(napi_env env, napi_callback_info callbackInfo)
     napi_status status = napi_create_async_work(env, nullptr, resourceName, ExecutePredict, CompletePredict, work.get(),
                                                 &work->work);
     if (status != napi_ok) {
-        if (work->work != nullptr && napi_delete_async_work(env, work->work) != napi_ok) {
-            EstablishExceptionOrFatal(env, "Could not delete unqueued gesture async work.");
-            return nullptr;
-        }
-        work->work = nullptr;
+        DeleteUnqueuedWorkOrFatal(env, work);
         return RejectBeforeQueue(env, deferred, promise, "Could not create gesture async work.");
     }
     status = napi_queue_async_work(env, work->work);
     if (status != napi_ok) {
-        napi_async_work asyncWork = work->work;
-        work->work = nullptr;
-        if (napi_delete_async_work(env, asyncWork) != napi_ok) {
-            EstablishExceptionOrFatal(env, "Could not delete unqueued gesture async work.");
-            return nullptr;
-        }
+        DeleteUnqueuedWorkOrFatal(env, work);
         return RejectBeforeQueue(env, deferred, promise, "Could not queue gesture async work.");
     }
     work.release();
