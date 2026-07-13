@@ -3,6 +3,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from tools.translation.distill_en_zh import (
     DistillationError,
@@ -15,6 +16,8 @@ from tools.translation.distill_en_zh import (
 )
 from tools.translation.train_rescue import (
     CANDIDATE_DIR,
+    ATOMIC_REPLACE_ATTEMPTS,
+    _write_atomic_json,
     build_rescue_objective_hashes,
     checked_rescue_budget_snapshot,
     cumulative_rescue_elapsed,
@@ -23,6 +26,7 @@ from tools.translation.train_rescue import (
     rescue_budget_snapshot,
     summarize_audited_manual_results,
     validate_rescue_resume_state,
+    validate_baseline_replay,
     verify_epoch2_authorization,
     verify_rescue_bundle,
 )
@@ -39,6 +43,35 @@ class FakeStudentProcessor:
 
 
 class RescueContractTest(unittest.TestCase):
+    def test_atomic_writer_retries_only_transient_permission_conflicts(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "atomic.json"
+            original_replace = __import__("os").replace
+            calls = []
+
+            def transient(source, destination):
+                calls.append((source, destination))
+                if len(calls) == 1:
+                    raise PermissionError(5, "shared target")
+                return original_replace(source, destination)
+
+            with mock.patch("tools.translation.train_rescue.os.replace", side_effect=transient), mock.patch(
+                "tools.translation.train_rescue.time.sleep"
+            ) as sleeper:
+                _write_atomic_json(path, {"value": 1})
+            self.assertEqual(json.loads(path.read_text(encoding="utf-8")), {"value": 1})
+            self.assertEqual(len(calls), 2)
+            sleeper.assert_called_once()
+
+            with mock.patch(
+                "tools.translation.train_rescue.os.replace",
+                side_effect=PermissionError(5, "persistent conflict"),
+            ) as replace, mock.patch("tools.translation.train_rescue.time.sleep"):
+                with self.assertRaises(PermissionError):
+                    _write_atomic_json(path, {"value": 2})
+            self.assertEqual(replace.call_count, ATOMIC_REPLACE_ATTEMPTS)
+            self.assertFalse(Path(str(path) + ".partial").exists())
+
     def _bundle(self, root):
         config = load_distillation_config(CONFIG)
         processor = FakeStudentProcessor()
@@ -260,6 +293,82 @@ class RescueContractTest(unittest.TestCase):
             500,
         )
 
+    def test_explicit_baseline_replay_inherits_elapsed_and_rejects_unsafe_state(self):
+        objective_hashes = {"contract": "a" * 64}
+        progress = {
+            "schema_version": 1,
+            "rescue_step": 414,
+            "loss": 3.9,
+            "learning_rate": 0.00001,
+            "rescue_gpu_seconds": 241.391,
+            "cumulative_gpu_seconds": 26559.437,
+            "objective_hashes": objective_hashes,
+        }
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            progress_path = root / "progress-v1.json"
+            resume_path = root / "resume.pt"
+            recovery_path = root / "baseline-replay-v1.json"
+            progress_path.write_bytes(canonical_json_bytes(progress))
+            floor, replayed = validate_baseline_replay(
+                progress_path,
+                resume_path,
+                objective_hashes,
+                prior_elapsed_floor=0.0,
+                recovery_path=recovery_path,
+            )
+            self.assertEqual((floor, replayed), (241.391, 414))
+            recovery = json.loads(recovery_path.read_text(encoding="utf-8"))
+            self.assertEqual(recovery["elapsed_floor_seconds"], 241.391)
+            self.assertEqual(recovery["replayed_optimizer_steps"], 414)
+            with self.assertRaises(DistillationError):
+                validate_baseline_replay(
+                    progress_path,
+                    resume_path,
+                    objective_hashes,
+                    0.0,
+                    recovery_path,
+                )
+            recovery_path.unlink()
+            resume_path.write_bytes(b"resume")
+            with self.assertRaises(DistillationError):
+                validate_baseline_replay(
+                    progress_path,
+                    resume_path,
+                    objective_hashes,
+                    0.0,
+                    recovery_path,
+                )
+            resume_path.unlink()
+            Path(str(resume_path) + ".partial").write_bytes(b"partial resume")
+            with self.assertRaises(DistillationError):
+                validate_baseline_replay(
+                    progress_path,
+                    resume_path,
+                    objective_hashes,
+                    0.0,
+                    recovery_path,
+                )
+            Path(str(resume_path) + ".partial").unlink()
+            Path(str(progress_path) + ".partial").write_bytes(b"partial")
+            with self.assertRaises(DistillationError):
+                validate_baseline_replay(
+                    progress_path,
+                    resume_path,
+                    objective_hashes,
+                    0.0,
+                    recovery_path,
+                )
+            Path(str(progress_path) + ".partial").unlink()
+            with self.assertRaises(DistillationError):
+                validate_baseline_replay(
+                    progress_path,
+                    resume_path,
+                    {"contract": "b" * 64},
+                    0.0,
+                    recovery_path,
+                )
+
     def test_manual_results_are_bound_rowwise_to_manual_asset(self):
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / "manual-results-v1.jsonl"
@@ -448,6 +557,9 @@ class RescueContractTest(unittest.TestCase):
                 "promotion_allowed": False,
                 "promotion_status": "pending_manual_and_flores_gate",
                 "resumed": False,
+                "replayed_from_baseline": False,
+                "replayed_optimizer_steps": 0,
+                "baseline_replay_receipt": None,
                 "rescue_gpu_seconds": 500.0,
                 "epoch_gpu_seconds": 500.0,
                 "best_validation_loss": 3.5,
@@ -507,6 +619,113 @@ class RescueContractTest(unittest.TestCase):
             )
             self.assertEqual(authorization["prior_rescue_gpu_seconds"], 500.0)
             self.assertEqual(authorization["baseline_validation_loss"], 3.5)
+            replay_receipt_path = root / "baseline-replay-v1.json"
+            replay_receipt = {
+                "schema_version": 1,
+                "mode": "explicit_replay_from_baseline",
+                "progress": {
+                    "path": "progress-v1.json", "bytes": 100,
+                    "sha256": "9" * 64,
+                },
+                "elapsed_floor_seconds": 241.391,
+                "replayed_optimizer_steps": 414,
+                "objective_hashes": objective_hashes,
+            }
+            replay_receipt_path.write_bytes(canonical_json_bytes(replay_receipt))
+            replay_artifact = {
+                "path": replay_receipt_path.name,
+                "bytes": replay_receipt_path.stat().st_size,
+                "sha256": hashlib.sha256(replay_receipt_path.read_bytes()).hexdigest(),
+            }
+            replay_training = {
+                **training,
+                "replayed_from_baseline": True,
+                "replayed_optimizer_steps": 414,
+                "baseline_replay_receipt": replay_artifact,
+            }
+            training_path.write_bytes(canonical_json_bytes(replay_training))
+            replay_gate = {
+                **gate,
+                "trainingReport": {
+                    "path": training_path.name,
+                    "bytes": training_path.stat().st_size,
+                    "sha256": hashlib.sha256(training_path.read_bytes()).hexdigest(),
+                },
+            }
+            gate_path.write_bytes(canonical_json_bytes(replay_gate))
+            self.assertEqual(
+                verify_epoch2_authorization(
+                    gate_path, training_path, candidate, config, 100.0,
+                    objective_hashes,
+                )["prior_rescue_gpu_seconds"],
+                500.0,
+            )
+            for mutation in (
+                {**replay_receipt, "progress": {**replay_receipt["progress"], "path": "other.json"}},
+                {**replay_receipt, "progress": {**replay_receipt["progress"], "bytes": -1}},
+                {**replay_receipt, "progress": {**replay_receipt["progress"], "sha256": "x"}},
+            ):
+                replay_receipt_path.write_bytes(canonical_json_bytes(mutation))
+                mutated_training = {
+                    **replay_training,
+                    "baseline_replay_receipt": {
+                        "path": replay_receipt_path.name,
+                        "bytes": replay_receipt_path.stat().st_size,
+                        "sha256": hashlib.sha256(replay_receipt_path.read_bytes()).hexdigest(),
+                    },
+                }
+                training_path.write_bytes(canonical_json_bytes(mutated_training))
+                mutated_gate = {
+                    **gate,
+                    "trainingReport": {
+                        "path": training_path.name,
+                        "bytes": training_path.stat().st_size,
+                        "sha256": hashlib.sha256(training_path.read_bytes()).hexdigest(),
+                    },
+                }
+                gate_path.write_bytes(canonical_json_bytes(mutated_gate))
+                with self.assertRaises(DistillationError):
+                    verify_epoch2_authorization(
+                        gate_path, training_path, candidate, config, 100.0,
+                        objective_hashes,
+                    )
+            replay_receipt_path.write_bytes(canonical_json_bytes(replay_receipt))
+            arbitrary_receipt_path = root / "arbitrary-replay.json"
+            arbitrary_receipt_path.write_bytes(replay_receipt_path.read_bytes())
+            arbitrary_training = {
+                **replay_training,
+                "baseline_replay_receipt": {
+                    "path": arbitrary_receipt_path.name,
+                    "bytes": arbitrary_receipt_path.stat().st_size,
+                    "sha256": hashlib.sha256(arbitrary_receipt_path.read_bytes()).hexdigest(),
+                },
+            }
+            training_path.write_bytes(canonical_json_bytes(arbitrary_training))
+            arbitrary_gate = {
+                **gate,
+                "trainingReport": {
+                    "path": training_path.name,
+                    "bytes": training_path.stat().st_size,
+                    "sha256": hashlib.sha256(training_path.read_bytes()).hexdigest(),
+                },
+            }
+            gate_path.write_bytes(canonical_json_bytes(arbitrary_gate))
+            with self.assertRaises(DistillationError):
+                verify_epoch2_authorization(
+                    gate_path, training_path, candidate, config, 100.0,
+                    objective_hashes,
+                )
+            arbitrary_receipt_path.unlink()
+            training_path.write_bytes(canonical_json_bytes(replay_training))
+            gate_path.write_bytes(canonical_json_bytes(replay_gate))
+            replay_receipt_path.unlink()
+            with self.assertRaises(DistillationError):
+                verify_epoch2_authorization(
+                    gate_path, training_path, candidate, config, 100.0,
+                    objective_hashes,
+                )
+            training_path.write_bytes(training_bytes)
+            gate_path.write_bytes(canonical_json_bytes(gate))
             rejected = dict(gate, epoch2_launch_allowed=False)
             gate_path.write_bytes(canonical_json_bytes(rejected))
             with self.assertRaises(DistillationError):

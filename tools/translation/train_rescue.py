@@ -50,13 +50,22 @@ from tools.translation.train_bidirectional import (
 
 BASELINE_LOSS = 3.7039039318084717
 CANDIDATE_DIR = "candidate-epoch1"
+ATOMIC_REPLACE_ATTEMPTS = 20
+ATOMIC_REPLACE_RETRY_SECONDS = 0.05
 
 
 def _write_atomic_json(path, value):
     temporary = Path(str(path) + ".partial")
     try:
         temporary.write_bytes(canonical_json_bytes(value))
-        os.replace(temporary, path)
+        for attempt in range(ATOMIC_REPLACE_ATTEMPTS):
+            try:
+                os.replace(temporary, path)
+                break
+            except PermissionError:
+                if attempt + 1 == ATOMIC_REPLACE_ATTEMPTS:
+                    raise
+                time.sleep(ATOMIC_REPLACE_RETRY_SECONDS)
     finally:
         temporary.unlink(missing_ok=True)
 
@@ -450,6 +459,67 @@ def cumulative_rescue_elapsed(previous_elapsed, phase_started, now):
     return float(previous_elapsed + now - phase_started)
 
 
+def validate_baseline_replay(
+    progress_path,
+    resume_path,
+    expected_objective_hashes,
+    prior_elapsed_floor,
+    recovery_path,
+):
+    progress_path = Path(progress_path)
+    recovery_path = Path(recovery_path)
+    if Path(resume_path).exists():
+        raise DistillationError("baseline replay is forbidden when a resume checkpoint exists")
+    if Path(str(resume_path) + ".partial").exists():
+        raise DistillationError("baseline replay rejects partial resume checkpoint")
+    if Path(str(progress_path) + ".partial").exists():
+        raise DistillationError("baseline replay rejects partial progress")
+    if recovery_path.exists() or Path(str(recovery_path) + ".partial").exists():
+        raise DistillationError("baseline replay receipt already exists")
+    progress = _load_json(progress_path)
+    if (
+        not isinstance(progress, dict)
+        or set(progress) != {
+            "schema_version", "rescue_step", "loss", "learning_rate",
+            "rescue_gpu_seconds", "cumulative_gpu_seconds", "objective_hashes",
+        }
+        or progress["schema_version"] != 1
+        or progress["objective_hashes"] != expected_objective_hashes
+        or progress_path.read_bytes() != canonical_json_bytes(progress)
+        or isinstance(progress["rescue_step"], bool)
+        or not isinstance(progress["rescue_step"], int)
+        or progress["rescue_step"] < 1
+        or any(
+            isinstance(progress[name], bool)
+            or not isinstance(progress[name], (int, float))
+            or not math.isfinite(progress[name])
+            or progress[name] < 0
+            for name in (
+                "loss", "learning_rate", "rescue_gpu_seconds", "cumulative_gpu_seconds"
+            )
+        )
+    ):
+        raise DistillationError("baseline replay progress schema/objective differs")
+    elapsed_floor = rescue_elapsed_floor(
+        prior_elapsed_floor, progress, expected_objective_hashes
+    )
+    progress_bytes, progress_sha256 = _sha256_file(progress_path)
+    recovery = {
+        "schema_version": 1,
+        "mode": "explicit_replay_from_baseline",
+        "progress": {
+            "path": progress_path.name,
+            "bytes": progress_bytes,
+            "sha256": progress_sha256,
+        },
+        "elapsed_floor_seconds": elapsed_floor,
+        "replayed_optimizer_steps": progress["rescue_step"],
+        "objective_hashes": expected_objective_hashes,
+    }
+    _write_atomic_json(recovery_path, recovery)
+    return elapsed_floor, progress["rescue_step"]
+
+
 def summarize_audited_manual_results(path, expected_manual_rows):
     if not isinstance(expected_manual_rows, list) or len(expected_manual_rows) != 100:
         raise DistillationError("manual asset rows differ")
@@ -510,6 +580,14 @@ def _file_artifact(path):
     return {"path": Path(path).name, "bytes": size, "sha256": digest}
 
 
+def _is_sha256(value):
+    return (
+        isinstance(value, str)
+        and len(value) == 64
+        and all(character in "0123456789abcdef" for character in value)
+    )
+
+
 def _validated_manual_gate_summary(manual):
     if not isinstance(manual, dict) or set(manual) != {"zh-en", "en-zh"}:
         raise DistillationError("rescue manual gate schema differs")
@@ -538,6 +616,60 @@ def _validated_manual_gate_summary(manual):
     }
 
 
+def _verify_training_replay_receipt(training, training_report_path, objective_hashes):
+    replayed = training["replayed_from_baseline"]
+    replayed_steps = training["replayed_optimizer_steps"]
+    artifact = training["baseline_replay_receipt"]
+    if not replayed:
+        if replayed_steps != 0 or artifact is not None:
+            raise DistillationError("non-replay training report contains replay evidence")
+        return
+    if (
+        replayed_steps < 1
+        or not isinstance(artifact, dict)
+        or set(artifact) != {"path", "bytes", "sha256"}
+        or artifact["path"] != "baseline-replay-v1.json"
+        or isinstance(artifact["bytes"], bool)
+        or not isinstance(artifact["bytes"], int)
+        or artifact["bytes"] < 1
+        or not _is_sha256(artifact["sha256"])
+    ):
+        raise DistillationError("baseline replay artifact schema differs")
+    receipt_path = Path(training_report_path).resolve().parent / artifact["path"]
+    try:
+        actual_artifact = _file_artifact(receipt_path)
+    except OSError as error:
+        raise DistillationError("baseline replay artifact is missing") from error
+    if actual_artifact != artifact:
+        raise DistillationError("baseline replay artifact hash differs")
+    receipt = _load_json(receipt_path)
+    if (
+        not isinstance(receipt, dict)
+        or set(receipt) != {
+            "schema_version", "mode", "progress", "elapsed_floor_seconds",
+            "replayed_optimizer_steps", "objective_hashes",
+        }
+        or receipt["schema_version"] != 1
+        or receipt["mode"] != "explicit_replay_from_baseline"
+        or receipt["replayed_optimizer_steps"] != replayed_steps
+        or receipt["objective_hashes"] != objective_hashes
+        or not isinstance(receipt["progress"], dict)
+        or set(receipt["progress"]) != {"path", "bytes", "sha256"}
+        or receipt["progress"]["path"] != "progress-v1.json"
+        or isinstance(receipt["progress"]["bytes"], bool)
+        or not isinstance(receipt["progress"]["bytes"], int)
+        or receipt["progress"]["bytes"] < 1
+        or not _is_sha256(receipt["progress"]["sha256"])
+        or isinstance(receipt["elapsed_floor_seconds"], bool)
+        or not isinstance(receipt["elapsed_floor_seconds"], (int, float))
+        or not math.isfinite(receipt["elapsed_floor_seconds"])
+        or receipt["elapsed_floor_seconds"] < 0
+        or receipt["elapsed_floor_seconds"] > training["rescue_gpu_seconds"]
+        or receipt_path.read_bytes() != canonical_json_bytes(receipt)
+    ):
+        raise DistillationError("baseline replay receipt content differs")
+
+
 def verify_epoch2_authorization(
     gate_report_path, epoch1_training_report_path, expected_candidate,
     distillation_config, teacher_generation_seconds,
@@ -560,7 +692,8 @@ def verify_epoch2_authorization(
         "probe_gpu_seconds", "rescue_gpu_seconds", "epoch_gpu_seconds",
         "cumulative_gpu_seconds", "gpuLedger", "training_view_manifest_sha256",
         "distillation_manifest_sha256", "peak_cuda_bytes", "last_progress",
-        "objective_hashes",
+        "objective_hashes", "replayed_from_baseline", "replayed_optimizer_steps",
+        "baseline_replay_receipt",
     }
     manual_asset = gate.get("manualAsset") if isinstance(gate, dict) else None
     manual_results = gate.get("manualResults") if isinstance(gate, dict) else None
@@ -605,6 +738,11 @@ def verify_epoch2_authorization(
         or training.get("candidate_checkpoint") != "candidate-epoch1/selected"
         or training.get("promotion_allowed") is not False
         or training.get("promotion_status") != "pending_manual_and_flores_gate"
+        or not isinstance(training.get("replayed_from_baseline"), bool)
+        or isinstance(training.get("replayed_optimizer_steps"), bool)
+        or not isinstance(training.get("replayed_optimizer_steps"), int)
+        or training.get("replayed_optimizer_steps") < 0
+        or training.get("replayed_optimizer_steps") > 1406
         or not isinstance(objective_hashes, dict)
         or not objective_hashes
         or any(not isinstance(value, str) or len(value) != 64 for value in objective_hashes.values())
@@ -622,6 +760,9 @@ def verify_epoch2_authorization(
         or gate["epoch2_status"] != "authorized"
     ):
         raise DistillationError("epoch 1 manual gate does not authorize epoch 2")
+    _verify_training_replay_receipt(
+        training, epoch1_training_report_path, objective_hashes
+    )
     history = training["validation_history"]
     if (
         not isinstance(history, list)
@@ -910,9 +1051,12 @@ def run_rescue_epoch(
     epoch1_gate_report=None,
     epoch1_training_report=None,
     epoch1_baseline_checkpoint=None,
+    replay_from_baseline=False,
 ):
     if isinstance(epoch, bool) or epoch not in {1, 2}:
         raise DistillationError("rescue epoch must be 1 or 2")
+    if resume and replay_from_baseline:
+        raise DistillationError("--resume and --replay-from-baseline are mutually exclusive")
     if epoch == 1 and any(
         value is not None
         for value in (
@@ -1012,6 +1156,31 @@ def run_rescue_epoch(
         objective_hashes,
         {"stage", "resumable_model_step", "attempted_rescue_step"},
     )
+    candidate_dir = "candidate-epoch%d" % epoch
+    candidate_root = artifact_root / candidate_dir / "selected"
+    resume_path = artifact_root / "resume.pt"
+    progress_path = artifact_root / "progress-v1.json"
+    replay_elapsed_floor = prior_rescue_seconds
+    replayed_optimizer_steps = 0
+    baseline_replay_receipt = None
+    if replay_from_baseline:
+        replay_elapsed_floor, replayed_optimizer_steps = validate_baseline_replay(
+            progress_path,
+            resume_path,
+            objective_hashes,
+            prior_rescue_seconds,
+            artifact_root / "baseline-replay-v1.json",
+        )
+        baseline_replay_receipt = _file_artifact(
+            artifact_root / "baseline-replay-v1.json"
+        )
+    elif resume:
+        if not resume_path.is_file() or not progress_path.is_file():
+            raise DistillationError("--resume requires resume.pt and progress-v1.json")
+    elif resume_path.exists() or progress_path.exists():
+        raise DistillationError(
+            "existing rescue state requires explicit --resume or --replay-from-baseline"
+        )
     verified = verify_dataset_inputs(dataset_root, dataset_manifest)
     del verified
     view_artifact = bundle["view_artifact"]
@@ -1066,16 +1235,10 @@ def run_rescue_epoch(
     validation_history = []
     best_loss = epoch_baseline_loss
     best_step = None
-    candidate_dir = "candidate-epoch%d" % epoch
-    candidate_root = artifact_root / candidate_dir / "selected"
-    resume_path = artifact_root / "resume.pt"
-    progress_path = artifact_root / "progress-v1.json"
     start_group = 0
     resumable_model_step = 0
-    previous_elapsed = prior_rescue_seconds
+    previous_elapsed = replay_elapsed_floor
     if resume:
-        if not resume_path.is_file():
-            raise DistillationError("--resume requested but rescue resume.pt is missing")
         state = torch.load(resume_path, map_location="cpu", weights_only=False)
         start_group, previous_elapsed, validation_history, best_loss, best_step = restore_rescue_resume_state(
             torch,
@@ -1089,8 +1252,6 @@ def run_rescue_epoch(
             epoch_baseline_loss,
         )
         resumable_model_step = start_group
-        if not progress_path.is_file():
-            raise DistillationError("rescue elapsed journal is missing; refusing elapsed rollback")
         elapsed_progress = _load_json(progress_path)
         if elapsed_progress.get("rescue_step", 0) < start_group:
             raise DistillationError("rescue elapsed journal is behind resume checkpoint")
@@ -1099,8 +1260,6 @@ def run_rescue_epoch(
         )
         if best_step is not None and not candidate_root.is_dir():
             raise DistillationError("rescue best metadata exists but candidate checkpoint is missing")
-    elif resume_path.exists():
-        raise DistillationError("rescue resume.pt exists; explicit --resume is required")
     torch.cuda.reset_peak_memory_stats()
     last_progress = _load_json(progress_path) if resume and progress_path.is_file() else None
     for rescue_step, group in enumerate(groups[start_group:], start_group + 1):
@@ -1149,7 +1308,23 @@ def run_rescue_epoch(
                 },
             )
             validation_history.append({"rescue_step": rescue_step, "loss": validation_loss})
-            _write_atomic_json(artifact_root / "validation-history-v1.json", validation_history)
+            try:
+                _write_atomic_json(
+                    artifact_root / "validation-history-v1.json", validation_history
+                )
+            except PermissionError:
+                persist_terminal_budget_journal(
+                    terminal_path,
+                    "rescue_training",
+                    elapsed,
+                    objective_hashes,
+                    {
+                        "stage": "validation_history_journal",
+                        "resumable_model_step": resumable_model_step,
+                        "attempted_rescue_step": rescue_step,
+                    },
+                )
+                raise
             if validation_loss < best_loss:
                 best_loss = validation_loss
                 best_step = rescue_step
@@ -1169,10 +1344,24 @@ def run_rescue_epoch(
             "cumulative_gpu_seconds": ledger["cumulativeActualSeconds"],
             "objective_hashes": objective_hashes,
         }
-        _write_atomic_json(progress_path, last_progress)
+        try:
+            _write_atomic_json(progress_path, last_progress)
+        except PermissionError:
+            persist_terminal_budget_journal(
+                terminal_path,
+                "rescue_training",
+                elapsed,
+                objective_hashes,
+                {
+                    "stage": "progress_journal",
+                    "resumable_model_step": resumable_model_step,
+                    "attempted_rescue_step": rescue_step,
+                },
+            )
+            raise
         if rescue_step % 20 == 0:
             print(json.dumps(last_progress, sort_keys=True), flush=True)
-        if rescue_step % 500 == 0:
+        if rescue_step == 100 or rescue_step % 500 == 0:
             _save_rescue_resume(
                 torch,
                 resume_path,
@@ -1241,6 +1430,9 @@ def run_rescue_epoch(
         "promotion_allowed": False,
         "promotion_status": "pending_manual_and_flores_gate",
         "resumed": bool(resume),
+        "replayed_from_baseline": bool(replay_from_baseline),
+        "replayed_optimizer_steps": replayed_optimizer_steps,
+        "baseline_replay_receipt": baseline_replay_receipt,
         "teacher_generation_gpu_seconds": teacher_generation_seconds,
         "probe_gpu_seconds": probe_gpu_seconds,
         "rescue_gpu_seconds": elapsed,
@@ -1253,7 +1445,21 @@ def run_rescue_epoch(
         "last_progress": last_progress,
         "objective_hashes": objective_hashes,
     }
-    _write_atomic_json(artifact_root / "training-v1.json", report)
+    try:
+        _write_atomic_json(artifact_root / "training-v1.json", report)
+    except PermissionError:
+        persist_terminal_budget_journal(
+            terminal_path,
+            "rescue_training",
+            elapsed,
+            objective_hashes,
+            {
+                "stage": "final_report",
+                "resumable_model_step": len(groups),
+                "attempted_rescue_step": len(groups),
+            },
+        )
+        raise
     return report
 
 
@@ -1277,6 +1483,7 @@ def build_parser():
     train.add_argument("--epoch1-gate-report", type=Path)
     train.add_argument("--epoch1-training-report", type=Path)
     train.add_argument("--epoch1-baseline-checkpoint", type=Path)
+    train.add_argument("--replay-from-baseline", action="store_true")
     gate = commands.add_parser("gate")
     gate.add_argument("--distillation-config", required=True, type=Path)
     gate.add_argument("--evaluation-summary", required=True, type=Path)
@@ -1373,6 +1580,7 @@ def main(argv=None):
             epoch1_gate_report=args.epoch1_gate_report,
             epoch1_training_report=args.epoch1_training_report,
             epoch1_baseline_checkpoint=args.epoch1_baseline_checkpoint,
+            replay_from_baseline=args.replay_from_baseline,
         )
     print(json.dumps(report, sort_keys=True), flush=True)
 
