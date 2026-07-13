@@ -6,7 +6,8 @@
   "author": "",
   "license": "",
   "dependencies": {
-    "libgesture_mnn.so": "file:./src/main/cpp/types/libgesture_mnn"
+    "libgesture_mnn.so": "file:./src/main/cpp/types/libgesture_mnn",
+    "libtranslation_archive.so": "file:./src/main/cpp/types/libtranslation_archive"
   }
 }
 

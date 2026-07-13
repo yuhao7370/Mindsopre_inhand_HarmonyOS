@@ -14,6 +14,22 @@ import {
   TranslationTokenizerGoldenCase,
   TranslationTokenizerGoldenChunk
 } from './TranslationTokenizerFixture';
+import {
+  TranslationGraphManifest,
+  TranslationModelManifest,
+  TranslationTensorManifest,
+  parseTranslationModelManifest
+} from '../main/ets/services/ai/TranslationModelManifest';
+import {
+  MindSporeLiteTranslationRunner,
+  productionTranslationModelBundleFactory,
+  TranslationModelBundle,
+  TranslationModelResourceManager,
+  TranslationRawFileDescriptor,
+  TranslationTensor,
+  TranslationTensorSession,
+  resetTranslationModelCacheForTests
+} from '../main/ets/services/ai/MindSporeLiteTranslationRunner';
 
 function assertStringArrayEqual(actual: Array<string>, expected: Array<string>): void {
   expect(actual.length).assertEqual(expected.length);
@@ -102,8 +118,439 @@ function reconstructedSource(chunks: Array<TranslationChunk>): string {
 
 const FULL_RUNTIME_TABLE = buildFullRuntimeTable();
 
+function manifestTensor(name: string, dtype: 'INT32' | 'FLOAT32', shape: Array<number>): TranslationTensorManifest {
+  return { name: name, dtype: dtype, shape: shape };
+}
+
+function manifestGraph(
+  file: string,
+  inputs: Array<TranslationTensorManifest>,
+  outputs: Array<TranslationTensorManifest>
+): TranslationGraphManifest {
+  return {
+    file: file,
+    size: 100,
+    sha256: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+    inputs: inputs,
+    outputs: outputs
+  };
+}
+
+function validTranslationManifest(): TranslationModelManifest {
+  const manifest: TranslationModelManifest = {
+    schemaVersion: 1,
+    vocabulary: {
+      size: 32003,
+      eos: 0,
+      unk: 1,
+      pad: 32000,
+      decoderStart: 32000,
+      toEnglish: 32001,
+      toChinese: 32002
+    },
+    archive: {
+      file: 'translation-models.tar.xz',
+      size: 123,
+      sha256: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      cacheKey: 'ARCHIVE_SHA256'
+    },
+    graphs: [
+      manifestGraph('encoder.ms', [
+        manifestTensor('input_ids', 'INT32', [1, 128]),
+        manifestTensor('attention_mask', 'INT32', [1, 128])
+      ], [manifestTensor('last_hidden_state', 'FLOAT32', [1, 128, 256])]),
+      manifestGraph('decoder_prefill.ms', [
+        manifestTensor('decoder_input_ids', 'INT32', [1, 1]),
+        manifestTensor('encoder_hidden_states', 'FLOAT32', [1, 128, 256]),
+        manifestTensor('encoder_attention_mask', 'INT32', [1, 128])
+      ], [
+        manifestTensor('logits', 'FLOAT32', [1, 32003]),
+        manifestTensor('self_key_0', 'FLOAT32', [1, 8, 1, 32]),
+        manifestTensor('self_value_0', 'FLOAT32', [1, 8, 1, 32]),
+        manifestTensor('cross_key_0', 'FLOAT32', [1, 8, 128, 32]),
+        manifestTensor('cross_value_0', 'FLOAT32', [1, 8, 128, 32]),
+        manifestTensor('self_key_1', 'FLOAT32', [1, 8, 1, 32]),
+        manifestTensor('self_value_1', 'FLOAT32', [1, 8, 1, 32]),
+        manifestTensor('cross_key_1', 'FLOAT32', [1, 8, 128, 32]),
+        manifestTensor('cross_value_1', 'FLOAT32', [1, 8, 128, 32])
+      ]),
+      manifestGraph('decoder_step.ms', [
+        manifestTensor('decoder_input_ids', 'INT32', [1, 1]),
+        manifestTensor('position_id', 'INT32', [1]),
+        manifestTensor('self_attention_mask', 'INT32', [1, 128]),
+        manifestTensor('cross_attention_mask', 'INT32', [1, 128]),
+        manifestTensor('past_key_0', 'FLOAT32', [1, 8, 127, 32]),
+        manifestTensor('past_value_0', 'FLOAT32', [1, 8, 127, 32]),
+        manifestTensor('cross_key_0', 'FLOAT32', [1, 8, 128, 32]),
+        manifestTensor('cross_value_0', 'FLOAT32', [1, 8, 128, 32]),
+        manifestTensor('past_key_1', 'FLOAT32', [1, 8, 127, 32]),
+        manifestTensor('past_value_1', 'FLOAT32', [1, 8, 127, 32]),
+        manifestTensor('cross_key_1', 'FLOAT32', [1, 8, 128, 32]),
+        manifestTensor('cross_value_1', 'FLOAT32', [1, 8, 128, 32])
+      ], [
+        manifestTensor('logits', 'FLOAT32', [1, 32003]),
+        manifestTensor('new_key_0', 'FLOAT32', [1, 8, 1, 32]),
+        manifestTensor('new_value_0', 'FLOAT32', [1, 8, 1, 32]),
+        manifestTensor('new_key_1', 'FLOAT32', [1, 8, 1, 32]),
+        manifestTensor('new_value_1', 'FLOAT32', [1, 8, 1, 32])
+      ])
+    ]
+  };
+  return manifest;
+}
+
+function validTranslationManifestText(): string {
+  return JSON.stringify(validTranslationManifest());
+}
+
+function intData(tensor: TranslationTensor): Int32Array {
+  if (!(tensor.data instanceof Int32Array)) {
+    throw new Error(`${tensor.name} is not INT32.`);
+  }
+  return tensor.data;
+}
+
+function floatData(tensor: TranslationTensor): Float32Array {
+  if (!(tensor.data instanceof Float32Array)) {
+    throw new Error(`${tensor.name} is not FLOAT32.`);
+  }
+  return tensor.data;
+}
+
+function outputTensor(
+  name: string,
+  dtype: 'INT32' | 'FLOAT32',
+  shape: Array<number>,
+  data: Int32Array | Float32Array
+): TranslationTensor {
+  return { name: name, dtype: dtype, shape: shape, data: data };
+}
+
+function cacheSlot(value: number): Float32Array {
+  const data = new Float32Array(8 * 32);
+  for (let head = 0; head < 8; head++) {
+    data[head * 32] = value + head * 100;
+  }
+  return data;
+}
+
+function logitsForToken(token: number): Float32Array {
+  const data = new Float32Array(32003);
+  data.fill(-1000);
+  data[token] = 1;
+  return data;
+}
+
+class FakeTranslationSession implements TranslationTensorSession {
+  readonly tokens: Array<number>;
+  readonly positions: Array<number> = [];
+  readonly selfMaskCounts: Array<number> = [];
+  readonly seenDecoderTokens: Array<number> = [];
+  encoderCalls: number = 0;
+  prefillCalls: number = 0;
+  stepCalls: number = 0;
+  closeCalls: number = 0;
+  retainedCrossCaches: boolean = true;
+  firstPastHeadOneValue: number = -1;
+  malformedMode: string = '';
+  tieToken: number = -1;
+  private stepInChunk: number = 0;
+  private crossData: Array<Float32Array> = [];
+
+  constructor(tokens: Array<number>) {
+    this.tokens = tokens;
+  }
+
+  async run(graph: 'encoder' | 'decoder_prefill' | 'decoder_step', inputs: Array<TranslationTensor>):
+    Promise<Array<TranslationTensor>> {
+    if (graph === 'encoder') {
+      this.encoderCalls++;
+      this.stepInChunk = 0;
+      expect(inputs.length).assertEqual(2);
+      return [outputTensor(
+        'last_hidden_state', 'FLOAT32', [1, 128, 256], new Float32Array(128 * 256)
+      )];
+    }
+    if (graph === 'decoder_prefill') {
+      this.prefillCalls++;
+      expect(intData(inputs[0])[0]).assertEqual(32000);
+      expect(inputs[1].name).assertEqual('encoder_hidden_states');
+      const logits = logitsForToken(this.tokens[0]);
+      if (this.tieToken >= 0) {
+        logits[this.tieToken] = 1;
+      }
+      if (this.malformedMode === 'nan') {
+        logits[0] = Number.NaN;
+      }
+      const cross0 = new Float32Array(8 * 128 * 32);
+      const cross1 = new Float32Array(8 * 128 * 32);
+      const cross2 = new Float32Array(8 * 128 * 32);
+      const cross3 = new Float32Array(8 * 128 * 32);
+      this.crossData = [cross0, cross1, cross2, cross3];
+      const outputs: Array<TranslationTensor> = [
+        outputTensor('logits', 'FLOAT32', [1, 32003], logits),
+        outputTensor('self_key_0', 'FLOAT32', [1, 8, 1, 32], cacheSlot(10)),
+        outputTensor('self_value_0', 'FLOAT32', [1, 8, 1, 32], cacheSlot(20)),
+        outputTensor('cross_key_0', 'FLOAT32', [1, 8, 128, 32], cross0),
+        outputTensor('cross_value_0', 'FLOAT32', [1, 8, 128, 32], cross1),
+        outputTensor('self_key_1', 'FLOAT32', [1, 8, 1, 32], cacheSlot(30)),
+        outputTensor('self_value_1', 'FLOAT32', [1, 8, 1, 32], cacheSlot(40)),
+        outputTensor('cross_key_1', 'FLOAT32', [1, 8, 128, 32], cross2),
+        outputTensor('cross_value_1', 'FLOAT32', [1, 8, 128, 32], cross3)
+      ];
+      if (this.malformedMode === 'missing') {
+        outputs.pop();
+      } else if (this.malformedMode === 'extra') {
+        outputs.push(outputTensor('extra', 'FLOAT32', [1], new Float32Array(1)));
+      } else if (this.malformedMode === 'shape') {
+        outputs[0] = outputTensor('logits', 'FLOAT32', [32003], logits);
+      } else if (this.malformedMode === 'dtype') {
+        outputs[0] = outputTensor('logits', 'INT32', [1, 32003], new Int32Array(32003));
+      } else if (this.malformedMode === 'duplicate') {
+        outputs[8] = outputTensor('logits', 'FLOAT32', [1, 32003], logits);
+      }
+      return outputs;
+    }
+    this.stepCalls++;
+    const position = intData(inputs[1])[0];
+    this.positions.push(position);
+    this.seenDecoderTokens.push(intData(inputs[0])[0]);
+    let maskCount = 0;
+    const mask = intData(inputs[2]);
+    for (let index = 0; index < mask.length; index++) {
+      maskCount += mask[index];
+    }
+    this.selfMaskCounts.push(maskCount);
+    if (this.stepCalls === 1) {
+      this.firstPastHeadOneValue = floatData(inputs[4])[(1 * 127) * 32];
+    }
+    const crossInputs: Array<TranslationTensor> = [inputs[6], inputs[7], inputs[10], inputs[11]];
+    for (let index = 0; index < crossInputs.length; index++) {
+      if (floatData(crossInputs[index]) !== this.crossData[index]) {
+        this.retainedCrossCaches = false;
+      }
+    }
+    this.stepInChunk++;
+    const tokenIndex = Math.min(this.stepInChunk, this.tokens.length - 1);
+    return [
+      outputTensor('logits', 'FLOAT32', [1, 32003], logitsForToken(this.tokens[tokenIndex])),
+      outputTensor('new_key_0', 'FLOAT32', [1, 8, 1, 32], cacheSlot(10 + position)),
+      outputTensor('new_value_0', 'FLOAT32', [1, 8, 1, 32], cacheSlot(20 + position)),
+      outputTensor('new_key_1', 'FLOAT32', [1, 8, 1, 32], cacheSlot(30 + position)),
+      outputTensor('new_value_1', 'FLOAT32', [1, 8, 1, 32], cacheSlot(40 + position))
+    ];
+  }
+
+  async close(): Promise<void> {
+    this.closeCalls++;
+  }
+}
+
+class MissingTranslationResources implements TranslationModelResourceManager {
+  async getRawFileContent(_path: string): Promise<Uint8Array> {
+    throw new Error('missing rawfile');
+  }
+
+  async getRawFd(_path: string): Promise<TranslationRawFileDescriptor> {
+    throw new Error('missing rawfile');
+  }
+
+  async closeRawFd(_path: string): Promise<void> {
+  }
+}
+
+function bundleFor(session: TranslationTensorSession): TranslationModelBundle {
+  return { manifest: validTranslationManifest(), session: session };
+}
+
+function runnerFor(session: TranslationTensorSession): MindSporeLiteTranslationRunner {
+  return new MindSporeLiteTranslationRunner({
+    bundleFactory: async (): Promise<TranslationModelBundle> => bundleFor(session)
+  });
+}
+
 export default function translationModelUnitTest(): void {
   describe('TranslationModelUnit', () => {
+    it('acceptsOnlyTheFinalPackageRuntimeManifestContract', 0, () => {
+      const parsed = parseTranslationModelManifest(validTranslationManifestText());
+      expect(parsed.graphs.length).assertEqual(3);
+      expect(parsed.graphs[2].inputs[4].name).assertEqual('past_key_0');
+      expect(parsed.graphs[2].inputs[4].shape.join(',')).assertEqual('1,8,127,32');
+      const valid = validTranslationManifestText();
+      assertThrows((): void => { parseTranslationModelManifest(valid.replace('32003', '32004')); });
+      assertThrows((): void => { parseTranslationModelManifest(valid.replace('encoder.ms', 'encoder2.ms')); });
+      assertThrows((): void => { parseTranslationModelManifest(valid.replace('INT32', 'INT64')); });
+      assertThrows((): void => { parseTranslationModelManifest(valid.replace('[1,128]', '[1,127]')); });
+      assertThrows((): void => { parseTranslationModelManifest(valid.replace('aaaaaaaa', 'notahash')); });
+      assertThrows((): void => {
+        parseTranslationModelManifest(valid.replace('"schemaVersion":1', '"schemaVersion":1,"extra":1'));
+      });
+    });
+
+    it('runsEncoderPrefillAndStepWithExactCacheEvolution', 0, async () => {
+      resetTranslationModelCacheForTests();
+      configureTranslationTokenizerForTests(TOKENIZER_RUNTIME_FIXTURE);
+      const session = new FakeTranslationSession([12249, 192, 0]);
+      const result = await runnerFor(session).translate('hello', 'zh');
+      expect(result.ok).assertTrue();
+      expect(result.runtimeSource).assertEqual('localModel');
+      expect(result.translatedText).assertEqual(decodeTranslationTokens([12249, 192]));
+      expect(session.encoderCalls).assertEqual(1);
+      expect(session.prefillCalls).assertEqual(1);
+      expect(session.stepCalls).assertEqual(2);
+      assertNumberArrayEqual(session.positions, [1, 2]);
+      assertNumberArrayEqual(session.selfMaskCounts, [2, 3]);
+      assertNumberArrayEqual(session.seenDecoderTokens, [12249, 192]);
+      expect(session.firstPastHeadOneValue).assertEqual(110);
+      expect(session.retainedCrossCaches).assertTrue();
+    });
+
+    it('usesStableSmallestIdArgmaxAndStopsAtEos', 0, async () => {
+      resetTranslationModelCacheForTests();
+      configureTranslationTokenizerForTests(TOKENIZER_RUNTIME_FIXTURE);
+      const session = new FakeTranslationSession([12249, 0]);
+      session.tieToken = 192;
+      const result = await runnerFor(session).translate('hello', 'zh');
+      expect(result.ok).assertTrue();
+      expect(result.translatedText).assertEqual(decodeTranslationTokens([192]));
+      expect(session.stepCalls).assertEqual(1);
+    });
+
+    it('runsEachChunkOnceAndPreservesEverySeparator', 0, async () => {
+      resetTranslationModelCacheForTests();
+      configureTranslationTokenizerForTests(TOKENIZER_RUNTIME_FIXTURE);
+      const source = findGolden('multiple_newlines').text;
+      const chunks = encodeTranslationText(source, 'zh');
+      const session = new FakeTranslationSession([12249, 0]);
+      const result = await runnerFor(session).translate(source, 'zh');
+      let expectedText = '';
+      for (let index = 0; index < chunks.length; index++) {
+        expectedText += chunks[index].separatorBefore + 'Hello' + chunks[index].separatorAfter;
+      }
+      expect(result.ok).assertTrue();
+      expect(result.translatedText).assertEqual(expectedText);
+      expect(session.encoderCalls).assertEqual(chunks.length);
+      expect(session.prefillCalls).assertEqual(chunks.length);
+      expect(session.stepCalls).assertEqual(chunks.length);
+    });
+
+    it('stopsAtExactly128GeneratedTokensWithoutWritingPastSlot127', 0, async () => {
+      resetTranslationModelCacheForTests();
+      configureTranslationTokenizerForTests(TOKENIZER_RUNTIME_FIXTURE);
+      const session = new FakeTranslationSession([12249]);
+      const result = await runnerFor(session).translate('hello', 'zh');
+      expect(result.ok).assertTrue();
+      expect(session.stepCalls).assertEqual(127);
+      expect(session.positions[0]).assertEqual(1);
+      expect(session.positions[126]).assertEqual(127);
+      expect(decodeTranslationTokens(new Array<number>(128).fill(12249))).assertEqual(result.translatedText);
+    });
+
+    it('failsClosedForMalformedAndNonFiniteModelOutputs', 0, async () => {
+      const modes: Array<string> = ['missing', 'extra', 'shape', 'dtype', 'duplicate', 'nan'];
+      for (let index = 0; index < modes.length; index++) {
+        resetTranslationModelCacheForTests();
+        configureTranslationTokenizerForTests(TOKENIZER_RUNTIME_FIXTURE);
+        const session = new FakeTranslationSession([12249, 0]);
+        session.malformedMode = modes[index];
+        const result = await runnerFor(session).translate('hello', 'zh');
+        expect(result.ok).assertFalse();
+        expect(result.translatedText).assertEqual('');
+        expect(result.runtimeSource === undefined).assertTrue();
+      }
+    });
+
+    it('rejectsEmptyOutputAndUnsupportedTargetWithoutFallbackOrLoad', 0, async () => {
+      resetTranslationModelCacheForTests();
+      configureTranslationTokenizerForTests(TOKENIZER_RUNTIME_FIXTURE);
+      let loadCalls = 0;
+      const session = new FakeTranslationSession([0]);
+      const runner = new MindSporeLiteTranslationRunner({
+        bundleFactory: async (): Promise<TranslationModelBundle> => {
+          loadCalls++;
+          return bundleFor(session);
+        }
+      });
+      const unsupported = await runner.translate('hello', 'fr');
+      expect(unsupported.ok).assertFalse();
+      expect(loadCalls).assertEqual(0);
+      const empty = await runner.translate('hello', 'zh');
+      expect(empty.ok).assertFalse();
+      expect(loadCalls).assertEqual(1);
+    });
+
+    it('sharesConcurrentLoadResetsAndRetriesFailedLoad', 0, async () => {
+      resetTranslationModelCacheForTests();
+      configureTranslationTokenizerForTests(TOKENIZER_RUNTIME_FIXTURE);
+      let loadCalls = 0;
+      const shared = new FakeTranslationSession([12249, 0]);
+      const factory = async (): Promise<TranslationModelBundle> => {
+        loadCalls++;
+        return bundleFor(shared);
+      };
+      const firstRunner = new MindSporeLiteTranslationRunner({ bundleFactory: factory });
+      const secondRunner = new MindSporeLiteTranslationRunner({ bundleFactory: factory });
+      const results = await Promise.all([
+        firstRunner.translate('hello', 'zh'), secondRunner.translate('world', 'zh')
+      ]);
+      expect(results[0].ok).assertTrue();
+      expect(results[1].ok).assertTrue();
+      expect(loadCalls).assertEqual(1);
+      resetTranslationModelCacheForTests();
+      await Promise.resolve();
+      expect(shared.closeCalls).assertEqual(1);
+
+      let retryCalls = 0;
+      const recovered = new FakeTranslationSession([12249, 0]);
+      const retryRunner = new MindSporeLiteTranslationRunner({
+        bundleFactory: async (): Promise<TranslationModelBundle> => {
+          retryCalls++;
+          if (retryCalls === 1) {
+            throw new Error('load failed');
+          }
+          return bundleFor(recovered);
+        }
+      });
+      expect((await retryRunner.translate('hello', 'zh')).ok).assertFalse();
+      expect((await retryRunner.translate('hello', 'zh')).ok).assertTrue();
+      expect(retryCalls).assertEqual(2);
+    });
+
+    it('keepsResetGenerationSafeWhenAnOldLoadFinishesLate', 0, async () => {
+      resetTranslationModelCacheForTests();
+      configureTranslationTokenizerForTests(TOKENIZER_RUNTIME_FIXTURE);
+      const stale = new FakeTranslationSession([12249, 0]);
+      const staleRunner = new MindSporeLiteTranslationRunner({
+        bundleFactory: async (): Promise<TranslationModelBundle> => {
+          await Promise.resolve();
+          return bundleFor(stale);
+        }
+      });
+      const staleResultPromise = staleRunner.translate('hello', 'zh');
+      resetTranslationModelCacheForTests();
+      const fresh = new FakeTranslationSession([12249, 0]);
+      const freshResult = await runnerFor(fresh).translate('hello', 'zh');
+      const staleResult = await staleResultPromise;
+      expect(freshResult.ok).assertTrue();
+      expect(staleResult.ok).assertFalse();
+      expect(stale.closeCalls).assertEqual(1);
+      expect(fresh.closeCalls).assertEqual(0);
+    });
+
+    it('productionLoaderFailsHonestlyWhenFinalAssetsAreMissing', 0, async () => {
+      resetTranslationModelCacheForTests();
+      configureTranslationTokenizerForTests(TOKENIZER_RUNTIME_FIXTURE);
+      const runner = new MindSporeLiteTranslationRunner({
+        bundleFactory: productionTranslationModelBundleFactory({
+          resourceManager: new MissingTranslationResources(),
+          cacheRoot: '/data/storage/el2/base/cache/translation'
+        })
+      });
+      const result = await runner.translate('hello', 'zh');
+      expect(result.ok).assertFalse();
+      expect(result.translatedText).assertEqual('');
+      expect(result.runtimeSource === undefined).assertTrue();
+    });
     it('matchesPinnedPythonSentencePieceGoldens', 0, () => {
       configureTranslationTokenizerForTests(TOKENIZER_RUNTIME_FIXTURE);
       for (let caseIndex = 0; caseIndex < TOKENIZER_GOLDEN_CASES.length; caseIndex++) {

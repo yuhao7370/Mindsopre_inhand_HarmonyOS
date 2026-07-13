@@ -47,6 +47,7 @@ import {
   parseObjectCategoryLabels
 } from './ObjectDetectionService';
 import { MindSporeLiteModelRunner, RawfileContentReader } from './MindSporeLiteModelRunner';
+import { resetTranslationModelCacheForTests } from './MindSporeLiteTranslationRunner';
 import {
   HarmonySubjectSegmentationRunner,
   SegmentationAndroidScene,
@@ -126,6 +127,7 @@ let cachedHarmonyLocalSceneDetectionAiServiceLocale: string = '';
 let harmonyRuntimeLabelLocaleForTests: string | undefined = undefined;
 
 export function resetHarmonyRuntimeAiServiceCachesForTests(): void {
+  resetTranslationModelCacheForTests();
   cachedHarmonyDefaultAiService = undefined;
   cachedHarmonyDefaultAiServiceLocale = '';
   cachedHarmonyLocalSceneDetectionAiService = undefined;
