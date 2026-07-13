@@ -60,6 +60,16 @@ function Assert-Equal([object]$Actual, [object]$Expected, [string]$Label) {
   }
 }
 
+function Assert-ExactProperties([object]$Object, [string[]]$ExpectedNames, [string]$Label) {
+  if ($null -eq $Object) { throw "$Label must be an object." }
+  $properties = @($Object.PSObject.Properties)
+  $actualNames = @($properties | ForEach-Object Name | Sort-Object)
+  $expected = @($ExpectedNames | Sort-Object)
+  if ($properties.Count -ne $expected.Count -or ($actualNames -join '|') -cne ($expected -join '|')) {
+    throw "$Label properties mismatch: expected $($expected -join ', '), got $($actualNames -join ', ')"
+  }
+}
+
 function Invoke-Captured([string]$Executable, [string[]]$Arguments) {
   $output = & $Executable @Arguments 2>&1 | Out-String
   if ($LASTEXITCODE -ne 0) {
@@ -164,7 +174,8 @@ function Assert-VendoredRuntime([object]$Toolchain) {
   foreach ($path in @($libraryPath, $manifestPath, $licensePath)) {
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Missing vendored MNN file: $path" }
   }
-  $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+  $manifestJson = Get-Content -LiteralPath $manifestPath -Raw
+  $manifest = $manifestJson | ConvertFrom-Json
   Assert-Equal $manifest.schemaVersion 1 'Manifest schemaVersion'
   Assert-Equal $manifest.upstream.repository $mnnRepository 'MNN repository'
   Assert-Equal $manifest.upstream.commit $mnnCommit 'MNN commit'
@@ -182,8 +193,19 @@ function Assert-VendoredRuntime([object]$Toolchain) {
   Assert-Equal $manifest.toolchain.ninja $Toolchain.NinjaVersion 'Manifest Ninja version'
   Assert-Equal $manifest.build.generator 'Ninja' 'Manifest build generator'
   Assert-Equal $manifest.build.target 'MNN' 'Manifest build target'
+  $expectedFlagNames = @($requiredCMakeFlags.Keys)
+  Assert-ExactProperties $manifest.build.cmakeFlags $expectedFlagNames 'Manifest CMake flags'
+  $rawFlagBlocks = [regex]::Matches($manifestJson, '"cmakeFlags"\s*:\s*\{(?<body>[^{}]*)\}')
+  if ($rawFlagBlocks.Count -ne 1) { throw 'Manifest must contain exactly one flat cmakeFlags object.' }
+  $rawFlagNames = @([regex]::Matches($rawFlagBlocks[0].Groups['body'].Value, '"(?<name>[A-Za-z0-9_]+)"\s*:') | ForEach-Object { $_.Groups['name'].Value } | Sort-Object)
+  if ($rawFlagNames.Count -ne $expectedFlagNames.Count -or
+      ($rawFlagNames -join '|') -cne (($expectedFlagNames | Sort-Object) -join '|')) {
+    throw "Manifest raw CMake flag names mismatch: $($rawFlagNames -join ', ')"
+  }
   foreach ($item in $requiredCMakeFlags.GetEnumerator()) {
-    Assert-Equal $manifest.build.cmakeFlags.($item.Key) $item.Value "Manifest CMake $($item.Key)"
+    $value = $manifest.build.cmakeFlags.($item.Key)
+    if ($value -isnot [string]) { throw "Manifest CMake $($item.Key) must be a string." }
+    Assert-Equal $value $item.Value "Manifest CMake $($item.Key)"
   }
 
   $actualHash = (Get-FileHash -LiteralPath $libraryPath -Algorithm SHA256).Hash
@@ -193,12 +215,12 @@ function Assert-VendoredRuntime([object]$Toolchain) {
   Assert-Equal $manifest.artifact.elfMachine 'AArch64' 'Manifest ELF machine'
   Assert-Equal $manifest.reference.sha256 $referenceSha256 'Manifest reference SHA-256'
   Assert-Equal $manifest.reference.size $referenceSize 'Manifest reference size'
-  Assert-Equal $manifest.artifact.sha256 $actualHash 'Manifest artifact SHA-256'
-  Assert-Equal $manifest.artifact.size $actualSize 'Manifest artifact size'
-  if ($actualHash -cne $referenceSha256 -or $actualSize -ne $referenceSize) {
-    if (-not [string]$manifest.toolchainInputDifference) {
-      throw "Non-reference MNN artifact requires a verified toolchainInputDifference; got $actualHash ($actualSize bytes)"
-    }
+  Assert-Equal $actualHash $referenceSha256 'Vendored artifact SHA-256'
+  Assert-Equal $actualSize $referenceSize 'Vendored artifact size'
+  Assert-Equal $manifest.artifact.sha256 $referenceSha256 'Manifest artifact SHA-256'
+  Assert-Equal $manifest.artifact.size $referenceSize 'Manifest artifact size'
+  if ($null -ne $manifest.toolchainInputDifference) {
+    throw 'Manifest toolchainInputDifference must be null for the fixed reference artifact.'
   }
   $dependencies = Get-ElfContract $libraryPath $Toolchain.ReadElf
   if ((@($manifest.artifact.dynamicDependencies | Sort-Object) -join '|') -cne ($dependencies -join '|')) {
@@ -211,11 +233,26 @@ function Assert-VendoredRuntime([object]$Toolchain) {
   if (($actualHeaders -join '|') -cne (($requiredHeaders | Sort-Object) -join '|')) {
     throw "Vendored public header set is not minimal: $($actualHeaders -join ', ')"
   }
+  if ($manifest.headers -isnot [System.Array]) { throw 'Manifest headers must be an array.' }
+  $manifestHeaders = @($manifest.headers)
+  $expectedHeaderPaths = @($requiredHeaders | ForEach-Object { "include/MNN/$_" } | Sort-Object)
+  $manifestHeaderPaths = @($manifestHeaders | ForEach-Object { $_.path } | Sort-Object)
+  if ($manifestHeaders.Count -ne $expectedHeaderPaths.Count -or
+      ($manifestHeaderPaths -join '|') -cne ($expectedHeaderPaths -join '|')) {
+    throw "Manifest header paths mismatch: expected $($expectedHeaderPaths -join ', '), got $($manifestHeaderPaths -join ', ')"
+  }
+  foreach ($entry in $manifestHeaders) {
+    Assert-ExactProperties $entry @('path', 'sha256') "Manifest header entry '$($entry.path)'"
+    if ($entry.path -isnot [string] -or $entry.sha256 -isnot [string]) {
+      throw 'Manifest header path and sha256 must be strings.'
+    }
+    if ($entry.sha256 -cnotmatch '^[0-9A-F]{64}$') { throw "Invalid header SHA-256 for $($entry.path)" }
+  }
   foreach ($header in $requiredHeaders) {
     $entry = @($manifest.headers | Where-Object { $_.path -ceq "include/MNN/$header" })
     if ($entry.Count -ne 1) { throw "Manifest must contain exactly one entry for header $header" }
     $hash = (Get-FileHash -LiteralPath (Join-Path $includeRoot $header) -Algorithm SHA256).Hash
-    Assert-Equal $entry[0].sha256 $hash "Header $header SHA-256"
+    Assert-Equal $hash $entry[0].sha256 "Header $header SHA-256"
   }
   $licenseHash = (Get-FileHash -LiteralPath $licensePath -Algorithm SHA256).Hash
   Assert-Equal $manifest.license.path 'third_party/MNN/LICENSE.txt' 'License path'
@@ -283,17 +320,8 @@ if (-not (Test-Path -LiteralPath $builtLibrary -PathType Leaf)) { throw "Missing
 $dependencies = Get-ElfContract $builtLibrary $toolchain.ReadElf
 $builtHash = (Get-FileHash -LiteralPath $builtLibrary -Algorithm SHA256).Hash
 $builtSize = (Get-Item -LiteralPath $builtLibrary).Length
-$verifiedInputDifferences = @()
-if ($toolchain.CMakeVersion -cne 'cmake version 3.28.2') {
-  $verifiedInputDifferences += "CMake is $($toolchain.CMakeVersion), reference used cmake version 3.28.2"
-}
-if ($toolchain.NinjaVersion -cne '1.12.0') {
-  $verifiedInputDifferences += "Ninja is $($toolchain.NinjaVersion), reference used 1.12.0"
-}
-$verifiedInputDifference = $verifiedInputDifferences -join '; '
-if (($builtHash -cne $referenceSha256 -or $builtSize -ne $referenceSize) -and -not $verifiedInputDifference) {
-  throw "MNN build does not match the reference ($builtHash, $builtSize bytes), but no verified toolchain input differs."
-}
+Assert-Equal $builtHash $referenceSha256 'Built MNN SHA-256'
+Assert-Equal $builtSize $referenceSize 'Built MNN size'
 
 $sourceIncludeRoot = Join-Path $SourceRoot 'include\MNN'
 foreach ($header in $requiredHeaders) {
@@ -354,7 +382,7 @@ $manifest = [ordered]@{
     path = 'third_party/MNN/LICENSE.txt'
     sha256 = (Get-FileHash -LiteralPath $licensePath -Algorithm SHA256).Hash
   }
-  toolchainInputDifference = $(if ($verifiedInputDifference) { $verifiedInputDifference } else { $null })
+  toolchainInputDifference = $null
 }
 [System.IO.File]::WriteAllText($manifestPath, (($manifest | ConvertTo-Json -Depth 8) + "`n"), [System.Text.UTF8Encoding]::new($false))
 Assert-VendoredRuntime $toolchain
