@@ -14,6 +14,7 @@ import {
   SegmentationBackgroundMetadata,
   aiRunResultRows,
   copyableTextForAiResult,
+  translatedTextForAiResult,
   segmentationMetadataWithBackground,
   sceneDetectionOverlayRows
 } from '../main/ets/services/ai/AiService';
@@ -354,6 +355,7 @@ import {
   specializedAndroidLiveLayoutForWorkflow,
   usesAndroidPortraitSegmentationLayout,
   usesAndroidTextRecognitionLayout,
+  usesAndroidTextTranslationLayout,
   usesSimpleAndroidLiveLayout,
   shouldShowPrimaryImageInputPreview,
   sampleImageUriForWorkflow,
@@ -4451,6 +4453,21 @@ export default function localUnitTest() {
       });
 
       expect(copyableTextForAiResult('translateText', aiRunResultRows(result))).assertEqual('hello');
+    });
+
+    it('projectsOnlyCompleteTranslatedTextForAndroidTranslationOutput', 0, () => {
+      const sourceAndTranslation: Array<AiRunResultRow> = [
+        { labelKey: 'feature_runtime_result_text', value: 'source\ntext\n' },
+        { labelKey: 'feature_runtime_result_translated_text', value: '译文第一行\ntranslation line 2\n' }
+      ];
+      const sourceOnly: Array<AiRunResultRow> = [
+        { labelKey: 'feature_runtime_result_text', value: 'must not be copied' }
+      ];
+
+      expect(translatedTextForAiResult(sourceAndTranslation))
+        .assertEqual('译文第一行\ntranslation line 2\n');
+      expect(translatedTextForAiResult(sourceOnly)).assertEqual('');
+      expect(translatedTextForAiResult([])).assertEqual('');
     });
 
     it('aiServiceReportsTextTranslationFailureWithI18nKey', 0, async () => {
@@ -9087,6 +9104,15 @@ export default function localUnitTest() {
           .assertEqual(workflow.routeName === AppRoute.TEXT_RECOGNITION.name);
       });
       expect(usesAndroidTextRecognitionLayout(undefined)).assertFalse();
+    });
+
+    it('usesAndroidTextTranslationLayout', 0, () => {
+      expect(featureWorkflows.length).assertEqual(16);
+      featureWorkflows.forEach((workflow: FeatureWorkflow) => {
+        expect(usesAndroidTextTranslationLayout(workflow))
+          .assertEqual(workflow.routeName === AppRoute.TEXT_TRANSLATION.name);
+      });
+      expect(usesAndroidTextTranslationLayout(undefined)).assertFalse();
     });
 
     it('selectsSpecializedAndroidLiveLayoutOnlyForImageAndObjectCamera', 0, () => {

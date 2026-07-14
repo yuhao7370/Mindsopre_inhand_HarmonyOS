@@ -1176,6 +1176,10 @@ export function copyableTextForAiResult(aiMethod: string, rows: Array<AiRunResul
   return '';
 }
 
+export function translatedTextForAiResult(rows: Array<AiRunResultRow>): string {
+  return resultRowValue(rows, 'feature_runtime_result_translated_text');
+}
+
 export function segmentationMetadataWithBackground(
   rows: Array<AiRunResultRow>,
   detailText: string,

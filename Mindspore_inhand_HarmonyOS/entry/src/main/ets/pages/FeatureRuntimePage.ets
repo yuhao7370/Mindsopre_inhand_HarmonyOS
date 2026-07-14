@@ -19,6 +19,7 @@ import {
   specializedAndroidLiveLayoutForWorkflow,
   usesAndroidPortraitSegmentationLayout,
   usesAndroidTextRecognitionLayout,
+  usesAndroidTextTranslationLayout,
   usesSimpleAndroidLiveLayout,
   visibleInputKindsForWorkflow,
   shouldShowPrimaryImageInputPreview,
@@ -88,6 +89,7 @@ import {
   SegmentationBackgroundMetadata,
   aiRunResultRows,
   copyableTextForAiResult,
+  translatedTextForAiResult,
   segmentationMetadataWithBackground,
   sceneDetectionOverlayRows
 } from '../services/ai/AiService';
@@ -1554,6 +1556,13 @@ struct FeatureRuntimePage {
   private copyRecognizedText(): void {
     new ClipboardService().copyText(this.recognizedTextForCopy()).then((result: CopyTextResult) => {
       this.statusKey = result.ok ? 'feature_runtime_copy_done' : 'feature_runtime_copy_failed';
+    });
+  }
+
+  private copyTranslatedText(): void {
+    new ClipboardService().copyText(translatedTextForAiResult(this.resultRows)).then((result: CopyTextResult) => {
+      this.statusKey = result.ok ? 'feature_runtime_copy_done' : 'feature_runtime_copy_failed';
+      this.showRuntimeToast(this.statusKey);
     });
   }
 
@@ -3043,8 +3052,106 @@ struct FeatureRuntimePage {
     .backgroundColor(Color.White)
   }
 
+  @Builder
+  textTranslationAndroidLayout() {
+    Stack({ alignContent: Alignment.TopStart }) {
+      Column() {
+        this.runtimeActionToolbar(false)
+        Stack({ alignContent: Alignment.Center }) {
+          if (this.textInputVisible) {
+            TextArea({
+              text: this.userText,
+              placeholder: appString('feature_runtime_text_translation_placeholder')
+            })
+              .width('100%')
+              .height('100%')
+              .margin(5)
+              .fontSize(18)
+              .fontColor('#000000')
+              .placeholderColor('#666666')
+              .backgroundColor(Color.Transparent)
+              .border({ width: 0.33, color: '#B6B2B2', radius: 5 })
+              .onChange((value: string) => this.updateUserText(value))
+          } else {
+            Image(this.imageInputUri)
+              .width('100%')
+              .height('100%')
+              .margin(10)
+              .objectFit(ImageFit.Contain)
+              .backgroundColor(Color.Transparent)
+              .border({ width: 0.33, color: '#B6B2B2', radius: 5 })
+          }
+        }
+        .width('100%')
+        .layoutWeight(5)
+        Button(appString(this.runActionKey), { type: ButtonType.Normal })
+          .width('100%')
+          .height(50)
+          .margin(5)
+          .fontColor(Color.White)
+          .enabled(this.runActionEnabled())
+          .onClick(() => this.runPrimaryAction())
+        Scroll() {
+          Text(translatedTextForAiResult(this.resultRows))
+            .width('100%')
+            .fontSize(18)
+            .fontColor('#000000')
+        }
+        .width('100%')
+        .layoutWeight(4)
+        .margin(5)
+        .scrollBar(BarState.Auto)
+        .border({ width: 0.33, color: '#B6B2B2', radius: 5 })
+        Row() {
+          Button(appString('feature_input_photo_android'), { type: ButtonType.Normal })
+            .layoutWeight(1)
+            .height(37)
+            .margin({ left: 20, right: 5 })
+            .fontSize(14)
+            .fontWeight(FontWeight.Normal)
+            .fontColor('#666666')
+            .backgroundColor('#F4F3F8')
+            .borderRadius(5)
+            .onClick(() => this.prepareInput('photo'))
+          Button(appString('feature_input_camera_android'), { type: ButtonType.Normal })
+            .layoutWeight(1)
+            .height(37)
+            .margin({ left: 5, right: 5 })
+            .fontSize(14)
+            .fontWeight(FontWeight.Normal)
+            .fontColor('#666666')
+            .backgroundColor('#F4F3F8')
+            .borderRadius(5)
+            .onClick(() => this.prepareInput('camera'))
+          Button(appString('feature_runtime_copy_text'), { type: ButtonType.Normal })
+            .layoutWeight(1)
+            .height(37)
+            .margin({ left: 5, right: 20 })
+            .fontSize(14)
+            .fontWeight(FontWeight.Normal)
+            .fontColor('#666666')
+            .backgroundColor('#F4F3F8')
+            .borderRadius(5)
+            .onClick(() => this.copyTranslatedText())
+        }
+        .width('100%')
+        .layoutWeight(1)
+        .alignItems(VerticalAlign.Center)
+      }
+      .width('100%')
+      .height('100%')
+      .backgroundColor(Color.White)
+      this.runtimePermissionRecoveryOverlay()
+    }
+    .width('100%')
+    .height('100%')
+    .backgroundColor(Color.White)
+  }
+
   build() {
-    if (usesAndroidTextRecognitionLayout(workflowForRoute(this.routeName))) {
+    if (usesAndroidTextTranslationLayout(workflowForRoute(this.routeName))) {
+      this.textTranslationAndroidLayout()
+    } else if (usesAndroidTextRecognitionLayout(workflowForRoute(this.routeName))) {
       this.textRecognitionAndroidLayout()
     } else if (usesAndroidPortraitSegmentationLayout(workflowForRoute(this.routeName))) {
       this.portraitSegmentationAndroidLayout()

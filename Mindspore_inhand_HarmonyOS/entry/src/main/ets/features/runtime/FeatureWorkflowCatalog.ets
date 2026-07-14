@@ -314,6 +314,10 @@ export function usesAndroidTextRecognitionLayout(workflow: FeatureWorkflow | und
   return workflow?.routeName === AppRoute.TEXT_RECOGNITION.name;
 }
 
+export function usesAndroidTextTranslationLayout(workflow: FeatureWorkflow | undefined): boolean {
+  return workflow?.routeName === AppRoute.TEXT_TRANSLATION.name;
+}
+
 export function runtimeInputKindsForWorkflow(workflow: FeatureWorkflow): Array<FeatureInputKind> {
   const kinds: Array<FeatureInputKind> = [];
   workflow.inputKinds.forEach((kind: FeatureInputKind) => appendUniqueInputKind(kinds, kind));

@@ -258,18 +258,21 @@ Current HarmonyOS behavior:
   KV cache between steps. The native archive utility does not perform ML
   inference.
 - Successful local-model results use the normal Android-compatible completion
-  message and expose `runtimeSource=localModel`. The copy action returns the
-  translated text, and source/translated newlines remain exact through typed
-  and OCR flows.
+  message and expose `runtimeSource=localModel`. The dedicated Android-shaped
+  page exposes one translated-output field only; generic source, target,
+  runtime, timing, and debug rows remain hidden. Source/translated newlines
+  remain exact through typed and OCR flows.
 - The translation workflow requests only camera/media permissions and never
   requests Internet or calls a network translation service. The application-
   level Internet declaration remains for unrelated web/help and resource
   features.
 - Blank typed text and blank OCR output are treated as missing or failed input
   instead of successful empty translation/recognition results.
-- Image-based translation shows the source and translated text and keeps the
-  copy action, but does not add the unreachable Android result-save action.
-  Model failures preserve the OCR source text for copying.
+- Image-based translation keeps the selected-image preview and translated-only
+  output without adding the unreachable Android result-save action. Its Copy
+  action reads only the translated-output row: empty or failed translation does
+  not fall back to the OCR/source text and retains the existing Copy-failed
+  outcome.
 - Package, host, and tensor-session checks do not promote this model beyond its
   recorded limitations: `manual-quality-gate-not-passed`,
   `local-learning-only-not-production-approved`, and device-not-validated
