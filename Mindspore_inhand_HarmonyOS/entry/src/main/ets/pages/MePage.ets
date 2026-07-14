@@ -1,12 +1,18 @@
 import { common } from '@kit.AbilityKit';
 import router from '@ohos.router';
-import { GradientTitleBar } from '../common/components/GradientTitleBar';
-import { SectionTitle } from '../common/components/SectionTitle';
 import { MeItem, isMeItemPageNavigable, isMeItemUrlNavigable, visibleMeItems } from '../common/data/MeCatalog';
+import {
+  meDividerHeightVp,
+  meRowIconGapVp,
+  meRowIconSizeVp,
+  meRowSideInsetVp,
+  meRowVerticalPaddingVp,
+  meTitleHeightVp
+} from '../common/data/MeLayoutSpec';
 import { webPagePath } from '../common/data/WebDestination';
 import { iconLabel, iconMediaResource } from '../common/icons/IconSymbols';
 import { AppStringKey, appString } from '../common/i18n/AppStrings';
-import { AppColor, AppRadius, AppSpacing } from '../common/theme/AppTheme';
+import { AppColor, AppSpacing } from '../common/theme/AppTheme';
 import { AppVersionService } from '../services/app/AppVersionService';
 import {
   HarmonySystemShareTextWriter,
@@ -90,22 +96,22 @@ export struct MePage {
   private meIcon(item: MeItem) {
     if (iconMediaResource(item.icon) !== undefined) {
       Image(iconMediaResource(item.icon) as Resource)
-        .width(32)
-        .height(32)
+        .width(meRowIconSizeVp)
+        .height(meRowIconSizeVp)
         .objectFit(ImageFit.Contain)
-        .margin({ right: 8 })
+        .margin({ right: meRowIconGapVp })
     } else {
       Text(iconLabel(item.icon))
-        .fontSize(13)
+        .fontSize(8)
         .fontWeight(FontWeight.Bold)
         .fontColor(Color.White)
-        .width(32)
-        .height(32)
+        .width(meRowIconSizeVp)
+        .height(meRowIconSizeVp)
         .backgroundColor(AppColor.accent)
-        .borderRadius(16)
+        .borderRadius(meRowIconSizeVp / 2)
         .textAlign(TextAlign.Center)
         .maxLines(1)
-        .margin({ right: 8 })
+        .margin({ right: meRowIconGapVp })
     }
   }
 
@@ -130,41 +136,54 @@ export struct MePage {
     Row() {
       this.meIcon(item)
       Text(appString(item.titleKey))
-        .fontSize(15)
-        .fontColor(AppColor.textPrimary)
+        .fontSize(16)
+        .fontWeight(FontWeight.Normal)
+        .fontColor('#333333')
         .layoutWeight(1)
         .maxLines(1)
       Text(this.valueForItem(item))
         .fontSize(13)
-        .fontColor(AppColor.textSecondary)
+        .fontColor('#666666')
       if (isMeItemUrlNavigable(item) || isMeItemPageNavigable(item)) {
         this.meChevron()
       }
     }
     .width('100%')
-    .padding({ left: AppSpacing.md, right: AppSpacing.md, top: AppSpacing.md, bottom: AppSpacing.md })
-    .backgroundColor(AppColor.cardBackground)
-    .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
+    .padding({
+      left: meRowSideInsetVp,
+      right: meRowSideInsetVp,
+      top: meRowVerticalPaddingVp,
+      bottom: meRowVerticalPaddingVp
+    })
     .onClick(() => this.openItem(item))
   }
 
   build() {
-    Scroll() {
-      Column() {
-        GradientTitleBar({
-          titleKey: 'me_head_title',
-          subtitleKey: 'me_head_subtitle'
-        })
+    Column() {
+      Row() {
+        Text(appString('me_head_title'))
+          .fontSize(17)
+          .fontWeight(FontWeight.Bold)
+          .fontColor(Color.White)
+          .textAlign(TextAlign.Center)
+      }
+      .width('100%')
+      .height(meTitleHeightVp)
+      .justifyContent(FlexAlign.Center)
+      .linearGradient({
+        angle: 90,
+        colors: [['#59BBE3', 0], ['#6189FF', 1]]
+      })
+      Row() {
+      }
+      .width('100%')
+      .height(meDividerHeightVp)
+      .backgroundColor('#DBDBDB')
+      Scroll() {
         Column() {
-          SectionTitle({ titleKey: 'account_title' })
-          Column() {
-            ForEach(visibleMeItems, (item: MeItem) => {
-              Column() {
-                this.meRow(item)
-              }
-                .margin({ top: AppSpacing.md })
-            }, (item: MeItem) => item.id)
-          }
+          ForEach(visibleMeItems, (item: MeItem) => {
+            this.meRow(item)
+          }, (item: MeItem) => item.id)
           if (this.statusKey !== 'empty') {
             Text(appString(this.statusKey))
               .fontSize(13)
@@ -174,11 +193,13 @@ export struct MePage {
           }
         }
         .width('100%')
-        .padding(AppSpacing.page)
       }
       .width('100%')
+      .layoutWeight(1)
+      .scrollBar(BarState.Off)
     }
-    .scrollBar(BarState.Off)
-    .backgroundColor(AppColor.pageBackground)
+    .width('100%')
+    .height('100%')
+    .backgroundColor(Color.White)
   }
 }

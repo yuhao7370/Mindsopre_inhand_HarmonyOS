@@ -569,6 +569,14 @@ import {
   collegeSummaryDialogLogoMedia
 } from '../main/ets/common/data/CollegeSummaryDialog';
 import { MeItem, isMeItemUrlNavigable, meItems, visibleMeItems } from '../main/ets/common/data/MeCatalog';
+import {
+  meDividerHeightVp,
+  meRowIconGapVp,
+  meRowIconSizeVp,
+  meRowSideInsetVp,
+  meRowVerticalPaddingVp,
+  meTitleHeightVp
+} from '../main/ets/common/data/MeLayoutSpec';
 import { AppVersionReader, AppVersionService, formattedAppVersionName } from '../main/ets/services/app/AppVersionService';
 import {
   CollegeProgressService,
@@ -2006,6 +2014,15 @@ export default function localUnitTest() {
       expect(meItems.find((item: MeItem) => item.id === 'star')?.title).assertEqual('Like');
       expect(meItems.find((item: MeItem) => item.id === 'code')?.title).assertEqual('Official Code');
       expect(meItems.find((item: MeItem) => item.id === 'feedback')?.title).assertEqual('Feedback');
+    });
+
+    it('usesAndroidMePageGeometry', 0, () => {
+      expect(meTitleHeightVp).assertEqual(56);
+      expect(meDividerHeightVp).assertEqual(1);
+      expect(meRowVerticalPaddingVp).assertEqual(29);
+      expect(meRowSideInsetVp).assertEqual(20);
+      expect(meRowIconSizeVp).assertEqual(14);
+      expect(meRowIconGapVp).assertEqual(15);
     });
 
     it('usesAndroidCollegeSummaryDialogTitleKey', 0, () => {
