@@ -9059,6 +9059,17 @@ export default function localUnitTest() {
       expect(initialInputKindForWorkflow(workflowForRoute(AppRoute.TEXT_RECOGNITION.name)!)).assertUndefined();
     });
 
+    it('hidesAutoPreparedObjectPhotoAlbumInputLikeAndroidPhotoActivity', 0, () => {
+      const objectPhoto: FeatureWorkflow = workflowForRoute(AppRoute.OBJECT_PHOTO.name)!;
+
+      expect(JSON.stringify(runtimeInputKindsForWorkflow(objectPhoto)))
+        .assertEqual(JSON.stringify(['photo', 'modelFile']));
+      expect(initialInputKindForWorkflow(objectPhoto)).assertEqual('photo');
+      expect(autoStartInputKindForWorkflow(objectPhoto)).assertUndefined();
+      expect(JSON.stringify(visibleInputKindsForWorkflow(objectPhoto)))
+        .assertEqual(JSON.stringify(['modelFile']));
+    });
+
     it('keepsObjectPhotoScreenOnLikeAndroidLayout', 0, () => {
       expect(shouldKeepScreenOnForWorkflow(workflowForRoute(AppRoute.OBJECT_PHOTO.name)))
         .assertTrue();

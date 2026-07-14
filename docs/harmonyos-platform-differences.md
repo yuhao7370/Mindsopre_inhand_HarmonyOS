@@ -547,6 +547,9 @@ Current HarmonyOS behavior:
 - `/imageobject/ObjectPhotoActivity` follows the Android page flow: opening the
   route prepares the album image input once, and a selected image immediately
   runs object detection.
+- Because that initial album picker already supplies the photo, the Object
+  Detection Photo page shows only `Select Model` as an input action, matching
+  Android instead of exposing a redundant Photo action.
 - The Object Detection Photo route keeps the HarmonyOS window awake while the
   page is visible, matching `android:keepScreenOn="true"` from Android's
   `activity_object_photo.xml` without affecting the live Object Camera route.

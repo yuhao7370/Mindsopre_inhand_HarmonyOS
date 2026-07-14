@@ -299,9 +299,9 @@ export function autoStartInputKindForWorkflow(workflow: FeatureWorkflow): Featur
 }
 
 export function visibleInputKindsForWorkflow(workflow: FeatureWorkflow): Array<FeatureInputKind> {
-  const autoStartInputKind = autoStartInputKindForWorkflow(workflow);
+  const implicitInputKind = autoStartInputKindForWorkflow(workflow) ?? initialInputKindForWorkflow(workflow);
   return runtimeInputKindsForWorkflow(workflow).filter((inputKind: FeatureInputKind) => {
-    return inputKind !== autoStartInputKind &&
+    return inputKind !== implicitInputKind &&
       (workflow.routeName !== AppRoute.PORTRAIT_SEGMENTATION.name || inputKind !== 'backgroundImage');
   });
 }
