@@ -10,7 +10,7 @@ if (-not $PagePath) {
 $source = Get-Content -Raw -Encoding UTF8 $PagePath
 $segmentationViewId = 'segmentationBackgroundReplacementComponentId'
 $segmentationViewIdModifierPattern = '(?m)^[ \t]*\.id\(\s*' +
-  [regex]::Escape($segmentationViewId) + '\s*\)[ \t]*$'
+  [regex]::Escape($segmentationViewId) + '\s*\)[ \t]*\r?$'
 
 function Get-SourceSlice([string] $text, [string] $startMarker, [string] $endMarker) {
   $start = $text.IndexOf($startMarker)

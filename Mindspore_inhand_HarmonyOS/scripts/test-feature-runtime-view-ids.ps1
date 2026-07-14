@@ -5,6 +5,7 @@ $powershell = (Get-Process -Id $PID).Path
 $tempRoot = Join-Path ([IO.Path]::GetTempPath()) ("feature-runtime-view-ids-" + [Guid]::NewGuid().ToString('N'))
 $tempRoot = [IO.Path]::GetFullPath($tempRoot)
 $tempBase = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd([IO.Path]::DirectorySeparatorChar)
+$utf8 = New-Object Text.UTF8Encoding($false)
 
 if (-not $tempRoot.StartsWith($tempBase + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
   throw "Unsafe test fixture path: $tempRoot"
@@ -14,7 +15,8 @@ function New-PageFixture(
   [string]$Name,
   [string]$CompositeBody,
   [string]$GenericBody,
-  [string]$PoseBody
+  [string]$PoseBody,
+  [string]$LineEnding = "`n"
 ) {
   $path = Join-Path $tempRoot "$Name.ets"
   $source = @"
@@ -39,7 +41,11 @@ $PoseBody
 poseTemplatePreview() {
 }
 "@
-  Set-Content -LiteralPath $path -Value $source -Encoding UTF8
+  $source = $source.Replace("`r`n", "`n").Replace("`r", "`n")
+  if ($LineEnding -eq "`r`n") {
+    $source = $source.Replace("`n", "`r`n")
+  }
+  [IO.File]::WriteAllText($path, $source, $utf8)
   return $path
 }
 
@@ -79,13 +85,15 @@ function Assert-GuardRejects([string]$Label, [string]$PagePath, [string]$Expecte
 
 New-Item -ItemType Directory -Path $tempRoot | Out-Null
 try {
-  $good = New-PageFixture 'good' @'
+  $goodCompositeBody = @'
   Stack() {
     Image()
   }
   .width('100%')
   .id(segmentationBackgroundReplacementComponentId)
-'@ '' ''
+'@
+  $goodLf = New-PageFixture 'good-lf' $goodCompositeBody '' '' "`n"
+  $goodCrLf = New-PageFixture 'good-crlf' $goodCompositeBody '' '' "`r`n"
   $nestedChild = New-PageFixture 'nested-child' @'
   Stack() {
     Image()
@@ -132,7 +140,8 @@ try {
   .width('100%')
 '@ '' ''
 
-  Assert-GuardAccepts 'portrait composite' $good
+  Assert-GuardAccepts 'portrait composite with LF' $goodLf
+  Assert-GuardAccepts 'portrait composite with CRLF' $goodCrLf
   Assert-GuardRejects 'nested child component' $nestedChild `
     'must be attached directly to the outer portrait Stack'
   Assert-GuardAccepts 'comment and string lookalikes' $commentAndString
