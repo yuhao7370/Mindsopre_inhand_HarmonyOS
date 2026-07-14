@@ -320,8 +320,8 @@ Current HarmonyOS behavior:
   user-facing labels and file names, instead of raw picker paths or surface ids.
 - The shared runtime shows a primary action only for PoseNet, Text Translation,
   and Custom Model, matching Android's manual Detect, Translate, and Execute
-  controls. Camera-only live workflows and still/style workflows that run
-  automatically when their input is ready omit the generic Run button.
+  controls. The remaining still/style routes and all live routes rely solely on
+  automatic triggers and omit the generic Run button.
 - The HAP build helper now runs a static guard to catch accidental re-exposure
   of those debug fields in `FeatureRuntimePage`.
 

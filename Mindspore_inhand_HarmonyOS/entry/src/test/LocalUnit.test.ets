@@ -8920,23 +8920,40 @@ export default function localUnitTest() {
     });
 
     it('showsPrimaryRunActionOnlyForAndroidManualWorkflows', 0, () => {
-      expect(featureWorkflows.length).assertEqual(16);
-      expect(shouldShowPrimaryRunAction(workflowForRoute(AppRoute.POSENET.name))).assertTrue();
-      expect(shouldShowPrimaryRunAction(workflowForRoute(AppRoute.TEXT_TRANSLATION.name))).assertTrue();
-      expect(shouldShowPrimaryRunAction(workflowForRoute(AppRoute.CUSTOM_MODEL.name))).assertTrue();
-      expect(shouldShowPrimaryRunAction(workflowForRoute(AppRoute.LIVE_SKELETON.name))).assertFalse();
-      expect(shouldShowPrimaryRunAction(workflowForRoute(AppRoute.SEGMENTATION_STILL.name))).assertFalse();
-      expect(shouldShowPrimaryRunAction(workflowForRoute(AppRoute.SEGMENTATION_LIVE.name))).assertFalse();
-      expect(shouldShowPrimaryRunAction(workflowForRoute(AppRoute.PORTRAIT_SEGMENTATION.name))).assertFalse();
-      expect(shouldShowPrimaryRunAction(workflowForRoute(AppRoute.IMAGE_CAMERA.name))).assertFalse();
-      expect(shouldShowPrimaryRunAction(workflowForRoute(AppRoute.GESTURE_STILL.name))).assertFalse();
-      expect(shouldShowPrimaryRunAction(workflowForRoute(AppRoute.GESTURE_LIVE.name))).assertFalse();
-      expect(shouldShowPrimaryRunAction(workflowForRoute(AppRoute.SCENE_STILL.name))).assertFalse();
-      expect(shouldShowPrimaryRunAction(workflowForRoute(AppRoute.SCENE_LIVE.name))).assertFalse();
-      expect(shouldShowPrimaryRunAction(workflowForRoute(AppRoute.TEXT_RECOGNITION.name))).assertFalse();
-      expect(shouldShowPrimaryRunAction(workflowForRoute(AppRoute.OBJECT_PHOTO.name))).assertFalse();
-      expect(shouldShowPrimaryRunAction(workflowForRoute(AppRoute.OBJECT_CAMERA.name))).assertFalse();
-      expect(shouldShowPrimaryRunAction(workflowForRoute(AppRoute.STYLE_TRANSFER.name))).assertFalse();
+      const expectedRouteNames: Array<string> = [
+        AppRoute.POSENET.name,
+        AppRoute.LIVE_SKELETON.name,
+        AppRoute.SEGMENTATION_STILL.name,
+        AppRoute.SEGMENTATION_LIVE.name,
+        AppRoute.PORTRAIT_SEGMENTATION.name,
+        AppRoute.IMAGE_CAMERA.name,
+        AppRoute.GESTURE_STILL.name,
+        AppRoute.GESTURE_LIVE.name,
+        AppRoute.SCENE_STILL.name,
+        AppRoute.SCENE_LIVE.name,
+        AppRoute.TEXT_RECOGNITION.name,
+        AppRoute.TEXT_TRANSLATION.name,
+        AppRoute.OBJECT_PHOTO.name,
+        AppRoute.OBJECT_CAMERA.name,
+        AppRoute.STYLE_TRANSFER.name,
+        AppRoute.CUSTOM_MODEL.name
+      ];
+      const manualRouteNames: Array<string> = [
+        AppRoute.POSENET.name,
+        AppRoute.TEXT_TRANSLATION.name,
+        AppRoute.CUSTOM_MODEL.name
+      ];
+
+      expect(featureWorkflows.length).assertEqual(expectedRouteNames.length);
+      expectedRouteNames.forEach((routeName: string) => {
+        expect(featureWorkflows.filter((workflow: FeatureWorkflow) => workflow.routeName === routeName).length)
+          .assertEqual(1);
+      });
+      featureWorkflows.forEach((workflow: FeatureWorkflow) => {
+        expect(expectedRouteNames.indexOf(workflow.routeName) >= 0).assertTrue();
+        expect(shouldShowPrimaryRunAction(workflow))
+          .assertEqual(manualRouteNames.indexOf(workflow.routeName) >= 0);
+      });
       expect(shouldShowPrimaryRunAction(undefined)).assertFalse();
     });
 
