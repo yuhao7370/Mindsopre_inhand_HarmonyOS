@@ -120,39 +120,23 @@ Current HarmonyOS behavior:
 ## Gesture Recognition
 
 Android source uses HMS ML Kit `MLGestureAnalyzer` for still and live hand
-gesture recognition. The local HarmonyOS SDK exports `@kit.CoreVisionKit`
-capabilities for OCR, face, object detection, subject segmentation, and
-skeleton detection, but it does not expose an equivalent hand gesture or hand
-landmark API.
-
-Local verification on 2026-07-12:
-
-- `C:\Program Files\Huawei\DevEco Studio\sdk\default\hms\ets\kits\@kit.CoreVisionKit.d.ts`
-  exports `textRecognition`, `faceDetector`, `faceComparator`,
-  `subjectSegmentation`, `visionBase`, `objectDetection`, and
-  `skeletonDetection`; no hand gesture export is present.
-- Exact SDK searches for `handgesture`, `handGesture`, `MLGesture`,
-  `gestureRecognition`, `hand gesture`, and `gesture recogn` under the local
-  HMS SDK did not find a usable ArkTS or native hand gesture recognition API.
-  The only local `hand*` SDK hits are stylus handwrite and network handover
-  APIs, which are unrelated to camera hand gesture recognition.
-- The HarmonyOS project currently bundles `mobilenetv2.ms`,
-  `resnet18-place365.ms`, `ssd.ms`, `style_predict_quant.ms`, and
-  `style_transfer_quant.ms`. None is a hand gesture detector/classifier. The
-  cloned Android source does not include a `.ms`, `.om`, `.tflite`, `.task`, or
-  `.mindir` gesture model asset to copy across.
-- Huawei's current public Core Vision Kit guide lists OCR, face detection,
-  face verification, subject segmentation, multi-object detection, and skeleton
-  detection. Huawei ML Kit still documents hand gesture recognition on the
-  Android HMS path, so a future equivalent HarmonyOS implementation needs
-  either a Harmony SDK hand gesture export or a separately supplied/converted
-  local model. MindSpore Lite can run `.ms` models and convert some
-  third-party framework models to `.ms`, but no trustworthy ready-made
-  Android-`MLGesture`-compatible `.ms` model is bundled with this project.
+gesture recognition. HarmonyOS does not expose the same ArkTS API, so the port
+packages and runs the exact model from the official HMS gesture-model AAR.
 
 Current HarmonyOS behavior:
 
-- `Gesture Recognition` keeps the Android route and entry available.
+- `GestureDetector.ms` from
+  `com.huawei.hms:ml-computer-vision-gesture-model:2.1.0.300` is packaged with
+  its pinned size and SHA-256. Despite its suffix, it is an MNN FlatBuffer, not
+  a MindSpore Lite model.
+- The production runtime loads the model through the bundled MNN shared
+  library and the narrow C++/NAPI `libgesture_mnn.so` session, then applies the
+  HMS-compatible preprocessing, YOLOv3 decode, confidence thresholds, NMS,
+  and Android gesture-category mapping.
+- The real local runner is the production default for both the still route and
+  the shared live-camera loop; it is no longer an unavailable/injected-runner
+  placeholder. The still flow runs after album or camera input, and the live
+  flow refreshes detections and bounding boxes on the camera preview.
 - The still gesture route exposes the Android-style Real-time action and
   auto-runs gesture analysis after album or camera image input is ready.
 - HMS still-image workflows that used Android's `btn_photo`/`btn_camera` now
@@ -164,10 +148,8 @@ Current HarmonyOS behavior:
 - The still Gesture and still Scene pages use Android's original image/camera/
   real-time prompt as their top runtime summary, while their live routes keep
   the generic feature summary.
-- The production runtime does not construct the bundled MobileNetV2/ImageNet
-  classifier as a gesture detector. Without an authorized gesture runner it
-  reports `feature_runtime_gesture_runner_unavailable` before loading ImageNet
-  labels or attempting inference; this also removes the former `mitten` false
+- The production runtime does not substitute the bundled MobileNetV2/ImageNet
+  classifier for this gesture model, avoiding the former `mitten` false
   positive.
 - Explicit hand/gesture aliases such as `boxing_glove`, `thumb_up`, `fist`,
   `heart`, and `ok_gesture` remain available only when an injected or future
@@ -186,25 +168,14 @@ Current HarmonyOS behavior:
 - An injected gesture score runner can return up to three distinct mapped
   Android gesture categories per run, preserving the score threshold and
   category de-duplication.
-- A dedicated `AndroidGestureModelRunner` adapter now defines the future local
-  model contract for Android `MLGesture`-style category, score, and optional
-  rectangle output. This keeps the service/UI boundary ready for a real
-  HarmonyOS gesture model without changing the current fallback behavior.
+- `AndroidGestureModelRunner` preserves the Android `MLGesture`-style category,
+  score, and optional-rectangle service contract around the local MNN detector.
 - Gesture label matching intentionally uses stable English model labels
   internally even on Chinese devices.
-- API 24's phone-capable `CoreVisionKit` surface has no hand gesture or hand
-  landmark detector. Real gesture parity is therefore blocked on an externally
-  supplied and authorized gesture model/runner plus validation on a HarmonyOS
-  phone; host tests can verify the adapter and false-positive rejection, but
-  cannot establish camera inference parity.
-- A real gesture runner can still be injected through the existing runtime
-  boundary and retains the Android-style success/failure result contract.
-- The live gesture route participates in the shared HarmonyOS live camera loop.
-  An injected gesture runner refreshes at the 500ms fast-live cadence; without
-  one, the same explicit unavailable status is returned for captured frames.
-- Live gesture detections with bounding rectangles are drawn directly over the
-  HarmonyOS camera preview, reusing the still-image gesture overlay renderer to
-  mirror Android's `HandGestureGraphic` behavior.
+- Host guards and tests cover provenance, preprocessing, tensor contracts,
+  decoding, and fixture wiring. Real-image accuracy, phone performance, and
+  device stability have not been validated; `GestureNative.test.ets` requires
+  a device or emulator and has only been compiled into the test HAP here.
 
 ## Text Recognition
 
@@ -253,50 +224,56 @@ Current HarmonyOS behavior:
 ## Text Translation
 
 Android source uses HMS ML Kit cloud translation through `MLRemoteTranslator`.
-The local HarmonyOS SDK has Natural Language text processing and AI Caption
-APIs, but no direct text translation API matching the Android flow of typed
-text or OCR text to translated text.
+The HarmonyOS port replaces that cloud call with a packaged local translation
+runtime for typed text and OCR text.
 
 Current HarmonyOS behavior:
 
-- Text extraction uses HarmonyOS OCR.
-- Text translation keeps the Android route and entry available.
+- Text translation keeps the Android route and the same typed-text, camera, and
+  album-photo inputs. Camera and album inputs use HarmonyOS OCR, then pass the
+  recognized text through the same local runner as typed input.
 - The page exposes exactly the three Android inputs: typed text, camera capture,
   and album photo. It does not expose the generic shared live-camera translation
   input; the obsolete `liveCamera` input kind and its translation-only runtime
   branches have been removed, so Camera always follows the normal still-image
   OCR flow on this page.
 - The production runtime constructs `MindSporeLiteTranslationRunner` for both
-  typed text and OCR output. Both inputs share the same loaded runner and keep
-  Android's default target-language rule (`zh` text translates to `en`, other
-  text translates to `zh`).
+  typed text and OCR output. Both inputs share the same cached model bundle and
+  keep Android's default target-language rule (`zh` text translates to `en`,
+  other text translates to `zh`).
 - `LocalTextTranslationRunner` remains available only through explicit
   legacy/demo test injection. It is no longer an implicit `DefaultAiService` or
   runtime-factory fallback, so production does not substitute a finite
   dictionary for arbitrary input.
+- The packaged model set is one verified `translation-models.tar.xz` containing
+  `encoder.ms`, `decoder_prefill.ms`, and `decoder_step.ms`, accompanied by the
+  SentencePiece/tokenizer runtime files, vocabulary, manifest, hashes, and
+  license evidence. A narrow native XZ/TAR extractor validates and caches those
+  three graphs in app-private storage before MindSpore Lite opens them.
+- ArkTS performs tokenization and encoder -> prefill -> step inference, chooses
+  tokens with deterministic greedy decoding, and carries the decoder self/cross
+  KV cache between steps. The native archive utility does not perform ML
+  inference.
 - Successful local-model results use the normal Android-compatible completion
   message and expose `runtimeSource=localModel`. The copy action returns the
   translated text, and source/translated newlines remain exact through typed
   and OCR flows.
-- The translation workflow no longer requests Internet. The application-level
-  Internet declaration remains for unrelated web/help and resource features.
-- The final bilingual archive, runtime manifest, and tokenizer assets are not
-  checked in at this checkpoint. Production requests therefore report the
-  normal model translation failure while preserving source text; they do not
-  crash, call a cloud service, or fall back to the demo dictionary.
+- The translation workflow requests only camera/media permissions and never
+  requests Internet or calls a network translation service. The application-
+  level Internet declaration remains for unrelated web/help and resource
+  features.
 - Blank typed text and blank OCR output are treated as missing or failed input
   instead of successful empty translation/recognition results.
 - Image-based translation only exposes the result snapshot save action after a
   translated-text row exists. Model failures preserve the OCR source text for
   copying but do not create a misleading translated snapshot.
-- In the API 24 phone SDK, `CoreVisionKit` can supply OCR but not translation;
-  `NaturalLanguageKit` does not expose a general typed/OCR text translation API;
-  and `DataAugmentationKit`'s available capability is not a replacement for the
-  Android `MLRemoteTranslator` flow. Host tests use injected runners or model
-  sessions and do not establish real offline translation quality, latency, or
-  device inference. The HAP model-package guard and target inference tests stay
-  deferred until the final verified assets exist; enabling that guard now
-  would correctly reject the asset-incomplete package.
+- Package, host, and tensor-session checks do not promote this model beyond its
+  recorded limitations: `manual-quality-gate-not-passed`,
+  `local-learning-only-not-production-approved`, and device-not-validated
+  (`device-functionality-not-validated` in the authorization manifest).
+  `productionPromotionAllowed` remains `false`. Real translation quality,
+  latency, memory use, and device stability remain unverified, and
+  `TranslationNative.test.ets` has only been compiled into the test HAP here.
 
 ## Model File Overrides
 
@@ -448,8 +425,13 @@ Current HarmonyOS behavior:
 
 ## Build, Signing, And Device Verification Boundary
 
-- Host-side dependency resolution, Hypium tests, static/model guards, and HAP
-  assembly are verifiable with the checked-in toolchain configuration.
+- Hypium host tests are runnable on the workstation.
+- Python model and package tests are runnable on the workstation.
+- The main and `ohosTest` HAPs are assembled and structurally inspected on the
+  workstation, including the main-package asset/native-library guard and the
+  main/test pairing guard.
+- `GestureNative.test.ets` and `TranslationNative.test.ets` are compiled into
+  the `ohosTest` HAP, but are not executed without a device or emulator.
 - The current build artifact is an unsigned HAP. It cannot be used as evidence
   of successful phone installation or launch until DevEco-supported signing is
   configured without committing private keys.

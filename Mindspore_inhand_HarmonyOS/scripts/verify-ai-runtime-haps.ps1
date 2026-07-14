@@ -53,7 +53,9 @@ if ($OhosTestHapPath) {
   $testHapEntries = @(Get-HapEntries $OhosTestHapPath)
   Assert-ExactEntries $testHapEntries $testRequired 'ohosTest HAP'
 
-  $copiedModels = @($testHapEntries | Where-Object { $_.StartsWith('resources/rawfile/models/') })
+  $copiedModels = @($testHapEntries | Where-Object {
+    $_.StartsWith('resources/rawfile/model/') -or $_.StartsWith('resources/rawfile/models/')
+  })
   if ($copiedModels.Count -ne 0) {
     throw "ohosTest HAP contains copied models: $($copiedModels -join ', ')"
   }

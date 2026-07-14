@@ -40,6 +40,7 @@
         "buildOption": {
           "resOptions": {
             "ignoreResourcePattern": [
+              "*.ms",
               "GestureDetector.ms",
               "manifest.json",
               "NOTICE.md",

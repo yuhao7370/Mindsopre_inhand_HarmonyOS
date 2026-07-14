@@ -115,6 +115,14 @@ try {
   New-HapFixture $copiedModelHap $copiedModelFiles
   Assert-GuardRejects 'copied model in test HAP' $mainHap $copiedModelHap
 
+  $copiedAppModelHap = Join-Path $tempRoot 'copied-app-model.hap'
+  $copiedAppModelFiles = New-FileMap $testEntries
+  $copiedAppModelFiles['module.json'] = $testModule
+  $copiedAppModelFiles['pack.info'] = $testPack
+  $copiedAppModelFiles['resources/rawfile/model/ssd.ms'] = 'fixture'
+  New-HapFixture $copiedAppModelHap $copiedAppModelFiles
+  Assert-GuardRejects 'copied app model in test HAP' $mainHap $copiedAppModelHap
+
   Write-Host 'HAP guard contract tests passed.'
 } finally {
   Remove-Item -LiteralPath $tempRoot -Recurse -Force -ErrorAction SilentlyContinue
