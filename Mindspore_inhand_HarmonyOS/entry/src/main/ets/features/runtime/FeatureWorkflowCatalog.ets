@@ -467,16 +467,22 @@ export function shouldShowCopyTextAction(aiMethod: string): boolean {
 
 export function shouldShowResultSaveAction(
   workflow: FeatureWorkflow | undefined,
-  resultImageReady: boolean
+  _resultImageReady: boolean
 ): boolean {
-  if (workflow?.aiMethod === 'translateText') {
-    return false;
-  }
-  if (resultImageReady) {
-    return true;
-  }
   return workflow?.routeName === AppRoute.STYLE_TRANSFER.name ||
     workflow?.routeName === AppRoute.SEGMENTATION_STILL.name;
+}
+
+export function shouldShowStandaloneSegmentationForegroundPreview(
+  workflow: FeatureWorkflow | undefined
+): boolean {
+  return workflow?.routeName === AppRoute.SEGMENTATION_STILL.name;
+}
+
+export function shouldShowCompositeSegmentationSaveAction(
+  workflow: FeatureWorkflow | undefined
+): boolean {
+  return workflow?.routeName === AppRoute.PORTRAIT_SEGMENTATION.name;
 }
 
 export function shouldShowLiveGestureCameraOverlay(workflow: FeatureWorkflow | undefined): boolean {

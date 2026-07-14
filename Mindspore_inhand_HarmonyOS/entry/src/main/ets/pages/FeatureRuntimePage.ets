@@ -35,6 +35,7 @@ import {
   shouldMirrorSegmentationForeground,
   shouldMirrorLiveGestureCameraOverlay,
   shouldShowCopyTextAction,
+  shouldShowCompositeSegmentationSaveAction,
   shouldShowLiveClassificationCameraOverlay,
   liveClassificationEmptyPromptKey,
   shouldShowLiveGestureCameraOverlay,
@@ -45,6 +46,7 @@ import {
   shouldShowLiveSegmentationCameraOverlay,
   shouldRenderLiveCameraPreview,
   shouldShowResultSaveAction,
+  shouldShowStandaloneSegmentationForegroundPreview,
   shouldShowStyleRecoveryControl,
   shouldShowStyleTransferStyledPreview,
   shouldUseLongTextInput,
@@ -2800,7 +2802,8 @@ struct FeatureRuntimePage {
           if (this.gestureImageUri.length > 0 && this.visibleGestureDetections().length > 0) {
             this.gesturePreview('feature_runtime_result_gesture_overlay', this.gestureImageUri)
           }
-          if (this.segmentationForegroundPixelMap !== undefined) {
+          if (this.segmentationForegroundPixelMap !== undefined &&
+            shouldShowStandaloneSegmentationForegroundPreview(workflowForRoute(this.routeName))) {
             this.pixelMapPreview('feature_runtime_result_foreground', this.segmentationForegroundPixelMap)
           }
           if (shouldShowResultSaveAction(workflowForRoute(this.routeName),
@@ -2810,7 +2813,9 @@ struct FeatureRuntimePage {
           }
           if (this.shouldShowSegmentationBackgroundPreview() && this.segmentationForegroundPixelMap !== undefined) {
             this.segmentationBackgroundReplacementPreview(this.segmentationForegroundPixelMap)
-            this.resultComponentImageSaveControl(segmentationBackgroundReplacementComponentId)
+            if (shouldShowCompositeSegmentationSaveAction(workflowForRoute(this.routeName))) {
+              this.resultComponentImageSaveControl(segmentationBackgroundReplacementComponentId)
+            }
           }
           if (this.segmentationImageUri.length > 0 && this.segmentationRectangles.length > 0) {
             this.segmentationPreview('feature_runtime_result_segmentation_overlay', this.segmentationImageUri)

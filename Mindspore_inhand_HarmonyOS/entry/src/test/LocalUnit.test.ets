@@ -368,7 +368,9 @@ import {
   shouldKeepScreenOnForWorkflow,
   shouldMirrorLiveGestureCameraOverlay,
   shouldShowCopyTextAction,
+  shouldShowCompositeSegmentationSaveAction,
   shouldShowResultSaveAction,
+  shouldShowStandaloneSegmentationForegroundPreview,
   shouldShowLiveClassificationCameraOverlay,
   shouldShowLiveGestureCameraOverlay,
   shouldShowLiveObjectDetectionCameraOverlay,
@@ -3499,11 +3501,13 @@ export default function localUnitTest() {
       expect(shouldUseLongTextResultRow(customModel.aiMethod, 'feature_runtime_result_output')).assertTrue();
     });
 
-    it('keepsAndroidSaveActionReachableBeforeProcessedImagesExist', 0, () => {
+    it('showsDirectResultSaveOnlyForAndroidStillImageResultRoutes', 0, () => {
       const styleTransfer: FeatureWorkflow = workflowForRoute(AppRoute.STYLE_TRANSFER.name)!;
       const segmentationStill: FeatureWorkflow = workflowForRoute(AppRoute.SEGMENTATION_STILL.name)!;
+      const segmentationLive: FeatureWorkflow = workflowForRoute(AppRoute.SEGMENTATION_LIVE.name)!;
       const portraitSegmentation: FeatureWorkflow = workflowForRoute(AppRoute.PORTRAIT_SEGMENTATION.name)!;
       const textRecognition: FeatureWorkflow = workflowForRoute(AppRoute.TEXT_RECOGNITION.name)!;
+      const textTranslation: FeatureWorkflow = workflowForRoute(AppRoute.TEXT_TRANSLATION.name)!;
       const objectPhoto: FeatureWorkflow = workflowForRoute(AppRoute.OBJECT_PHOTO.name)!;
       const classification: FeatureWorkflow = workflowForRoute(AppRoute.IMAGE_CAMERA.name)!;
 
@@ -3512,10 +3516,19 @@ export default function localUnitTest() {
       expect(shouldShowResultSaveAction(segmentationStill, false)).assertTrue();
       expect(shouldShowResultSaveAction(segmentationStill, true)).assertTrue();
       expect(shouldShowResultSaveAction(portraitSegmentation, false)).assertFalse();
-      expect(shouldShowResultSaveAction(portraitSegmentation, true)).assertTrue();
+      expect(shouldShowResultSaveAction(portraitSegmentation, true)).assertFalse();
+      expect(shouldShowResultSaveAction(segmentationLive, false)).assertFalse();
+      expect(shouldShowResultSaveAction(segmentationLive, true)).assertFalse();
       expect(shouldShowResultSaveAction(textRecognition, false)).assertFalse();
+      expect(shouldShowResultSaveAction(textRecognition, true)).assertFalse();
+      expect(shouldShowResultSaveAction(textTranslation, false)).assertFalse();
+      expect(shouldShowResultSaveAction(textTranslation, true)).assertFalse();
       expect(shouldShowResultSaveAction(objectPhoto, false)).assertFalse();
+      expect(shouldShowResultSaveAction(objectPhoto, true)).assertFalse();
       expect(shouldShowResultSaveAction(classification, false)).assertFalse();
+      expect(shouldShowResultSaveAction(classification, true)).assertFalse();
+      expect(shouldShowResultSaveAction(undefined, false)).assertFalse();
+      expect(shouldShowResultSaveAction(undefined, true)).assertFalse();
     });
 
     it('keepsAndroidTranslationCopyWithoutResultImageSave', 0, () => {
@@ -3524,6 +3537,30 @@ export default function localUnitTest() {
       expect(shouldShowCopyTextAction('translateText')).assertTrue();
       expect(shouldShowResultSaveAction(textTranslation, false)).assertFalse();
       expect(shouldShowResultSaveAction(textTranslation, true)).assertFalse();
+    });
+
+    it('showsStandaloneSegmentationForegroundOnlyForAndroidStillResult', 0, () => {
+      expect(shouldShowStandaloneSegmentationForegroundPreview(
+        workflowForRoute(AppRoute.SEGMENTATION_STILL.name))).assertTrue();
+      expect(shouldShowStandaloneSegmentationForegroundPreview(
+        workflowForRoute(AppRoute.SEGMENTATION_LIVE.name))).assertFalse();
+      expect(shouldShowStandaloneSegmentationForegroundPreview(
+        workflowForRoute(AppRoute.PORTRAIT_SEGMENTATION.name))).assertFalse();
+      expect(shouldShowStandaloneSegmentationForegroundPreview(
+        workflowForRoute(AppRoute.STYLE_TRANSFER.name))).assertFalse();
+      expect(shouldShowStandaloneSegmentationForegroundPreview(undefined)).assertFalse();
+    });
+
+    it('showsCompositeSegmentationSaveOnlyForAndroidPortraitResult', 0, () => {
+      expect(shouldShowCompositeSegmentationSaveAction(
+        workflowForRoute(AppRoute.PORTRAIT_SEGMENTATION.name))).assertTrue();
+      expect(shouldShowCompositeSegmentationSaveAction(
+        workflowForRoute(AppRoute.SEGMENTATION_STILL.name))).assertFalse();
+      expect(shouldShowCompositeSegmentationSaveAction(
+        workflowForRoute(AppRoute.SEGMENTATION_LIVE.name))).assertFalse();
+      expect(shouldShowCompositeSegmentationSaveAction(
+        workflowForRoute(AppRoute.STYLE_TRANSFER.name))).assertFalse();
+      expect(shouldShowCompositeSegmentationSaveAction(undefined)).assertFalse();
     });
 
     it('mirrorsOnlyAndroidPortraitForegroundForFrontCamera', 0, () => {
