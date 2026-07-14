@@ -1,7 +1,8 @@
 import { FeatureItem } from '../data/FeatureCatalog';
+import { experienceGridCardHeightVp } from '../data/ExperienceLayoutSpec';
 import { iconLabel, iconMediaResource } from '../icons/IconSymbols';
 import { appString } from '../i18n/AppStrings';
-import { AppColor, AppRadius } from '../theme/AppTheme';
+import { AppColor } from '../theme/AppTheme';
 
 const DEFAULT_FEATURE_ITEM: FeatureItem = {
   id: '',
@@ -21,22 +22,22 @@ export struct FeatureCard {
   private iconView() {
     if (iconMediaResource(this.item.icon) !== undefined) {
       Image(iconMediaResource(this.item.icon) as Resource)
-        .width(32)
-        .height(32)
+        .width(28)
+        .height(22)
         .objectFit(ImageFit.Contain)
-        .margin({ right: 8 })
+        .margin({ right: 5 })
     } else {
       Text(iconLabel(this.item.icon))
-        .fontSize(13)
+        .fontSize(11)
         .fontWeight(FontWeight.Bold)
         .fontColor(Color.White)
-        .width(32)
-        .height(32)
+        .width(28)
+        .height(22)
         .backgroundColor(AppColor.accent)
-        .borderRadius(16)
+        .borderRadius(11)
         .textAlign(TextAlign.Center)
         .maxLines(1)
-        .margin({ right: 8 })
+        .margin({ right: 5 })
     }
   }
 
@@ -44,9 +45,9 @@ export struct FeatureCard {
     Row() {
       this.iconView()
       Text(appString(this.item.titleKey))
-        .fontSize(14)
-        .fontColor(AppColor.textPrimary)
-        .fontWeight(FontWeight.Medium)
+        .fontSize(12)
+        .fontColor('#333333')
+        .fontWeight(FontWeight.Normal)
         .layoutWeight(1)
         .maxLines(1)
       if (this.item.badge || this.item.badgeKey) {
@@ -56,10 +57,11 @@ export struct FeatureCard {
           .fontStyle(FontStyle.Italic)
       }
     }
-    .height(58)
-    .padding({ left: 10, right: 10 })
-    .backgroundColor(AppColor.cardBackground)
-    .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
+    .width('100%')
+    .height(experienceGridCardHeightVp)
+    .padding({ left: 4, right: 4 })
+    .backgroundColor(Color.Transparent)
+    .border({ width: 1, color: '#E6E6E6', radius: 5 })
     .onClick(() => this.action(this.item))
   }
 }

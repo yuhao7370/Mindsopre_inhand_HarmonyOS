@@ -458,6 +458,14 @@ import {
   experienceHeaderHeightVp
 } from '../main/ets/common/data/ExperienceHeaderBranding';
 import {
+  experienceGridCardHeightVp,
+  experienceGridColumnCount,
+  experienceGridColumnGapVp,
+  experienceGridHeightVp,
+  experienceGridRowGapVp,
+  experienceGridSideInsetVp
+} from '../main/ets/common/data/ExperienceLayoutSpec';
+import {
   inputActionForKind,
   modelFileSuffixFilters,
   runtimeInputActionForWorkflowInput,
@@ -2165,6 +2173,21 @@ export default function localUnitTest() {
 
     it('usesAndroidExperienceHeaderHeight', 0, () => {
       expect(experienceHeaderHeightVp).assertEqual(160);
+    });
+
+    it('usesAndroidExperienceTwoColumnGridGeometry', 0, () => {
+      expect(experienceGridColumnCount).assertEqual(2);
+      expect(experienceGridCardHeightVp).assertEqual(50);
+      expect(experienceGridRowGapVp).assertEqual(17);
+      expect(experienceGridSideInsetVp).assertEqual(18);
+      expect(experienceGridColumnGapVp).assertEqual(8);
+      expect(experienceGridHeightVp(-1)).assertEqual(0);
+      expect(experienceGridHeightVp(0)).assertEqual(0);
+      expect(experienceGridHeightVp(1)).assertEqual(50);
+      expect(experienceGridHeightVp(2)).assertEqual(50);
+      expect(experienceGridHeightVp(3)).assertEqual(117);
+      expect(experienceGridHeightVp(4)).assertEqual(117);
+      expect(experienceGridHeightVp(5)).assertEqual(184);
     });
 
     it('formatsAppVersionNameLikeAndroidPackageInfo', 0, () => {
