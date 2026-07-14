@@ -6,6 +6,7 @@ import {
   configureTranslationTokenizerForTests,
   decodeTranslationTokens,
   encodeTranslationText,
+  resetTranslationTokenizerForTests,
   translationTargetLanguageForText
 } from '../main/ets/services/ai/TinyTranslationTokenizer';
 import {
@@ -880,9 +881,29 @@ export default function translationModelUnitTest(): void {
       expect(fresh.closeCalls).assertEqual(0);
     });
 
+    it('loadsTheProductionBundleBeforeEncodingConfiguresTheTokenizer', 0, async () => {
+      resetTranslationModelCacheForTests();
+      resetTranslationTokenizerForTests();
+      let loadCalls = 0;
+      const session = new FakeTranslationSession([12249, 0]);
+      const runner = new MindSporeLiteTranslationRunner({
+        bundleFactory: async (): Promise<TranslationModelBundle> => {
+          loadCalls++;
+          configureTranslationTokenizerForTests(TOKENIZER_RUNTIME_FIXTURE);
+          return bundleFor(session);
+        }
+      });
+
+      const result = await runner.translate('hello', 'zh');
+
+      expect(loadCalls).assertEqual(1);
+      expect(result.ok).assertTrue();
+      expect(result.runtimeSource).assertEqual('localModel');
+    });
+
     it('productionLoaderFailsHonestlyWhenFinalAssetsAreMissing', 0, async () => {
       resetTranslationModelCacheForTests();
-      configureTranslationTokenizerForTests(TOKENIZER_RUNTIME_FIXTURE);
+      resetTranslationTokenizerForTests();
       const runner = new MindSporeLiteTranslationRunner({
         bundleFactory: productionTranslationModelBundleFactory({
           resourceManager: new MissingTranslationResources(),

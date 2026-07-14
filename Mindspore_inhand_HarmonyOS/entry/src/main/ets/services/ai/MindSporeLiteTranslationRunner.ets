@@ -109,11 +109,13 @@ export class MindSporeLiteTranslationRunner implements TextTranslationRunner {
       return failedTranslation(text, targetLanguage);
     }
     try {
+      // The production bundle loads and validates tokenizer_runtime.json. It must
+      // be ready before the first call to encodeTranslationText().
+      const bundle = await cachedTranslationBundle(this.bundleFactory);
       const chunks = encodeTranslationText(text, targetLanguage);
       if (chunks.length === 0) {
         return failedTranslation(text, targetLanguage);
       }
-      const bundle = await cachedTranslationBundle(this.bundleFactory);
       return await bundle.requestQueue.runExclusive(async (): Promise<TextTranslationResult> => {
         return await translateChunks(bundle, chunks, text, targetLanguage);
       });
