@@ -23,6 +23,21 @@ FLORES_REVISION = "b3a5298db5721c8a682e7ef00a37fcc9ab522757"
 FLORES_PATHS = {"devtest/cmn_Hans.jsonl", "devtest/eng_Latn.jsonl"}
 PYTORCH_ONNX_MAX_ABS = 0.03
 DECODER_PYTORCH_ONNX_MAX_ABS = 0.03
+LOCAL_LEARNING_LIMITATIONS = (
+    "manual-quality-gate-not-passed",
+    "flores-plus-access-gated",
+    "local-learning-only-not-production-approved",
+    "device-functionality-not-validated",
+)
+LOCAL_LEARNING_USER_AUTHORIZATION = {
+    "purpose": "local-learning",
+    "repositoryVisibility": "private",
+    "modelCommitAllowed": True,
+}
+V5_EVALUATOR_CODE_SHA256 = "e331e9bed826c3b8c94f8db4c5e74d0a67a09957769994547908626d7db39971"
+V5_EVALUATION_REPORT_SHA256 = "5999214747b78cf23d1895acb7dc479f786fb982810c1b69a807e6a4d9003b2c"
+V5_EVALUATION_MANIFEST_SHA256 = "651da63181c1bbfed7a3dccabf1734d838fd0d857cd5d0850de01890d7592b39"
+V5_EVALUATION_BUDGET_SHA256 = "bc1f9d8fad59530b4f47ceb054b9dab22e4c33877d2255dbf5bd27d8400a7f14"
 
 
 class ContractError(RuntimeError):
@@ -70,6 +85,334 @@ def _valid_artifact(value: object) -> bool:
         and isinstance(value["sha256"], str)
         and len(value["sha256"]) == 64
     )
+
+
+def _valid_row_artifact(value: object, rows: int) -> bool:
+    return (
+        isinstance(value, dict)
+        and set(value) == {"path", "bytes", "sha256", "rows"}
+        and value.get("rows") == rows
+        and _valid_artifact({name: value[name] for name in ("path", "bytes", "sha256")})
+    )
+
+
+def _require_artifact(path: Path, expected: dict, label: str, rows: Optional[int] = None) -> None:
+    path = Path(path).resolve()
+    valid = _valid_artifact(expected) if rows is None else _valid_row_artifact(expected, rows)
+    actual = _file_artifact(path) if path.is_file() and not path.is_symlink() else None
+    if rows is not None and actual is not None:
+        actual["rows"] = rows
+    if not valid or actual != expected:
+        raise ContractError(f"{label} artifact differs")
+
+
+def load_budget_evidence(path: Path, supporting_evidence_paths=()):
+    from tools.translation.diagnose_translation import load_budget_evidence as load
+
+    return load(path, supporting_evidence_paths)
+
+
+def _native_number(value: object) -> bool:
+    return type(value) in (int, float) and math.isfinite(float(value))
+
+
+def _validate_local_learning_approval_record(approval: object) -> bool:
+    if not isinstance(approval, dict) or set(approval) != {
+        "releaseChannel", "productionPromotionAllowed", "userAuthorization",
+        "limitations", "candidate", "candidateGlobalStep", "candidateAdamWStep",
+        "evaluatorCodeSha256", "authorizationReport", "v5Terminal",
+        "evaluationReport", "evaluationManifest", "budgetReceipt",
+    }:
+        return False
+    candidate = approval.get("candidate")
+    return (
+        approval.get("releaseChannel") == "local-learning"
+        and approval.get("productionPromotionAllowed") is False
+        and approval.get("userAuthorization") == LOCAL_LEARNING_USER_AUTHORIZATION
+        and approval.get("limitations") == list(LOCAL_LEARNING_LIMITATIONS)
+        and isinstance(candidate, dict)
+        and set(candidate) == {"model_sha256", "tokenizer_sha256"}
+        and all(
+            isinstance(value, str)
+            and len(value) == 64
+            and all(character in "0123456789abcdef" for character in value)
+            for value in candidate.values()
+        )
+        and type(approval.get("candidateGlobalStep")) is int
+        and approval["candidateGlobalStep"] > 0
+        and type(approval.get("candidateAdamWStep")) is int
+        and approval["candidateAdamWStep"] > 0
+        and approval.get("evaluatorCodeSha256") == V5_EVALUATOR_CODE_SHA256
+        and approval.get("evaluationReport", {}).get("sha256") == V5_EVALUATION_REPORT_SHA256
+        and approval.get("evaluationManifest", {}).get("sha256") == V5_EVALUATION_MANIFEST_SHA256
+        and approval.get("budgetReceipt", {}).get("sha256") == V5_EVALUATION_BUDGET_SHA256
+        and all(
+            _valid_artifact(approval.get(name))
+            for name in (
+                "authorizationReport", "v5Terminal", "evaluationReport",
+                "evaluationManifest", "budgetReceipt",
+            )
+        )
+    )
+
+
+def validate_local_learning_authorization(
+    checkpoint: Optional[Path],
+    authorization_report_path: Path,
+    v5_terminal_path: Path,
+    evaluation_report_path: Path,
+    evaluation_manifest_path: Path,
+    budget_receipt_path: Path,
+    budget_supporting_evidence=(),
+) -> dict:
+    checkpoint = Path(checkpoint).resolve() if checkpoint is not None else None
+    authorization_report_path = Path(authorization_report_path).resolve()
+    v5_terminal_path = Path(v5_terminal_path).resolve()
+    evaluation_report_path = Path(evaluation_report_path).resolve()
+    evaluation_manifest_path = Path(evaluation_manifest_path).resolve()
+    budget_receipt_path = Path(budget_receipt_path).resolve()
+    supporting = tuple(Path(path).resolve() for path in budget_supporting_evidence)
+    authorization = _canonical_report(authorization_report_path, "local-learning authorization")
+    expected_authorization_keys = {
+        "schemaVersion", "releaseChannel", "productionPromotionAllowed",
+        "userAuthorization", "limitations", "candidate", "candidateGlobalStep",
+        "candidateAdamWStep", "evaluatorCodeSha256", "v5Terminal",
+        "evaluationReport", "evaluationManifest", "budgetReceipt",
+    }
+    if (
+        set(authorization) != expected_authorization_keys
+        or authorization.get("schemaVersion") != 1
+        or authorization.get("releaseChannel") != "local-learning"
+        or authorization.get("productionPromotionAllowed") is not False
+        or authorization.get("userAuthorization") != LOCAL_LEARNING_USER_AUTHORIZATION
+        or authorization.get("limitations") != list(LOCAL_LEARNING_LIMITATIONS)
+        or authorization.get("evaluatorCodeSha256") != V5_EVALUATOR_CODE_SHA256
+    ):
+        raise ContractError("local-learning authorization cannot grant production promotion")
+    _require_artifact(v5_terminal_path, authorization.get("v5Terminal"), "V5 terminal")
+    _require_artifact(evaluation_report_path, authorization.get("evaluationReport"), "evaluation report")
+    _require_artifact(
+        evaluation_manifest_path, authorization.get("evaluationManifest"), "evaluation manifest"
+    )
+    _require_artifact(budget_receipt_path, authorization.get("budgetReceipt"), "evaluation budget receipt")
+    if (
+        authorization["evaluationReport"]["sha256"] != V5_EVALUATION_REPORT_SHA256
+        or authorization["evaluationManifest"]["sha256"] != V5_EVALUATION_MANIFEST_SHA256
+        or authorization["budgetReceipt"]["sha256"] != V5_EVALUATION_BUDGET_SHA256
+    ):
+        raise ContractError("local-learning release is not bound to the pinned V5 evaluation evidence")
+
+    expected_names = {
+        "base_revision.txt", "config.json", "generation_config.json",
+        "model.safetensors", "selection.json", "tokenizer.model",
+    }
+    terminal = _canonical_report(v5_terminal_path, "V5 terminal")
+    terminal_candidate = terminal.get("candidate")
+    terminal_checkpoint = terminal_candidate.get("checkpoint") if isinstance(terminal_candidate, dict) else None
+    candidate_files = terminal_checkpoint.get("files") if isinstance(terminal_checkpoint, dict) else None
+    if (
+        not isinstance(candidate_files, dict)
+        or set(candidate_files) != expected_names
+        or any(not _valid_artifact(record) or record["path"] != name for name, record in candidate_files.items())
+    ):
+        raise ContractError("local-learning candidate file inventory differs")
+    if checkpoint is not None:
+        try:
+            actual_names = {path.name for path in checkpoint.iterdir() if path.is_file()}
+        except OSError as error:
+            raise ContractError("cannot read local-learning candidate checkpoint") from error
+        actual_files = {name: _file_artifact(checkpoint / name) for name in sorted(expected_names)}
+        if actual_names != expected_names or actual_files != candidate_files:
+            raise ContractError("local-learning candidate file inventory differs")
+    candidate = {
+        "model_sha256": candidate_files["model.safetensors"]["sha256"],
+        "tokenizer_sha256": candidate_files["tokenizer.model"]["sha256"],
+    }
+    if authorization.get("candidate") != candidate:
+        raise ContractError("local-learning authorization candidate differs from checkpoint")
+
+    terminal_step = terminal_candidate.get("globalStep") if isinstance(terminal_candidate, dict) else None
+    terminal_adam = terminal_candidate.get("adamWStep") if isinstance(terminal_candidate, dict) else None
+    if (
+        terminal.get("schema_version") != 1
+        or terminal.get("stage") != "translation_v5_original_bist_continuation"
+        or terminal.get("status") != "completed"
+        or terminal.get("error") is not None
+        or terminal.get("finalGlobalStep") != terminal_step
+        or terminal.get("adamWStep") != terminal_adam
+        or not isinstance(terminal_checkpoint, dict)
+        or terminal_checkpoint.get("path") != "checkpoint"
+        or terminal_checkpoint.get("files") != candidate_files
+        or authorization.get("candidateGlobalStep") != terminal_step
+        or authorization.get("candidateAdamWStep") != terminal_adam
+    ):
+        raise ContractError("completed V5 terminal does not bind the local-learning candidate")
+    terminal_budget = terminal.get("budgetReceipt")
+    if not _valid_artifact(terminal_budget):
+        raise ContractError("V5 terminal budget receipt differs")
+    terminal_budget_path = v5_terminal_path.parent / terminal_budget["path"]
+    _require_artifact(terminal_budget_path, terminal_budget, "V5 terminal budget receipt")
+
+    evaluation = _canonical_report(evaluation_report_path, "V5 candidate evaluation report")
+    expected_evaluation_keys = {
+        "schema_version", "identity", "stage", "status", "checkpoint", "dataset",
+        "bistTest", "manual", "decode", "runtime", "execution", "priorEvidence",
+        "rootEvidence", "gpuLedger", "peakCudaBytes", "artifacts",
+    }
+    evaluation_checkpoint = evaluation.get("checkpoint")
+    dataset = evaluation.get("dataset")
+    manual = evaluation.get("manual")
+    artifacts = evaluation.get("artifacts")
+    selection = evaluation_checkpoint.get("selection") if isinstance(evaluation_checkpoint, dict) else None
+    selection_bytes = _canonical_json_bytes(selection) if isinstance(selection, dict) else b""
+    selection_artifact = {
+        "path": "selection.json",
+        "bytes": len(selection_bytes),
+        "sha256": hashlib.sha256(selection_bytes).hexdigest(),
+    }
+    if (
+        set(evaluation) != expected_evaluation_keys
+        or evaluation.get("schema_version") != 1
+        or evaluation.get("identity") != "v5-final-candidate"
+        or evaluation.get("stage") != "translation_v5_candidate_quality_evaluation"
+        or evaluation.get("status") != "completed"
+        or not isinstance(evaluation_checkpoint, dict)
+        or set(evaluation_checkpoint) != {"globalStep", "adamWStep", "files", "selection"}
+        or evaluation_checkpoint.get("globalStep") != terminal_step
+        or evaluation_checkpoint.get("adamWStep") != terminal_adam
+        or evaluation_checkpoint.get("files") != candidate_files
+        or selection_artifact != candidate_files["selection.json"]
+        or dataset != {
+            "repo": "Mxode/BiST",
+            "revision": "aca6be897afc319f779009379c8b849c1eb8d63e",
+            "testRowsPerDirection": 5000,
+        }
+        or manual != {
+            "rows": 100,
+            "mode": "raw-model-outputs-with-automatic-corruption-flags-only",
+        }
+        or not isinstance(evaluation.get("runtime"), dict)
+        or not evaluation["runtime"]
+        or not isinstance(evaluation.get("execution"), dict)
+        or not evaluation["execution"]
+        or evaluation["execution"].get("evaluatorCodeSha256") != V5_EVALUATOR_CODE_SHA256
+        or type(evaluation.get("peakCudaBytes")) is not int
+        or evaluation["peakCudaBytes"] < 0
+        or not isinstance(artifacts, dict)
+        or set(artifacts) != {"bistTestOutputs", "manualRawResults", "budgetReceipt"}
+    ):
+        raise ContractError("V5 candidate evaluation contract differs")
+    metrics = evaluation.get("bistTest")
+    if not isinstance(metrics, dict) or set(metrics) != {"zh-en", "en-zh"}:
+        raise ContractError("V5 candidate evaluation metrics differ")
+    for direction in ("zh-en", "en-zh"):
+        values = metrics[direction]
+        if (
+            not isinstance(values, dict)
+            or not {"bleu", "chrf2"}.issubset(values)
+            or not _native_number(values["bleu"])
+            or not _native_number(values["chrf2"])
+        ):
+            raise ContractError("V5 candidate evaluation metrics differ")
+    _require_artifact(
+        evaluation_report_path.parent / artifacts["bistTestOutputs"]["path"],
+        artifacts["bistTestOutputs"], "BiST evaluation outputs", rows=10000,
+    )
+    _require_artifact(
+        evaluation_report_path.parent / artifacts["manualRawResults"]["path"],
+        artifacts["manualRawResults"], "manual raw evaluation outputs", rows=100,
+    )
+    if artifacts["budgetReceipt"] != authorization["budgetReceipt"]:
+        raise ContractError("evaluation budget receipt differs from authorization")
+
+    evaluation_manifest = _canonical_report(
+        evaluation_manifest_path, "V5 candidate evaluation manifest"
+    )
+    manifest_inputs = evaluation_manifest.get("inputs")
+    manifest_outputs = evaluation_manifest.get("outputs")
+    expected_checkpoint_inputs = {
+        "checkpoint_" + name.replace(".", "_").replace("-", "_"): record
+        for name, record in candidate_files.items()
+    }
+    if (
+        evaluation_manifest.get("schema_version") != 1
+        or evaluation_manifest.get("identity") != "v5-final-candidate"
+        or evaluation_manifest.get("stage") != "translation_v5_candidate_quality_evaluation"
+        or not isinstance(manifest_inputs, dict)
+        or not isinstance(manifest_outputs, dict)
+        or set(manifest_outputs) != {
+            "bist_test_outputs", "manual_raw_results", "budget_receipt", "quality_report"
+        }
+        or manifest_outputs.get("bist_test_outputs") != artifacts["bistTestOutputs"]
+        or manifest_outputs.get("manual_raw_results") != artifacts["manualRawResults"]
+        or manifest_outputs.get("budget_receipt") != artifacts["budgetReceipt"]
+        or manifest_outputs.get("quality_report") != authorization["evaluationReport"]
+        or manifest_inputs.get("v5_terminal") != authorization["v5Terminal"]
+        or manifest_inputs.get("v5_budget_terminal") != terminal_budget
+        or not isinstance(manifest_inputs.get("evaluator_code"), dict)
+        or manifest_inputs["evaluator_code"].get("sha256") != V5_EVALUATOR_CODE_SHA256
+        or any(manifest_inputs.get(name) != record for name, record in expected_checkpoint_inputs.items())
+    ):
+        raise ContractError("V5 candidate complete evaluation manifest differs")
+
+    receipt = _canonical_report(budget_receipt_path, "evaluation budget receipt")
+    ledger = evaluation.get("gpuLedger")
+    if (
+        set(receipt) != {
+            "schema_version", "stage", "status", "priorEvidence", "rootEvidence",
+            "priorCumulativeSeconds", "evaluationActualSeconds", "cumulativeActualSeconds",
+            "totalBudgetSeconds", "remainingSeconds", "error",
+        }
+        or receipt.get("schema_version") != 1
+        or receipt.get("stage") != evaluation["stage"]
+        or receipt.get("status") != "completed"
+        or receipt.get("error") is not None
+        or receipt.get("priorEvidence") != terminal_budget
+        or receipt.get("priorEvidence") != evaluation.get("priorEvidence")
+        or receipt.get("rootEvidence") != terminal.get("rootEvidence")
+        or receipt.get("rootEvidence") != evaluation.get("rootEvidence")
+        or ledger != receipt
+        or not all(_native_number(receipt[name]) for name in (
+            "priorCumulativeSeconds", "evaluationActualSeconds", "cumulativeActualSeconds",
+            "totalBudgetSeconds", "remainingSeconds",
+        ))
+        or receipt["priorCumulativeSeconds"] + receipt["evaluationActualSeconds"]
+        != receipt["cumulativeActualSeconds"]
+        or receipt["totalBudgetSeconds"] - receipt["cumulativeActualSeconds"]
+        != receipt["remainingSeconds"]
+        or receipt["remainingSeconds"] < 0
+    ):
+        raise ContractError("evaluation budget evidence chain differs")
+    try:
+        budget = load_budget_evidence(budget_receipt_path, supporting)
+    except Exception as error:
+        raise ContractError("cannot verify recursive local-learning budget evidence") from error
+    if (
+        budget.get("artifact") != authorization["budgetReceipt"]
+        or budget.get("rootEvidence") != evaluation["rootEvidence"]
+        or budget.get("cumulativeActualSeconds") != receipt["cumulativeActualSeconds"]
+        or budget.get("totalBudgetSeconds") != receipt["totalBudgetSeconds"]
+    ):
+        raise ContractError("recursive local-learning budget evidence differs")
+
+    approval = {
+        "releaseChannel": "local-learning",
+        "productionPromotionAllowed": False,
+        "userAuthorization": LOCAL_LEARNING_USER_AUTHORIZATION,
+        "limitations": list(LOCAL_LEARNING_LIMITATIONS),
+        "candidate": candidate,
+        "candidateGlobalStep": terminal_step,
+        "candidateAdamWStep": terminal_adam,
+        "evaluatorCodeSha256": V5_EVALUATOR_CODE_SHA256,
+        "authorizationReport": _file_artifact(authorization_report_path),
+        "v5Terminal": authorization["v5Terminal"],
+        "evaluationReport": authorization["evaluationReport"],
+        "evaluationManifest": authorization["evaluationManifest"],
+        "budgetReceipt": authorization["budgetReceipt"],
+    }
+    if not _validate_local_learning_approval_record(approval):
+        raise ContractError("local-learning approval record differs")
+    return approval
 
 
 def load_profile(contract_path: Path, profile_name: str) -> dict:
@@ -321,6 +664,12 @@ def _validate_checkpoint(
     profile_name: str,
     training_report_path: Optional[Path] = None,
     quality_gate_report_path: Optional[Path] = None,
+    local_learning_authorization_path: Optional[Path] = None,
+    v5_terminal_path: Optional[Path] = None,
+    evaluation_report_path: Optional[Path] = None,
+    evaluation_manifest_path: Optional[Path] = None,
+    budget_receipt_path: Optional[Path] = None,
+    budget_supporting_evidence=(),
 ) -> Optional[dict]:
     config_path = checkpoint / "config.json"
     if not config_path.is_file() or not (checkpoint / "model.safetensors").is_file():
@@ -345,15 +694,35 @@ def _validate_checkpoint(
     if revision != PINNED_REVISION:
         raise ContractError(f"checkpoint revision mismatch: expected {PINNED_REVISION}, got {revision}")
     if profile_name == "final":
-        if training_report_path is None or quality_gate_report_path is None:
-            raise ContractError("final export requires canonical training and quality gate reports")
         if not (checkpoint / "tokenizer.model").is_file():
             raise ContractError("final checkpoint must contain tokenizer.model")
-        return _validate_candidate_approval(
-            checkpoint, Path(training_report_path), Path(quality_gate_report_path)
+        production = (training_report_path, quality_gate_report_path)
+        local_learning = (
+            local_learning_authorization_path, v5_terminal_path,
+            evaluation_report_path, evaluation_manifest_path, budget_receipt_path,
         )
-    if training_report_path is not None or quality_gate_report_path is not None:
-        raise ContractError("prototype export rejects production approval reports")
+        if all(path is not None for path in production) and all(path is None for path in local_learning):
+            return _validate_candidate_approval(
+                checkpoint, Path(training_report_path), Path(quality_gate_report_path)
+            )
+        if all(path is None for path in production) and all(path is not None for path in local_learning):
+            return validate_local_learning_authorization(
+                checkpoint,
+                Path(local_learning_authorization_path),
+                Path(v5_terminal_path),
+                Path(evaluation_report_path),
+                Path(evaluation_manifest_path),
+                Path(budget_receipt_path),
+                budget_supporting_evidence,
+            )
+        raise ContractError(
+            "final export requires canonical production quality approval or complete local-learning authorization"
+        )
+    if any(path is not None for path in (
+        training_report_path, quality_gate_report_path, local_learning_authorization_path,
+        v5_terminal_path, evaluation_report_path, evaluation_manifest_path, budget_receipt_path,
+    )) or budget_supporting_evidence:
+        raise ContractError("prototype export rejects final release approval reports")
     if model_sha256 != PROTOTYPE_MODEL_SHA256:
         raise ContractError("prototype checkpoint model is outside the pinned allowlist")
     return None
@@ -543,6 +912,12 @@ def export_graphs(
     profile_name: str,
     training_report_path: Optional[Path] = None,
     quality_gate_report_path: Optional[Path] = None,
+    local_learning_authorization_path: Optional[Path] = None,
+    v5_terminal_path: Optional[Path] = None,
+    evaluation_report_path: Optional[Path] = None,
+    evaluation_manifest_path: Optional[Path] = None,
+    budget_receipt_path: Optional[Path] = None,
+    budget_supporting_evidence=(),
 ) -> dict:
     import numpy as np
     import torch
@@ -555,6 +930,12 @@ def export_graphs(
         profile_name,
         training_report_path,
         quality_gate_report_path,
+        local_learning_authorization_path,
+        v5_terminal_path,
+        evaluation_report_path,
+        evaluation_manifest_path,
+        budget_receipt_path,
+        budget_supporting_evidence,
     )
     output_root = output_root.resolve()
     repository_root = Path(__file__).resolve().parents[2]
@@ -675,43 +1056,37 @@ def verify_export_report(output_root: Path, contract_path: Path, profile_name: s
         raise ContractError("export report does not bind the inspected ONNX graphs")
     approval = report.get("approval")
     if profile_name == "final":
-        candidate = approval.get("candidate") if isinstance(approval, dict) else None
-        objective = approval.get("objectiveHashes") if isinstance(approval, dict) else None
-        artifacts = (
-            approval.get("trainingReport") if isinstance(approval, dict) else None,
-            approval.get("qualityGateReport") if isinstance(approval, dict) else None,
-        )
-        if (
-            not isinstance(approval, dict)
-            or set(approval) != {
-                "candidate", "candidateEpoch", "objectiveHashes",
-                "trainingReport", "qualityGateReport",
-            }
-            or not isinstance(candidate, dict)
-            or set(candidate) != {"model_sha256", "tokenizer_sha256"}
-            or any(
-                not isinstance(value, str)
-                or len(value) != 64
-                or any(character not in "0123456789abcdef" for character in value.lower())
-                for value in candidate.values()
+        if isinstance(approval, dict) and approval.get("releaseChannel") == "local-learning":
+            if not _validate_local_learning_approval_record(approval):
+                raise ContractError("final export report lacks local-learning approval provenance")
+        else:
+            candidate = approval.get("candidate") if isinstance(approval, dict) else None
+            objective = approval.get("objectiveHashes") if isinstance(approval, dict) else None
+            artifacts = (
+                approval.get("trainingReport") if isinstance(approval, dict) else None,
+                approval.get("qualityGateReport") if isinstance(approval, dict) else None,
             )
-            or approval.get("candidateEpoch") not in (1, 2)
-            or not isinstance(objective, dict)
-            or not objective
-            or any(not isinstance(value, str) or len(value) != 64 for value in objective.values())
-            or any(
-                not isinstance(artifact, dict)
-                or set(artifact) != {"path", "bytes", "sha256"}
-                or not isinstance(artifact["path"], str)
-                or not artifact["path"]
-                or not isinstance(artifact["bytes"], int)
-                or artifact["bytes"] <= 0
-                or not isinstance(artifact["sha256"], str)
-                or len(artifact["sha256"]) != 64
-                for artifact in artifacts
-            )
-        ):
-            raise ContractError("final export report lacks candidate approval provenance")
+            if (
+                not isinstance(approval, dict)
+                or set(approval) != {
+                    "candidate", "candidateEpoch", "objectiveHashes",
+                    "trainingReport", "qualityGateReport",
+                }
+                or not isinstance(candidate, dict)
+                or set(candidate) != {"model_sha256", "tokenizer_sha256"}
+                or any(
+                    not isinstance(value, str)
+                    or len(value) != 64
+                    or any(character not in "0123456789abcdef" for character in value.lower())
+                    for value in candidate.values()
+                )
+                or approval.get("candidateEpoch") not in (1, 2)
+                or not isinstance(objective, dict)
+                or not objective
+                or any(not isinstance(value, str) or len(value) != 64 for value in objective.values())
+                or any(not _valid_artifact(artifact) for artifact in artifacts)
+            ):
+                raise ContractError("final export report lacks candidate approval provenance")
     elif approval is not None:
         raise ContractError("prototype export report contains production approval provenance")
     return report
@@ -860,6 +1235,12 @@ def _parse(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument("--encoder-valid-tokens", type=int)
     parser.add_argument("--training-report", type=Path)
     parser.add_argument("--quality-gate-report", type=Path)
+    parser.add_argument("--local-learning-authorization", type=Path)
+    parser.add_argument("--v5-terminal", type=Path)
+    parser.add_argument("--evaluation-report", type=Path)
+    parser.add_argument("--evaluation-manifest", type=Path)
+    parser.add_argument("--budget-receipt", type=Path)
+    parser.add_argument("--budget-supporting-evidence", action="append", type=Path, default=[])
     return parser.parse_args(argv)
 
 
@@ -900,6 +1281,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             args.profile,
             args.training_report,
             args.quality_gate_report,
+            args.local_learning_authorization,
+            args.v5_terminal,
+            args.evaluation_report,
+            args.evaluation_manifest,
+            args.budget_receipt,
+            args.budget_supporting_evidence,
         )
     print(json.dumps(result, sort_keys=True))
     return 0

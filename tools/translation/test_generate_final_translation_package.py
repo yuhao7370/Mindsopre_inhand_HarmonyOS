@@ -15,6 +15,10 @@ from unittest import mock
 import sentencepiece
 
 from tools.translation.build_translation_archive import build_tar
+from tools.translation.export_marian_smoke import (
+    LOCAL_LEARNING_LIMITATIONS,
+    LOCAL_LEARNING_USER_AUTHORIZATION,
+)
 from tools.translation.tokenizer_generate_fixture import _normalize_with_map
 from tools.translation.verify_translation_package import PackageError, verify_package
 import tools.translation.generate_final_translation_package as package_generator
@@ -323,6 +327,194 @@ class FinalTranslationPackageGeneratorTest(unittest.TestCase):
         bad.write_text(json.dumps(mutated), encoding="utf-8")
         with self.assertRaisesRegex(PackageError, "approval|tokenizer|provenance"):
             verify_package(bad, stage, self.decompressor)
+
+    def test_local_learning_package_retains_non_production_authorization_and_full_v5_evidence(self):
+        conversion = json.loads(self.conversion_report.read_text(encoding="utf-8"))
+        candidate = conversion["approval"]["candidate"]
+        selection = {"optimizer_step": 18284, "adamw_step": 18279}
+        selection_path = self.root / "selection.json"
+        selection_path.write_bytes(_canonical_json_bytes(selection))
+        candidate_files = {
+            "base_revision.txt": {"path": "base_revision.txt", "bytes": 41, "sha256": "1" * 64},
+            "config.json": {"path": "config.json", "bytes": 1, "sha256": "2" * 64},
+            "generation_config.json": {"path": "generation_config.json", "bytes": 1, "sha256": "3" * 64},
+            "model.safetensors": {"path": "model.safetensors", "bytes": 1, "sha256": candidate["model_sha256"]},
+            "selection.json": _artifact(selection_path),
+            "tokenizer.model": {"path": "tokenizer.model", "bytes": 1, "sha256": candidate["tokenizer_sha256"]},
+        }
+        root_path = self.root / "budget-root.json"
+        root_path.write_bytes(b"{}\n")
+        root_artifact = _artifact(root_path)
+        training_budget_path = self.root / "v5-training-budget.json"
+        training_budget_path.write_bytes(_canonical_json_bytes({"status": "completed"}))
+        training_budget = _artifact(training_budget_path)
+        terminal_path = self.root / "v5-terminal-v1.json"
+        terminal_path.write_bytes(_canonical_json_bytes({
+            "schema_version": 1,
+            "stage": "translation_v5_original_bist_continuation",
+            "status": "completed",
+            "rootEvidence": root_artifact,
+            "budgetReceipt": training_budget,
+            "finalGlobalStep": 18284,
+            "adamWStep": 18279,
+            "candidate": {
+                "globalStep": 18284,
+                "adamWStep": 18279,
+                "checkpoint": {"path": "checkpoint", "files": candidate_files},
+            },
+            "error": None,
+        }))
+        bist_output = self.root / "bist-test-outputs-v1.jsonl"
+        bist_output.write_bytes(b"{}\n")
+        manual_output = self.root / "manual-raw-results-v1.jsonl"
+        manual_output.write_bytes(b"{}\n")
+        final_budget_path = self.root / "evaluation-budget-terminal-v1.json"
+        ledger = {
+            "priorCumulativeSeconds": 28924.0,
+            "evaluationActualSeconds": 10.0,
+            "cumulativeActualSeconds": 28934.0,
+            "totalBudgetSeconds": 43200.0,
+            "remainingSeconds": 14266.0,
+        }
+        final_budget = {
+            "schema_version": 1,
+            "stage": "translation_v5_candidate_quality_evaluation",
+            "status": "completed",
+            "priorEvidence": training_budget,
+            "rootEvidence": root_artifact,
+            **ledger,
+            "error": None,
+        }
+        final_budget_path.write_bytes(_canonical_json_bytes(final_budget))
+        evaluation_path = self.root / "v5-candidate-quality-evaluation-v1.json"
+        evaluation_path.write_bytes(_canonical_json_bytes({
+            "schema_version": 1,
+            "identity": "v5-final-candidate",
+            "stage": "translation_v5_candidate_quality_evaluation",
+            "status": "completed",
+            "checkpoint": {
+                "globalStep": 18284,
+                "adamWStep": 18279,
+                "files": candidate_files,
+                "selection": selection,
+            },
+            "dataset": {
+                "repo": "Mxode/BiST",
+                "revision": "aca6be897afc319f779009379c8b849c1eb8d63e",
+                "testRowsPerDirection": 5000,
+            },
+            "bistTest": {"zh-en": {"bleu": 1.0, "chrf2": 2.0}, "en-zh": {"bleu": 1.0, "chrf2": 2.0}},
+            "manual": {"rows": 100, "mode": "raw-model-outputs-with-automatic-corruption-flags-only"},
+            "decode": {"strategy": "greedy"},
+            "runtime": {"device": "cuda"},
+            "execution": {"evaluatorCodeSha256": "a" * 64},
+            "priorEvidence": training_budget,
+            "rootEvidence": root_artifact,
+            "gpuLedger": final_budget,
+            "peakCudaBytes": 1,
+            "artifacts": {
+                "bistTestOutputs": {**_artifact(bist_output), "rows": 10000},
+                "manualRawResults": {**_artifact(manual_output), "rows": 100},
+                "budgetReceipt": _artifact(final_budget_path),
+            },
+        }))
+        evaluation_manifest_path = self.root / "v5-candidate-quality-manifest-v1.json"
+        evaluation_manifest_path.write_bytes(_canonical_json_bytes({
+            "schema_version": 1,
+            "identity": "v5-final-candidate",
+            "stage": "translation_v5_candidate_quality_evaluation",
+            "inputs": {
+                "evaluator_code": {"path": "evaluate_v5_candidate.py", "bytes": 1, "sha256": "a" * 64},
+                "v5_terminal": _artifact(terminal_path),
+                "v5_budget_terminal": training_budget,
+                **{
+                    "checkpoint_" + name.replace(".", "_"): record
+                    for name, record in candidate_files.items()
+                },
+            },
+            "outputs": {
+                "bist_test_outputs": {**_artifact(bist_output), "rows": 10000},
+                "manual_raw_results": {**_artifact(manual_output), "rows": 100},
+                "budget_receipt": _artifact(final_budget_path),
+                "quality_report": _artifact(evaluation_path),
+            },
+        }))
+        authorization_path = self.root / "local-learning-authorization-v1.json"
+        authorization = {
+            "schemaVersion": 1,
+            "releaseChannel": "local-learning",
+            "productionPromotionAllowed": False,
+            "userAuthorization": LOCAL_LEARNING_USER_AUTHORIZATION,
+            "limitations": list(LOCAL_LEARNING_LIMITATIONS),
+            "candidate": candidate,
+            "candidateGlobalStep": 18284,
+            "candidateAdamWStep": 18279,
+            "evaluatorCodeSha256": "a" * 64,
+            "v5Terminal": _artifact(terminal_path),
+            "evaluationReport": _artifact(evaluation_path),
+            "evaluationManifest": _artifact(evaluation_manifest_path),
+            "budgetReceipt": _artifact(final_budget_path),
+        }
+        authorization_path.write_bytes(_canonical_json_bytes(authorization))
+        local_approval = {
+            **{name: authorization[name] for name in (
+                "releaseChannel", "productionPromotionAllowed", "userAuthorization",
+                "limitations", "candidate", "candidateGlobalStep", "candidateAdamWStep",
+                "evaluatorCodeSha256", "v5Terminal", "evaluationReport", "evaluationManifest",
+                "budgetReceipt",
+            )},
+            "authorizationReport": _artifact(authorization_path),
+        }
+        conversion["approval"] = local_approval
+        self.conversion_report.write_text(json.dumps(conversion), encoding="utf-8")
+
+        stage = self.root / "stage-local-learning"
+        package_path = self.root / "local-learning-package.json"
+        budget_result = {
+            "artifact": _artifact(final_budget_path),
+            "rootEvidence": root_artifact,
+            "cumulativeActualSeconds": ledger["cumulativeActualSeconds"],
+            "totalBudgetSeconds": ledger["totalBudgetSeconds"],
+        }
+        with mock.patch.multiple(
+            "tools.translation.export_marian_smoke",
+            V5_EVALUATOR_CODE_SHA256="a" * 64,
+            V5_EVALUATION_REPORT_SHA256=_artifact(evaluation_path)["sha256"],
+            V5_EVALUATION_MANIFEST_SHA256=_artifact(evaluation_manifest_path)["sha256"],
+            V5_EVALUATION_BUDGET_SHA256=_artifact(final_budget_path)["sha256"],
+        ), mock.patch(
+            "tools.translation.export_marian_smoke.load_budget_evidence",
+            return_value=budget_result,
+        ):
+            package = generate_final_package(
+                tokenizer_model=TOKENIZER,
+                archive=self.archive,
+                archive_manifest_a=self.evidence_a,
+                archive_manifest_b=self.evidence_b,
+                decompressor=self.decompressor,
+                licenses_source=self.licenses,
+                quality_gate_report=None,
+                local_learning_authorization=authorization_path,
+                v5_terminal=terminal_path,
+                evaluation_report=evaluation_path,
+                evaluation_manifest=evaluation_manifest_path,
+                budget_receipt=final_budget_path,
+                budget_supporting_evidence=(training_budget_path, root_path),
+                conversion_report=self.conversion_report,
+                stage_root=stage,
+                package_manifest_path=package_path,
+            )
+        self.assertEqual(package["evidence"]["approval"]["releaseChannel"], "local-learning")
+        self.assertIs(package["evidence"]["approval"]["productionPromotionAllowed"], False)
+        self.assertEqual(package["evidence"]["v5Terminal"], _artifact(terminal_path))
+        self.assertEqual(package["evidence"]["evaluationReport"], _artifact(evaluation_path))
+        self.assertEqual(package["evidence"]["evaluationManifest"], _artifact(evaluation_manifest_path))
+        self.assertEqual(package["evidence"]["budgetReceipt"], _artifact(final_budget_path))
+
+        package["evidence"]["approval"]["productionPromotionAllowed"] = True
+        package_path.write_text(json.dumps(package), encoding="utf-8")
+        with self.assertRaisesRegex(PackageError, "production|promotion|local-learning"):
+            verify_package(package_path, stage, self.decompressor)
 
     def test_final_verifier_rebuilds_raw_assets_and_binds_archive_evidence(self):
         base_stage, base_package = self._generate("authentic-base")

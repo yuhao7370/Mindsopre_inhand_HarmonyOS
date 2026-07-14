@@ -18,6 +18,10 @@ if __package__ in {None, ""}:
 from sentencepiece import sentencepiece_model_pb2
 
 from tools.translation.build_translation_archive import verify_archive
+from tools.translation.export_marian_smoke import (
+    _validate_local_learning_approval_record,
+    validate_local_learning_authorization,
+)
 from tools.translation.tokenizer_generate_fixture import (
     MODEL_SHA256,
     MODEL_SIZE,
@@ -191,46 +195,85 @@ def _validate_conversion_metrics(conversion):
             raise PackageGenerationError("conversion encoder parity metrics differ from the final bounds")
 
 
-def _approved_conversion(quality_gate_report, conversion_report, archive_manifest):
-    gate_path = Path(quality_gate_report)
+def _approved_conversion(
+    quality_gate_report,
+    conversion_report,
+    archive_manifest,
+    *,
+    local_learning_authorization=None,
+    v5_terminal=None,
+    evaluation_report=None,
+    evaluation_manifest=None,
+    budget_receipt=None,
+    budget_supporting_evidence=(),
+):
     conversion_path = Path(conversion_report)
-    for path, label in ((gate_path, "quality gate report"), (conversion_path, "conversion report")):
-        if not path.is_file() or path.is_symlink():
-            raise PackageGenerationError("%s is not a regular file" % label)
-    gate = _read_json(gate_path, "quality gate report")
-    if gate_path.read_bytes() != _canonical_json_bytes(gate):
-        raise PackageGenerationError("quality gate report is not canonical gate-v1 JSON")
-    candidate = gate.get("candidate")
-    objective = gate.get("objectiveHashes")
-    if (
-        set(gate) != GATE_KEYS
-        or gate.get("schema_version") != 1
-        or gate.get("promotion_allowed") is not True
-        or not isinstance(candidate, dict)
-        or set(candidate) != {"model_sha256", "tokenizer_sha256"}
-        or not all(_is_sha256(value) for value in candidate.values())
-        or candidate.get("tokenizer_sha256") != MODEL_SHA256
-        or isinstance(gate.get("candidateEpoch"), bool)
-        or gate.get("candidateEpoch") not in (1, 2)
-        or not isinstance(objective, dict)
-        or not objective
-        or not all(isinstance(name, str) and name and _is_sha256(value) for name, value in objective.items())
-        or not _valid_artifact(gate.get("trainingReport"))
-    ):
-        raise PackageGenerationError("quality gate does not approve the pinned final candidate")
+    if not conversion_path.is_file() or conversion_path.is_symlink():
+        raise PackageGenerationError("conversion report is not a regular file")
     conversion = _read_json(conversion_path, "conversion report")
     approval = conversion.get("approval")
+    local_paths = (
+        local_learning_authorization, v5_terminal, evaluation_report,
+        evaluation_manifest, budget_receipt,
+    )
+    if quality_gate_report is not None and all(path is None for path in local_paths):
+        gate_path = Path(quality_gate_report)
+        if not gate_path.is_file() or gate_path.is_symlink():
+            raise PackageGenerationError("quality gate report is not a regular file")
+        gate = _read_json(gate_path, "quality gate report")
+        if gate_path.read_bytes() != _canonical_json_bytes(gate):
+            raise PackageGenerationError("quality gate report is not canonical gate-v1 JSON")
+        candidate = gate.get("candidate")
+        objective = gate.get("objectiveHashes")
+        if (
+            set(gate) != GATE_KEYS
+            or gate.get("schema_version") != 1
+            or gate.get("promotion_allowed") is not True
+            or not isinstance(candidate, dict)
+            or set(candidate) != {"model_sha256", "tokenizer_sha256"}
+            or not all(_is_sha256(value) for value in candidate.values())
+            or candidate.get("tokenizer_sha256") != MODEL_SHA256
+            or isinstance(gate.get("candidateEpoch"), bool)
+            or gate.get("candidateEpoch") not in (1, 2)
+            or not isinstance(objective, dict)
+            or not objective
+            or not all(isinstance(name, str) and name and _is_sha256(value) for name, value in objective.items())
+            or not _valid_artifact(gate.get("trainingReport"))
+        ):
+            raise PackageGenerationError("quality gate does not approve the pinned final candidate")
+        expected_approval = {
+            "candidate": candidate,
+            "candidateEpoch": gate["candidateEpoch"],
+            "objectiveHashes": objective,
+            "trainingReport": gate["trainingReport"],
+            "qualityGateReport": _artifact(gate_path),
+        }
+    elif quality_gate_report is None and all(path is not None for path in local_paths):
+        try:
+            expected_approval = validate_local_learning_authorization(
+                None,
+                local_learning_authorization,
+                v5_terminal,
+                evaluation_report,
+                evaluation_manifest,
+                budget_receipt,
+                budget_supporting_evidence,
+            )
+        except Exception as error:
+            raise PackageGenerationError("local-learning release evidence differs: %s" % error) from error
+        candidate = expected_approval["candidate"]
+        if candidate.get("tokenizer_sha256") != MODEL_SHA256:
+            raise PackageGenerationError("local-learning release does not bind the pinned tokenizer")
+    else:
+        raise PackageGenerationError(
+            "provide either production quality approval or complete local-learning release evidence"
+        )
     if (
         set(conversion) != CONVERSION_KEYS
         or conversion.get("schemaVersion") != 1
         or conversion.get("profile") != "final"
         or not isinstance(approval, dict)
-        or set(approval) != APPROVAL_KEYS
-        or approval.get("candidate") != candidate
-        or approval.get("candidateEpoch") != gate["candidateEpoch"]
-        or approval.get("objectiveHashes") != objective
-        or approval.get("trainingReport") != gate["trainingReport"]
-        or approval.get("qualityGateReport") != _artifact(gate_path)
+        or approval != expected_approval
         or not _valid_artifact(conversion.get("exportReport"), "export-report.json")
         or not isinstance(conversion.get("onnxArtifacts"), dict)
         or set(conversion["onnxArtifacts"]) != {"encoder.onnx", "decoder_prefill.onnx", "decoder_step.onnx"}
@@ -445,6 +488,12 @@ def generate_final_package(
     conversion_report,
     stage_root,
     package_manifest_path,
+    local_learning_authorization=None,
+    v5_terminal=None,
+    evaluation_report=None,
+    evaluation_manifest=None,
+    budget_receipt=None,
+    budget_supporting_evidence=(),
 ):
     evidence_a = _read_json(archive_manifest_a, "source archive evidence")
     evidence_b = _read_json(archive_manifest_b, "canonical archive rebuild")
@@ -471,7 +520,17 @@ def generate_final_package(
         verify_archive(archive, evidence_b)
     except Exception as error:
         raise PackageGenerationError("archive differs from retained evidence: %s" % error) from error
-    conversion = _approved_conversion(quality_gate_report, conversion_report, evidence_b)
+    conversion = _approved_conversion(
+        quality_gate_report,
+        conversion_report,
+        evidence_b,
+        local_learning_authorization=local_learning_authorization,
+        v5_terminal=v5_terminal,
+        evaluation_report=evaluation_report,
+        evaluation_manifest=evaluation_manifest,
+        budget_receipt=budget_receipt,
+        budget_supporting_evidence=budget_supporting_evidence,
+    )
     if (
         licenses_source.resolve() != TRUSTED_LICENSES_SOURCE.resolve()
         or hashlib.sha256(_canonical_license_bytes(licenses_source)).hexdigest() != TRUSTED_LICENSES_SHA256
@@ -527,23 +586,37 @@ def generate_final_package(
     assets = [_asset(roles_by_name[path.name], path) for path in stage_root.iterdir()]
     assets.append(_asset("decompressor", decompressor))
     assets.sort(key=lambda asset: asset["path"])
+    release_approval = conversion["approval"]
+    package_evidence = {
+        "sourceEvidence": {"tar": evidence_a["tar"], "archive": evidence_a["archive"]},
+        "canonicalRebuild": {"tar": evidence_b["tar"], "archive": evidence_b["archive"]},
+        "conversionReport": _artifact(conversion_report),
+    }
+    if _validate_local_learning_approval_record(release_approval):
+        package_evidence.update({
+            "authorizationReport": release_approval["authorizationReport"],
+            "v5Terminal": release_approval["v5Terminal"],
+            "evaluationReport": release_approval["evaluationReport"],
+            "evaluationManifest": release_approval["evaluationManifest"],
+            "budgetReceipt": release_approval["budgetReceipt"],
+            "approval": release_approval,
+        })
+    else:
+        package_evidence.update({
+            "qualityGateReport": _artifact(quality_gate_report),
+            "approval": {
+                "candidate": release_approval["candidate"],
+                "candidateEpoch": release_approval["candidateEpoch"],
+                "objectiveHashes": release_approval["objectiveHashes"],
+            },
+        })
     package = {
         "schemaVersion": 1,
         "mode": "final",
         "limitBytes": PACKAGE_LIMIT_BYTES,
         "assets": assets,
         "allowances": [],
-        "evidence": {
-            "sourceEvidence": {"tar": evidence_a["tar"], "archive": evidence_a["archive"]},
-            "canonicalRebuild": {"tar": evidence_b["tar"], "archive": evidence_b["archive"]},
-            "qualityGateReport": _artifact(quality_gate_report),
-            "conversionReport": _artifact(conversion_report),
-            "approval": {
-                "candidate": conversion["approval"]["candidate"],
-                "candidateEpoch": conversion["approval"]["candidateEpoch"],
-                "objectiveHashes": conversion["approval"]["objectiveHashes"],
-            },
-        },
+        "evidence": package_evidence,
     }
     package_manifest_path.parent.mkdir(parents=True, exist_ok=True)
     _write_json(package_manifest_path, package)
@@ -559,7 +632,13 @@ def main(argv=None):
     parser.add_argument("--archive-manifest-b", required=True, type=Path)
     parser.add_argument("--decompressor", required=True, type=Path)
     parser.add_argument("--licenses-source", required=True, type=Path)
-    parser.add_argument("--quality-gate-report", required=True, type=Path)
+    parser.add_argument("--quality-gate-report", type=Path)
+    parser.add_argument("--local-learning-authorization", type=Path)
+    parser.add_argument("--v5-terminal", type=Path)
+    parser.add_argument("--evaluation-report", type=Path)
+    parser.add_argument("--evaluation-manifest", type=Path)
+    parser.add_argument("--budget-receipt", type=Path)
+    parser.add_argument("--budget-supporting-evidence", action="append", type=Path, default=[])
     parser.add_argument("--conversion-report", required=True, type=Path)
     parser.add_argument("--stage-root", required=True, type=Path)
     parser.add_argument("--package-manifest-out", required=True, type=Path)
@@ -575,6 +654,12 @@ def main(argv=None):
         conversion_report=args.conversion_report,
         stage_root=args.stage_root,
         package_manifest_path=args.package_manifest_out,
+        local_learning_authorization=args.local_learning_authorization,
+        v5_terminal=args.v5_terminal,
+        evaluation_report=args.evaluation_report,
+        evaluation_manifest=args.evaluation_manifest,
+        budget_receipt=args.budget_receipt,
+        budget_supporting_evidence=args.budget_supporting_evidence,
     )
     print(json.dumps({"assets": len(package["assets"]), "mode": package["mode"]}, sort_keys=True))
     return 0

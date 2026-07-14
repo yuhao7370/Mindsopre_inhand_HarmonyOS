@@ -192,7 +192,14 @@ def _load_manifest(path: Path) -> dict:
     evidence = manifest["evidence"]
     expected_evidence = {"sourceEvidence", "canonicalRebuild"}
     if manifest["mode"] == "final":
-        expected_evidence |= {"qualityGateReport", "conversionReport", "approval"}
+        approval = evidence.get("approval") if isinstance(evidence, dict) else None
+        if isinstance(approval, dict) and approval.get("releaseChannel") == "local-learning":
+            expected_evidence |= {
+                "authorizationReport", "v5Terminal", "evaluationReport",
+                "evaluationManifest", "budgetReceipt", "conversionReport", "approval",
+            }
+        else:
+            expected_evidence |= {"qualityGateReport", "conversionReport", "approval"}
     if not isinstance(evidence, dict) or set(evidence) != expected_evidence:
         raise PackageError("invalid evidence schema")
     for evidence_name in ("sourceEvidence", "canonicalRebuild"):
@@ -208,7 +215,14 @@ def _load_manifest(path: Path) -> dict:
             if not isinstance(artifact["sha256"], str) or not re.fullmatch(r"[0-9a-fA-F]{64}", artifact["sha256"]):
                 raise PackageError(f"invalid {evidence_name} {artifact_name} hash")
     if manifest["mode"] == "final":
-        for artifact_name in ("qualityGateReport", "conversionReport"):
+        local_learning = isinstance(evidence["approval"], dict) and evidence["approval"].get(
+            "releaseChannel"
+        ) == "local-learning"
+        artifact_names = (
+            "authorizationReport", "v5Terminal", "evaluationReport", "evaluationManifest",
+            "budgetReceipt", "conversionReport"
+        ) if local_learning else ("qualityGateReport", "conversionReport")
+        for artifact_name in artifact_names:
             artifact = evidence[artifact_name]
             if (
                 not isinstance(artifact, dict)
@@ -223,27 +237,40 @@ def _load_manifest(path: Path) -> dict:
             ):
                 raise PackageError(f"invalid final provenance artifact: {artifact_name}")
         approval = evidence["approval"]
-        candidate = approval.get("candidate") if isinstance(approval, dict) else None
-        objective = approval.get("objectiveHashes") if isinstance(approval, dict) else None
-        if (
-            not isinstance(approval, dict)
-            or set(approval) != {"candidate", "candidateEpoch", "objectiveHashes"}
-            or not isinstance(candidate, dict)
-            or set(candidate) != {"model_sha256", "tokenizer_sha256"}
-            or not all(isinstance(value, str) and re.fullmatch(r"[0-9a-f]{64}", value) for value in candidate.values())
-            or type(approval.get("candidateEpoch")) is not int
-            or approval["candidateEpoch"] not in (1, 2)
-            or not isinstance(objective, dict)
-            or not objective
-            or not all(
-                isinstance(name, str)
-                and name
-                and isinstance(value, str)
-                and re.fullmatch(r"[0-9a-f]{64}", value)
-                for name, value in objective.items()
-            )
-        ):
-            raise PackageError("invalid final approval provenance")
+        if local_learning:
+            from tools.translation.export_marian_smoke import _validate_local_learning_approval_record
+
+            if (
+                not _validate_local_learning_approval_record(approval)
+                or approval["authorizationReport"] != evidence["authorizationReport"]
+                or approval["v5Terminal"] != evidence["v5Terminal"]
+                or approval["evaluationReport"] != evidence["evaluationReport"]
+                or approval["evaluationManifest"] != evidence["evaluationManifest"]
+                or approval["budgetReceipt"] != evidence["budgetReceipt"]
+            ):
+                raise PackageError("invalid local-learning non-production approval provenance")
+        else:
+            candidate = approval.get("candidate") if isinstance(approval, dict) else None
+            objective = approval.get("objectiveHashes") if isinstance(approval, dict) else None
+            if (
+                not isinstance(approval, dict)
+                or set(approval) != {"candidate", "candidateEpoch", "objectiveHashes"}
+                or not isinstance(candidate, dict)
+                or set(candidate) != {"model_sha256", "tokenizer_sha256"}
+                or not all(isinstance(value, str) and re.fullmatch(r"[0-9a-f]{64}", value) for value in candidate.values())
+                or type(approval.get("candidateEpoch")) is not int
+                or approval["candidateEpoch"] not in (1, 2)
+                or not isinstance(objective, dict)
+                or not objective
+                or not all(
+                    isinstance(name, str)
+                    and name
+                    and isinstance(value, str)
+                    and re.fullmatch(r"[0-9a-f]{64}", value)
+                    for name, value in objective.items()
+                )
+            ):
+                raise PackageError("invalid final approval provenance")
     return manifest
 
 

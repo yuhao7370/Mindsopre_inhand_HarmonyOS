@@ -7,12 +7,15 @@ from unittest import mock
 
 from tools.translation.export_marian_smoke import (
     ContractError,
+    LOCAL_LEARNING_LIMITATIONS,
+    LOCAL_LEARNING_USER_AUTHORIZATION,
     PINNED_REVISION,
     PROTOTYPE_MODEL_SHA256,
     _inspect_onnx,
     _validate_checkpoint,
     _validate_stable_softmax,
     load_profile,
+    validate_local_learning_authorization,
     validate_graph_contract,
     verify_export_report,
 )
@@ -24,6 +27,241 @@ ROOT = Path(__file__).parent
 
 
 class ExportContractTest(unittest.TestCase):
+    def test_local_learning_final_export_binds_v5_candidate_evaluation_and_budget_without_promotion(self):
+        def canonical(value):
+            return (json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
+
+        def artifact(path, rows=None):
+            payload = path.read_bytes()
+            value = {"path": path.name, "bytes": len(payload), "sha256": hashlib.sha256(payload).hexdigest()}
+            if rows is not None:
+                value["rows"] = rows
+            return value
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            checkpoint = root / "checkpoint"
+            checkpoint.mkdir()
+            files = {
+                "base_revision.txt": (PINNED_REVISION + "\n").encode("ascii"),
+                "config.json": json.dumps({
+                    "vocab_size": 32003,
+                    "decoder_vocab_size": 32003,
+                    "d_model": 256,
+                    "encoder_layers": 6,
+                    "decoder_layers": 2,
+                    "encoder_attention_heads": 8,
+                    "decoder_attention_heads": 8,
+                }).encode("utf-8"),
+                "generation_config.json": b"{}\n",
+                "model.safetensors": b"v5-candidate-model",
+                "selection.json": canonical({
+                    "schema_version": 1,
+                    "optimizer_step": 18284,
+                    "adamw_step": 18279,
+                    "skipped_optimizer_updates": 2,
+                    "skip_ledger": [],
+                    "directional_losses": {"zh-en": 3.249, "en-zh": 4.091},
+                    "vocab_size": 32003,
+                    "optimizer_independent": True,
+                }),
+                "tokenizer.model": b"v5-tokenizer",
+            }
+            for name, payload in files.items():
+                (checkpoint / name).write_bytes(payload)
+            candidate_files = {name: artifact(checkpoint / name) for name in sorted(files)}
+            candidate = {
+                "model_sha256": candidate_files["model.safetensors"]["sha256"],
+                "tokenizer_sha256": candidate_files["tokenizer.model"]["sha256"],
+            }
+
+            root_evidence_path = root / "budget-root.json"
+            root_evidence_path.write_bytes(b"{}\n")
+            root_evidence = artifact(root_evidence_path)
+            training_budget_path = root / "v5-training-budget.json"
+            training_budget_path.write_bytes(canonical({"status": "completed"}))
+            training_budget = artifact(training_budget_path)
+            terminal = {
+                "schema_version": 1,
+                "stage": "translation_v5_original_bist_continuation",
+                "status": "completed",
+                "rootEvidence": root_evidence,
+                "budgetReceipt": training_budget,
+                "finalGlobalStep": 18284,
+                "adamWStep": 18279,
+                "candidate": {
+                    "globalStep": 18284,
+                    "adamWStep": 18279,
+                    "checkpoint": {"path": "checkpoint", "files": candidate_files},
+                },
+                "error": None,
+            }
+            terminal_path = root / "v5-terminal-v1.json"
+            terminal_path.write_bytes(canonical(terminal))
+
+            bist_output = root / "bist-test-outputs-v1.jsonl"
+            bist_output.write_bytes(b"{}\n")
+            manual_output = root / "manual-raw-results-v1.jsonl"
+            manual_output.write_bytes(b"{}\n")
+            final_budget_path = root / "evaluation-budget-terminal-v1.json"
+            final_budget = {
+                "schema_version": 1,
+                "stage": "translation_v5_candidate_quality_evaluation",
+                "status": "completed",
+                "priorEvidence": training_budget,
+                "rootEvidence": root_evidence,
+                "priorCumulativeSeconds": 28924.0,
+                "evaluationActualSeconds": 10.0,
+                "cumulativeActualSeconds": 28934.0,
+                "totalBudgetSeconds": 43200.0,
+                "remainingSeconds": 14266.0,
+                "error": None,
+            }
+            final_budget_path.write_bytes(canonical(final_budget))
+            evaluation = {
+                "schema_version": 1,
+                "identity": "v5-final-candidate",
+                "stage": "translation_v5_candidate_quality_evaluation",
+                "status": "completed",
+                "checkpoint": {
+                    "globalStep": 18284,
+                    "adamWStep": 18279,
+                    "files": candidate_files,
+                    "selection": json.loads((checkpoint / "selection.json").read_text(encoding="utf-8")),
+                },
+                "dataset": {
+                    "repo": "Mxode/BiST",
+                    "revision": "aca6be897afc319f779009379c8b849c1eb8d63e",
+                    "testRowsPerDirection": 5000,
+                },
+                "bistTest": {
+                    "zh-en": {"bleu": 1.0, "chrf2": 2.0},
+                    "en-zh": {"bleu": 1.0, "chrf2": 2.0},
+                },
+                "manual": {"rows": 100, "mode": "raw-model-outputs-with-automatic-corruption-flags-only"},
+                "decode": {"strategy": "greedy", "maxTokens": 128},
+                "runtime": {"device": "cuda"},
+                "execution": {"evaluatorCodeSha256": "a" * 64},
+                "priorEvidence": training_budget,
+                "rootEvidence": root_evidence,
+                "gpuLedger": final_budget,
+                "peakCudaBytes": 1,
+                "artifacts": {
+                    "bistTestOutputs": artifact(bist_output, 10000),
+                    "manualRawResults": artifact(manual_output, 100),
+                    "budgetReceipt": artifact(final_budget_path),
+                },
+            }
+            evaluation_path = root / "v5-candidate-quality-evaluation-v1.json"
+            evaluation_path.write_bytes(canonical(evaluation))
+            evaluation_manifest_path = root / "v5-candidate-quality-manifest-v1.json"
+            evaluation_manifest_path.write_bytes(canonical({
+                "schema_version": 1,
+                "identity": "v5-final-candidate",
+                "stage": "translation_v5_candidate_quality_evaluation",
+                "inputs": {
+                    "evaluator_code": {"path": "evaluate_v5_candidate.py", "bytes": 1, "sha256": "a" * 64},
+                    "v5_terminal": artifact(terminal_path),
+                    "v5_budget_terminal": training_budget,
+                    **{
+                        "checkpoint_" + name.replace(".", "_"): record
+                        for name, record in candidate_files.items()
+                    },
+                },
+                "outputs": {
+                    "bist_test_outputs": artifact(bist_output, 10000),
+                    "manual_raw_results": artifact(manual_output, 100),
+                    "budget_receipt": artifact(final_budget_path),
+                    "quality_report": artifact(evaluation_path),
+                },
+            }))
+            authorization = {
+                "schemaVersion": 1,
+                "releaseChannel": "local-learning",
+                "productionPromotionAllowed": False,
+                "userAuthorization": LOCAL_LEARNING_USER_AUTHORIZATION,
+                "limitations": list(LOCAL_LEARNING_LIMITATIONS),
+                "candidate": candidate,
+                "candidateGlobalStep": 18284,
+                "candidateAdamWStep": 18279,
+                "evaluatorCodeSha256": "a" * 64,
+                "v5Terminal": artifact(terminal_path),
+                "evaluationReport": artifact(evaluation_path),
+                "evaluationManifest": artifact(evaluation_manifest_path),
+                "budgetReceipt": artifact(final_budget_path),
+            }
+            authorization_path = root / "local-learning-authorization-v1.json"
+            authorization_path.write_bytes(canonical(authorization))
+
+            with mock.patch.multiple(
+                "tools.translation.export_marian_smoke",
+                V5_EVALUATOR_CODE_SHA256="a" * 64,
+                V5_EVALUATION_REPORT_SHA256=artifact(evaluation_path)["sha256"],
+                V5_EVALUATION_MANIFEST_SHA256=artifact(evaluation_manifest_path)["sha256"],
+                V5_EVALUATION_BUDGET_SHA256=artifact(final_budget_path)["sha256"],
+            ), mock.patch(
+                "tools.translation.export_marian_smoke.load_budget_evidence",
+                return_value={
+                    "artifact": artifact(final_budget_path),
+                    "rootEvidence": root_evidence,
+                    "cumulativeActualSeconds": 28934.0,
+                    "totalBudgetSeconds": 43200.0,
+                },
+            ) as budget_loader:
+                approval = validate_local_learning_authorization(
+                    checkpoint,
+                    authorization_path,
+                    terminal_path,
+                    evaluation_path,
+                    evaluation_manifest_path,
+                    final_budget_path,
+                    (training_budget_path, root_evidence_path),
+                )
+                wired = _validate_checkpoint(
+                    checkpoint,
+                    load_profile(CONTRACT, "final"),
+                    "final",
+                    local_learning_authorization_path=authorization_path,
+                    v5_terminal_path=terminal_path,
+                    evaluation_report_path=evaluation_path,
+                    evaluation_manifest_path=evaluation_manifest_path,
+                    budget_receipt_path=final_budget_path,
+                    budget_supporting_evidence=(training_budget_path, root_evidence_path),
+                )
+            self.assertEqual(approval["releaseChannel"], "local-learning")
+            self.assertEqual(wired, approval)
+            self.assertIs(approval["productionPromotionAllowed"], False)
+            self.assertEqual(approval["candidate"], candidate)
+            self.assertEqual(budget_loader.call_count, 2)
+            budget_loader.assert_has_calls([mock.call(
+                final_budget_path.resolve(),
+                (training_budget_path.resolve(), root_evidence_path.resolve()),
+            )] * 2)
+            with self.assertRaisesRegex(ContractError, "config mismatch"):
+                _validate_checkpoint(
+                    checkpoint,
+                    load_profile(CONTRACT, "prototype"),
+                    "prototype",
+                    local_learning_authorization_path=authorization_path,
+                    v5_terminal_path=terminal_path,
+                    evaluation_report_path=evaluation_path,
+                    evaluation_manifest_path=evaluation_manifest_path,
+                    budget_receipt_path=final_budget_path,
+                )
+
+            authorization["productionPromotionAllowed"] = True
+            authorization_path.write_bytes(canonical(authorization))
+            with self.assertRaisesRegex(ContractError, "production|promotion|authorization"):
+                validate_local_learning_authorization(
+                    checkpoint,
+                    authorization_path,
+                    terminal_path,
+                    evaluation_path,
+                    evaluation_manifest_path,
+                    final_budget_path,
+                    (training_budget_path, root_evidence_path),
+                )
+
     def test_final_checkpoint_revision_provenance_is_required_and_pinned(self):
         rejected = "c28e7f7f8af8009d634795d2fd012a891695bf59dc134ddf7e50516da9831237"
         configs = {
