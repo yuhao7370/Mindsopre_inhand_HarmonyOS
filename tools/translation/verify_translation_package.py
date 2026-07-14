@@ -274,10 +274,89 @@ def _load_manifest(path: Path) -> dict:
     return manifest
 
 
+def _release_artifact(path: Path) -> dict:
+    return {"path": path.name, "bytes": path.stat().st_size, "sha256": _sha256(path)}
+
+
+def _valid_release_artifact(value: object) -> bool:
+    return (
+        isinstance(value, dict)
+        and set(value) == {"path", "bytes", "sha256"}
+        and isinstance(value.get("path"), str)
+        and bool(value["path"])
+        and Path(value["path"]).name == value["path"]
+        and type(value.get("bytes")) is int
+        and value["bytes"] > 0
+        and isinstance(value.get("sha256"), str)
+        and re.fullmatch(r"[0-9a-f]{64}", value["sha256"]) is not None
+    )
+
+
+def _verify_release_evidence(manifest: dict, release_evidence_path: Path) -> None:
+    from tools.translation.export_marian_smoke import _validate_local_learning_approval_record
+    from tools.translation.generate_final_translation_package import GATE_KEYS, MODEL_SHA256
+
+    path = Path(release_evidence_path)
+    if not path.is_file() or path.is_symlink():
+        raise PackageError("release evidence must be a regular file")
+    try:
+        release = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise PackageError("release evidence is invalid JSON") from error
+    if not isinstance(release, dict) or path.read_bytes() != _canonical_json_bytes(release):
+        raise PackageError("release evidence must be canonical JSON")
+
+    evidence = manifest["evidence"]
+    approval = evidence["approval"]
+    artifact = _release_artifact(path)
+    if release.get("releaseChannel") == "local-learning":
+        expected = {name: value for name, value in release.items() if name != "schemaVersion"}
+        expected["authorizationReport"] = artifact
+        if (
+            release.get("schemaVersion") != 1
+            or evidence.get("authorizationReport") != artifact
+            or approval != expected
+            or not _validate_local_learning_approval_record(approval)
+        ):
+            raise PackageError("external local-learning authorization differs from package approval")
+        return
+
+    candidate = release.get("candidate")
+    objective = release.get("objectiveHashes")
+    training = release.get("trainingReport")
+    if (
+        set(release) != GATE_KEYS
+        or release.get("schema_version") != 1
+        or release.get("promotion_allowed") is not True
+        or not isinstance(candidate, dict)
+        or set(candidate) != {"model_sha256", "tokenizer_sha256"}
+        or not all(isinstance(value, str) and re.fullmatch(r"[0-9a-f]{64}", value) for value in candidate.values())
+        or candidate.get("tokenizer_sha256") != MODEL_SHA256
+        or type(release.get("candidateEpoch")) is not int
+        or release["candidateEpoch"] not in (1, 2)
+        or not isinstance(objective, dict)
+        or not objective
+        or not all(
+            isinstance(name, str) and name and isinstance(value, str)
+            and re.fullmatch(r"[0-9a-f]{64}", value)
+            for name, value in objective.items()
+        )
+        or not _valid_release_artifact(training)
+        or evidence.get("qualityGateReport") != artifact
+        or approval != {
+            "candidate": candidate,
+            "candidateEpoch": release["candidateEpoch"],
+            "objectiveHashes": objective,
+        }
+    ):
+        raise PackageError("external production quality gate differs from package approval")
+
+
 def verify_package(
     manifest_path: Path,
     stage_root: Path,
     decompressor_path: Optional[Path] = None,
+    release_evidence_path: Optional[Path] = None,
 ) -> dict:
     manifest = _load_manifest(Path(manifest_path))
     stage_root = Path(stage_root)
@@ -379,7 +458,12 @@ def verify_package(
     if manifest["mode"] == "final":
         if decompressor_path is None:
             raise PackageError("final package requires the external decompressor")
+        if release_evidence_path is None:
+            raise PackageError("final package requires external release evidence")
+        _verify_release_evidence(manifest, release_evidence_path)
         _verify_final_authenticity(manifest, stage_root, decompressor_path)
+    elif release_evidence_path is not None:
+        raise PackageError("prototype package rejects release evidence")
 
     total = asset_bytes + allowance_bytes
     if total > PACKAGE_LIMIT_BYTES:
@@ -398,8 +482,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser.add_argument("--manifest", required=True, type=Path)
     parser.add_argument("--stage", required=True, type=Path)
     parser.add_argument("--decompressor", type=Path)
+    parser.add_argument("--release-evidence", type=Path)
     args = parser.parse_args(argv)
-    print(json.dumps(verify_package(args.manifest, args.stage, args.decompressor), sort_keys=True))
+    print(json.dumps(verify_package(
+        args.manifest, args.stage, args.decompressor, args.release_evidence,
+    ), sort_keys=True))
     return 0
 
 

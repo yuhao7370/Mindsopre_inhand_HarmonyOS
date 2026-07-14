@@ -133,6 +133,7 @@ def build_final_package_fixture(root):
         "stage": stage,
         "packageManifest": package_manifest,
         "decompressor": decompressor,
+        "releaseEvidence": quality_gate,
         "tar": tar_path,
         "archive": stage / "translation-models.tar.xz",
         "archiveManifest": archive_manifest,

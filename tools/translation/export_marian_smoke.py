@@ -38,6 +38,22 @@ V5_EVALUATOR_CODE_SHA256 = "e331e9bed826c3b8c94f8db4c5e74d0a67a09957769994547908
 V5_EVALUATION_REPORT_SHA256 = "5999214747b78cf23d1895acb7dc479f786fb982810c1b69a807e6a4d9003b2c"
 V5_EVALUATION_MANIFEST_SHA256 = "651da63181c1bbfed7a3dccabf1734d838fd0d857cd5d0850de01890d7592b39"
 V5_EVALUATION_BUDGET_SHA256 = "bc1f9d8fad59530b4f47ceb054b9dab22e4c33877d2255dbf5bd27d8400a7f14"
+V5_LOCAL_LEARNING_CANDIDATE = {
+    "model_sha256": "3b8b9a61910ae1b147947eef0168d6b0c5b8033d0a9059e82ef79cc468ce705f",
+    "tokenizer_sha256": "e5528a5c3685d08f8868902d31febeb763eea8519f9997f43b05964b02554640",
+}
+V5_LOCAL_LEARNING_GLOBAL_STEP = 18284
+V5_LOCAL_LEARNING_ADAMW_STEP = 18279
+V5_LOCAL_LEARNING_TERMINAL = {
+    "path": "v5-terminal-v1.json",
+    "bytes": 7020,
+    "sha256": "61f9554923cbc617d813d3c0b7128d44456e703bd3e1806978810cd1fa5ebd13",
+}
+V5_LOCAL_LEARNING_AUTHORIZATION = {
+    "path": "local-learning-authorization-v1.json",
+    "bytes": 1296,
+    "sha256": "41dad5c85dfbfcab652b06b81f90bff1a365c297fef49d9470c3366b17bcf0db",
+}
 
 
 class ContractError(RuntimeError):
@@ -130,19 +146,12 @@ def _validate_local_learning_approval_record(approval: object) -> bool:
         and approval.get("productionPromotionAllowed") is False
         and approval.get("userAuthorization") == LOCAL_LEARNING_USER_AUTHORIZATION
         and approval.get("limitations") == list(LOCAL_LEARNING_LIMITATIONS)
-        and isinstance(candidate, dict)
-        and set(candidate) == {"model_sha256", "tokenizer_sha256"}
-        and all(
-            isinstance(value, str)
-            and len(value) == 64
-            and all(character in "0123456789abcdef" for character in value)
-            for value in candidate.values()
-        )
-        and type(approval.get("candidateGlobalStep")) is int
-        and approval["candidateGlobalStep"] > 0
-        and type(approval.get("candidateAdamWStep")) is int
-        and approval["candidateAdamWStep"] > 0
+        and candidate == V5_LOCAL_LEARNING_CANDIDATE
+        and approval.get("candidateGlobalStep") == V5_LOCAL_LEARNING_GLOBAL_STEP
+        and approval.get("candidateAdamWStep") == V5_LOCAL_LEARNING_ADAMW_STEP
         and approval.get("evaluatorCodeSha256") == V5_EVALUATOR_CODE_SHA256
+        and approval.get("v5Terminal") == V5_LOCAL_LEARNING_TERMINAL
+        and approval.get("authorizationReport") == V5_LOCAL_LEARNING_AUTHORIZATION
         and approval.get("evaluationReport", {}).get("sha256") == V5_EVALUATION_REPORT_SHA256
         and approval.get("evaluationManifest", {}).get("sha256") == V5_EVALUATION_MANIFEST_SHA256
         and approval.get("budgetReceipt", {}).get("sha256") == V5_EVALUATION_BUDGET_SHA256

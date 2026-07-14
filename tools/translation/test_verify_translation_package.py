@@ -148,17 +148,24 @@ class TranslationPackageTest(unittest.TestCase):
         }]
         manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
         with self.assertRaisesRegex(PackageError, "allowance"):
-            verify_package(manifest_path, fixture["stage"], fixture["decompressor"])
+            verify_package(
+                manifest_path, fixture["stage"], fixture["decompressor"], fixture["releaseEvidence"]
+            )
 
         manifest["allowances"] = []
         manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
-        result = verify_package(manifest_path, fixture["stage"], fixture["decompressor"])
+        result = verify_package(
+            manifest_path, fixture["stage"], fixture["decompressor"], fixture["releaseEvidence"]
+        )
         self.assertEqual(result["allowanceBytes"], 0)
 
     def test_final_mode_verifies_external_decompressor_and_rejects_rawfile_duplicate(self):
         self.assertIn("decompressor_path", inspect.signature(verify_package).parameters)
         fixture = self._authentic_final("final-native")
-        result = verify_package(fixture["packageManifest"], fixture["stage"], fixture["decompressor"])
+        result = verify_package(
+            fixture["packageManifest"], fixture["stage"], fixture["decompressor"],
+            fixture["releaseEvidence"],
+        )
         self.assertEqual(
             result["assetBytes"],
             sum(path.stat().st_size for path in fixture["stage"].iterdir())
@@ -168,7 +175,24 @@ class TranslationPackageTest(unittest.TestCase):
         duplicate = fixture["stage"] / fixture["decompressor"].name
         duplicate.write_bytes(fixture["decompressor"].read_bytes())
         with self.assertRaisesRegex(PackageError, "unexpected|duplicate"):
+            verify_package(
+                fixture["packageManifest"], fixture["stage"], fixture["decompressor"],
+                fixture["releaseEvidence"],
+            )
+
+    def test_final_release_evidence_is_external_and_binds_the_production_candidate(self):
+        self.assertIn("release_evidence_path", inspect.signature(verify_package).parameters)
+        fixture = self._authentic_final("final-release-evidence")
+        with self.assertRaisesRegex(PackageError, "external release evidence"):
             verify_package(fixture["packageManifest"], fixture["stage"], fixture["decompressor"])
+        manifest = json.loads(fixture["packageManifest"].read_text(encoding="utf-8"))
+        manifest["evidence"]["approval"]["candidate"]["model_sha256"] = "f" * 64
+        fixture["packageManifest"].write_text(json.dumps(manifest), encoding="utf-8")
+        with self.assertRaisesRegex(PackageError, "release|approval|candidate|gate"):
+            verify_package(
+                fixture["packageManifest"], fixture["stage"], fixture["decompressor"],
+                fixture["releaseEvidence"],
+            )
 
     def test_final_mode_rejects_removal_of_every_required_asset(self):
         for role, name in REQUIRED_ASSETS.items():

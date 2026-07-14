@@ -36,6 +36,8 @@ class ProjectTranslationGuardTest(unittest.TestCase):
         guard_source = GUARD.read_text(encoding="utf-8")
         self.assertIn("[string]$NativeDecompressorPath", guard_source)
         self.assertIn("'--decompressor'", guard_source)
+        self.assertIn("[string]$ReleaseEvidencePath", guard_source)
+        self.assertIn("'--release-evidence'", guard_source)
 
         build_source = BUILD_HAP.read_text(encoding="utf-8")
         self.assertNotIn("verify-translation-model.ps1", build_source)
@@ -59,6 +61,7 @@ class ProjectTranslationGuardTest(unittest.TestCase):
         self.stage = fixture["stage"]
         self.decompressor = fixture["decompressor"]
         self.package_manifest = fixture["packageManifest"]
+        self.release_evidence = fixture["releaseEvidence"]
         self.tar_record = fixture["archiveManifest"]["tar"]
 
     def tearDown(self):
@@ -86,6 +89,7 @@ class ProjectTranslationGuardTest(unittest.TestCase):
             str(POWERSHELL), "-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
             "-File", str(GUARD), "-StageRoot", str(self.stage), "-PackageManifestPath", str(self.package_manifest),
             "-NativeDecompressorPath", str(self.decompressor),
+            "-ReleaseEvidencePath", str(self.release_evidence),
             "-Python", sys.executable,
         ], cwd=ROOT, text=True, capture_output=True)
 

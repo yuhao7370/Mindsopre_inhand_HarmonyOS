@@ -620,7 +620,8 @@ def generate_final_package(
     }
     package_manifest_path.parent.mkdir(parents=True, exist_ok=True)
     _write_json(package_manifest_path, package)
-    verify_package(package_manifest_path, stage_root, decompressor)
+    release_evidence = local_learning_authorization or quality_gate_report
+    verify_package(package_manifest_path, stage_root, decompressor, release_evidence)
     return package
 
 

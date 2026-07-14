@@ -319,14 +319,14 @@ class FinalTranslationPackageGeneratorTest(unittest.TestCase):
                 bad = self.root / ("missing-" + field + ".json")
                 bad.write_text(json.dumps(mutated), encoding="utf-8")
                 with self.assertRaisesRegex(PackageError, "evidence|provenance|approval|artifact"):
-                    verify_package(bad, stage, self.decompressor)
+                    verify_package(bad, stage, self.decompressor, self.quality_gate_report)
 
         mutated = json.loads(package_path.read_text(encoding="utf-8"))
         mutated["evidence"]["approval"]["candidate"]["tokenizer_sha256"] = "0" * 64
         bad = self.root / "forged-approval.json"
         bad.write_text(json.dumps(mutated), encoding="utf-8")
         with self.assertRaisesRegex(PackageError, "approval|tokenizer|provenance"):
-            verify_package(bad, stage, self.decompressor)
+            verify_package(bad, stage, self.decompressor, self.quality_gate_report)
 
     def test_local_learning_package_retains_non_production_authorization_and_full_v5_evidence(self):
         conversion = json.loads(self.conversion_report.read_text(encoding="utf-8"))
@@ -482,6 +482,9 @@ class FinalTranslationPackageGeneratorTest(unittest.TestCase):
             V5_EVALUATION_REPORT_SHA256=_artifact(evaluation_path)["sha256"],
             V5_EVALUATION_MANIFEST_SHA256=_artifact(evaluation_manifest_path)["sha256"],
             V5_EVALUATION_BUDGET_SHA256=_artifact(final_budget_path)["sha256"],
+            V5_LOCAL_LEARNING_CANDIDATE=candidate,
+            V5_LOCAL_LEARNING_TERMINAL=_artifact(terminal_path),
+            V5_LOCAL_LEARNING_AUTHORIZATION=_artifact(authorization_path),
         ), mock.patch(
             "tools.translation.export_marian_smoke.load_budget_evidence",
             return_value=budget_result,
@@ -511,10 +514,72 @@ class FinalTranslationPackageGeneratorTest(unittest.TestCase):
         self.assertEqual(package["evidence"]["evaluationManifest"], _artifact(evaluation_manifest_path))
         self.assertEqual(package["evidence"]["budgetReceipt"], _artifact(final_budget_path))
 
-        package["evidence"]["approval"]["productionPromotionAllowed"] = True
-        package_path.write_text(json.dumps(package), encoding="utf-8")
-        with self.assertRaisesRegex(PackageError, "production|promotion|local-learning"):
-            verify_package(package_path, stage, self.decompressor)
+        pristine = json.loads(json.dumps(package))
+
+        def mutate(path, replacement, mirror=None):
+            forged = json.loads(json.dumps(pristine))
+            target = forged["evidence"]["approval"]
+            for name in path[:-1]:
+                target = target[name]
+            target[path[-1]] = replacement
+            if mirror is not None:
+                forged["evidence"][mirror] = json.loads(json.dumps(
+                    forged["evidence"]["approval"][mirror]
+                ))
+            package_path.write_text(json.dumps(forged), encoding="utf-8")
+
+        mutations = (
+            (("candidate", "model_sha256"), "f" * 64, None),
+            (("candidate", "tokenizer_sha256"), "f" * 64, None),
+            (("candidateGlobalStep",), 1, None),
+            (("candidateAdamWStep",), 1, None),
+            (("v5Terminal", "path"), "forged-terminal.json", "v5Terminal"),
+            (("v5Terminal", "bytes"), 1, "v5Terminal"),
+            (("v5Terminal", "sha256"), "f" * 64, "v5Terminal"),
+            (("authorizationReport", "path"), "forged-authorization.json", "authorizationReport"),
+            (("authorizationReport", "bytes"), 1, "authorizationReport"),
+            (("authorizationReport", "sha256"), "f" * 64, "authorizationReport"),
+            (("evaluationReport", "sha256"), "f" * 64, "evaluationReport"),
+            (("evaluationManifest", "sha256"), "f" * 64, "evaluationManifest"),
+            (("budgetReceipt", "sha256"), "f" * 64, "budgetReceipt"),
+        )
+        verifier_constants = {
+            "V5_EVALUATOR_CODE_SHA256": "a" * 64,
+            "V5_EVALUATION_REPORT_SHA256": _artifact(evaluation_path)["sha256"],
+            "V5_EVALUATION_MANIFEST_SHA256": _artifact(evaluation_manifest_path)["sha256"],
+            "V5_EVALUATION_BUDGET_SHA256": _artifact(final_budget_path)["sha256"],
+            "V5_LOCAL_LEARNING_CANDIDATE": candidate,
+            "V5_LOCAL_LEARNING_TERMINAL": _artifact(terminal_path),
+            "V5_LOCAL_LEARNING_AUTHORIZATION": _artifact(authorization_path),
+        }
+        with mock.patch.multiple("tools.translation.export_marian_smoke", **verifier_constants):
+            for path, replacement, mirror in mutations:
+                with self.subTest(local_identity=".".join(path)):
+                    mutate(path, replacement, mirror)
+                    with self.assertRaisesRegex(PackageError, "local-learning|approval|release"):
+                        verify_package(
+                            package_path, stage, self.decompressor, authorization_path,
+                        )
+
+            reclassified = json.loads(json.dumps(pristine))
+            reclassified["evidence"] = {
+                "sourceEvidence": reclassified["evidence"]["sourceEvidence"],
+                "canonicalRebuild": reclassified["evidence"]["canonicalRebuild"],
+                "conversionReport": reclassified["evidence"]["conversionReport"],
+                "qualityGateReport": {"path": "forged-gate.json", "bytes": 1, "sha256": "f" * 64},
+                "approval": {
+                    "candidate": candidate,
+                    "candidateEpoch": 1,
+                    "objectiveHashes": {"forged": "f" * 64},
+                },
+            }
+            package_path.write_text(json.dumps(reclassified), encoding="utf-8")
+            with self.assertRaisesRegex(PackageError, "local-learning|authorization|release"):
+                verify_package(package_path, stage, self.decompressor, authorization_path)
+
+            mutate(("productionPromotionAllowed",), True)
+            with self.assertRaisesRegex(PackageError, "production|promotion|local-learning"):
+                verify_package(package_path, stage, self.decompressor, authorization_path)
 
     def test_final_verifier_rebuilds_raw_assets_and_binds_archive_evidence(self):
         base_stage, base_package = self._generate("authentic-base")
@@ -547,7 +612,7 @@ class FinalTranslationPackageGeneratorTest(unittest.TestCase):
                     self._refresh_checksums(stage)
                 self._refresh_package_assets(package, stage)
                 with self.assertRaisesRegex(PackageError, message):
-                    verify_package(package, stage, self.decompressor)
+                    verify_package(package, stage, self.decompressor, self.quality_gate_report)
 
         for name, artifact, message in (
             ("different-evidence", "source", "evidence|rebuild"),
@@ -565,7 +630,7 @@ class FinalTranslationPackageGeneratorTest(unittest.TestCase):
                     package["evidence"]["canonicalRebuild"][artifact] = dict(record)
                 package_path.write_text(json.dumps(package), encoding="utf-8")
                 with self.assertRaisesRegex(PackageError, message):
-                    verify_package(package_path, stage, self.decompressor)
+                    verify_package(package_path, stage, self.decompressor, self.quality_gate_report)
 
         stage, package_path = self._copied_fixture(base_stage, base_package, "trailing-xz")
         archive = stage / "translation-models.tar.xz"
@@ -583,7 +648,7 @@ class FinalTranslationPackageGeneratorTest(unittest.TestCase):
         self._refresh_checksums(stage)
         self._refresh_package_assets(package_path, stage)
         with self.assertRaisesRegex(PackageError, "XZ|archive|stream|trailing"):
-            verify_package(package_path, stage, self.decompressor)
+            verify_package(package_path, stage, self.decompressor, self.quality_gate_report)
 
     def test_final_verifier_requires_trusted_aarch64_elf_shared_object(self):
         base_stage, base_package = self._generate("native-base")
@@ -605,7 +670,7 @@ class FinalTranslationPackageGeneratorTest(unittest.TestCase):
                 native.write_bytes(elf(machine))
                 self._refresh_package_assets(package, stage, native)
                 with self.assertRaisesRegex(PackageError, message):
-                    verify_package(package, stage, native)
+                    verify_package(package, stage, native, self.quality_gate_report)
 
     def test_generates_complete_deterministic_raw_assets_and_external_native_manifest(self):
         stage_a, package_a = self._generate("a")
@@ -652,7 +717,7 @@ class FinalTranslationPackageGeneratorTest(unittest.TestCase):
         self.assertEqual(package["allowances"], [])
         self.assertEqual([asset["path"] for asset in package["assets"]], sorted(RAW_ASSETS | {self.decompressor.name}))
         self.assertEqual(package["evidence"]["sourceEvidence"], package["evidence"]["canonicalRebuild"])
-        verified = verify_package(package_a, stage_a, self.decompressor)
+        verified = verify_package(package_a, stage_a, self.decompressor, self.quality_gate_report)
         self.assertEqual(verified["allowanceBytes"], 0)
         self.assertEqual(verified["totalBytes"], sum(asset["size"] for asset in package["assets"]))
 

@@ -11,6 +11,7 @@ from tools.translation.export_marian_smoke import (
     LOCAL_LEARNING_USER_AUTHORIZATION,
     PINNED_REVISION,
     PROTOTYPE_MODEL_SHA256,
+    _validate_local_learning_approval_record,
     _inspect_onnx,
     _validate_checkpoint,
     _validate_stable_softmax,
@@ -27,6 +28,74 @@ ROOT = Path(__file__).parent
 
 
 class ExportContractTest(unittest.TestCase):
+    def test_persisted_local_learning_approval_rejects_every_v5_identity_mutation(self):
+        trusted = {
+            "releaseChannel": "local-learning",
+            "productionPromotionAllowed": False,
+            "userAuthorization": LOCAL_LEARNING_USER_AUTHORIZATION,
+            "limitations": list(LOCAL_LEARNING_LIMITATIONS),
+            "candidate": {
+                "model_sha256": "3b8b9a61910ae1b147947eef0168d6b0c5b8033d0a9059e82ef79cc468ce705f",
+                "tokenizer_sha256": "e5528a5c3685d08f8868902d31febeb763eea8519f9997f43b05964b02554640",
+            },
+            "candidateGlobalStep": 18284,
+            "candidateAdamWStep": 18279,
+            "evaluatorCodeSha256": "e331e9bed826c3b8c94f8db4c5e74d0a67a09957769994547908626d7db39971",
+            "authorizationReport": {
+                "path": "local-learning-authorization-v1.json",
+                "bytes": 1296,
+                "sha256": "41dad5c85dfbfcab652b06b81f90bff1a365c297fef49d9470c3366b17bcf0db",
+            },
+            "v5Terminal": {
+                "path": "v5-terminal-v1.json",
+                "bytes": 7020,
+                "sha256": "61f9554923cbc617d813d3c0b7128d44456e703bd3e1806978810cd1fa5ebd13",
+            },
+            "evaluationReport": {
+                "path": "v5-candidate-quality-evaluation-v1.json",
+                "bytes": 4114,
+                "sha256": "5999214747b78cf23d1895acb7dc479f786fb982810c1b69a807e6a4d9003b2c",
+            },
+            "evaluationManifest": {
+                "path": "v5-candidate-quality-manifest-v1.json",
+                "bytes": 4945,
+                "sha256": "651da63181c1bbfed7a3dccabf1734d838fd0d857cd5d0850de01890d7592b39",
+            },
+            "budgetReceipt": {
+                "path": "budget-terminal-v5-candidate-evaluation-v1.json",
+                "bytes": 586,
+                "sha256": "bc1f9d8fad59530b4f47ceb054b9dab22e4c33877d2255dbf5bd27d8400a7f14",
+            },
+        }
+        self.assertTrue(_validate_local_learning_approval_record(trusted))
+
+        def set_value(value, path, replacement):
+            target = value
+            for name in path[:-1]:
+                target = target[name]
+            target[path[-1]] = replacement
+
+        mutations = (
+            (("candidate", "model_sha256"), "f" * 64),
+            (("candidate", "tokenizer_sha256"), "f" * 64),
+            (("candidateGlobalStep",), 1),
+            (("candidateAdamWStep",), 1),
+            (("v5Terminal", "path"), "forged-terminal.json"),
+            (("v5Terminal", "bytes"), 1),
+            (("v5Terminal", "sha256"), "f" * 64),
+            (("authorizationReport", "path"), "forged-authorization.json"),
+            (("authorizationReport", "bytes"), 1),
+            (("authorizationReport", "sha256"), "f" * 64),
+            (("evaluationReport", "sha256"), "f" * 64),
+            (("evaluationManifest", "sha256"), "f" * 64),
+            (("budgetReceipt", "sha256"), "f" * 64),
+        )
+        for path, replacement in mutations:
+            with self.subTest(path=".".join(path)):
+                forged = json.loads(json.dumps(trusted))
+                set_value(forged, path, replacement)
+                self.assertFalse(_validate_local_learning_approval_record(forged))
+
     def test_local_learning_final_export_binds_v5_candidate_evaluation_and_budget_without_promotion(self):
         def canonical(value):
             return (json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
@@ -199,6 +268,9 @@ class ExportContractTest(unittest.TestCase):
                 V5_EVALUATION_REPORT_SHA256=artifact(evaluation_path)["sha256"],
                 V5_EVALUATION_MANIFEST_SHA256=artifact(evaluation_manifest_path)["sha256"],
                 V5_EVALUATION_BUDGET_SHA256=artifact(final_budget_path)["sha256"],
+                V5_LOCAL_LEARNING_CANDIDATE=candidate,
+                V5_LOCAL_LEARNING_TERMINAL=artifact(terminal_path),
+                V5_LOCAL_LEARNING_AUTHORIZATION=artifact(authorization_path),
             ), mock.patch(
                 "tools.translation.export_marian_smoke.load_budget_evidence",
                 return_value={
