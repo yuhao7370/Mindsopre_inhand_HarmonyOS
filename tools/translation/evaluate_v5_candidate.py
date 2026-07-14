@@ -271,6 +271,55 @@ def build_budget_receipt(prior, elapsed, status, error):
     }
 
 
+def evaluation_budget_guard(prior, started, now=time.perf_counter):
+    if not isinstance(prior, dict) or isinstance(started, bool) or not isinstance(
+        started, (int, float)
+    ):
+        raise CandidateEvaluationError("evaluation budget guard inputs differ")
+    elapsed = float(now()) - float(started)
+    remaining = float(prior["totalBudgetSeconds"]) - float(
+        prior["cumulativeActualSeconds"]
+    )
+    if not math.isfinite(elapsed) or elapsed < 0 or remaining < 0 or elapsed > remaining:
+        raise CandidateEvaluationError("evaluation GPU budget exceeded during decode")
+    return elapsed
+
+
+def build_budget_overrun_terminal(prior, elapsed, error):
+    if (
+        not isinstance(prior, dict)
+        or not _valid_artifact(prior.get("artifact"))
+        or not _valid_artifact(prior.get("rootEvidence"))
+        or isinstance(elapsed, bool)
+        or not isinstance(elapsed, (int, float))
+        or not math.isfinite(elapsed)
+        or elapsed < 0
+        or not isinstance(error, str)
+        or not error
+    ):
+        raise CandidateEvaluationError("budget overrun terminal inputs differ")
+    previous = float(prior["cumulativeActualSeconds"])
+    total = float(prior["totalBudgetSeconds"])
+    cumulative = previous + float(elapsed)
+    remaining = total - cumulative
+    if total != TOTAL_GPU_BUDGET_SECONDS or remaining >= 0:
+        raise CandidateEvaluationError("budget overrun terminal requires a real overrun")
+    return {
+        "schema_version": 1,
+        "stage": EVALUATION_STAGE,
+        "status": "failed",
+        "admissibleForContinuation": False,
+        "priorEvidence": prior["artifact"],
+        "rootEvidence": prior["rootEvidence"],
+        "priorCumulativeSeconds": previous,
+        "evaluationActualSeconds": float(elapsed),
+        "cumulativeActualSeconds": cumulative,
+        "totalBudgetSeconds": total,
+        "remainingSeconds": remaining,
+        "error": error,
+    }
+
+
 def build_complete_manifest(identity, inputs, outputs):
     if identity != EVALUATION_IDENTITY or not inputs or not outputs:
         raise CandidateEvaluationError("complete manifest identity or inventory differs")
@@ -293,7 +342,7 @@ def build_complete_manifest(identity, inputs, outputs):
     }
 
 
-def validate_complete_manifest(manifest, root):
+def validate_complete_manifest(manifest, root, input_paths=None):
     if (
         not isinstance(manifest, dict)
         or set(manifest) != {"schema_version", "identity", "stage", "inputs", "outputs"}
@@ -307,12 +356,83 @@ def validate_complete_manifest(manifest, root):
     ):
         raise CandidateEvaluationError("complete manifest contract differs")
     root = Path(root).resolve()
-    for group in ("inputs", "outputs"):
-        for artifact in manifest[group].values():
+    if input_paths is not None:
+        if not isinstance(input_paths, dict) or set(input_paths) != set(manifest["inputs"]):
+            raise CandidateEvaluationError("complete manifest input inventory differs")
+        for label, artifact in manifest["inputs"].items():
+            expected = {key: artifact[key] for key in ("path", "bytes", "sha256")}
+            path = Path(input_paths[label]).resolve()
+            if (
+                not _valid_artifact(expected)
+                or path.name != expected["path"]
+                or _artifact(path) != expected
+            ):
+                raise CandidateEvaluationError("complete manifest input inventory differs")
+    else:
+        for artifact in manifest["inputs"].values():
             expected = {key: artifact[key] for key in ("path", "bytes", "sha256")}
             if not _valid_artifact(expected) or _artifact(root / expected["path"]) != expected:
                 raise CandidateEvaluationError("complete manifest artifact differs")
+    for artifact in manifest["outputs"].values():
+        expected = {key: artifact[key] for key in ("path", "bytes", "sha256")}
+        if not _valid_artifact(expected) or _artifact(root / expected["path"]) != expected:
+            raise CandidateEvaluationError("complete manifest artifact differs")
     return manifest
+
+
+def validate_evaluator_trust_anchor(report, manifest, authorized_evaluator_sha256):
+    if (
+        not isinstance(authorized_evaluator_sha256, str)
+        or len(authorized_evaluator_sha256) != 64
+        or any(value not in "0123456789abcdef" for value in authorized_evaluator_sha256)
+        or not isinstance(report, dict)
+        or report.get("identity") != EVALUATION_IDENTITY
+        or report.get("stage") != EVALUATION_STAGE
+        or report.get("status") != "completed"
+        or not isinstance(report.get("execution"), dict)
+        or report["execution"].get("evaluatorCodeSha256") != authorized_evaluator_sha256
+        or not isinstance(manifest, dict)
+        or manifest.get("identity") != EVALUATION_IDENTITY
+        or manifest.get("stage") != EVALUATION_STAGE
+        or not isinstance(manifest.get("inputs"), dict)
+        or not isinstance(manifest["inputs"].get("evaluator_code"), dict)
+        or manifest["inputs"]["evaluator_code"].get("sha256")
+        != authorized_evaluator_sha256
+    ):
+        raise CandidateEvaluationError("externally authorized evaluator hash differs")
+    return authorized_evaluator_sha256
+
+
+def validate_evaluation_bundle(
+    report_path, manifest_path, receipt_path, output_root, input_paths,
+    authorized_evaluator_sha256, supporting_budget_evidence,
+):
+    report = _canonical_load(report_path, "V5 quality report")
+    manifest = _canonical_load(manifest_path, "V5 quality manifest")
+    receipt = _canonical_load(receipt_path, "V5 quality budget receipt")
+    validate_complete_manifest(manifest, output_root, input_paths)
+    validate_evaluator_trust_anchor(report, manifest, authorized_evaluator_sha256)
+    receipt_artifact = _artifact(receipt_path)
+    if (
+        report.get("gpuLedger") != receipt
+        or report.get("artifacts", {}).get("budgetReceipt") != receipt_artifact
+        or manifest.get("outputs", {}).get("budget_receipt") != receipt_artifact
+        or receipt.get("stage") != EVALUATION_STAGE
+        or receipt.get("status") != "completed"
+        or receipt.get("error") is not None
+    ):
+        raise CandidateEvaluationError("V5 quality bundle budget binding differs")
+    try:
+        chain = load_budget_evidence(receipt_path, supporting_budget_evidence)
+    except Exception as error:
+        raise CandidateEvaluationError("V5 quality bundle recursive budget differs") from error
+    if (
+        chain.get("artifact") != receipt_artifact
+        or chain.get("cumulativeActualSeconds") != receipt.get("cumulativeActualSeconds")
+        or chain.get("rootEvidence") != receipt.get("rootEvidence")
+    ):
+        raise CandidateEvaluationError("V5 quality bundle recursive budget differs")
+    return {"report": report, "manifest": manifest, "receipt": receipt, "chain": chain}
 
 
 def _validate_static_input(path, expected, label):
@@ -361,12 +481,30 @@ def _configure_determinism():
     return torch
 
 
-def _manual_translations(torch, model, processor, rows):
+def _translate_bounded(
+    torch, model, processor, texts, direction, budget_guard, chunk_size=256,
+):
+    outputs = []
+    for start in range(0, len(texts), chunk_size):
+        budget_guard()
+        outputs.extend(
+            translate_texts(
+                torch, model, processor, texts[start:start + chunk_size], direction
+            )
+        )
+        budget_guard()
+    if len(outputs) != len(texts):
+        raise CandidateEvaluationError("bounded translation result count differs")
+    return outputs
+
+
+def _manual_translations(torch, model, processor, rows, budget_guard):
     outputs = [None] * len(rows)
     for direction in ("zh-en", "en-zh"):
         indexes = [index for index, row in enumerate(rows) if row["direction"] == direction]
-        translated = translate_texts(
-            torch, model, processor, [rows[index]["source"] for index in indexes], direction
+        translated = _translate_bounded(
+            torch, model, processor, [rows[index]["source"] for index in indexes],
+            direction, budget_guard,
         )
         for index, output in zip(indexes, translated):
             outputs[index] = output
@@ -413,8 +551,8 @@ def evaluate(args):
     )
     script_path = Path(__file__).resolve()
     code_artifact = _artifact(script_path)
-    if args.evaluator_code_sha256 != code_artifact["sha256"]:
-        raise CandidateEvaluationError("evaluator code launch hash differs")
+    if args.authorized_evaluator_code_sha256 != code_artifact["sha256"]:
+        raise CandidateEvaluationError("externally authorized evaluator code hash differs")
     execution_inputs = _execution_inputs(script_path)
     # The pinned prepare_bist publication format is pretty JSON; its exact byte hash
     # above and the six per-file hashes below bind it without changing that format.
@@ -453,9 +591,12 @@ def evaluate(args):
     inputs.update(execution_inputs)
 
     receipt_path = output_root / "budget-terminal-v5-candidate-evaluation-v1.json"
+    overrun_path = output_root / "budget-overrun-terminal-v5-candidate-evaluation-v1.json"
     started = time.perf_counter()
     torch = None
+    budget_guard = lambda: evaluation_budget_guard(prior, started)
     try:
+        budget_guard()
         torch = _configure_determinism()
         torch.cuda.reset_peak_memory_stats()
         torch, model, processor = load_runtime(
@@ -466,8 +607,9 @@ def evaluate(args):
         bist_output_rows = []
         for direction in ("zh-en", "en-zh"):
             rows = test_rows[direction]
-            outputs = translate_texts(
-                torch, model, processor, [row["source"] for row in rows], direction
+            outputs = _translate_bounded(
+                torch, model, processor, [row["source"] for row in rows], direction,
+                budget_guard,
             )
             direction_outputs[direction] = outputs
             direction_metrics[direction] = corpus_metrics(
@@ -484,7 +626,8 @@ def evaluate(args):
                     "output": output,
                 })
         raw_manual_rows = build_manual_results(
-            manual_rows, _manual_translations(torch, model, processor, manual_rows)
+            manual_rows,
+            _manual_translations(torch, model, processor, manual_rows, budget_guard),
         )
         torch.cuda.synchronize()
         elapsed = time.perf_counter() - started
@@ -497,8 +640,17 @@ def evaluate(args):
             except Exception:
                 pass
         elapsed = time.perf_counter() - started
-        receipt = build_budget_receipt(prior, elapsed, "failed", "%s: %s" % (type(error).__name__, error))
-        _write_json(receipt_path, receipt)
+        error_text = "%s: %s" % (type(error).__name__, error)
+        if float(prior["cumulativeActualSeconds"]) + elapsed > float(
+            prior["totalBudgetSeconds"]
+        ):
+            _write_json(
+                overrun_path,
+                build_budget_overrun_terminal(prior, elapsed, error_text),
+            )
+        else:
+            receipt = build_budget_receipt(prior, elapsed, "failed", error_text)
+            _write_json(receipt_path, receipt)
         raise
 
     bist_path = output_root / "bist-test-outputs-v5-candidate-v1.jsonl"
@@ -558,6 +710,7 @@ def evaluate(args):
     )
     manifest_path = output_root / "v5-candidate-quality-manifest-v1.json"
     _write_json(manifest_path, manifest)
+    validate_complete_manifest(manifest, output_root, inputs)
     return {
         "report": report_path,
         "manifest": manifest_path,
@@ -576,7 +729,7 @@ def _parser():
     parser.add_argument("--manual-set", required=True)
     parser.add_argument("--training-config", required=True)
     parser.add_argument("--output-root", required=True)
-    parser.add_argument("--evaluator-code-sha256", required=True)
+    parser.add_argument("--authorized-evaluator-code-sha256", required=True)
     return parser
 
 

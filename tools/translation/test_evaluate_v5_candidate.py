@@ -10,8 +10,11 @@ from tools.translation.evaluate_v5_candidate import (
     EVALUATION_IDENTITY,
     EVALUATION_STAGE,
     build_budget_receipt,
+    build_budget_overrun_terminal,
     build_complete_manifest,
     build_manual_results,
+    evaluation_budget_guard,
+    validate_evaluator_trust_anchor,
     validate_complete_manifest,
     validate_v5_binding,
 )
@@ -164,6 +167,52 @@ class V5CandidateEvaluationTest(unittest.TestCase):
             with self.assertRaisesRegex(CandidateEvaluationError, "manifest"):
                 validate_complete_manifest(manifest, root)
 
+    def test_complete_manifest_verifies_cross_root_inputs_by_explicit_label(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            output_root = root / "output"
+            first_root = root / "first"
+            second_root = root / "second"
+            output_root.mkdir()
+            first_root.mkdir()
+            second_root.mkdir()
+            first = first_root / "budget-terminal-v1.json"
+            second = second_root / "budget-terminal-v1.json"
+            output = output_root / "report.json"
+            first.write_bytes(b"first\n")
+            second.write_bytes(b"second\n")
+            output.write_bytes(b"{}\n")
+            inputs = {"prior_budget": first, "v5_budget": second}
+            manifest = build_complete_manifest(
+                EVALUATION_IDENTITY, inputs, {"quality_report": (output, None)}
+            )
+            validate_complete_manifest(manifest, output_root, inputs)
+            with self.assertRaisesRegex(CandidateEvaluationError, "inventory"):
+                validate_complete_manifest(
+                    manifest, output_root, {"prior_budget": second, "v5_budget": first}
+                )
+
+    def test_external_evaluator_trust_anchor_is_required_and_exact(self):
+        authorized = "a" * 64
+        report = {
+            "identity": EVALUATION_IDENTITY,
+            "stage": EVALUATION_STAGE,
+            "status": "completed",
+            "execution": {"evaluatorCodeSha256": authorized},
+        }
+        manifest = {
+            "identity": EVALUATION_IDENTITY,
+            "stage": EVALUATION_STAGE,
+            "inputs": {
+                "evaluator_code": {"path": "evaluate.py", "bytes": 1, "sha256": authorized}
+            },
+        }
+        validate_evaluator_trust_anchor(report, manifest, authorized)
+        with self.assertRaisesRegex(CandidateEvaluationError, "authorized"):
+            validate_evaluator_trust_anchor(report, manifest, "b" * 64)
+        with self.assertRaisesRegex(CandidateEvaluationError, "authorized"):
+            validate_evaluator_trust_anchor(report, manifest, "")
+
     def test_budget_receipt_extends_prior_recursively_without_changing_root(self):
         prior = {
             "artifact": {"path": "budget-terminal-v1.json", "bytes": 578, "sha256": "a" * 64},
@@ -179,6 +228,22 @@ class V5CandidateEvaluationTest(unittest.TestCase):
         self.assertEqual(14263.5, receipt["remainingSeconds"])
         with self.assertRaises(CandidateEvaluationError):
             build_budget_receipt(prior, 14277.0, "completed", None)
+
+    def test_periodic_budget_guard_and_overrun_terminal_fail_closed(self):
+        prior = {
+            "artifact": {"path": "budget-terminal-v1.json", "bytes": 578, "sha256": "a" * 64},
+            "rootEvidence": {"path": "diagnostic-provenance-v1.json", "bytes": 2382, "sha256": "b" * 64},
+            "cumulativeActualSeconds": 43190.0,
+            "totalBudgetSeconds": 43200.0,
+        }
+        self.assertEqual(9.0, evaluation_budget_guard(prior, 100.0, now=lambda: 109.0))
+        with self.assertRaisesRegex(CandidateEvaluationError, "budget"):
+            evaluation_budget_guard(prior, 100.0, now=lambda: 110.001)
+        terminal = build_budget_overrun_terminal(prior, 11.5, "decode exceeded budget")
+        self.assertEqual("failed", terminal["status"])
+        self.assertIs(terminal["admissibleForContinuation"], False)
+        self.assertEqual(-1.5, terminal["remainingSeconds"])
+        self.assertEqual(43201.5, terminal["cumulativeActualSeconds"])
 
 
 if __name__ == "__main__":
