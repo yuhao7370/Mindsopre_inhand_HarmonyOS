@@ -258,7 +258,7 @@ export const featureWorkflows: Array<FeatureWorkflow> = [
     titleKey: 'title_style_transfer',
     summaryKey: 'workflow_summary_style_transfer',
     aiMethod: 'runStyleTransfer',
-    inputKinds: ['camera', 'contentImage', 'styleImage'],
+    inputKinds: ['contentImage', 'camera', 'styleImage'],
     optionalInputKinds: ['stylePredictModelFile', 'styleTransferModelFile'],
     requiredPermissions: ['camera', 'media'],
     resultKind: 'styledImage',
@@ -302,7 +302,8 @@ export function visibleInputKindsForWorkflow(workflow: FeatureWorkflow): Array<F
   const implicitInputKind = autoStartInputKindForWorkflow(workflow) ?? initialInputKindForWorkflow(workflow);
   return runtimeInputKindsForWorkflow(workflow).filter((inputKind: FeatureInputKind) => {
     return inputKind !== implicitInputKind &&
-      (workflow.routeName !== AppRoute.PORTRAIT_SEGMENTATION.name || inputKind !== 'backgroundImage');
+      (workflow.routeName !== AppRoute.PORTRAIT_SEGMENTATION.name || inputKind !== 'backgroundImage') &&
+      (workflow.routeName !== AppRoute.STYLE_TRANSFER.name || inputKind !== 'styleImage');
   });
 }
 

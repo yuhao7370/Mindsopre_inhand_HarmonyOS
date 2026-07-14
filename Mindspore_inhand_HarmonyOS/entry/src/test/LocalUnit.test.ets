@@ -3417,6 +3417,23 @@ export default function localUnitTest() {
       expect(shouldRenderLiveCameraPreview(portraitSegmentation, false)).assertTrue();
     });
 
+    it('matchesAndroidStyleTransferInputSurfaceWithoutDuplicateStyleChip', 0, () => {
+      const styleTransfer: FeatureWorkflow = workflowForRoute(AppRoute.STYLE_TRANSFER.name)!;
+      const runtimeInputKinds: Array<FeatureInputKind> = runtimeInputKindsForWorkflow(styleTransfer);
+      const visibleInputKinds: Array<FeatureInputKind> = visibleInputKindsForWorkflow(styleTransfer);
+
+      expect(JSON.stringify(styleTransfer.inputKinds))
+        .assertEqual(JSON.stringify(['contentImage', 'camera', 'styleImage']));
+      expect(JSON.stringify(runtimeInputKinds)).assertEqual(JSON.stringify([
+        'contentImage', 'camera', 'styleImage', 'stylePredictModelFile', 'styleTransferModelFile'
+      ]));
+      expect(JSON.stringify(visibleInputKinds)).assertEqual(JSON.stringify([
+        'contentImage', 'camera', 'stylePredictModelFile', 'styleTransferModelFile'
+      ]));
+      expect(runtimeInputKinds.includes('styleImage')).assertTrue();
+      expect(visibleInputKinds.includes('styleImage')).assertFalse();
+    });
+
     it('usesAndroidStillImagePromptSummariesWhereAndroidLayoutsShowPrompts', 0, () => {
       const gestureStill: FeatureWorkflow = workflowForRoute(AppRoute.GESTURE_STILL.name)!;
       const gestureLive: FeatureWorkflow = workflowForRoute(AppRoute.GESTURE_LIVE.name)!;

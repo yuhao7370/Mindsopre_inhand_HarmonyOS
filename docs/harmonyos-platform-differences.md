@@ -481,8 +481,11 @@ the preview to the original content image after a styled result is shown.
 
 Current HarmonyOS behavior:
 
-- The shared runtime keeps the existing content image, style image, built-in
-  preset, and optional `.ms` model inputs intact.
+- The shared runtime exposes the Android top-input order: Album, Camera, then
+  the optional predict and transfer `.ms` model selectors.
+- The `styleImage` runtime capability remains intact for preset/custom
+  selection, but it is not rendered as a duplicate top action. The final
+  custom-style add tile is the sole custom style-image picker action.
 - The built-in preset strip matches Android's visible `style0` through
   `style18` entries, followed by Android's final custom-style add tile. The
   tile opens the same style-image picker and shows the selected custom style as
