@@ -16,6 +16,36 @@ function New-HapFixture([string]$Path, [hashtable]$Files) {
   Move-Item -LiteralPath $zip -Destination $Path
 }
 
+function Add-DuplicateHapEntry([string]$Path, [string]$Entry, [string]$Content) {
+  Add-Type -AssemblyName System.IO.Compression
+  Add-Type -AssemblyName System.IO.Compression.FileSystem
+  $fileStream = [System.IO.File]::Open(
+    $Path,
+    [System.IO.FileMode]::Open,
+    [System.IO.FileAccess]::ReadWrite,
+    [System.IO.FileShare]::None
+  )
+  $archive = $null
+  try {
+    $archive = New-Object System.IO.Compression.ZipArchive(
+      $fileStream,
+      [System.IO.Compression.ZipArchiveMode]::Update,
+      $false
+    )
+    $duplicate = $archive.CreateEntry($Entry.Replace('/', '\'))
+    $entryStream = $duplicate.Open()
+    try {
+      $bytes = [System.Text.Encoding]::UTF8.GetBytes($Content)
+      $entryStream.Write($bytes, 0, $bytes.Length)
+    } finally {
+      $entryStream.Dispose()
+    }
+  } finally {
+    if ($null -ne $archive) { $archive.Dispose() }
+    $fileStream.Dispose()
+  }
+}
+
 function New-FileMap([string[]]$Entries) {
   $files = @{}
   foreach ($entry in $Entries) { $files[$entry] = 'fixture' }
@@ -52,6 +82,23 @@ function Assert-GuardRejects(
     throw "Guard rejected '$Label' for the wrong reason: $message"
   }
   Write-Host "Rejected invalid fixture: $Label"
+}
+
+function Assert-GuardAcceptsInFreshProcess([string]$MainHapPath, [string]$OhosTestHapPath) {
+  $previousErrorActionPreference = $ErrorActionPreference
+  $ErrorActionPreference = 'Continue'
+  try {
+    $output = & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $guard `
+      -MainHapPath $MainHapPath -OhosTestHapPath $OhosTestHapPath `
+      -ExpectedRawfileRoot $expectedRawfileRoot -ExpectedNativeLibRoot $expectedNativeRoot 2>&1
+    $exitCode = $LASTEXITCODE
+  } finally {
+    $ErrorActionPreference = $previousErrorActionPreference
+  }
+  if ($exitCode -ne 0) {
+    throw "Fresh powershell.exe rejected valid fixture:`n$($output | Out-String)"
+  }
+  Write-Host 'Accepted valid fixture in fresh powershell.exe.'
 }
 
 $mainEntries = @(
@@ -112,20 +159,33 @@ try {
   New-HapFixture $testHap $testFiles
   & $guard -MainHapPath $mainHap -OhosTestHapPath $testHap `
     -ExpectedRawfileRoot $expectedRawfileRoot -ExpectedNativeLibRoot $expectedNativeRoot
+  Assert-GuardAcceptsInFreshProcess $mainHap $testHap
 
   $tamperedModelHap = Join-Path $tempRoot 'tampered-model.hap'
   $tamperedModelFiles = New-FileMap $mainEntries
   $tamperedModelFiles['module.json'] = $mainModule
-  $tamperedModelFiles['resources/rawfile/models/gesture/GestureDetector.ms'] = 'tampered'
+  $tamperedModelEntry = 'resources/rawfile/models/gesture/GestureDetector.ms'
+  $tamperedModelFiles[$tamperedModelEntry] = 'fixturf'
   New-HapFixture $tamperedModelHap $tamperedModelFiles
-  Assert-GuardRejects 'tampered model content' $tamperedModelHap $testHap 'payload differs from expected file'
+  $expectedModelPath = Join-Path $expectedRawfileRoot 'models/gesture/GestureDetector.ms'
+  Assert-GuardRejects 'tampered model content' $tamperedModelHap $testHap `
+    "payload differs from expected file: $tamperedModelEntry; expected source path: $expectedModelPath"
+
+  $duplicateModelHap = Join-Path $tempRoot 'duplicate-model.hap'
+  Copy-Item -LiteralPath $mainHap -Destination $duplicateModelHap
+  Add-DuplicateHapEntry $duplicateModelHap $tamperedModelEntry 'fixturf'
+  Assert-GuardRejects 'duplicate model entry' $duplicateModelHap $testHap `
+    "payload entry must appear exactly once: $tamperedModelEntry; found 2"
 
   $tamperedLibraryHap = Join-Path $tempRoot 'tampered-library.hap'
   $tamperedLibraryFiles = New-FileMap $mainEntries
   $tamperedLibraryFiles['module.json'] = $mainModule
-  $tamperedLibraryFiles['libs/arm64-v8a/libgesture_mnn.so'] = 'tampered'
+  $tamperedLibraryEntry = 'libs/arm64-v8a/libgesture_mnn.so'
+  $tamperedLibraryFiles[$tamperedLibraryEntry] = 'fixturf'
   New-HapFixture $tamperedLibraryHap $tamperedLibraryFiles
-  Assert-GuardRejects 'tampered native library content' $tamperedLibraryHap $testHap 'payload differs from expected file'
+  $expectedLibraryPath = Join-Path $expectedNativeRoot 'libgesture_mnn.so'
+  Assert-GuardRejects 'tampered native library content' $tamperedLibraryHap $testHap `
+    "payload differs from expected file: $tamperedLibraryEntry; expected source path: $expectedLibraryPath"
 
   $wrongMainBundleHap = Join-Path $tempRoot 'wrong-main-bundle.hap'
   $wrongMainBundleFiles = New-FileMap $mainEntries

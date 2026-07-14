@@ -5,6 +5,8 @@ param(
   [string]$ExpectedNativeLibRoot = ''
 )
 $ErrorActionPreference = 'Stop'
+Add-Type -AssemblyName System.IO.Compression
+Add-Type -AssemblyName System.IO.Compression.FileSystem
 
 if (-not $ExpectedRawfileRoot) {
   $ExpectedRawfileRoot = Join-Path $PSScriptRoot '..\entry\src\main\resources\rawfile'
@@ -34,7 +36,6 @@ function Assert-ExactEntries([string[]]$Entries, [string[]]$Required, [string]$L
 }
 
 function Assert-HapPayloadHashes([string]$Path, [object[]]$Payloads) {
-  Add-Type -AssemblyName System.IO.Compression.FileSystem
   $fileStream = [System.IO.File]::OpenRead($Path)
   $archive = $null
   try {
@@ -47,9 +48,13 @@ function Assert-HapPayloadHashes([string]$Path, [object[]]$Payloads) {
       if (-not (Test-Path -LiteralPath $payload.ExpectedPath -PathType Leaf)) {
         throw "Expected HAP payload does not exist: $($payload.ExpectedPath)"
       }
-      $entry = $archive.GetEntry($payload.Entry)
-      if ($null -eq $entry) { $entry = $archive.GetEntry($payload.Entry.Replace('/', '\')) }
-      if ($null -eq $entry) { throw "Main HAP is missing: $($payload.Entry)" }
+      $matches = @($archive.Entries | Where-Object {
+        $_.FullName.Replace('\', '/') -ceq $payload.Entry
+      })
+      if ($matches.Count -ne 1) {
+        throw "Main HAP payload entry must appear exactly once: $($payload.Entry); found $($matches.Count)"
+      }
+      $entry = $matches[0]
 
       $entryStream = $entry.Open()
       $sha256 = [System.Security.Cryptography.SHA256]::Create()
@@ -61,7 +66,7 @@ function Assert-HapPayloadHashes([string]$Path, [object[]]$Payloads) {
       }
       $expectedHash = (Get-FileHash -LiteralPath $payload.ExpectedPath -Algorithm SHA256).Hash
       if ($actualHash -cne $expectedHash) {
-        throw "Main HAP payload differs from expected file: $($payload.Entry)"
+        throw "Main HAP payload differs from expected file: $($payload.Entry); expected source path: $($payload.ExpectedPath)"
       }
     }
   } finally {
