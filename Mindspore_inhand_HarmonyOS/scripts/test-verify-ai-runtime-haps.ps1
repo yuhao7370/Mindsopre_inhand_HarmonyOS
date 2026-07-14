@@ -23,14 +23,34 @@ function New-FileMap([string[]]$Entries) {
   return $files
 }
 
-function Assert-GuardRejects([string]$Label, [string]$MainHapPath, [string]$OhosTestHapPath) {
+function Write-ExpectedFiles([string]$Root, [hashtable]$Files, [string]$Prefix) {
+  foreach ($entry in @($Files.Keys | Where-Object { $_.StartsWith($Prefix) })) {
+    $relativePath = $entry.Substring($Prefix.Length)
+    $file = Join-Path $Root ($relativePath.Replace('/', [System.IO.Path]::DirectorySeparatorChar))
+    New-Item -ItemType Directory -Path (Split-Path -Parent $file) -Force | Out-Null
+    Set-Content -LiteralPath $file -Value $Files[$entry] -NoNewline -Encoding utf8
+  }
+}
+
+function Assert-GuardRejects(
+  [string]$Label,
+  [string]$MainHapPath,
+  [string]$OhosTestHapPath,
+  [string]$ExpectedMessage = ''
+) {
   $rejected = $false
+  $message = ''
   try {
-    & $guard -MainHapPath $MainHapPath -OhosTestHapPath $OhosTestHapPath *> $null
+    & $guard -MainHapPath $MainHapPath -OhosTestHapPath $OhosTestHapPath `
+      -ExpectedRawfileRoot $expectedRawfileRoot -ExpectedNativeLibRoot $expectedNativeRoot *> $null
   } catch {
     $rejected = $true
+    $message = $_.Exception.Message
   }
   if (-not $rejected) { throw "Guard unexpectedly accepted: $Label" }
+  if ($ExpectedMessage -and -not $message.Contains($ExpectedMessage)) {
+    throw "Guard rejected '$Label' for the wrong reason: $message"
+  }
   Write-Host "Rejected invalid fixture: $Label"
 }
 
@@ -84,32 +104,51 @@ try {
   $testFiles = New-FileMap $testEntries
   $testFiles['module.json'] = $testModule
   $testFiles['pack.info'] = $testPack
+  $expectedRawfileRoot = Join-Path $tempRoot 'expected-rawfile'
+  $expectedNativeRoot = Join-Path $tempRoot 'expected-native'
+  Write-ExpectedFiles $expectedRawfileRoot $mainFiles 'resources/rawfile/'
+  Write-ExpectedFiles $expectedNativeRoot $mainFiles 'libs/arm64-v8a/'
   New-HapFixture $mainHap $mainFiles
   New-HapFixture $testHap $testFiles
-  & $guard -MainHapPath $mainHap -OhosTestHapPath $testHap
+  & $guard -MainHapPath $mainHap -OhosTestHapPath $testHap `
+    -ExpectedRawfileRoot $expectedRawfileRoot -ExpectedNativeLibRoot $expectedNativeRoot
+
+  $tamperedModelHap = Join-Path $tempRoot 'tampered-model.hap'
+  $tamperedModelFiles = New-FileMap $mainEntries
+  $tamperedModelFiles['module.json'] = $mainModule
+  $tamperedModelFiles['resources/rawfile/models/gesture/GestureDetector.ms'] = 'tampered'
+  New-HapFixture $tamperedModelHap $tamperedModelFiles
+  Assert-GuardRejects 'tampered model content' $tamperedModelHap $testHap 'payload differs from expected file'
+
+  $tamperedLibraryHap = Join-Path $tempRoot 'tampered-library.hap'
+  $tamperedLibraryFiles = New-FileMap $mainEntries
+  $tamperedLibraryFiles['module.json'] = $mainModule
+  $tamperedLibraryFiles['libs/arm64-v8a/libgesture_mnn.so'] = 'tampered'
+  New-HapFixture $tamperedLibraryHap $tamperedLibraryFiles
+  Assert-GuardRejects 'tampered native library content' $tamperedLibraryHap $testHap 'payload differs from expected file'
 
   $wrongMainBundleHap = Join-Path $tempRoot 'wrong-main-bundle.hap'
   $wrongMainBundleFiles = New-FileMap $mainEntries
   $wrongMainBundleFiles['module.json'] = $mainModule.Replace('com.yuhaofeng.mih', 'com.example.other')
   New-HapFixture $wrongMainBundleHap $wrongMainBundleFiles
-  Assert-GuardRejects 'wrong main bundle name' $wrongMainBundleHap $testHap
+  Assert-GuardRejects 'wrong main bundle name' $wrongMainBundleHap $testHap 'bundle names must match'
 
   $wrongMainModuleHap = Join-Path $tempRoot 'wrong-main-module.hap'
   $wrongMainModuleFiles = New-FileMap $mainEntries
   $wrongMainModuleFiles['module.json'] = $mainModule.Replace('"entry"', '"other"')
   New-HapFixture $wrongMainModuleHap $wrongMainModuleFiles
-  Assert-GuardRejects 'wrong main module name' $wrongMainModuleHap $testHap
+  Assert-GuardRejects 'wrong main module name' $wrongMainModuleHap $testHap 'Main HAP module name must be entry'
 
   $missingMainHap = Join-Path $tempRoot 'missing-main-entry.hap'
   New-HapFixture $missingMainHap (New-FileMap @($mainEntries | Select-Object -SkipLast 1))
-  Assert-GuardRejects 'missing main entry' $missingMainHap $testHap
+  Assert-GuardRejects 'missing main entry' $missingMainHap $testHap 'Main HAP is missing:'
 
   $wrongModuleHap = Join-Path $tempRoot 'wrong-test-module.hap'
   $wrongModuleFiles = New-FileMap $testEntries
   $wrongModuleFiles['module.json'] = $testModule.Replace('entry_test', 'other_test')
   $wrongModuleFiles['pack.info'] = $testPack
   New-HapFixture $wrongModuleHap $wrongModuleFiles
-  Assert-GuardRejects 'wrong test module name' $mainHap $wrongModuleHap
+  Assert-GuardRejects 'wrong test module name' $mainHap $wrongModuleHap 'ohosTest HAP module name must be entry_test'
 
   $missingEntryHap = Join-Path $tempRoot 'missing-paired-entry.hap'
   $missingEntryPack = @{
@@ -122,7 +161,7 @@ try {
   $missingEntryFiles['module.json'] = $testModule
   $missingEntryFiles['pack.info'] = $missingEntryPack
   New-HapFixture $missingEntryHap $missingEntryFiles
-  Assert-GuardRejects 'missing paired entry module' $mainHap $missingEntryHap
+  Assert-GuardRejects 'missing paired entry module' $mainHap $missingEntryHap 'must contain exactly one paired entry module'
 
   $copiedModelHap = Join-Path $tempRoot 'copied-model.hap'
   $copiedModelFiles = New-FileMap $testEntries
@@ -130,7 +169,7 @@ try {
   $copiedModelFiles['pack.info'] = $testPack
   $copiedModelFiles['resources/rawfile/models/gesture/GestureDetector.ms'] = 'fixture'
   New-HapFixture $copiedModelHap $copiedModelFiles
-  Assert-GuardRejects 'copied model in test HAP' $mainHap $copiedModelHap
+  Assert-GuardRejects 'copied model in test HAP' $mainHap $copiedModelHap 'ohosTest HAP contains copied models'
 
   $copiedAppModelHap = Join-Path $tempRoot 'copied-app-model.hap'
   $copiedAppModelFiles = New-FileMap $testEntries
@@ -138,7 +177,7 @@ try {
   $copiedAppModelFiles['pack.info'] = $testPack
   $copiedAppModelFiles['resources/rawfile/model/ssd.ms'] = 'fixture'
   New-HapFixture $copiedAppModelHap $copiedAppModelFiles
-  Assert-GuardRejects 'copied app model in test HAP' $mainHap $copiedAppModelHap
+  Assert-GuardRejects 'copied app model in test HAP' $mainHap $copiedAppModelHap 'ohosTest HAP contains copied models'
 
   Write-Host 'HAP guard contract tests passed.'
 } finally {

@@ -3,9 +3,11 @@ Set-StrictMode -Version Latest
 
 $buildCall = "& (Join-Path `$PSScriptRoot 'build-hap.ps1')"
 $gestureName = 'verify-gesture-native-contract.ps1'
-$gestureCall = "& (Join-Path `$PSScriptRoot '$gestureName')"
+$gestureDefaultCall = "& (Join-Path `$PSScriptRoot '$gestureName')"
+$gestureCall = "$gestureDefaultCall -LibraryPath (Join-Path `$PSScriptRoot '..\entry\build\default\intermediates\stripped_native_libs\default\arm64-v8a\libgesture_mnn.so')"
 $translationName = 'test-translation-xz-native-contract.ps1'
-$translationCall = "& (Join-Path `$PSScriptRoot '$translationName')"
+$translationDefaultCall = "& (Join-Path `$PSScriptRoot '$translationName')"
+$translationCall = "$translationDefaultCall -LibraryPath (Join-Path `$PSScriptRoot '..\entry\build\default\intermediates\stripped_native_libs\default\arm64-v8a\libtranslation_archive.so')"
 $ohosTestCall = '& cmd.exe /d /c "`"$hvigor`" assembleHap --mode module -p product=default -p module=entry@ohosTest --no-daemon 2>&1"'
 
 function Assert-AcceptanceWiring([string]$Source) {
@@ -86,6 +88,20 @@ try {
 }
 if (-not $conditionalRejected) {
   throw 'Wiring guard accepted native verifier calls hidden behind false conditions.'
+}
+
+$defaultLibrarySource = $source.Replace($gestureCall, $gestureDefaultCall).Replace(
+  $translationCall,
+  $translationDefaultCall
+)
+$defaultLibraryRejected = $false
+try {
+  Assert-AcceptanceWiring $defaultLibrarySource
+} catch {
+  $defaultLibraryRejected = $true
+}
+if (-not $defaultLibraryRejected) {
+  throw 'Wiring guard accepted native verifiers without explicit stripped library paths.'
 }
 
 $fakeOhosTestSource = $source.Replace($ohosTestCall, "Write-Output 'module=entry@ohosTest'")

@@ -1,8 +1,17 @@
 param(
   [Parameter(Mandatory = $true)][string]$MainHapPath,
-  [string]$OhosTestHapPath = ''
+  [string]$OhosTestHapPath = '',
+  [string]$ExpectedRawfileRoot = '',
+  [string]$ExpectedNativeLibRoot = ''
 )
 $ErrorActionPreference = 'Stop'
+
+if (-not $ExpectedRawfileRoot) {
+  $ExpectedRawfileRoot = Join-Path $PSScriptRoot '..\entry\src\main\resources\rawfile'
+}
+if (-not $ExpectedNativeLibRoot) {
+  $ExpectedNativeLibRoot = Join-Path $PSScriptRoot '..\entry\build\default\intermediates\stripped_native_libs\default\arm64-v8a'
+}
 
 function Get-HapEntries([string]$Path) {
   if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
@@ -24,8 +33,44 @@ function Assert-ExactEntries([string[]]$Entries, [string[]]$Required, [string]$L
   if ($missing.Count -ne 0) { throw "$Label is missing: $($missing -join ', ')" }
 }
 
-$mainEntries = @(
-  'module.json',
+function Assert-HapPayloadHashes([string]$Path, [object[]]$Payloads) {
+  Add-Type -AssemblyName System.IO.Compression.FileSystem
+  $fileStream = [System.IO.File]::OpenRead($Path)
+  $archive = $null
+  try {
+    $archive = New-Object System.IO.Compression.ZipArchive(
+      $fileStream,
+      [System.IO.Compression.ZipArchiveMode]::Read,
+      $false
+    )
+    foreach ($payload in $Payloads) {
+      if (-not (Test-Path -LiteralPath $payload.ExpectedPath -PathType Leaf)) {
+        throw "Expected HAP payload does not exist: $($payload.ExpectedPath)"
+      }
+      $entry = $archive.GetEntry($payload.Entry)
+      if ($null -eq $entry) { $entry = $archive.GetEntry($payload.Entry.Replace('/', '\')) }
+      if ($null -eq $entry) { throw "Main HAP is missing: $($payload.Entry)" }
+
+      $entryStream = $entry.Open()
+      $sha256 = [System.Security.Cryptography.SHA256]::Create()
+      try {
+        $actualHash = [System.BitConverter]::ToString($sha256.ComputeHash($entryStream)).Replace('-', '')
+      } finally {
+        $sha256.Dispose()
+        $entryStream.Dispose()
+      }
+      $expectedHash = (Get-FileHash -LiteralPath $payload.ExpectedPath -Algorithm SHA256).Hash
+      if ($actualHash -cne $expectedHash) {
+        throw "Main HAP payload differs from expected file: $($payload.Entry)"
+      }
+    }
+  } finally {
+    if ($null -ne $archive) { $archive.Dispose() }
+    $fileStream.Dispose()
+  }
+}
+
+$resourceEntries = @(
   'resources/rawfile/models/gesture/GestureDetector.ms',
   'resources/rawfile/models/gesture/manifest.json',
   'resources/rawfile/models/gesture/NOTICE.md',
@@ -35,15 +80,33 @@ $mainEntries = @(
   'resources/rawfile/models/translation/vocab.json',
   'resources/rawfile/models/translation/manifest.json',
   'resources/rawfile/models/translation/SHA256SUMS',
-  'resources/rawfile/models/translation/LICENSES.md',
+  'resources/rawfile/models/translation/LICENSES.md'
+)
+$nativeEntries = @(
   'libs/arm64-v8a/libgesture_mnn.so',
   'libs/arm64-v8a/libMNN.so',
   'libs/arm64-v8a/libtranslation_archive.so'
 )
+$mainEntries = @('module.json') + $resourceEntries + $nativeEntries
 $mainHapEntries = @(Get-HapEntries $MainHapPath)
 Assert-ExactEntries $mainHapEntries $mainEntries 'Main HAP'
 $mainModule = Read-HapJson $MainHapPath 'module.json'
 if ($mainModule.module.name -ne 'entry') { throw 'Main HAP module name must be entry' }
+$payloads = @(
+  foreach ($entry in $resourceEntries) {
+    [pscustomobject]@{
+      Entry = $entry
+      ExpectedPath = Join-Path $ExpectedRawfileRoot $entry.Substring('resources/rawfile/'.Length)
+    }
+  }
+  foreach ($entry in $nativeEntries) {
+    [pscustomobject]@{
+      Entry = $entry
+      ExpectedPath = Join-Path $ExpectedNativeLibRoot $entry.Substring('libs/arm64-v8a/'.Length)
+    }
+  }
+)
+Assert-HapPayloadHashes $MainHapPath $payloads
 
 if ($OhosTestHapPath) {
   $testRequired = @(
@@ -85,4 +148,4 @@ if ($OhosTestHapPath) {
 
 $verified = @("main=$MainHapPath")
 if ($OhosTestHapPath) { $verified += "ohosTest=$OhosTestHapPath" }
-Write-Host "Verified AI runtime HAP structure: $($verified -join '; ')"
+Write-Host "Verified AI runtime HAP structure and payload bytes: $($verified -join '; ')"
