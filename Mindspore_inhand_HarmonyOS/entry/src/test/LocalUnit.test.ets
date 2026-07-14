@@ -349,6 +349,7 @@ import {
   resetRememberedLiveCameraPositionsForTests,
   runtimeInputKindsForWorkflow,
   visibleInputKindsForWorkflow,
+  usesSimpleAndroidLiveLayout,
   shouldShowPrimaryImageInputPreview,
   sampleImageUriForWorkflow,
   shouldAutoRunWorkflowAfterInputReady,
@@ -8990,6 +8991,21 @@ export default function localUnitTest() {
       expect(autoStartInputKindForWorkflow(workflowForRoute(AppRoute.GESTURE_STILL.name)!)).assertUndefined();
       expect(autoStartInputKindForWorkflow(workflowForRoute(AppRoute.TEXT_RECOGNITION.name)!)).assertUndefined();
 
+    });
+
+    it('usesSimpleAndroidLiveLayoutOnlyForMatchingAndroidActivities', 0, () => {
+      const simpleLiveRouteNames: Array<string> = [
+        AppRoute.SEGMENTATION_LIVE.name,
+        AppRoute.GESTURE_LIVE.name,
+        AppRoute.SCENE_LIVE.name
+      ];
+      expect(new Set<string>(simpleLiveRouteNames).size).assertEqual(3);
+
+      featureWorkflows.forEach((workflow: FeatureWorkflow) => {
+        expect(usesSimpleAndroidLiveLayout(workflow))
+          .assertEqual(simpleLiveRouteNames.indexOf(workflow.routeName) >= 0);
+      });
+      expect(usesSimpleAndroidLiveLayout(undefined)).assertFalse();
     });
 
     it('hidesAutoStartCameraFromLiveInputChipsLikeAndroidLiveActivities', 0, () => {

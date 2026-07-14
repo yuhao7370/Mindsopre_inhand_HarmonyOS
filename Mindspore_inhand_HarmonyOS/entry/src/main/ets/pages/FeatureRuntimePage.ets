@@ -16,6 +16,7 @@ import {
   rememberLiveCameraPositionForRoute,
   permissionLabelKey,
   runtimeInputKindsForWorkflow,
+  usesSimpleAndroidLiveLayout,
   visibleInputKindsForWorkflow,
   shouldShowPrimaryImageInputPreview,
   sampleImageUriForWorkflow,
@@ -1833,6 +1834,71 @@ struct FeatureRuntimePage {
   }
 
   @Builder
+  liveCameraSurfaceContent() {
+    XComponent({
+      id: liveCameraXComponentId,
+      type: XComponentType.SURFACE,
+      controller: this.liveCameraController
+    })
+      .width('100%')
+      .height('100%')
+      .onLoad(() => {
+        this.liveCameraSurfaceId = this.liveCameraController.getXComponentSurfaceId();
+        if (this.liveCameraInputSelected) {
+          this.startLiveCameraPreview();
+        } else {
+          this.autoStartLiveCameraIfNeeded();
+        }
+      })
+      .onDestroy(() => this.stopLiveCameraPreview())
+    if (this.sceneOverlayRows.length > 0 && this.shouldShowLiveSceneOverlay()) {
+      this.liveSceneOverlay()
+    }
+    if (this.segmentationForegroundPixelMap !== undefined &&
+      shouldShowLiveSegmentationCameraOverlay(workflowForRoute(this.routeName))) {
+      Image(this.segmentationForegroundPixelMap)
+        .width('100%')
+        .height('100%')
+        .objectFit(ImageFit.Fill)
+        .scale({ x: this.segmentationForegroundMirrorScaleX(), y: 1 })
+    }
+    if (this.objectDetections.length > 0 &&
+      shouldShowLiveObjectDetectionCameraOverlay(workflowForRoute(this.routeName))) {
+      ForEach(this.objectDetections, (detection: ObjectDetection, index: number) => {
+        this.objectDetectionBox(detection, index)
+      }, (detection: ObjectDetection) => `${detection.imageId}-${detection.labelId}-${detection.score}`)
+    }
+    if (this.posePoints.length > 0 && shouldShowLivePoseCameraOverlay(workflowForRoute(this.routeName))) {
+      ForEach(this.poseLines(), (line: PoseLine) => {
+        this.poseLine(line)
+      }, (line: PoseLine) => `${line.start.type}-${line.end.type}-${line.start.x}-${line.start.y}`)
+      ForEach(this.visiblePosePoints(), (point: PosePoint) => {
+        this.posePoint(point)
+      }, (point: PosePoint) => `${point.type}-${point.x}-${point.y}-${point.score}`)
+    }
+    if (this.visibleGestureDetections().length > 0 &&
+      shouldShowLiveGestureCameraOverlay(workflowForRoute(this.routeName))) {
+      ForEach(this.visibleGestureDetections(), (gesture: GestureDetection) => {
+        this.gestureBox(gesture)
+      }, (gesture: GestureDetection) =>
+        `${gesture.category}-${gesture.score}-${gesture.rect?.left}-${gesture.rect?.top}`)
+    }
+    if (shouldShowLivePoseTemplateOverlay(workflowForRoute(this.routeName))) {
+      Column() {
+        this.livePoseTemplateOverlay()
+      }
+      .width('100%')
+      .height('100%')
+      .justifyContent(FlexAlign.End)
+      .alignItems(HorizontalAlign.End)
+      .padding({ right: 10, bottom: 10 })
+    }
+    if (shouldShowLiveClassificationCameraOverlay(workflowForRoute(this.routeName))) {
+      this.liveClassificationOverlay()
+    }
+  }
+
+  @Builder
   liveCameraPreview() {
     Column() {
       Text(appString('feature_runtime_preview_image'))
@@ -1840,67 +1906,7 @@ struct FeatureRuntimePage {
         .fontColor(AppColor.textSecondary)
         .width('100%')
       Stack({ alignContent: Alignment.TopStart }) {
-        XComponent({
-          id: liveCameraXComponentId,
-          type: XComponentType.SURFACE,
-          controller: this.liveCameraController
-        })
-          .width('100%')
-          .height('100%')
-          .onLoad(() => {
-            this.liveCameraSurfaceId = this.liveCameraController.getXComponentSurfaceId();
-            if (this.liveCameraInputSelected) {
-              this.startLiveCameraPreview();
-            } else {
-              this.autoStartLiveCameraIfNeeded();
-            }
-          })
-          .onDestroy(() => this.stopLiveCameraPreview())
-        if (this.sceneOverlayRows.length > 0 && this.shouldShowLiveSceneOverlay()) {
-          this.liveSceneOverlay()
-        }
-        if (this.segmentationForegroundPixelMap !== undefined &&
-          shouldShowLiveSegmentationCameraOverlay(workflowForRoute(this.routeName))) {
-          Image(this.segmentationForegroundPixelMap)
-            .width('100%')
-            .height('100%')
-            .objectFit(ImageFit.Fill)
-            .scale({ x: this.segmentationForegroundMirrorScaleX(), y: 1 })
-        }
-        if (this.objectDetections.length > 0 &&
-          shouldShowLiveObjectDetectionCameraOverlay(workflowForRoute(this.routeName))) {
-          ForEach(this.objectDetections, (detection: ObjectDetection, index: number) => {
-            this.objectDetectionBox(detection, index)
-          }, (detection: ObjectDetection) => `${detection.imageId}-${detection.labelId}-${detection.score}`)
-        }
-        if (this.posePoints.length > 0 && shouldShowLivePoseCameraOverlay(workflowForRoute(this.routeName))) {
-          ForEach(this.poseLines(), (line: PoseLine) => {
-            this.poseLine(line)
-          }, (line: PoseLine) => `${line.start.type}-${line.end.type}-${line.start.x}-${line.start.y}`)
-          ForEach(this.visiblePosePoints(), (point: PosePoint) => {
-            this.posePoint(point)
-          }, (point: PosePoint) => `${point.type}-${point.x}-${point.y}-${point.score}`)
-        }
-        if (this.visibleGestureDetections().length > 0 &&
-          shouldShowLiveGestureCameraOverlay(workflowForRoute(this.routeName))) {
-          ForEach(this.visibleGestureDetections(), (gesture: GestureDetection) => {
-            this.gestureBox(gesture)
-          }, (gesture: GestureDetection) =>
-            `${gesture.category}-${gesture.score}-${gesture.rect?.left}-${gesture.rect?.top}`)
-        }
-        if (shouldShowLivePoseTemplateOverlay(workflowForRoute(this.routeName))) {
-          Column() {
-            this.livePoseTemplateOverlay()
-          }
-          .width('100%')
-          .height('100%')
-          .justifyContent(FlexAlign.End)
-          .alignItems(HorizontalAlign.End)
-          .padding({ right: 10, bottom: 10 })
-        }
-        if (shouldShowLiveClassificationCameraOverlay(workflowForRoute(this.routeName))) {
-          this.liveClassificationOverlay()
-        }
+        this.liveCameraSurfaceContent()
       }
         .width('100%')
         .height(260)
@@ -2589,8 +2595,87 @@ struct FeatureRuntimePage {
     .alignItems(VerticalAlign.Top)
   }
 
+  @Builder
+  simpleAndroidLiveLayout() {
+    Column() {
+      Row() {
+        Row() {
+          Image($r('app.media.icon_back'))
+            .width(11)
+            .height(22)
+            .objectFit(ImageFit.Contain)
+        }
+          .width(40)
+          .height(40)
+          .justifyContent(FlexAlign.Center)
+          .alignItems(VerticalAlign.Center)
+          .onClick(() => router.back())
+        Text(appString(this.titleKey))
+          .fontSize(22)
+          .fontWeight(FontWeight.Bold)
+          .fontColor(AppColor.textPrimary)
+          .layoutWeight(1)
+          .maxLines(1)
+      }
+      .width('100%')
+      .height(56)
+      .padding({ left: AppSpacing.page, right: AppSpacing.page })
+      .alignItems(VerticalAlign.Center)
+
+      Stack({ alignContent: Alignment.TopStart }) {
+        this.liveCameraSurfaceContent()
+        if (this.liveCameraSwitchAvailable) {
+          Column() {
+            Image($r('app.media.front_back_switch'))
+              .width(35)
+              .height(35)
+              .objectFit(ImageFit.Contain)
+              .margin({ bottom: 30 })
+              .onClick(() => this.switchLiveCamera())
+          }
+          .width('100%')
+          .height('100%')
+          .justifyContent(FlexAlign.End)
+          .alignItems(HorizontalAlign.Center)
+        }
+        if (this.shouldShowRuntimePermissionRetry()) {
+          Stack({ alignContent: Alignment.Center }) {
+            Column() {
+              Text(appString(this.statusKey))
+                .fontSize(14)
+                .fontColor(AppColor.textPrimary)
+                .textAlign(TextAlign.Center)
+              Button(appString('splash_permission_retry'))
+                .height(36)
+                .margin({ top: AppSpacing.sm })
+                .onClick(() => this.retryRuntimePermission())
+              Button(appString('app_permission_by_hand'))
+                .height(36)
+                .margin({ top: AppSpacing.sm })
+                .onClick(() => this.openRuntimePermissionSettings())
+            }
+            .padding(AppSpacing.md)
+            .backgroundColor('#E6FFFFFF')
+            .borderRadius(AppRadius.card)
+          }
+          .width('100%')
+          .height('100%')
+        }
+      }
+      .width('100%')
+      .layoutWeight(1)
+      .backgroundColor('#111827')
+    }
+    .width('100%')
+    .height('100%')
+    .backgroundColor(AppColor.pageBackground)
+  }
+
   build() {
-    Scroll() {
+    if (usesSimpleAndroidLiveLayout(workflowForRoute(this.routeName))) {
+      this.simpleAndroidLiveLayout()
+    } else {
+      Scroll() {
       Column() {
         Row() {
           Row() {
@@ -2872,6 +2957,7 @@ struct FeatureRuntimePage {
       .padding(AppSpacing.page)
     }
     .scrollBar(BarState.Off)
-    .backgroundColor(AppColor.pageBackground)
+      .backgroundColor(AppColor.pageBackground)
+    }
   }
 }

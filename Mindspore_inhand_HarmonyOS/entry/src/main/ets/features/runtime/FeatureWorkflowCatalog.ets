@@ -284,6 +284,13 @@ export function workflowForRoute(routeName: string): FeatureWorkflow | undefined
   return featureWorkflows.find((workflow: FeatureWorkflow) => workflow.routeName === routeName);
 }
 
+export function usesSimpleAndroidLiveLayout(workflow: FeatureWorkflow | undefined): boolean {
+  const routeName = workflow?.routeName ?? '';
+  return routeName === AppRoute.SEGMENTATION_LIVE.name ||
+    routeName === AppRoute.GESTURE_LIVE.name ||
+    routeName === AppRoute.SCENE_LIVE.name;
+}
+
 export function runtimeInputKindsForWorkflow(workflow: FeatureWorkflow): Array<FeatureInputKind> {
   const kinds: Array<FeatureInputKind> = [];
   workflow.inputKinds.forEach((kind: FeatureInputKind) => appendUniqueInputKind(kinds, kind));
