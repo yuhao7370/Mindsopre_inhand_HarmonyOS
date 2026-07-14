@@ -306,6 +306,10 @@ export function usesSimpleAndroidLiveLayout(workflow: FeatureWorkflow | undefine
     routeName === AppRoute.LIVE_SKELETON.name;
 }
 
+export function usesAndroidPortraitSegmentationLayout(workflow: FeatureWorkflow | undefined): boolean {
+  return workflow?.routeName === AppRoute.PORTRAIT_SEGMENTATION.name;
+}
+
 export function runtimeInputKindsForWorkflow(workflow: FeatureWorkflow): Array<FeatureInputKind> {
   const kinds: Array<FeatureInputKind> = [];
   workflow.inputKinds.forEach((kind: FeatureInputKind) => appendUniqueInputKind(kinds, kind));

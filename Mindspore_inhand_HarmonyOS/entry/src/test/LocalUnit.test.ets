@@ -352,6 +352,7 @@ import {
   runtimeInputKindsForWorkflow,
   visibleInputKindsForWorkflow,
   specializedAndroidLiveLayoutForWorkflow,
+  usesAndroidPortraitSegmentationLayout,
   usesSimpleAndroidLiveLayout,
   shouldShowPrimaryImageInputPreview,
   sampleImageUriForWorkflow,
@@ -9028,6 +9029,14 @@ export default function localUnitTest() {
           .assertEqual(simpleLiveRouteNames.indexOf(workflow.routeName) >= 0);
       });
       expect(usesSimpleAndroidLiveLayout(undefined)).assertFalse();
+    });
+
+    it('usesAndroidPortraitSegmentationLayoutOnlyForPortrait', 0, () => {
+      featureWorkflows.forEach((workflow: FeatureWorkflow) => {
+        expect(usesAndroidPortraitSegmentationLayout(workflow))
+          .assertEqual(workflow.routeName === AppRoute.PORTRAIT_SEGMENTATION.name);
+      });
+      expect(usesAndroidPortraitSegmentationLayout(undefined)).assertFalse();
     });
 
     it('selectsSpecializedAndroidLiveLayoutOnlyForImageAndObjectCamera', 0, () => {

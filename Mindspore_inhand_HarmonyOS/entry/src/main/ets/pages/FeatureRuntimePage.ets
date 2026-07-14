@@ -17,6 +17,7 @@ import {
   permissionLabelKey,
   runtimeInputKindsForWorkflow,
   specializedAndroidLiveLayoutForWorkflow,
+  usesAndroidPortraitSegmentationLayout,
   usesSimpleAndroidLiveLayout,
   visibleInputKindsForWorkflow,
   shouldShowPrimaryImageInputPreview,
@@ -1859,7 +1860,8 @@ struct FeatureRuntimePage {
       this.liveSceneOverlay()
     }
     if (this.segmentationForegroundPixelMap !== undefined &&
-      shouldShowLiveSegmentationCameraOverlay(workflowForRoute(this.routeName))) {
+      shouldShowLiveSegmentationCameraOverlay(workflowForRoute(this.routeName)) &&
+      !usesAndroidPortraitSegmentationLayout(workflowForRoute(this.routeName))) {
       Image(this.segmentationForegroundPixelMap)
         .width('100%')
         .height('100%')
@@ -2355,7 +2357,6 @@ struct FeatureRuntimePage {
       .backgroundColor('#F7F8FA')
       .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
       .clip(true)
-      .id(segmentationBackgroundReplacementComponentId)
       .margin({ top: AppSpacing.xs })
     }
     .width('100%')
@@ -2705,6 +2706,141 @@ struct FeatureRuntimePage {
   }
 
   @Builder
+  portraitSegmentationToolbar() {
+    Row() {
+      Row() {
+        Image($r('app.media.icon_back'))
+          .width(11)
+          .height(22)
+          .objectFit(ImageFit.Contain)
+      }
+        .width(40)
+        .height(40)
+        .justifyContent(FlexAlign.Center)
+        .alignItems(VerticalAlign.Center)
+        .onClick(() => router.back())
+      Text(appString(this.titleKey))
+        .fontSize(22)
+        .fontWeight(FontWeight.Bold)
+        .fontColor(AppColor.textPrimary)
+        .layoutWeight(1)
+        .maxLines(1)
+      if (this.liveCameraSwitchAvailable) {
+        Row() {
+          Image($r('app.media.icon_camera'))
+            .width(24)
+            .height(24)
+            .objectFit(ImageFit.Contain)
+        }
+          .width(40)
+          .height(40)
+          .justifyContent(FlexAlign.Center)
+          .alignItems(VerticalAlign.Center)
+          .onClick(() => this.switchLiveCamera())
+      }
+      SaveButton({
+        icon: SaveIconStyle.FULL_FILLED,
+        buttonType: ButtonType.Normal
+      })
+        .width(40)
+        .height(40)
+        .onClick((_event: ClickEvent, result: SaveButtonOnClickResult) => {
+          if (result === SaveButtonOnClickResult.SUCCESS) {
+            this.saveResultComponentImage(segmentationBackgroundReplacementComponentId);
+            return;
+          }
+          this.statusKey = 'feature_runtime_save_image_failed';
+        })
+    }
+    .width('100%')
+    .height(56)
+    .padding({ left: AppSpacing.page, right: AppSpacing.page })
+    .alignItems(VerticalAlign.Center)
+    .backgroundColor(Color.White)
+  }
+
+  @Builder
+  portraitSegmentationComposite() {
+    Stack({ alignContent: Alignment.TopStart }) {
+      Image(this.backgroundImageUri)
+        .orientation(this.segmentationBackgroundImageOrientation)
+        .width('100%')
+        .height('100%')
+        .objectFit(ImageFit.Fill)
+      if (this.segmentationForegroundPixelMap !== undefined) {
+        Image(this.segmentationForegroundPixelMap)
+          .width('100%')
+          .height('100%')
+          .objectFit(ImageFit.Fill)
+          .scale({ x: this.segmentationForegroundMirrorScaleX(), y: 1 })
+      }
+    }
+    .width('100%')
+    .height('100%')
+    .id(segmentationBackgroundReplacementComponentId)
+  }
+
+  @Builder
+  portraitSegmentationBackgroundStrip() {
+    Column() {
+      Divider()
+        .strokeWidth(5)
+        .color(AppColor.divider)
+        .width('100%')
+      List({ space: 0 }) {
+        ForEach(portraitSegmentationBackgroundPresets, (preset: PortraitSegmentationBackgroundPreset) => {
+          ListItem() {
+            Image(portraitSegmentationBackgroundUri(preset))
+              .width(95)
+              .height(120)
+              .objectFit(ImageFit.Fill)
+              .onClick(() => this.selectPortraitBackgroundPreset(preset))
+          }
+        }, (preset: PortraitSegmentationBackgroundPreset) => preset.id)
+        ListItem() {
+          Image($r('app.media.icon_default'))
+            .width(95)
+            .height(120)
+            .objectFit(ImageFit.Fill)
+            .onClick(() => this.prepareInput('backgroundImage'))
+        }
+      }
+      .listDirection(Axis.Horizontal)
+      .scrollBar(BarState.Off)
+      .width('100%')
+      .height(100)
+      .clip(true)
+    }
+    .width('100%')
+    .height(105)
+    .backgroundColor(AppColor.divider)
+  }
+
+  @Builder
+  portraitSegmentationAndroidLayout() {
+    Column() {
+      this.portraitSegmentationToolbar()
+      Stack({ alignContent: Alignment.TopStart }) {
+        this.liveCameraSurfaceContent()
+        this.portraitSegmentationComposite()
+        Column() {
+          this.portraitSegmentationBackgroundStrip()
+        }
+        .width('100%')
+        .height('100%')
+        .justifyContent(FlexAlign.End)
+        this.runtimePermissionRecoveryOverlay()
+      }
+      .width('100%')
+      .layoutWeight(1)
+      .backgroundColor('#111827')
+    }
+    .width('100%')
+    .height('100%')
+    .backgroundColor(AppColor.pageBackground)
+  }
+
+  @Builder
   simpleAndroidLiveLayout() {
     Column() {
       this.runtimeActionToolbar(false)
@@ -2810,7 +2946,9 @@ struct FeatureRuntimePage {
   }
 
   build() {
-    if (specializedAndroidLiveLayoutForWorkflow(workflowForRoute(this.routeName)) === 'imageClassification') {
+    if (usesAndroidPortraitSegmentationLayout(workflowForRoute(this.routeName))) {
+      this.portraitSegmentationAndroidLayout()
+    } else if (specializedAndroidLiveLayoutForWorkflow(workflowForRoute(this.routeName)) === 'imageClassification') {
       this.imageClassificationAndroidLiveLayout()
     } else if (specializedAndroidLiveLayoutForWorkflow(workflowForRoute(this.routeName)) === 'objectDetection') {
       this.objectDetectionAndroidLiveLayout()
