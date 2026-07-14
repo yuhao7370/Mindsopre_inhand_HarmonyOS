@@ -4,6 +4,11 @@ import { AppRoute } from '../main/ets/app/AppRoutes';
 import { workflowForRoute } from '../main/ets/features/runtime/FeatureWorkflowCatalog';
 import { gestureInputFromRgba } from '../main/ets/services/ai/HmsGesturePreprocessor';
 import {
+  openPalmGestureFixtureHeight,
+  openPalmGestureFixtureRgba,
+  openPalmGestureFixtureWidth
+} from './GestureImageFixture';
+import {
   HmsGestureOutputTensor,
   HmsGestureOutputs,
   decodeHmsGestureOutputs,
@@ -385,6 +390,25 @@ export default function gestureModelUnitTest(): void {
       assertNear(input[planeSize * 2], 10 / 255);
       assertNear(input[input.length - 1], 100 / 255);
       expect(totalFinite(input)).assertTrue();
+    });
+
+    it('preprocessesGeneratedOpenPalmFixtureDeterministically', 0, () => {
+      const rgba = openPalmGestureFixtureRgba();
+      const first = gestureInputFromRgba(rgba, openPalmGestureFixtureWidth, openPalmGestureFixtureHeight);
+      const second = gestureInputFromRgba(rgba, openPalmGestureFixtureWidth, openPalmGestureFixtureHeight);
+      expect(first.length).assertEqual(3 * 224 * 224);
+      expect(second.length).assertEqual(first.length);
+      let allFinite = true;
+      let allInUnitRange = true;
+      let allExact = true;
+      for (let index = 0; index < first.length; index++) {
+        allFinite = Number.isFinite(first[index]) && allFinite;
+        allInUnitRange = first[index] >= 0 && first[index] <= 1 && allInUnitRange;
+        allExact = second[index] === first[index] && allExact;
+      }
+      expect(allFinite).assertTrue();
+      expect(allInUnitRange).assertTrue();
+      expect(allExact).assertTrue();
     });
 
     it('roundsAndClampsNearestCoordinatesForNonSquareDownscale', 0, () => {

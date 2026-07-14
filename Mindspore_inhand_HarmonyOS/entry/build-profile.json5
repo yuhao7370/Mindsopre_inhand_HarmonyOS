@@ -36,6 +36,32 @@
     },
     {
       "name": "ohosTest",
+      "config": {
+        "buildOption": {
+          "resOptions": {
+            "ignoreResourcePattern": [
+              "GestureDetector.ms",
+              "manifest.json",
+              "NOTICE.md",
+              "translation-models.tar.xz",
+              "tokenizer.model",
+              "tokenizer_runtime.json",
+              "vocab.json",
+              "SHA256SUMS",
+              "LICENSES.md"
+            ]
+          },
+          "nativeLib": {
+            "filter": {
+              "excludes": [
+                "**/libgesture_mnn.so",
+                "**/libMNN.so",
+                "**/libtranslation_archive.so"
+              ]
+            }
+          }
+        }
+      }
     }
   ]
 }

@@ -1,3 +1,5 @@
+import { image } from '@kit.ImageKit';
+import { resourceManager } from '@kit.LocalizationKit';
 import { abilityDelegatorRegistry } from '@kit.TestKit';
 import { describe, it, expect } from '@ohos/hypium';
 import {
@@ -7,6 +9,7 @@ import {
   createHarmonyHmsGestureNativeSession,
   HmsGestureNativeSession
 } from '../../../main/ets/services/ai/HmsGestureNativeSession';
+import { gestureInputFromRgba } from '../../../main/ets/services/ai/HmsGesturePreprocessor';
 import {
   HmsGestureOutputTensor,
   HmsGestureOutputs
@@ -22,6 +25,35 @@ const expectedGestureTensors: Array<ExpectedGestureTensor> = [
   { name: 'layer101-conv-hand', shape: [1, 60, 14, 14] },
   { name: 'layer113-conv-hand', shape: [1, 60, 28, 28] }
 ];
+
+async function loadOpenPalmGestureInput(manager: resourceManager.ResourceManager): Promise<Float32Array> {
+  let encoded: Uint8Array;
+  try {
+    encoded = await manager.getRawFileContent('fixtures/gesture/open_palm.png');
+  } catch (_) {
+    throw new Error('Unable to load open-palm gesture fixture.');
+  }
+  const encodedBuffer = new ArrayBuffer(encoded.byteLength);
+  new Uint8Array(encodedBuffer).set(encoded);
+  const imageSource = image.createImageSource(encodedBuffer);
+  try {
+    const pixelMap = await imageSource.createPixelMap({
+      desiredPixelFormat: image.PixelMapFormat.RGBA_8888
+    });
+    try {
+      const imageInfo: image.ImageInfo = await pixelMap.getImageInfo();
+      const width = imageInfo.size.width;
+      const height = imageInfo.size.height;
+      const rgbaBuffer = new ArrayBuffer(width * height * 4);
+      await pixelMap.readPixelsToBuffer(rgbaBuffer);
+      return gestureInputFromRgba(new Uint8Array(rgbaBuffer), width, height);
+    } finally {
+      await pixelMap.release();
+    }
+  } finally {
+    await imageSource.release();
+  }
+}
 
 function assertExactFiniteOutputs(first: HmsGestureOutputs, second: HmsGestureOutputs): void {
   expect(first.tensors.length).assertEqual(expectedGestureTensors.length);
@@ -61,7 +93,8 @@ export default function gestureNativeTest() {
         expect(modelInfo.inputName).assertEqual('data');
         expect(modelInfo.inputShape.join(',')).assertEqual('1,3,224,224');
 
-        const input = new Float32Array(1 * 3 * 224 * 224);
+        const input = await loadOpenPalmGestureInput(resourceManager);
+        expect(input.length).assertEqual(1 * 3 * 224 * 224);
         const firstOutputs = await session.predict(input);
         const secondOutputs = await session.predict(input);
         assertExactFiniteOutputs(firstOutputs, secondOutputs);
