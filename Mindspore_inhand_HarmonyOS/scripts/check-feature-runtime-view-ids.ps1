@@ -9,7 +9,8 @@ if (-not $PagePath) {
 }
 $source = Get-Content -Raw -Encoding UTF8 $PagePath
 $segmentationViewId = 'segmentationBackgroundReplacementComponentId'
-$segmentationViewIdPattern = '\.id\(\s*' + [regex]::Escape($segmentationViewId) + '\s*\)'
+$segmentationViewIdModifierPattern = '(?m)^[ \t]*\.id\(\s*' +
+  [regex]::Escape($segmentationViewId) + '\s*\)[ \t]*$'
 
 function Get-SourceSlice([string] $text, [string] $startMarker, [string] $endMarker) {
   $start = $text.IndexOf($startMarker)
@@ -36,21 +37,27 @@ $posePreview = Get-SourceSlice `
   'posePreview(labelKey: AppStringKey, uri: string)' `
   'poseTemplatePreview()'
 
-$bindingCount = [regex]::Matches($source, $segmentationViewIdPattern).Count
+$bindingCount = [regex]::Matches($source, $segmentationViewIdModifierPattern).Count
 if ($bindingCount -ne 1) {
   throw "$segmentationViewId must appear exactly once in the full page source; found $bindingCount."
 }
 
-if ($genericSegmentationPreview -match $segmentationViewIdPattern) {
+if ($genericSegmentationPreview -match $segmentationViewIdModifierPattern) {
   throw "$segmentationViewId must not be attached to segmentationBackgroundReplacementPreview."
 }
 
-if ($posePreview -match $segmentationViewIdPattern) {
+if ($posePreview -match $segmentationViewIdModifierPattern) {
   throw "$segmentationViewId must not be attached to posePreview."
 }
 
-if ($portraitComposite -notmatch $segmentationViewIdPattern) {
-  throw "$segmentationViewId must be attached to portraitSegmentationComposite."
+$portraitOuterStackPattern = '(?ms)^[ \t]*portraitSegmentationComposite\(\)[ \t]*\{\r?\n' +
+  '(?<stackIndent>[ \t]*)Stack[^\r\n]*\{\r?\n' +
+  '.*?^\k<stackIndent>\}[ \t]*\r?\n' +
+  '(?<modifiers>(?:^\k<stackIndent>\.[^\r\n]*(?:\r?\n|$))*)'
+$portraitOuterStackMatch = [regex]::Match($portraitComposite, $portraitOuterStackPattern)
+if (-not $portraitOuterStackMatch.Success -or
+  $portraitOuterStackMatch.Groups['modifiers'].Value -notmatch $segmentationViewIdModifierPattern) {
+  throw "$segmentationViewId must be attached directly to the outer portrait Stack modifier chain."
 }
 
 Write-Output 'Feature runtime view ids are attached only to the expected portrait composite.'

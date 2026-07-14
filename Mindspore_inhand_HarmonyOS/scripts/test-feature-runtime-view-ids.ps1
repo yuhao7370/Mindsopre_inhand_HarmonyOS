@@ -79,19 +79,63 @@ function Assert-GuardRejects([string]$Label, [string]$PagePath, [string]$Expecte
 
 New-Item -ItemType Directory -Path $tempRoot | Out-Null
 try {
-  $good = New-PageFixture 'good' `
-    '  Stack() {}.id(segmentationBackgroundReplacementComponentId)' '' ''
-  $oldGeneric = New-PageFixture 'old-generic' '' `
-    '  Stack() {}.id(segmentationBackgroundReplacementComponentId)' ''
-  $duplicate = New-PageFixture 'duplicate' @'
-  Stack() {}.id(segmentationBackgroundReplacementComponentId)
-  Stack() {}.id(segmentationBackgroundReplacementComponentId)
+  $good = New-PageFixture 'good' @'
+  Stack() {
+    Image()
+  }
+  .width('100%')
+  .id(segmentationBackgroundReplacementComponentId)
 '@ '' ''
-  $pose = New-PageFixture 'pose' '' '' `
-    '  Stack() {}.id(segmentationBackgroundReplacementComponentId)'
-  $missing = New-PageFixture 'missing' '' '' ''
+  $nestedChild = New-PageFixture 'nested-child' @'
+  Stack() {
+    Image()
+      .id(segmentationBackgroundReplacementComponentId)
+  }
+  .width('100%')
+'@ '' ''
+  $commentAndString = New-PageFixture 'comment-string' @'
+  Stack() {
+    Text('.id(segmentationBackgroundReplacementComponentId)')
+    // .id(segmentationBackgroundReplacementComponentId)
+  }
+  .width('100%')
+  .id(segmentationBackgroundReplacementComponentId)
+'@ '' ''
+  $oldGeneric = New-PageFixture 'old-generic' @'
+  Stack() {
+  }
+  .width('100%')
+'@ @'
+  Stack() {
+  }
+  .id(segmentationBackgroundReplacementComponentId)
+'@ ''
+  $duplicate = New-PageFixture 'duplicate' @'
+  Stack() {
+    Image()
+      .id(segmentationBackgroundReplacementComponentId)
+  }
+  .id(segmentationBackgroundReplacementComponentId)
+'@ '' ''
+  $pose = New-PageFixture 'pose' @'
+  Stack() {
+  }
+  .width('100%')
+'@ '' @'
+  Stack() {
+  }
+  .id(segmentationBackgroundReplacementComponentId)
+'@
+  $missing = New-PageFixture 'missing' @'
+  Stack() {
+  }
+  .width('100%')
+'@ '' ''
 
   Assert-GuardAccepts 'portrait composite' $good
+  Assert-GuardRejects 'nested child component' $nestedChild `
+    'must be attached directly to the outer portrait Stack'
+  Assert-GuardAccepts 'comment and string lookalikes' $commentAndString
   Assert-GuardRejects 'old generic preview' $oldGeneric `
     'must not be attached to segmentationBackgroundReplacement'
   Assert-GuardRejects 'duplicate id binding' $duplicate `
