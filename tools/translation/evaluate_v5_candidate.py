@@ -320,6 +320,40 @@ def build_budget_overrun_terminal(prior, elapsed, error):
     }
 
 
+def persist_failure_budget_evidence(
+    prior, elapsed, primary_error, receipt_path, overrun_path,
+):
+    error_text = "%s: %s" % (type(primary_error).__name__, primary_error)
+    try:
+        if float(prior["cumulativeActualSeconds"]) + elapsed > float(
+            prior["totalBudgetSeconds"]
+        ):
+            _write_json(
+                overrun_path,
+                build_budget_overrun_terminal(prior, elapsed, error_text),
+            )
+        else:
+            _write_json(
+                receipt_path,
+                build_budget_receipt(prior, elapsed, "failed", error_text),
+            )
+    except Exception as secondary_error:
+        note = "secondary failure while writing budget evidence: %s: %s" % (
+            type(secondary_error).__name__, secondary_error,
+        )
+        if hasattr(primary_error, "add_note"):
+            primary_error.add_note(note)
+        else:
+            existing = list(getattr(primary_error, "secondary_evidence_errors", []))
+            existing.append(note)
+            try:
+                primary_error.secondary_evidence_errors = existing
+            except Exception:
+                pass
+        return False
+    return True
+
+
 def build_complete_manifest(identity, inputs, outputs):
     if identity != EVALUATION_IDENTITY or not inputs or not outputs:
         raise CandidateEvaluationError("complete manifest identity or inventory differs")
@@ -375,7 +409,13 @@ def validate_complete_manifest(manifest, root, input_paths=None):
                 raise CandidateEvaluationError("complete manifest artifact differs")
     for artifact in manifest["outputs"].values():
         expected = {key: artifact[key] for key in ("path", "bytes", "sha256")}
-        if not _valid_artifact(expected) or _artifact(root / expected["path"]) != expected:
+        candidate = (root / expected["path"]).resolve()
+        if (
+            not _valid_artifact(expected)
+            or candidate.parent != root
+            or candidate.name != expected["path"]
+            or _artifact(candidate) != expected
+        ):
             raise CandidateEvaluationError("complete manifest artifact differs")
     return manifest
 
@@ -413,10 +453,25 @@ def validate_evaluation_bundle(
     validate_complete_manifest(manifest, output_root, input_paths)
     validate_evaluator_trust_anchor(report, manifest, authorized_evaluator_sha256)
     receipt_artifact = _artifact(receipt_path)
+    report_artifact = _artifact(report_path)
+    report_outputs = report.get("artifacts") if isinstance(report, dict) else None
+    manifest_outputs = manifest.get("outputs") if isinstance(manifest, dict) else None
+    output_root = Path(output_root).resolve()
     if (
-        report.get("gpuLedger") != receipt
-        or report.get("artifacts", {}).get("budgetReceipt") != receipt_artifact
-        or manifest.get("outputs", {}).get("budget_receipt") != receipt_artifact
+        Path(manifest_path).resolve().parent != output_root
+        or Path(report_path).resolve()
+        != (output_root / manifest_outputs.get("quality_report", {}).get("path", "")).resolve()
+        or Path(receipt_path).resolve()
+        != (output_root / manifest_outputs.get("budget_receipt", {}).get("path", "")).resolve()
+        or manifest_outputs.get("quality_report") != report_artifact
+        or not isinstance(report_outputs, dict)
+        or report_outputs.get("bistTestOutputs")
+        != manifest_outputs.get("bist_test_outputs")
+        or report_outputs.get("manualRawResults")
+        != manifest_outputs.get("manual_raw_results")
+        or report.get("gpuLedger") != receipt
+        or report_outputs.get("budgetReceipt") != receipt_artifact
+        or manifest_outputs.get("budget_receipt") != receipt_artifact
         or receipt.get("stage") != EVALUATION_STAGE
         or receipt.get("status") != "completed"
         or receipt.get("error") is not None
@@ -640,17 +695,9 @@ def evaluate(args):
             except Exception:
                 pass
         elapsed = time.perf_counter() - started
-        error_text = "%s: %s" % (type(error).__name__, error)
-        if float(prior["cumulativeActualSeconds"]) + elapsed > float(
-            prior["totalBudgetSeconds"]
-        ):
-            _write_json(
-                overrun_path,
-                build_budget_overrun_terminal(prior, elapsed, error_text),
-            )
-        else:
-            receipt = build_budget_receipt(prior, elapsed, "failed", error_text)
-            _write_json(receipt_path, receipt)
+        persist_failure_budget_evidence(
+            prior, elapsed, error, receipt_path, overrun_path
+        )
         raise
 
     bist_path = output_root / "bist-test-outputs-v5-candidate-v1.jsonl"

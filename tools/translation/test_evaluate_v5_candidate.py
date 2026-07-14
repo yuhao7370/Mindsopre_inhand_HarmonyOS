@@ -14,7 +14,9 @@ from tools.translation.evaluate_v5_candidate import (
     build_complete_manifest,
     build_manual_results,
     evaluation_budget_guard,
+    persist_failure_budget_evidence,
     validate_evaluator_trust_anchor,
+    validate_evaluation_bundle,
     validate_complete_manifest,
     validate_v5_binding,
 )
@@ -244,6 +246,126 @@ class V5CandidateEvaluationTest(unittest.TestCase):
         self.assertIs(terminal["admissibleForContinuation"], False)
         self.assertEqual(-1.5, terminal["remainingSeconds"])
         self.assertEqual(43201.5, terminal["cumulativeActualSeconds"])
+
+    def test_bundle_validator_binds_report_bist_manual_and_receipt_to_manifest(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            inputs_root = root / "inputs"
+            output_root = root / "outputs"
+            inputs_root.mkdir()
+            output_root.mkdir()
+            evaluator = inputs_root / "evaluate.py"
+            evaluator.write_bytes(b"authorized evaluator\n")
+            authorized = hashlib.sha256(evaluator.read_bytes()).hexdigest()
+            bist = output_root / "bist.jsonl"
+            manual = output_root / "manual.jsonl"
+            receipt_path = output_root / "receipt.json"
+            report_path = output_root / "report.json"
+            bist.write_bytes(b"{\"id\":1}\n")
+            manual.write_bytes(b"{\"id\":1}\n")
+            prior = {
+                "artifact": {"path": "prior.json", "bytes": 1, "sha256": "1" * 64},
+                "rootEvidence": {"path": "root.json", "bytes": 1, "sha256": "2" * 64},
+                "cumulativeActualSeconds": 10.0,
+                "totalBudgetSeconds": 43200.0,
+            }
+            receipt = build_budget_receipt(prior, 2.0, "completed", None)
+            receipt_path.write_bytes(_canonical(receipt))
+
+            def artifact(path, rows=None):
+                value = {
+                    "path": path.name,
+                    "bytes": path.stat().st_size,
+                    "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+                }
+                if rows is not None:
+                    value["rows"] = rows
+                return value
+
+            report = {
+                "identity": EVALUATION_IDENTITY,
+                "stage": EVALUATION_STAGE,
+                "status": "completed",
+                "execution": {"evaluatorCodeSha256": authorized},
+                "gpuLedger": receipt,
+                "artifacts": {
+                    "bistTestOutputs": artifact(bist, 1),
+                    "manualRawResults": artifact(manual, 1),
+                    "budgetReceipt": artifact(receipt_path),
+                },
+            }
+            report_path.write_bytes(_canonical(report))
+            inputs = {"evaluator_code": evaluator}
+            outputs = {
+                "bist_test_outputs": (bist, 1),
+                "manual_raw_results": (manual, 1),
+                "budget_receipt": (receipt_path, None),
+                "quality_report": (report_path, None),
+            }
+            manifest = build_complete_manifest(EVALUATION_IDENTITY, inputs, outputs)
+            manifest_path = output_root / "manifest.json"
+            manifest_path.write_bytes(_canonical(manifest))
+            chain = {
+                "artifact": artifact(receipt_path),
+                "rootEvidence": receipt["rootEvidence"],
+                "cumulativeActualSeconds": receipt["cumulativeActualSeconds"],
+            }
+            with mock.patch(
+                "tools.translation.evaluate_v5_candidate.load_budget_evidence",
+                return_value=chain,
+            ):
+                validate_evaluation_bundle(
+                    report_path, manifest_path, receipt_path, output_root, inputs,
+                    authorized, [],
+                )
+                alternate = output_root / "alternate-report.json"
+                alternate.write_bytes(report_path.read_bytes())
+                bad = json.loads(_canonical(manifest))
+                bad["outputs"]["quality_report"] = artifact(alternate)
+                manifest_path.write_bytes(_canonical(bad))
+                with self.assertRaisesRegex(CandidateEvaluationError, "binding"):
+                    validate_evaluation_bundle(
+                        report_path, manifest_path, receipt_path, output_root, inputs,
+                        authorized, [],
+                    )
+                manifest_path.write_bytes(_canonical(manifest))
+                bad = json.loads(_canonical(manifest))
+                bad["outputs"]["bist_test_outputs"] = artifact(manual, 1)
+                bad["outputs"]["manual_raw_results"] = artifact(bist, 1)
+                manifest_path.write_bytes(_canonical(bad))
+                with self.assertRaisesRegex(CandidateEvaluationError, "binding"):
+                    validate_evaluation_bundle(
+                        report_path, manifest_path, receipt_path, output_root, inputs,
+                        authorized, [],
+                    )
+
+    def test_failure_evidence_write_error_never_masks_primary_exception(self):
+        prior = {
+            "artifact": {"path": "prior.json", "bytes": 1, "sha256": "1" * 64},
+            "rootEvidence": {"path": "root.json", "bytes": 1, "sha256": "2" * 64},
+            "cumulativeActualSeconds": 10.0,
+            "totalBudgetSeconds": 43200.0,
+        }
+        primary = ValueError("primary decode failure")
+        with tempfile.TemporaryDirectory() as temporary, mock.patch(
+            "tools.translation.evaluate_v5_candidate._write_json",
+            side_effect=OSError("disk full"),
+        ):
+            with self.assertRaises(ValueError) as caught:
+                try:
+                    raise primary
+                except ValueError as error:
+                    persist_failure_budget_evidence(
+                        prior, 1.0, error,
+                        Path(temporary) / "receipt.json",
+                        Path(temporary) / "overrun.json",
+                    )
+                    raise
+        self.assertIs(primary, caught.exception)
+        self.assertIn("primary decode failure", str(caught.exception))
+        secondary = getattr(caught.exception, "secondary_evidence_errors", [])
+        notes = getattr(caught.exception, "__notes__", [])
+        self.assertTrue(secondary or any("disk full" in note for note in notes))
 
 
 if __name__ == "__main__":
