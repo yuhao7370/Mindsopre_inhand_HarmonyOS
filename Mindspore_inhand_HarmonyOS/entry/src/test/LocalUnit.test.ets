@@ -29,6 +29,7 @@ import {
   TextRecognitionService,
   TextTranslationResult,
   TextTranslationRunner,
+  TextTranslationRuntimeSource,
   TextTranslationService,
   textRecognitionOutputFromBlocks,
   translationLanguagePairSupportsTarget,
@@ -85,6 +86,9 @@ import {
   gestureRectanglePercent,
   localGestureDetectionMaxGestureCount
 } from '../main/ets/services/ai/GestureService';
+import {
+  hmsGestureConfidenceThresholdForLiveMode
+} from '../main/ets/services/ai/HmsGestureModelDetector';
 import {
   DanceFrameData,
   DanceSkeletonPoints,
@@ -252,6 +256,7 @@ import {
   cachedRuntimeAiServiceForWorkflow,
   createHarmonyDefaultAiService,
   createRuntimeAiServiceForWorkflow,
+  HarmonyImageClassificationRuntimeOptions,
   imageCategoryLabelRawfilePathForLocale,
   objectCategoryLabelRawfilePathForLocale,
   rawfileAsciiContentToText,
@@ -262,6 +267,8 @@ import {
 } from '../main/ets/services/ai/ImageClassificationRuntimeFactory';
 import { RuntimeAiServiceSession } from '../main/ets/services/ai/RuntimeAiServiceSession';
 import { RuntimeRequestGeneration } from '../main/ets/features/runtime/RuntimeRequestGeneration';
+import { configureTranslationTokenizerForTests } from '../main/ets/services/ai/TinyTranslationTokenizer';
+import { TOKENIZER_RUNTIME_FIXTURE } from './TranslationTokenizerFixture';
 import {
   RuntimePixelMapOwner,
   clearRuntimePixelMapState
@@ -358,6 +365,7 @@ import {
   shouldAllowRuntimeInputChange,
   shouldClearRuntimeResultAtWorkflowStart,
   shouldKeepScreenOnForWorkflow,
+  shouldMirrorLiveGestureCameraOverlay,
   shouldShowCopyTextAction,
   shouldShowResultSaveAction,
   shouldShowLiveClassificationCameraOverlay,
@@ -1112,9 +1120,11 @@ class FixedTextTranslationRunner implements TextTranslationRunner {
   readonly seenTexts: Array<string> = [];
   readonly seenTargetLanguages: Array<string> = [];
   private readonly translatedText: string;
+  private readonly runtimeSource?: TextTranslationRuntimeSource;
 
-  constructor(translatedText: string) {
+  constructor(translatedText: string, runtimeSource?: TextTranslationRuntimeSource) {
     this.translatedText = translatedText;
+    this.runtimeSource = runtimeSource;
   }
 
   async translate(text: string, targetLanguage: string): Promise<TextTranslationResult> {
@@ -1124,7 +1134,8 @@ class FixedTextTranslationRunner implements TextTranslationRunner {
       ok: true,
       sourceText: text,
       translatedText: this.translatedText,
-      targetLanguage: targetLanguage
+      targetLanguage: targetLanguage,
+      runtimeSource: this.runtimeSource
     };
   }
 }
@@ -1543,6 +1554,22 @@ class FixedAndroidGestureModelDetector implements AndroidGestureModelDetector {
 class RejectingAndroidGestureModelDetector implements AndroidGestureModelDetector {
   async detectAndroidGestures(_imageUri: string): Promise<AndroidGestureModelResult> {
     throw new Error('android gesture model failed');
+  }
+}
+
+class StoppingGestureRunner implements GestureRunner {
+  stopCount: number = 0;
+
+  async detectGesture(_imageUri: string): Promise<GestureResult> {
+    return {
+      ok: true,
+      gestures: [{ category: 10, label: 'Fist', score: 0.9 }],
+      executionMs: 1
+    };
+  }
+
+  stop(): void {
+    this.stopCount++;
   }
 }
 
@@ -3377,7 +3404,7 @@ export default function localUnitTest() {
       expect(isInputPreparationRequestCurrent(7, 7)).assertTrue();
       expect(isInputPreparationRequestCurrent(6, 7)).assertFalse();
       expect(hasAppStringKey('feature_input_live_translation')).assertTrue();
-      expect(translation.requiredPermissions.indexOf('internet') >= 0).assertTrue();
+      expect(translation.requiredPermissions.indexOf('internet')).assertEqual(-1);
 
       const portraitSegmentation: FeatureWorkflow = workflowForRoute(AppRoute.PORTRAIT_SEGMENTATION.name)!;
       expect(portraitSegmentation.aiMethod).assertEqual('segmentPerson');
@@ -3525,6 +3552,16 @@ export default function localUnitTest() {
       expect(shouldMirrorSegmentationForeground(segmentationLive, 'front')).assertFalse();
       expect(shouldMirrorSegmentationForeground(segmentationStill, 'front')).assertFalse();
       expect(shouldMirrorSegmentationForeground(undefined, 'front')).assertFalse();
+    });
+
+    it('mirrorsGestureOverlayOnlyForFrontCameraLiveWorkflow', 0, () => {
+      const gestureLive: FeatureWorkflow = workflowForRoute(AppRoute.GESTURE_LIVE.name)!;
+      const gestureStill: FeatureWorkflow = workflowForRoute(AppRoute.GESTURE_STILL.name)!;
+
+      expect(shouldMirrorLiveGestureCameraOverlay(gestureLive, 'front')).assertTrue();
+      expect(shouldMirrorLiveGestureCameraOverlay(gestureLive, 'back')).assertFalse();
+      expect(shouldMirrorLiveGestureCameraOverlay(gestureStill, 'front')).assertFalse();
+      expect(shouldMirrorLiveGestureCameraOverlay(undefined, 'front')).assertFalse();
     });
 
     it('showsAndroidCopyButtonForTextWorkflowsEvenWhenContentIsEmpty', 0, () => {
@@ -4162,7 +4199,7 @@ export default function localUnitTest() {
       expect(runner.seenTexts.length).assertEqual(0);
     });
 
-    it('defaultAiServiceReportsKnownLocalTranslationAsOfflineDemo', 0, async () => {
+    it('defaultAiServiceDoesNotUseLegacyDictionaryWithoutExplicitInjection', 0, async () => {
       const workflow = workflowForRoute(AppRoute.TEXT_TRANSLATION.name);
       expect(workflow !== undefined).assertTrue();
 
@@ -4170,12 +4207,8 @@ export default function localUnitTest() {
         text: 'Hello, MindSpore!'
       });
 
-      expect(result.ok).assertTrue();
-      expect(result.code).assertEqual('TEXT_TRANSLATION_DONE');
-      expect(result.messageKey).assertEqual('feature_runtime_text_translation_offline_done');
-      expect(result.detailText.indexOf('targetLanguage=zh') >= 0).assertTrue();
-      expect(result.detailText.indexOf('translated=\u4F60\u597D\u6607\u601D') >= 0).assertTrue();
-      expect(copyableTextForAiResult('translateText', aiRunResultRows(result))).assertEqual('\u4F60\u597D\u6607\u601D');
+      expect(result.ok).assertFalse();
+      expect(result.code).assertEqual('NATIVE_ADAPTER_PENDING');
     });
 
     it('callerOwnedPixelMapReleasesExactlyOnceAfterSuccessfulUse', 0, async () => {
@@ -4214,7 +4247,7 @@ export default function localUnitTest() {
       expect(pixelMap.releaseCount).assertEqual(1);
     });
 
-    it('defaultAiServiceReportsUnknownLocalTranslationAsOfflineUnsupported', 0, async () => {
+    it('defaultAiServiceDoesNotExposeLegacyDictionaryFailureMessaging', 0, async () => {
       const workflow = workflowForRoute(AppRoute.TEXT_TRANSLATION.name);
       expect(workflow !== undefined).assertTrue();
 
@@ -4223,8 +4256,8 @@ export default function localUnitTest() {
       });
 
       expect(result.ok).assertFalse();
-      expect(result.code).assertEqual('TEXT_TRANSLATION_FAILED');
-      expect(result.messageKey).assertEqual('feature_runtime_text_translation_offline_unsupported');
+      expect(result.code).assertEqual('NATIVE_ADAPTER_PENDING');
+      expect(result.messageKey).assertEqual('feature_runtime_pending_adapter');
     });
 
     it('aiServiceUsesAndroidTargetLanguageRuleForTextTranslation', 0, async () => {
@@ -4273,7 +4306,7 @@ export default function localUnitTest() {
         blockCount: 1,
         executionMs: 8
       });
-      const translationRunner: FixedTextTranslationRunner = new FixedTextTranslationRunner('hello');
+      const translationRunner: FixedTextTranslationRunner = new FixedTextTranslationRunner('hello', 'localModel');
 
       const result = await new DefaultAiService({
         textRecognitionService: new TextRecognitionService({ runner: recognitionRunner }),
@@ -4289,7 +4322,7 @@ export default function localUnitTest() {
       expect(translationRunner.seenTargetLanguages[0]).assertEqual('en');
     });
 
-    it('aiServiceRecognizesImageTextBeforeDefaultLocalTranslation', 0, async () => {
+    it('aiServiceRecognizesImageTextBeforeInjectedLocalModelTranslation', 0, async () => {
       const workflow = workflowForRoute(AppRoute.TEXT_TRANSLATION.name);
       expect(workflow !== undefined).assertTrue();
       const recognitionRunner = new FixedTextRecognitionRunner({
@@ -4299,16 +4332,18 @@ export default function localUnitTest() {
         blockCount: 1,
         executionMs: 8
       });
+      const translationRunner = new FixedTextTranslationRunner('\u6607\u601D', 'localModel');
 
       const result = await new DefaultAiService({
-        textRecognitionService: new TextRecognitionService({ runner: recognitionRunner })
+        textRecognitionService: new TextRecognitionService({ runner: recognitionRunner }),
+        textTranslationService: new TextTranslationService({ runner: translationRunner })
       }).run(workflow!, {
         imageUri: 'file://selected/text.jpg'
       });
 
       expect(result.ok).assertTrue();
       expect(result.code).assertEqual('TEXT_TRANSLATION_DONE');
-      expect(result.messageKey).assertEqual('feature_runtime_text_translation_offline_done');
+      expect(result.messageKey).assertEqual('feature_runtime_text_translation_done');
       expect(result.detailText.indexOf('targetLanguage=zh') >= 0).assertTrue();
       expect(result.detailText.indexOf('source=MindSpore') >= 0).assertTrue();
       expect(result.detailText.indexOf('translated=\u6607\u601D') >= 0).assertTrue();
@@ -4317,6 +4352,7 @@ export default function localUnitTest() {
       expect(aiRunResultRows(result)[1].value).assertEqual('MindSpore\n');
       expect(copyableTextForAiResult('translateText', aiRunResultRows(result))).assertEqual('\u6607\u601D');
       expect(recognitionRunner.seenImageUris[0]).assertEqual('file://selected/text.jpg');
+      expect(translationRunner.seenTexts[0]).assertEqual('MindSpore\n');
     });
 
     it('copyableTextForTranslationReturnsTranslatedTextLikeAndroidCopyButton', 0, async () => {
@@ -5308,6 +5344,29 @@ export default function localUnitTest() {
       expect(box.top.toFixed(1)).assertEqual('0.0');
       expect(box.width.toFixed(1)).assertEqual('60.0');
       expect(box.height.toFixed(1)).assertEqual('100.0');
+    });
+
+    it('usesAndroidHmsGestureThresholdsForStillAndLiveProduction', 0, () => {
+      expect(hmsGestureConfidenceThresholdForLiveMode(false)).assertEqual(0.6);
+      expect(hmsGestureConfidenceThresholdForLiveMode(true)).assertEqual(0.1);
+    });
+
+    it('mirrorsOnlyFrontCameraLiveGestureRectangleHorizontally', 0, () => {
+      const rectangle: GestureRectangle = {
+        left: 10,
+        top: 5,
+        width: 60,
+        height: 20
+      };
+
+      const stillBox = gestureRectanglePercent(rectangle, 100, 50);
+      const frontLiveBox = gestureRectanglePercent(rectangle, 100, 50, true);
+
+      expect(stillBox.left).assertEqual(10);
+      expect(frontLiveBox.left).assertEqual(30);
+      expect(frontLiveBox.top).assertEqual(stillBox.top);
+      expect(frontLiveBox.width).assertEqual(stillBox.width);
+      expect(frontLiveBox.height).assertEqual(stillBox.height);
     });
 
     it('aiServiceReportsGestureFailureWithI18nKey', 0, async () => {
@@ -7151,6 +7210,92 @@ export default function localUnitTest() {
       expect(creates).assertEqual(2);
     });
 
+    it('runtimeAiServiceSessionInvalidationStopsCachedGestureServiceExactlyOnce', 0, async () => {
+      const session = new RuntimeAiServiceSession();
+      const workflow: FeatureWorkflow = workflowForRoute(AppRoute.GESTURE_STILL.name)!;
+      const runner = new StoppingGestureRunner();
+      const service = new DefaultAiService({
+        gestureService: new GestureService({ runner: runner })
+      });
+      await session.getOrCreate(workflow, async (): Promise<DefaultAiService> => service);
+
+      session.invalidate();
+      session.invalidate();
+      await Promise.resolve();
+
+      expect(runner.stopCount).assertEqual(1);
+    });
+
+    it('runtimeAiServiceSessionInvalidationStopsPendingGestureServiceAndDoesNotReturnIt', 0, async () => {
+      const session = new RuntimeAiServiceSession();
+      const workflow: FeatureWorkflow = workflowForRoute(AppRoute.GESTURE_STILL.name)!;
+      const runner = new StoppingGestureRunner();
+      const service = new DefaultAiService({
+        gestureService: new GestureService({ runner: runner })
+      });
+      let resolveCreation: ((service: DefaultAiService) => void) | undefined = undefined;
+      const creation = new Promise<DefaultAiService>((resolve: (value: DefaultAiService) => void) => {
+        resolveCreation = resolve;
+      });
+      const requested = session.getOrCreate(workflow, (): Promise<DefaultAiService> => creation);
+
+      session.invalidate();
+      resolveCreation!(service);
+      let rejected = false;
+      try {
+        await requested;
+      } catch (_) {
+        rejected = true;
+      }
+      await Promise.resolve();
+
+      expect(rejected).assertTrue();
+      expect(runner.stopCount).assertEqual(1);
+    });
+
+    it('runtimeAiServiceSessionInvalidationRejectsEveryPendingSameRouteWaiter', 0, async () => {
+      const session = new RuntimeAiServiceSession();
+      const workflow: FeatureWorkflow = workflowForRoute(AppRoute.GESTURE_STILL.name)!;
+      const staleRunner = new StoppingGestureRunner();
+      const staleService = new DefaultAiService({
+        gestureService: new GestureService({ runner: staleRunner })
+      });
+      let resolveCreation: ((service: DefaultAiService) => void) | undefined = undefined;
+      const creation = new Promise<DefaultAiService>((resolve: (value: DefaultAiService) => void) => {
+        resolveCreation = resolve;
+      });
+      let creates = 0;
+      const creator = (): Promise<DefaultAiService> => {
+        creates++;
+        return creation;
+      };
+
+      const first = session.getOrCreate(workflow, creator).then(
+        (_service: DefaultAiService): boolean => false,
+        (_error: Error): boolean => true
+      );
+      const second = session.getOrCreate(workflow, creator).then(
+        (_service: DefaultAiService): boolean => false,
+        (_error: Error): boolean => true
+      );
+      expect(creates).assertEqual(1);
+      session.invalidate();
+      resolveCreation!(staleService);
+
+      expect(await first).assertTrue();
+      expect(await second).assertTrue();
+      await Promise.resolve();
+      expect(staleRunner.stopCount).assertEqual(1);
+
+      const freshService = new DefaultAiService();
+      const fresh = await session.getOrCreate(workflow, async (): Promise<DefaultAiService> => {
+        creates++;
+        return freshService;
+      });
+      expect(fresh === freshService).assertTrue();
+      expect(creates).assertEqual(2);
+    });
+
     it('runtimeAiServiceSessionCreatesAgainForDifferentRoute', 0, async () => {
       const session = new RuntimeAiServiceSession();
       const firstWorkflow: FeatureWorkflow = workflowForRoute(AppRoute.OBJECT_CAMERA.name)!;
@@ -7510,60 +7655,7 @@ export default function localUnitTest() {
       expect(estimator.seenImageUris.length).assertEqual(0);
     });
 
-    it('runtimeFactoryRejectsUntrustedClassificationLabelsAsGesturesByDefault', 0, async () => {
-      const workflow = workflowForRoute(AppRoute.GESTURE_STILL.name);
-      expect(workflow !== undefined).assertTrue();
-      const labelContent: Uint8Array = new Uint8Array([
-        103, 111, 108, 100, 102, 105, 115, 104, 10,
-        98, 111, 120, 105, 110, 103, 95, 103, 108, 111, 118, 101
-      ]);
-      const service = await createRuntimeAiServiceForWorkflow(workflow!, {
-        resourceManager: new FixedRawfileContentReader(labelContent),
-        inputPreprocessor: new FixedInputPreprocessor(new ArrayBuffer(12)),
-        tensorRunner: new FixedTensorRunner([0.1, 0.91])
-      });
-
-      const result = await service.run(workflow!, {
-        imageUri: 'file://selected/hand.jpg'
-      });
-
-      expect(result.ok).assertFalse();
-      expect(result.code).assertEqual('GESTURE_DETECTION_FAILED');
-      expect(result.messageKey).assertEqual('feature_runtime_gesture_failed');
-    });
-
-    it('runtimeFactoryPassesGestureRegionEstimatorToLocalGestureService', 0, async () => {
-      const workflow = workflowForRoute(AppRoute.GESTURE_STILL.name);
-      expect(workflow !== undefined).assertTrue();
-      const labelContent: Uint8Array = new Uint8Array([
-        103, 111, 108, 100, 102, 105, 115, 104, 10,
-        98, 111, 120, 105, 110, 103, 95, 103, 108, 111, 118, 101
-      ]);
-      const estimatedRect: GestureRectangle = {
-        left: 4,
-        top: 5,
-        width: 6,
-        height: 7
-      };
-      const estimator = new FixedGestureRegionEstimator(estimatedRect, 20, 30);
-      const service = await createRuntimeAiServiceForWorkflow(workflow!, {
-        resourceManager: new FixedRawfileContentReader(labelContent),
-        inputPreprocessor: new FixedInputPreprocessor(new ArrayBuffer(12)),
-        tensorRunner: new FixedTensorRunner([0.1, 0.91]),
-        trustedGestureModelLabels: true,
-        gestureRegionEstimator: estimator
-      });
-
-      const result = await service.run(workflow!, {
-        imageUri: 'file://selected/hand-estimated.jpg'
-      });
-
-      expect(result.ok).assertTrue();
-      expect(estimator.seenImageUris[0]).assertEqual('file://selected/hand-estimated.jpg');
-      expect(result.detailText.indexOf('Fist 91.00% [4,5,6,7]') >= 0).assertTrue();
-    });
-
-    it('cachedRuntimeFactoryReportsGestureRunnerUnavailableWithoutLoadingImageNetLabels', 0, async () => {
+    it('cachedRuntimeFactoryUsesProductionGestureRouteWithoutLoadingImageNetLabels', 0, async () => {
       resetHarmonyRuntimeAiServiceCachesForTests();
       const workflow = workflowForRoute(AppRoute.GESTURE_LIVE.name);
       expect(workflow !== undefined).assertTrue();
@@ -7578,9 +7670,10 @@ export default function localUnitTest() {
       });
 
       expect(result.ok).assertFalse();
-      expect(result.code).assertEqual('NATIVE_ADAPTER_PENDING');
-      expect(result.messageKey).assertEqual('feature_runtime_gesture_runner_unavailable');
-      expect(resourceManager.seenPaths.length).assertEqual(0);
+      expect(result.code).assertEqual('GESTURE_DETECTION_FAILED');
+      expect(result.messageKey).assertEqual('feature_runtime_gesture_failed');
+      expect(resourceManager.seenPaths.length).assertEqual(1);
+      expect(resourceManager.seenPaths[0]).assertEqual('models/gesture/GestureDetector.ms');
     });
 
     it('runtimeFactoryInjectsLocalSceneDetectionServiceByDefault', 0, async () => {
@@ -7771,34 +7864,75 @@ export default function localUnitTest() {
       expect(runner.seenImageUris[0]).assertEqual('file://selected/ocr.jpg');
     });
 
-    it('runtimeFactoryInjectsOcrAndTranslatorForImageTranslationWorkflow', 0, async () => {
+    it('runtimeFactorySharesInjectedLocalModelRunnerForDirectTextAndOcr', 0, async () => {
       const workflow = workflowForRoute(AppRoute.TEXT_TRANSLATION.name);
       expect(workflow !== undefined).assertTrue();
       const recognitionRunner: FixedTextRecognitionRunner = new FixedTextRecognitionRunner({
         ok: true,
-        text: '你好\n',
-        lineCount: 1,
+        text: 'second arbitrary OCR line\nkeeps newline\n',
+        lineCount: 2,
         blockCount: 1,
         executionMs: 7
       });
-      const translationRunner: FixedTextTranslationRunner = new FixedTextTranslationRunner('hello');
+      const translationRunner: FixedTextTranslationRunner =
+        new FixedTextTranslationRunner('translated line one\ntranslated line two\n', 'localModel');
       const service = await createRuntimeAiServiceForWorkflow(workflow!, {
         resourceManager: new ThrowingRawfileContentReader(),
         textRecognitionRunner: recognitionRunner,
         textTranslationRunner: translationRunner
       });
 
-      const result: AiRunResult = await service.run(workflow!, {
+      const directResult: AiRunResult = await service.run(workflow!, {
+        text: 'first arbitrary unmapped sentence'
+      });
+      const ocrResult: AiRunResult = await service.run(workflow!, {
         imageUri: 'file://selected/translation.jpg'
       });
 
-      expect(result.ok).assertTrue();
-      expect(result.code).assertEqual('TEXT_TRANSLATION_DONE');
+      expect(directResult.code).assertEqual('TEXT_TRANSLATION_DONE');
+      expect(ocrResult.code).assertEqual('TEXT_TRANSLATION_DONE');
       expect(recognitionRunner.seenImageUris[0]).assertEqual('file://selected/translation.jpg');
-      expect(translationRunner.seenTexts[0]).assertEqual('你好\n');
+      expect(translationRunner.seenTexts[0]).assertEqual('first arbitrary unmapped sentence');
+      expect(translationRunner.seenTexts[1]).assertEqual('second arbitrary OCR line\nkeeps newline\n');
+      expect(copyableTextForAiResult('translateText', aiRunResultRows(ocrResult)))
+        .assertEqual('translated line one\ntranslated line two\n');
+      if (directResult.data?.kind === 'textTranslation') {
+        expect(directResult.data.result.runtimeSource).assertEqual('localModel');
+      } else {
+        expect(false).assertTrue();
+      }
+      if (ocrResult.data?.kind === 'textTranslation') {
+        expect(ocrResult.data.result.runtimeSource).assertEqual('localModel');
+      } else {
+        expect(false).assertTrue();
+      }
     });
 
-    it('runtimeFactoryUsesLocalFallbackForImageTranslationWithoutTranslator', 0, async () => {
+    it('translationRepeatedClicksShareRunnerWhileGenerationSuppressesStaleAndPageExit', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.TEXT_TRANSLATION.name)!;
+      const runner = new FixedTextTranslationRunner('translated', 'localModel');
+      const service = await createRuntimeAiServiceForWorkflow(workflow, {
+        resourceManager: new ThrowingRawfileContentReader(),
+        textTranslationRunner: runner
+      });
+      const generation = new RuntimeRequestGeneration();
+      const firstGeneration = generation.begin();
+      const results = await Promise.all([
+        service.run(workflow, { text: 'first click' }),
+        service.run(workflow, { text: 'second click' })
+      ]);
+      const secondGeneration = generation.begin();
+
+      expect(results[0].code).assertEqual('TEXT_TRANSLATION_DONE');
+      expect(results[1].code).assertEqual('TEXT_TRANSLATION_DONE');
+      expect(runner.seenTexts.join(',')).assertEqual('first click,second click');
+      expect(generation.isCurrent(firstGeneration)).assertFalse();
+      expect(generation.isCurrent(secondGeneration)).assertTrue();
+      generation.invalidate();
+      expect(generation.isCurrent(secondGeneration)).assertFalse();
+    });
+
+    it('runtimeFactoryFailsOcrTranslationHonestlyWhenModelAssetIsMissing', 0, async () => {
       const workflow = workflowForRoute(AppRoute.TEXT_TRANSLATION.name);
       expect(workflow !== undefined).assertTrue();
       const recognitionRunner: FixedTextRecognitionRunner = new FixedTextRecognitionRunner({
@@ -7817,15 +7951,16 @@ export default function localUnitTest() {
         imageUri: 'file://selected/translation.jpg'
       });
 
-      expect(result.ok).assertTrue();
-      expect(result.code).assertEqual('TEXT_TRANSLATION_DONE');
+      expect(result.ok).assertFalse();
+      expect(result.code).assertEqual('TEXT_TRANSLATION_FAILED');
+      expect(result.messageKey).assertEqual('feature_runtime_text_translation_failed');
       expect(result.detailText.indexOf('source=\u4F60\u597D') >= 0).assertTrue();
-      expect(result.detailText.indexOf('translated=hello') >= 0).assertTrue();
+      expect(result.detailText.indexOf('translated=') >= 0).assertTrue();
       expect(recognitionRunner.seenImageUris[0]).assertEqual('file://selected/translation.jpg');
-      expect(translationSnapshotTranslatedTextReady(aiRunResultRows(result))).assertTrue();
+      expect(translationSnapshotTranslatedTextReady(aiRunResultRows(result))).assertFalse();
     });
 
-    it('runtimeFactoryUsesLocalFallbackForTypedTranslationWithoutTranslator', 0, async () => {
+    it('runtimeFactoryFailsTypedTranslationHonestlyWhenModelAssetIsMissing', 0, async () => {
       const workflow = workflowForRoute(AppRoute.TEXT_TRANSLATION.name);
       expect(workflow !== undefined).assertTrue();
       const service = await createRuntimeAiServiceForWorkflow(workflow!, {
@@ -7836,9 +7971,31 @@ export default function localUnitTest() {
         text: 'MindSpore'
       });
 
-      expect(result.ok).assertTrue();
-      expect(result.code).assertEqual('TEXT_TRANSLATION_DONE');
-      expect(result.detailText.indexOf('translated=\u6607\u601D') >= 0).assertTrue();
+      expect(result.ok).assertFalse();
+      expect(result.code).assertEqual('TEXT_TRANSLATION_FAILED');
+      expect(result.messageKey).assertEqual('feature_runtime_text_translation_failed');
+      expect(result.detailText.indexOf('source=MindSpore') >= 0).assertTrue();
+      expect(result.detailText.indexOf('translated=') >= 0).assertTrue();
+    });
+
+    it('runtimeFactoryConstructsModelRunnerWithInjectedHostBundleFactory', 0, async () => {
+      resetHarmonyRuntimeAiServiceCachesForTests();
+      configureTranslationTokenizerForTests(TOKENIZER_RUNTIME_FIXTURE);
+      const workflow = workflowForRoute(AppRoute.TEXT_TRANSLATION.name)!;
+      let bundleFactoryCalls = 0;
+      const service = await createRuntimeAiServiceForWorkflow(workflow, {
+        resourceManager: new ThrowingRawfileContentReader(),
+        translationModelBundleFactory: async () => {
+          bundleFactoryCalls++;
+          throw new Error('host bundle unavailable');
+        }
+      });
+
+      const result = await service.run(workflow, { text: 'arbitrary host sentence' });
+
+      expect(result.code).assertEqual('TEXT_TRANSLATION_FAILED');
+      expect(result.messageKey).assertEqual('feature_runtime_text_translation_failed');
+      expect(bundleFactoryCalls).assertEqual(1);
     });
 
     it('runtimeFactoryLoadsAndroidLanguagePairsForLocalTextTranslation', 0, async () => {
@@ -7850,7 +8007,8 @@ export default function localUnitTest() {
       ]);
       const reader: FixedRawfileContentReader = new FixedRawfileContentReader(languagePairContent);
       const service = await createRuntimeAiServiceForWorkflow(workflow!, {
-        resourceManager: reader
+        resourceManager: reader,
+        textTranslationRunner: new FixedTextTranslationRunner('\u6607\u601D', 'localModel')
       });
 
       const result: AiRunResult = await service.run(workflow!, {
@@ -8101,7 +8259,7 @@ export default function localUnitTest() {
           'human\nautomobile\ntraffic signal');
     });
 
-    it('runtimeFactoryLocalFallbackFailsUnknownTranslationHonestly', 0, async () => {
+    it('runtimeFactoryDoesNotFallBackToDictionaryForArbitraryText', 0, async () => {
       const workflow = workflowForRoute(AppRoute.TEXT_TRANSLATION.name);
       expect(workflow !== undefined).assertTrue();
       const service = await createRuntimeAiServiceForWorkflow(workflow!, {
@@ -8114,14 +8272,14 @@ export default function localUnitTest() {
 
       expect(result.ok).assertFalse();
       expect(result.code).assertEqual('TEXT_TRANSLATION_FAILED');
-      expect(result.messageKey).assertEqual('feature_runtime_text_translation_offline_unsupported');
+      expect(result.messageKey).assertEqual('feature_runtime_text_translation_failed');
       expect(result.detailText.indexOf('source=unmapped phrase') >= 0).assertTrue();
       expect(result.detailText.indexOf('translated=') >= 0).assertTrue();
       expect(aiRunResultRows(result)[1].value).assertEqual('unmapped phrase');
       expect(copyableTextForAiResult('translateText', aiRunResultRows(result))).assertEqual('unmapped phrase');
     });
 
-    it('runtimeFactoryLocalFallbackPreservesOcrSourceWhenUnknownTranslationFails', 0, async () => {
+    it('runtimeFactoryModelFailurePreservesOcrSourceWithoutFallback', 0, async () => {
       const workflow = workflowForRoute(AppRoute.TEXT_TRANSLATION.name);
       expect(workflow !== undefined).assertTrue();
       const recognitionRunner: FixedTextRecognitionRunner = new FixedTextRecognitionRunner({
@@ -8142,6 +8300,7 @@ export default function localUnitTest() {
 
       expect(result.ok).assertFalse();
       expect(result.code).assertEqual('TEXT_TRANSLATION_FAILED');
+      expect(result.messageKey).assertEqual('feature_runtime_text_translation_failed');
       expect(aiRunResultRows(result)[1].value).assertEqual('unmapped phrase\n');
       expect(translationSnapshotTranslatedTextReady(aiRunResultRows(result))).assertFalse();
       expect(shouldShowTranslationSnapshotSaveAction(
@@ -8177,6 +8336,30 @@ export default function localUnitTest() {
       expect(result.ok).assertTrue();
       expect(result.code).assertEqual('GESTURE_DETECTION_DONE');
       expect(runner.seenImageUris[0]).assertEqual('file://selected/gesture.jpg');
+    });
+
+    it('runtimeFactoryUsesInjectedAndroidGestureDetectorWithoutImageNetLabels', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.GESTURE_STILL.name)!;
+      const resourceManager = new FixedRawfileContentReader(new Uint8Array([102, 105, 115, 116]));
+      const detector = new FixedAndroidGestureModelDetector({
+        gestures: [{ category: 10, score: 0.91 }],
+        imageWidth: 320,
+        imageHeight: 240,
+        executionMs: 6
+      });
+      const options: HarmonyImageClassificationRuntimeOptions = {
+        resourceManager: resourceManager,
+        androidGestureModelDetector: detector
+      };
+
+      const service = await createRuntimeAiServiceForWorkflow(workflow, options);
+      const result = await service.run(workflow, {
+        imageUri: 'file://selected/gesture.jpg'
+      });
+
+      expect(result.code).assertEqual('GESTURE_DETECTION_DONE');
+      expect(detector.seenImageUris.length).assertEqual(1);
+      expect(resourceManager.seenPaths.length).assertEqual(0);
     });
 
     it('runtimeFactoryInjectsSceneDetectionServiceForSceneWorkflow', 0, async () => {
@@ -8799,6 +8982,7 @@ export default function localUnitTest() {
         .assertEqual('front');
       expect(initialLiveCameraPositionForWorkflow(workflowForRoute(AppRoute.IMAGE_CAMERA.name)!)).assertEqual('back');
       expect(initialLiveCameraPositionForWorkflow(workflowForRoute(AppRoute.OBJECT_CAMERA.name)!)).assertEqual('back');
+      expect(initialLiveCameraPositionForWorkflow(workflowForRoute(AppRoute.GESTURE_LIVE.name)!)).assertEqual('back');
       expect(initialLiveCameraPositionForWorkflow(workflowForRoute(AppRoute.LIVE_SKELETON.name)!)).assertEqual('back');
       expect(initialLiveCameraPositionForWorkflow(undefined)).assertEqual('back');
     });

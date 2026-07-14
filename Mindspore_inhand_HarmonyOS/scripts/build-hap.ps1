@@ -21,6 +21,7 @@ $env:PATH = 'C:\Program Files\Huawei\DevEco Studio\jbr\bin;' + $env:PATH
 & (Join-Path $PSScriptRoot 'check-dance-countdown-assets.ps1')
 & (Join-Path $PSScriptRoot 'check-dance-thumbnail.ps1')
 & (Join-Path $PSScriptRoot 'ensure-mindspore-models.ps1')
+& (Join-Path $PSScriptRoot 'verify-translation-model.ps1') -ReleaseEvidencePath (Join-Path $PSScriptRoot '..\..\tools\translation\manifests\local-learning-authorization-v1.json')
 $hvigor = 'C:\Program Files\Huawei\DevEco Studio\tools\hvigor\bin\hvigorw.bat'
 & cmd.exe /d /c "`"$hvigor`" assembleHap --no-daemon 2>&1"
 if ($LASTEXITCODE -ne 0) {

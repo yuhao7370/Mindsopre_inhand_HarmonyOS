@@ -109,7 +109,7 @@ export interface TextTranslationLanguagePair {
   readonly code: string;
 }
 
-export type TextTranslationRuntimeSource = 'offlineDictionary';
+export type TextTranslationRuntimeSource = 'offlineDictionary' | 'localModel';
 
 export interface TextTranslationResult {
   readonly ok: boolean;

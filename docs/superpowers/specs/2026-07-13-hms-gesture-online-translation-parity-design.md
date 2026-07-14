@@ -1,7 +1,7 @@
 # HMS 手势识别与端侧中英翻译鸿蒙等价移植设计
 
 日期：2026-07-13
-状态：条件批准；翻译完整训练和生产装配受 ONNX→MindSpore smoke 门槛约束
+状态：条件批准；三图 ONNX→MindSpore 原型已通过，翻译生产装配仍受双向质量、W8 归档、HAP 资产和 arm64 真机门槛约束
 适用范围：本地学习、私有仓库
 
 ## 1. 目标与范围
@@ -195,10 +195,11 @@ cmake --build $BUILD --target MNN -j 8
 - 对 UTF-8 `source + "\0" + target` 计算 SHA-256，把十六进制摘要前 8 个字符按无符号 32 位大端整数解析，以该值 `% 20` 分配：0 为 test、1 为 validation、其余为 train；每方向分别收满 90,000 train、5,000 validation、5,000 test 后停止。
 - seed 固定为 `20260713`；中→英和英→中以 1:1 batch 交替采样。
 - 从上述 tiny checkpoint 加载权重，扩展两个方向 embedding，并用 seed `20260713`、normal(0, 0.02) 初始化新行；FP16 训练，AdamW，learning rate `3e-5`，weight decay `0.01`，label smoothing `0.1`，warmup 1,000 steps，单卡 batch 32、gradient accumulation 4、effective batch 128。
-- 最多训练 4 epochs 或 12 个 RTX 2070 GPU 小时，以先到者为准；每 1,000 steps 评估，validation loss 连续两次不改善即 early stop；保存 validation loss 最低的 checkpoint。
+- 初始最多训练 4 epochs；step 5626 的 validation loss 仍改善到 `4.171371296310425`，但固定 BiST held-out 诊断的英→中 chrF2 仅为 `21.620435536984907`，因此启用证据修订：从同一 model/optimizer/scaler/RNG/cursor 严格续训到总计最多 8 epochs。8 epochs 后 loss 仍改善到 `3.870474980163574`，但英→中 chrF2 仅 `26.134425140756175`，人工审计中→英/英→中仅 34/50 与 26/50；方向 validation loss 分别为 `3.3318655151367187` 与 `4.409084445190429`。因此第二次证据修订只把总 epoch 上限延到 12，仍保持 1:1，不做方向重采样。总预算仍为累计 12 个 RTX 2070 GPU 小时，不因恢复而重置；继续在绝对 optimizer step 12000、13000……评估，validation loss 连续两次不改善即 early stop；始终只保存 validation loss 严格最低的 checkpoint。运行期间旧 100-step 恢复节奏在操作性停机前保存了完整 step-11300 状态，随后仅把周期恢复间隔改为 500 steps 并严格继续该 model/optimizer/scaler/RNG 状态，没有回滚或伪造 step-11252 优化器状态。
+- 12 epochs 最终停在 step 16878，validation loss 为 `3.7039039318084717`，方向 loss 为中→英 `3.2650395484924317`、英→中 `4.142768315124512`。人工审计仅 34/50 与 25/50，分别有 5 与 7 个致命损坏；精确固定 FLORES+ 仓库又因访问门控返回 HTTP 401。因此当前 checkpoint 判定 `T3_QUALITY_BLOCKED`，只保留证据，不进入生产转换或装配；任何蒸馏/数据救援都必须另行批准并保持质量阈值不变。
 - 不再引入未固定的教师模型。BiST 本身是合成双向平行语料；若上述预算内质量不达标，模型里程碑判定失败并调整训练定义，不暗中切回云服务或字典。
 
-“一个翻译模型”指上述单一双向 checkpoint 和一个版本化模型包。为了高效自回归推理，导出为 `encoder.ms`、`decoder_prefill.ms`、`decoder_step.ms` 三个计算图；三图共享同一 manifest、词表、版本和哈希，不作为三个语言模型管理。checkpoint 生成、ONNX→MindSpore 转换和桌面 benchmark tensor smoke 全部成功之前，不开始页面生产装配。
+“一个翻译模型”指上述单一双向 checkpoint 和一个版本化模型包。为了高效自回归推理，导出为 `encoder.ms`、`decoder_prefill.ms`、`decoder_step.ms` 三个计算图；三图共享同一 manifest、词表、版本和哈希，不作为三个语言模型管理。HAP 只携带一个固实压缩的 W8 `translation-models.tar.xz`，运行时把其中三图严格校验后解压到应用私有目录；不把三份原始 `.ms` 直接作为 rawfile 分别打包。checkpoint 生成、ONNX→MindSpore 转换和桌面 benchmark tensor smoke 全部成功之前，不开始页面生产装配。
 
 ### 5.2 ArkTS 推理流程
 
@@ -229,35 +230,57 @@ Tokenizer 固定为基线 `source.spm` 的 SentencePiece Unigram，不再混用�
 6. SentencePiece 解码并按原始分隔结构拼接。
 7. 新请求到来或页面销毁时递增 generation；旧推理结果不得回写 UI。
 
-模型和 tokenizer 由 `MindSporeLiteTextTranslationRunner` 单例缓存。张量契约固定如下，导出脚本必须用这些名称，manifest 和运行时同时校验：
+模型和 tokenizer 由 `MindSporeLiteTranslationRunner` 单例缓存。张量契约固定如下，导出脚本必须用这些名称，manifest 和运行时同时校验：
 
 `encoder.ms`：
 
-- inputs：`input_ids INT32 [1,128]`、`attention_mask FLOAT32 [1,128]`
-- output：`encoder_hidden_states FLOAT32 [1,128,256]`
+- ONNX inputs：`input_ids INT32 [1,128]`、`attention_mask INT32 [1,128]`
+- ONNX output：`last_hidden_state FLOAT16 [1,128,256]`；转换后的 MindSpore runtime tensor 为 `FLOAT32`
 
 `decoder_prefill.ms`：
 
-- inputs：`decoder_input_ids INT32 [1,1]`、`decoder_position INT32 [1]`、`encoder_hidden_states FLOAT32 [1,128,256]`、`encoder_attention_mask FLOAT32 [1,128]`
-- outputs：`logits FLOAT32 [1,1,32003]`，以及每层 `present_self_key_{0,1}`、`present_self_value_{0,1}`、`present_cross_key_{0,1}`、`present_cross_value_{0,1}`，每个 cache 均为 `FLOAT32 [1,8,128,32]`
+- ONNX inputs：`decoder_input_ids INT32 [1,1]`、`encoder_hidden_states FLOAT16 [1,128,256]`、`encoder_attention_mask INT32 [1,128]`
+- ONNX outputs：`logits FLOAT16 [1,32003]`，每层 self key/value 为 `FLOAT16 [1,8,1,32]`，cross key/value 为 `FLOAT16 [1,8,128,32]`；对应 MindSpore runtime tensor 为 `FLOAT32`
 
 `decoder_step.ms`：
 
-- inputs：`decoder_input_ids INT32 [1,1]`、`decoder_position INT32 [1]`、`encoder_attention_mask FLOAT32 [1,128]`，以及上一步 8 个 `past_*` cache，均为 `FLOAT32 [1,8,128,32]`
-- outputs：`logits FLOAT32 [1,1,32003]`，4 个更新后的 self `present_*` cache；cross cache 由 ArkTS 保留并复用
-- cache 使用固定 128 槽，`decoder_position` 指定写入位置；padding 槽必须为 0，self-attention mask 禁止读取未来槽位
+- ONNX inputs：`decoder_input_ids INT32 [1,1]`、`position_id INT32 [1]`、`self_attention_mask INT32 [1,128]`、`cross_attention_mask INT32 [1,128]`，每层 host-managed past key/value 为 `FLOAT16 [1,8,127,32]`，cross key/value 为 `FLOAT16 [1,8,128,32]`
+- ONNX outputs：`logits FLOAT16 [1,32003]`，每层一个 new key/value，均为 `FLOAT16 [1,8,1,32]`；对应 MindSpore runtime tensor 为 `FLOAT32`，cross cache 由 ArkTS 保留并复用
+- cache 使用固定 128 槽，`position_id` 指定写入位置；padding 槽必须为 0，self-attention mask 禁止读取未来槽位
 
-上述三个 ONNX 图必须在完整训练开始前通过 MindSpore converter 与桌面 benchmark smoke。原型同时执行 8-bit weight quantization 并记录三个 `.ms` 的总大小；若按最终 32,003 vocab 推算明显超过 35 MiB，必须先解决重复 embedding/LM head/decoder 权重或重新设计单包共享结构，不能把体积问题推迟到完整训练后。若固定 cache 更新仍产生不支持算子，本设计的翻译里程碑失败并重新评审图结构；不允许在实施中静默改成另一套 Native runtime。
+上述三个 ONNX 图必须在完整训练开始前通过 MindSpore converter 与桌面 benchmark smoke。若固定 cache 更新仍产生不支持算子，本设计的翻译里程碑失败并重新评审图结构；不允许在实施中静默改成另一套 ML runtime。
 
-Encoder 原型已证明 Transformers 通用动态 mask 和原生 Softmax 导出会分别触发 MindSpore shape 推断失败与第 5 层 NaN。三个导出 wrapper 因此统一直接构造固定 additive mask，并把 Softmax 展开为 `ReduceMax → Sub → Exp → ReduceSum → Div`。已通过的 encoder 参考误差为：全有效 mask `max_abs=0.0071133`、半 padding `max_abs=0.0146904`；最终三图对 PyTorch/ONNX 的 MindSpore 输出门槛统一设为 `max_abs <= 0.02`、`mean_abs <= 0.002` 且无 NaN/Inf。
+三图 MindSpore Lite 2.8 原型已证明 stable-softmax encoder、prefill 和 fixed-cache step 均可转换并逐图执行。Encoder 原型证明 Transformers 通用动态 mask 和原生 Softmax 导出会分别触发 MindSpore shape 推断失败与第 5 层 NaN；三个导出 wrapper 因此统一直接构造固定 additive mask，并把 Softmax 展开为 `ReduceMax → Sub → Exp → ReduceSum → Div`。Encoder 对 ONNX Runtime 的实测误差为：全有效 mask `max_abs=0.0071133`、`mean_abs=0.0007997`；半 padding `max_abs=0.0146904`、`mean_abs=0.0010149`。针对保留图/模型哈希的 fresh replay 纠正了旧报告中的陈旧序列：ONNX Runtime、float MindSpore 和 fixed-bit W8 MindSpore 均稳定复现 prefill 加五步序列 `[422,22,7,4,422,22]`；MindSpore smoke 按精确 tensor name 绑定，并按 NCHW head stride 写回 cache slot，分叉时 fail closed。Cache 图的最终 converter 命令必须显式使用 NCHW input/output flags。以上只证明图结构、converter 和 runtime 可行，不证明尚未训练完成的最终双向模型质量；最终三图仍须满足 `max_abs <= 0.02`、`mean_abs <= 0.002` 且无 NaN/Inf。
+
+量化原型的实测结论如下：
+
+| 方案 | 三图总大小 | 数值/序列结论 | 决策 |
+| --- | ---: | --- | --- |
+| float | `100.169 MiB` | 数值对照基线 | 不进入 HAP |
+| fixed-bit W8 | `58,161,928 B` / `55.468 MiB` | 输出有限、逐图 benchmark 成功；可复现 cache-loop exact 已通过 | 质量候选；原始三图体积 NO，最终训练质量仍待验收 |
+| dynamic W8 | `56,629,192 B` / `54.006 MiB` | 原始三图仍超体积 | NO |
+| W4 | `32,877,504 B` / `31.354 MiB` | token 序列严重偏离 | 质量 NO |
+| mixed | `30,739,720 B` / `29.316 MiB` | token 序列严重偏离 | 质量 NO |
+
+生产路径只保留 fixed-bit W8，不提供 W4 或 mixed 的生产回退。原型 W8 三图证据为：
+
+| 原型文件 | 大小 | SHA-256 |
+| --- | ---: | --- |
+| `encoder_fixed_stable_w8.ms` | `16,109,400 B` | `317DB84237D67206AEC036CF4A5B6F8212E5F116C3682C1B3E1ED7916460B558` |
+| `decoder_prefill1_stable_w8_nchw.ms` | `21,138,552 B` | `FBCBCBC50C89740EE4851BBE0DC397973F1A2905473237F0934E12497BF4084C` |
+| `decoder_step_fixedcache_stable_w8_nchw.ms` | `20,913,976 B` | `333704F597B2C28CEB37DE7E61CBAA3B503D45FA84EA2D81F0A328408D8B4C33` |
+
+35 MiB 门槛约束的是 HAP 内完整的已交付翻译资产集合，而不是三份解压后 `.ms` 的和。最终 HAP 资产集合必须 `<=35 MiB`，且只包含一个固实 W8 `translation-models.tar.xz`、tokenizer/runtime 资产、manifest/licenses/hashes 和小型解压器；不得包含三份原始 `.ms`、float/ONNX/checkpoint 等训练或中间产物。旧 source-evidence 归档为 `25,073,516 B`，SHA-256 `1DBB6BA66FC7F5FBA777F38960E1D56FBC0AAB793C30B068020D1DCD0773BC7F`；其非 canonical TAR 为 `58,173,440 B`，SHA-256 `D305ED7D1FE5DF6E1019078646D3D8D9F43D4514345D166011BF2A70F95FBB84`。同一成员按 canonical 名称和归一化元数据重建后，TAR SHA-256 为 `23A3DD41E006A6A3E1A7C844E6E66B3F99A49A54ACCEED02B7EAF38D0108F3E5`，XZ SHA-256 为 `A942697ADA0EC6EC8C102AB898B43D931C31EE132112B2A11B95F2673C8B30EE`。两组证据必须分开记录，不能声称 canonical rebuild 与旧归档 byte-identical。该归档仅为打包与解压可行性证据，不是最终双向模型；最终归档只能在双向训练和质量门槛通过后生成。
+
+本地解压固定使用 XZ Utils 5.8.3，官方源码 SHA-256 `FFF1FFCF2B0DA84D308A14DE513A1AA23D4E9AA3464D17E64B9714BFDD0BBFB6`、tag commit `4b73f2ec19a99ef465282fbce633e8deb33691b3`；明确拒绝已受攻击的 5.6.0/5.6.1。只构建最小静态 `liblzma`，关闭 encoders、tools 和 threads；API 24 arm64 编译/链接 probe 已通过。ArkTS 仍负责 tokenizer 和 greedy decoder，Native 代码只是窄接口解压工具，不是第二套 ML runtime。
+
+解压器从 rawfile FD/range 流式读取到应用私有临时目录/文件，限制压缩输入 `<=32 MiB`、解压输出 `<=60 MiB`、liblzma 内存 `<=68 MiB`；必须校验 CRC64，拒绝 concatenated stream 和任何 trailing data。TAR 只允许 `encoder.ms`、`decoder_prefill.ms`、`decoder_step.ms` 三个普通文件，按最终 manifest 校验精确名称、大小和 SHA-256；拒绝链接、路径成分、重复项和额外项。全部校验完成后原子重命名，失败清理所有 partial；私有缓存以归档 SHA-256 为 key。运行时允许私有目录保留约 `55.5 MiB` 的解压三图；35 MiB 只约束已交付/HAP 资产，私有缓存磁盘占用与运行时 RSS 分别记录和验收。
 
 ### 5.3 训练和导出交付物
 
 仓库内允许包含：
 
-- `translation/encoder.ms`
-- `translation/decoder_prefill.ms`
-- `translation/decoder_step.ms`
+- `translation/translation-models.tar.xz`，内含经 manifest 约束的 `encoder.ms`、`decoder_prefill.ms`、`decoder_step.ms`
 - `translation/tokenizer.model`
 - `translation/vocab.json`
 - `translation/tokenizer_runtime.json`，包含 32,000 个 piece 的 ID、score、type 以及 `nmt_nfkc` 规范化映射，供 ArkTS 使用
@@ -272,6 +295,8 @@ Encoder 原型已证明 Transformers 通用动态 mask 和原生 Softmax 导出�
 - 导出三个固定张量契约的 ONNX 中间图
 - 转换 MindSpore Lite
 - 量化、哈希和张量契约检查
+- 可复现的固实 TAR/XZ 归档构建和 HAP 资产集合体积 guard
+- 固定 XZ Utils 5.8.3 的源码下载、哈希校验、最小静态 `liblzma` 构建/导入验证及窄 NAPI 解压 wrapper
 
 三个图统一使用 MindSpore Lite 2.8 fixed-bit weight quantization：
 
@@ -288,9 +313,9 @@ per_channel=true
 bias_correction=false
 ```
 
-先保留未量化 `.ms` 做数值对照；量化图在固定 100 条转换校准句上与未量化图逐 token argmax 一致率必须不低于 99%，否则量化里程碑失败。最终 HAP 只打包量化图。
+先在构建工作区保留未量化 `.ms` 做数值对照；最终训练后的 W8 三图在固定 100 条转换校准句上与未量化图逐 token argmax 一致率必须不低于 99%，否则量化里程碑失败。最终 HAP 只打包通过双向质量门槛后生成的 W8 归档，不打包原始三图或数值对照产物。
 
-大规模临时数据不提交；最终学生 checkpoint 的训练 manifest、三个 `.ms`、运行时 tokenizer 资产和质量报告提交。公开 tiny TFLite 因转换失败不进入 HAP。
+大规模临时数据不提交；最终学生 checkpoint 的训练 manifest、W8 归档、三份解压图契约/哈希、运行时 tokenizer 资产和质量报告提交。公开 tiny TFLite、float/ONNX/checkpoint 及三份原始 `.ms` 不进入 HAP。
 
 ## 6. 代码结构
 
@@ -303,17 +328,24 @@ entry/src/main/ets/
     HmsGesturePreprocessor.ets
     HmsGestureYoloDecoder.ets
     HmsGestureNms.ets
-  ai/translation/
+  services/ai/
     TinyTranslationTokenizer.ets
-    MindSporeLiteTextTranslationRunner.ets
+    MindSporeLiteTranslationRunner.ets
     TranslationModelManifest.ets
   native/gesture_mnn/
+    index.d.ts
+  native/translation_xz/
     index.d.ts
 
 entry/src/main/cpp/gesture_mnn/
   CMakeLists.txt
   gesture_mnn_napi.cpp
   gesture_mnn_runtime.cpp
+
+entry/src/main/cpp/translation_xz/
+  CMakeLists.txt
+  translation_xz_napi.cpp
+  translation_xz_extract.cpp
 
 entry/src/main/resources/rawfile/models/
   gesture/GestureDetector.ms
@@ -364,7 +396,7 @@ entry/src/main/resources/rawfile/models/
 
 ### 8.3 模型质量与端侧验收
 
-固定外部测试集为 `openlanguagedata/flores_plus` revision `b3a5298db5721c8a682e7ef00a37fcc9ab522757` 的 `devtest`，语言为 `zho_Hans` 与 `eng_Latn`，不得用于训练或 early stopping。
+固定外部测试集为 `openlanguagedata/flores_plus` revision `b3a5298db5721c8a682e7ef00a37fcc9ab522757` 的 `devtest`，使用上游实际文件名 `cmn_Hans`（简体中文；原设计中的 `zho_Hans` 是不存在于该 revision 的别名）与 `eng_Latn`，不得用于训练或 early stopping。
 
 指标使用 sacreBLEU 2.4.3：
 
@@ -377,12 +409,12 @@ entry/src/main/resources/rawfile/models/
 
 参考性能设备固定为 Huawei Mate 60 Pro 12 GB、HarmonyOS 6.x/API 24：
 
-- 翻译模型运行资产总大小不超过 35 MiB。
+- HAP 内完整翻译资产集合（W8 归档、tokenizer/runtime、manifest/licenses/hashes 和解压器）不超过 35 MiB；约 55.5 MiB 私有解压缓存不计入该门槛，但单独记录磁盘占用。
 - 首次加载不超过 3 秒；已加载后 32 个输出 token 的单句总延迟不超过 5 秒。
 - 翻译推理相对空闲页峰值 RSS 增量不超过 250 MiB。
 - 手势静态单帧不超过 500 ms；实时模式保持 500 ms 采样上限且不存在并发帧。
 
-若验收机器不可获得，对应性能项保持未完成，不用模拟器数据替代真机结论。模拟器只验证安装、启动、入口和可控失败态；arm64 真机验证 MNN 推理、实时摄像头、本地翻译和离线行为。最终运行全量 Hypium、HAP 构建、安装和启动 smoke test。
+若验收机器不可获得，对应性能项保持未完成，不用 host 或模拟器数据替代真机结论。模拟器只验证安装、启动、入口和可控失败态；arm64 真机验证 MNN 推理、实时摄像头、本地翻译、离线行为、真实冷加载、32-token 延迟、RSS 和解压。最终运行全量 Hypium、HAP 构建、安装和启动 smoke test。
 
 ## 9. 资产和许可
 
@@ -401,9 +433,9 @@ entry/src/main/resources/rawfile/models/
 1. 记录已完成的 MNN OHOS/NAPI probe，建立仓库内可重复构建脚本和 Native 张量 smoke test。
 2. 将 HMS 模型及 manifest 加入资源，完成 ArkTS 预处理、YOLO 解码与 NMS 单元测试。
 3. 接入静态手势页，再接入实时相机流并做 Android 对照。
-4. 先用固定 tiny checkpoint 导出三个 ONNX 原型并执行 ONNX→MindSpore tensor smoke；失败则在训练前修订图结构，不投入完整训练。
-5. 按第 5.1 节生成双向 checkpoint，执行质量门槛、导出、量化、哈希和桌面 benchmark；此里程碑通过后才装配翻译生产 runtime。
-6. 完成 tokenizer 与 encoder/prefill/decode ArkTS runner 的测试和实现。
+4. 固定 tiny checkpoint 的三图 ONNX→MindSpore tensor smoke、W8 质量候选和固实 XZ 原型已通过；把导出、NCHW cache 转换、归档和 guard 固化为可复现脚本。该原型只证明图/运行时/打包可行，不代表最终双向质量。
+5. 按第 5.1 节生成双向 checkpoint，执行 FLORES+/人工质量门槛、100-step W8 argmax、导出、量化、哈希、归档和桌面 benchmark；此里程碑通过后才生成最终归档并装配翻译生产 runtime。
+6. 完成 tokenizer、encoder/prefill/decode ArkTS runner 以及窄 Native XZ 解压器的测试和实现。
 7. 把文本输入和 OCR 翻译统一切换到本地模型。
 8. 执行全量测试、HAP 构建、模拟器和 arm64 真机验收。
 
@@ -412,5 +444,6 @@ entry/src/main/resources/rawfile/models/
 - MNN OHOS 构建或 NAPI ABI 不兼容：工具链和 probe 已验证；模型张量 smoke 仍前置，不先改大面积 UI。
 - 翻译模型转换含不支持算子：公开 tiny TFLite→MindSpore 已确认失败；正式路径只采用自定义固定契约 ONNX 图，并在完整训练前完成 converter smoke。
 - 双向学生质量不足：使用固定方向 token、1:1 混合采样和第 5.1 节 early-stop 规则；质量未达标时模型里程碑失败，不回退短语字典。
-- 模型包过大：优先量化、共享词表和共享权重；不得通过删除一个翻译方向伪造达标。
+- 模型包过大：只以 HAP 内完整翻译资产集合 `<=35 MiB` 判定；使用经过质量验证的固实 W8 归档，不采用 token 已严重偏离的 W4/mixed，也不得通过删除一个翻译方向伪造达标。
+- 私有解压缓存或内存过大：分别跟踪约 55.5 MiB 私有缓存磁盘和运行时 RSS；流式解压并执行输入、输出、liblzma 内存上限，最终结论留待 Mate 60 Pro/arm64 真机。
 - 模型资产可再分发性变化：保持来源和哈希清单，并在仓库公开/发布前重新审查。

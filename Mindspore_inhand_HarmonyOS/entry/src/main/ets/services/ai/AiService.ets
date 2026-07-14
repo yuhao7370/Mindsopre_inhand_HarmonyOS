@@ -40,7 +40,6 @@ import {
   SceneDetectionService
 } from './SceneDetectionService';
 import {
-  LocalTextTranslationRunner,
   TextRecognitionResult,
   TextRecognitionService,
   hasMeaningfulText,
@@ -205,11 +204,12 @@ export class DefaultAiService {
   private readonly objectDetectionService?: ObjectDetectionService;
   private readonly styleTransferService?: StyleTransferService;
   private readonly textRecognitionService?: TextRecognitionService;
-  private readonly textTranslationService: TextTranslationService;
+  private readonly textTranslationService?: TextTranslationService;
   private readonly segmentationService?: SegmentationService;
   private readonly poseService?: PoseService;
   private readonly gestureService?: GestureService;
   private readonly sceneDetectionService?: SceneDetectionService;
+  private stopPromise: Promise<void> | undefined = undefined;
 
   constructor(options?: AiServiceOptions) {
     this.imageClassificationService = options?.imageClassificationService ?? new ImageClassificationService({
@@ -219,9 +219,7 @@ export class DefaultAiService {
     this.objectDetectionService = options?.objectDetectionService;
     this.styleTransferService = options?.styleTransferService;
     this.textRecognitionService = options?.textRecognitionService;
-    this.textTranslationService = options?.textTranslationService ?? new TextTranslationService({
-      runner: new LocalTextTranslationRunner()
-    });
+    this.textTranslationService = options?.textTranslationService;
     this.segmentationService = options?.segmentationService;
     this.poseService = options?.poseService;
     this.gestureService = options?.gestureService;
@@ -266,6 +264,23 @@ export class DefaultAiService {
       messageKey: 'feature_runtime_pending_adapter',
       detailText: ''
     };
+  }
+
+  stop(): Promise<void> {
+    if (this.stopPromise === undefined) {
+      this.stopPromise = this.stopGestureService();
+    }
+    return this.stopPromise;
+  }
+
+  private async stopGestureService(): Promise<void> {
+    if (this.gestureService === undefined) {
+      return;
+    }
+    try {
+      await this.gestureService.stop();
+    } catch (_) {
+    }
   }
 
   private async detectGesture(inputs: AiRunInputs): Promise<AiRunResult> {
@@ -518,6 +533,9 @@ export class DefaultAiService {
       };
     }
 
+    if (this.textTranslationService === undefined) {
+      return this.pendingAdapterResult('translateText');
+    }
     const result: TextTranslationResult = await this.textTranslationService.translateText(text);
     if (!result.ok) {
       return {

@@ -1,0 +1,129 @@
+{
+  "schemaVersion": 1,
+  "checkpoint": {
+    "repository": "Helsinki-NLP/opus-mt_tiny_zho-eng",
+    "revision": "4ee3a9342aae4ca6fbae82c930b5dccff5dd68dd"
+  },
+  "profiles": {
+    "prototype": {
+      "purpose": "Base-checkpoint converter/runtime evidence only; not the final bilingual model.",
+      "vocabSize": 32001,
+      "maxTokens": 256,
+      "onnxFloatingDtype": "FLOAT16",
+      "mindsporeFloatingDtype": "FLOAT32",
+      "stableSoftmaxChains": {"encoder": 6, "decoder_prefill": 4, "decoder_step": 4},
+      "graphs": {
+        "encoder": {
+          "inputs": {
+            "input_ids": {"dtype": "INT32", "shape": [1, 256]},
+            "attention_mask": {"dtype": "INT32", "shape": [1, 256]}
+          },
+          "outputs": {
+            "last_hidden_state": {"dtype": "FLOAT16", "shape": [1, 256, 256]}
+          }
+        },
+        "decoder_prefill": {
+          "inputs": {
+            "decoder_input_ids": {"dtype": "INT32", "shape": [1, 1]},
+            "encoder_hidden_states": {"dtype": "FLOAT16", "shape": [1, 256, 256]},
+            "encoder_attention_mask": {"dtype": "INT32", "shape": [1, 256]}
+          },
+          "outputs": {
+            "logits": {"dtype": "FLOAT16", "shape": [1, 32001]},
+            "self_key_0": {"dtype": "FLOAT16", "shape": [1, 8, 1, 32]},
+            "self_value_0": {"dtype": "FLOAT16", "shape": [1, 8, 1, 32]},
+            "cross_key_0": {"dtype": "FLOAT16", "shape": [1, 8, 256, 32]},
+            "cross_value_0": {"dtype": "FLOAT16", "shape": [1, 8, 256, 32]},
+            "self_key_1": {"dtype": "FLOAT16", "shape": [1, 8, 1, 32]},
+            "self_value_1": {"dtype": "FLOAT16", "shape": [1, 8, 1, 32]},
+            "cross_key_1": {"dtype": "FLOAT16", "shape": [1, 8, 256, 32]},
+            "cross_value_1": {"dtype": "FLOAT16", "shape": [1, 8, 256, 32]}
+          }
+        },
+        "decoder_step": {
+          "inputs": {
+            "decoder_input_ids": {"dtype": "INT32", "shape": [1, 1]},
+            "position_id": {"dtype": "INT32", "shape": [1]},
+            "self_attention_mask": {"dtype": "INT32", "shape": [1, 256]},
+            "cross_attention_mask": {"dtype": "INT32", "shape": [1, 256]},
+            "past_key_0": {"dtype": "FLOAT16", "shape": [1, 8, 255, 32]},
+            "past_value_0": {"dtype": "FLOAT16", "shape": [1, 8, 255, 32]},
+            "cross_key_0": {"dtype": "FLOAT16", "shape": [1, 8, 256, 32]},
+            "cross_value_0": {"dtype": "FLOAT16", "shape": [1, 8, 256, 32]},
+            "past_key_1": {"dtype": "FLOAT16", "shape": [1, 8, 255, 32]},
+            "past_value_1": {"dtype": "FLOAT16", "shape": [1, 8, 255, 32]},
+            "cross_key_1": {"dtype": "FLOAT16", "shape": [1, 8, 256, 32]},
+            "cross_value_1": {"dtype": "FLOAT16", "shape": [1, 8, 256, 32]}
+          },
+          "outputs": {
+            "logits": {"dtype": "FLOAT16", "shape": [1, 32001]},
+            "new_key_0": {"dtype": "FLOAT16", "shape": [1, 8, 1, 32]},
+            "new_value_0": {"dtype": "FLOAT16", "shape": [1, 8, 1, 32]},
+            "new_key_1": {"dtype": "FLOAT16", "shape": [1, 8, 1, 32]},
+            "new_value_1": {"dtype": "FLOAT16", "shape": [1, 8, 1, 32]}
+          }
+        }
+      }
+    },
+    "final": {
+      "purpose": "Template for the trained direction-token checkpoint; unavailable until vocab size is 32003.",
+      "vocabSize": 32003,
+      "maxTokens": 128,
+      "onnxFloatingDtype": "FLOAT16",
+      "mindsporeFloatingDtype": "FLOAT32",
+      "stableSoftmaxChains": {"encoder": 6, "decoder_prefill": 4, "decoder_step": 4},
+      "graphs": {
+        "encoder": {
+          "inputs": {
+            "input_ids": {"dtype": "INT32", "shape": [1, 128]},
+            "attention_mask": {"dtype": "INT32", "shape": [1, 128]}
+          },
+          "outputs": {
+            "last_hidden_state": {"dtype": "FLOAT16", "shape": [1, 128, 256]}
+          }
+        },
+        "decoder_prefill": {
+          "inputs": {
+            "decoder_input_ids": {"dtype": "INT32", "shape": [1, 1]},
+            "encoder_hidden_states": {"dtype": "FLOAT16", "shape": [1, 128, 256]},
+            "encoder_attention_mask": {"dtype": "INT32", "shape": [1, 128]}
+          },
+          "outputs": {
+            "logits": {"dtype": "FLOAT16", "shape": [1, 32003]},
+            "self_key_0": {"dtype": "FLOAT16", "shape": [1, 8, 1, 32]},
+            "self_value_0": {"dtype": "FLOAT16", "shape": [1, 8, 1, 32]},
+            "cross_key_0": {"dtype": "FLOAT16", "shape": [1, 8, 128, 32]},
+            "cross_value_0": {"dtype": "FLOAT16", "shape": [1, 8, 128, 32]},
+            "self_key_1": {"dtype": "FLOAT16", "shape": [1, 8, 1, 32]},
+            "self_value_1": {"dtype": "FLOAT16", "shape": [1, 8, 1, 32]},
+            "cross_key_1": {"dtype": "FLOAT16", "shape": [1, 8, 128, 32]},
+            "cross_value_1": {"dtype": "FLOAT16", "shape": [1, 8, 128, 32]}
+          }
+        },
+        "decoder_step": {
+          "inputs": {
+            "decoder_input_ids": {"dtype": "INT32", "shape": [1, 1]},
+            "position_id": {"dtype": "INT32", "shape": [1]},
+            "self_attention_mask": {"dtype": "INT32", "shape": [1, 128]},
+            "cross_attention_mask": {"dtype": "INT32", "shape": [1, 128]},
+            "past_key_0": {"dtype": "FLOAT16", "shape": [1, 8, 127, 32]},
+            "past_value_0": {"dtype": "FLOAT16", "shape": [1, 8, 127, 32]},
+            "cross_key_0": {"dtype": "FLOAT16", "shape": [1, 8, 128, 32]},
+            "cross_value_0": {"dtype": "FLOAT16", "shape": [1, 8, 128, 32]},
+            "past_key_1": {"dtype": "FLOAT16", "shape": [1, 8, 127, 32]},
+            "past_value_1": {"dtype": "FLOAT16", "shape": [1, 8, 127, 32]},
+            "cross_key_1": {"dtype": "FLOAT16", "shape": [1, 8, 128, 32]},
+            "cross_value_1": {"dtype": "FLOAT16", "shape": [1, 8, 128, 32]}
+          },
+          "outputs": {
+            "logits": {"dtype": "FLOAT16", "shape": [1, 32003]},
+            "new_key_0": {"dtype": "FLOAT16", "shape": [1, 8, 1, 32]},
+            "new_value_0": {"dtype": "FLOAT16", "shape": [1, 8, 1, 32]},
+            "new_key_1": {"dtype": "FLOAT16", "shape": [1, 8, 1, 32]},
+            "new_value_1": {"dtype": "FLOAT16", "shape": [1, 8, 1, 32]}
+          }
+        }
+      }
+    }
+  }
+}

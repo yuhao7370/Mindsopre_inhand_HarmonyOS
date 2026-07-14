@@ -48,6 +48,14 @@ import {
 } from './ObjectDetectionService';
 import { MindSporeLiteModelRunner, RawfileContentReader } from './MindSporeLiteModelRunner';
 import {
+  MindSporeLiteTranslationRunner,
+  productionTranslationModelBundleFactory,
+  resetTranslationModelCacheForTests,
+  TranslationModelBundleFactory,
+  TranslationModelResourceManager,
+  TranslationRawFileDescriptor
+} from './MindSporeLiteTranslationRunner';
+import {
   HarmonySubjectSegmentationRunner,
   SegmentationAndroidScene,
   SegmentationRunner,
@@ -59,12 +67,20 @@ import {
   PoseService
 } from './PoseService';
 import {
+  AndroidGestureModelDetector,
+  AndroidGestureModelRunner,
   HarmonyGestureRegionEstimator,
   ImageClassificationGestureRunner,
   GestureRegionEstimator,
   GestureRunner,
   GestureService
 } from './GestureService';
+import {
+  HmsGestureImageLoader,
+  HmsGestureModelDetector,
+  hmsGestureConfidenceThresholdForLiveMode
+} from './HmsGestureModelDetector';
+import { HmsGestureNativeSessionFactory } from './HmsGestureNativeSession';
 import {
   ImageClassificationSceneDetectionRunner,
   parseSceneDetectionLabels,
@@ -75,7 +91,6 @@ import {
 } from './SceneDetectionService';
 import {
   HarmonyTextRecognitionRunner,
-  LocalTextTranslationRunner,
   parseTranslationLanguagePairs,
   TextRecognitionRunner,
   TextRecognitionService,
@@ -100,9 +115,15 @@ export interface HarmonyImageClassificationRuntimeOptions {
   readonly styleTransferTensorRunner?: StyleTransferTensorRunner;
   readonly textRecognitionRunner?: TextRecognitionRunner;
   readonly textTranslationRunner?: TextTranslationRunner;
+  readonly translationModelBundleFactory?: TranslationModelBundleFactory;
+  readonly translationModelResourceManager?: TranslationModelResourceManager;
+  readonly translationModelCacheRoot?: string;
   readonly segmentationRunner?: SegmentationRunner;
   readonly poseRunner?: PoseRunner;
   readonly gestureRunner?: GestureRunner;
+  readonly androidGestureModelDetector?: AndroidGestureModelDetector;
+  readonly hmsGestureNativeSessionFactory?: HmsGestureNativeSessionFactory;
+  readonly hmsGestureImageLoader?: HmsGestureImageLoader;
   readonly trustedGestureModelLabels?: boolean;
   readonly gestureRegionEstimator?: GestureRegionEstimator;
   readonly sceneDetectionRunner?: SceneDetectionRunner;
@@ -115,6 +136,7 @@ let cachedHarmonyLocalSceneDetectionAiServiceLocale: string = '';
 let harmonyRuntimeLabelLocaleForTests: string | undefined = undefined;
 
 export function resetHarmonyRuntimeAiServiceCachesForTests(): void {
+  resetTranslationModelCacheForTests();
   cachedHarmonyDefaultAiService = undefined;
   cachedHarmonyDefaultAiServiceLocale = '';
   cachedHarmonyLocalSceneDetectionAiService = undefined;
@@ -136,7 +158,18 @@ export class HarmonyRawfileContentReader implements RawfileContentReader {
   async getRawFileContent(path: string): Promise<Uint8Array> {
     return this.resourceManager.getRawFileContent(path);
   }
+
+  async getRawFd(path: string): Promise<TranslationRawFileDescriptor> {
+    return await this.resourceManager.getRawFd(path);
+  }
+
+  async closeRawFd(path: string): Promise<void> {
+    await this.resourceManager.closeRawFd(path);
+  }
 }
+
+export const harmonyTranslationModelCacheRoot: string =
+  '/data/storage/el2/base/haps/entry/cache/translation';
 
 export function cachedHarmonyDefaultAiServiceForResourceManager(
   resourceManager: RawfileContentReader
@@ -242,7 +275,9 @@ export async function cachedRuntimeAiServiceForWorkflow(
     });
   }
   if (workflow.aiMethod === 'detectGesture') {
-    return new DefaultAiService();
+    return createRuntimeAiServiceForWorkflow(workflow, {
+      resourceManager: resourceManager
+    });
   }
   if (workflow.aiMethod === 'detectScene') {
     return cachedHarmonyLocalSceneDetectionAiServiceForResourceManager(resourceManager);
@@ -302,7 +337,7 @@ export async function createRuntimeAiServiceForWorkflow(
       });
     }
     return new DefaultAiService({
-      gestureService: await createHarmonyLocalGestureService(options)
+      gestureService: createHarmonyHmsGestureService(options, workflow)
     });
   }
   if (workflow.aiMethod === 'detectScene') {
@@ -423,8 +458,15 @@ export async function createHarmonyTextTranslationService(
   options: HarmonyImageClassificationRuntimeOptions
 ): Promise<TextTranslationService> {
   const languagePairs = await loadOptionalTranslationLanguagePairs(options.resourceManager);
+  const bundleFactory = options.translationModelBundleFactory ?? productionTranslationModelBundleFactory({
+    resourceManager: options.translationModelResourceManager ??
+      options.resourceManager as TranslationModelResourceManager,
+    cacheRoot: options.translationModelCacheRoot ?? harmonyTranslationModelCacheRoot
+  });
   return new TextTranslationService({
-    runner: options.textTranslationRunner ?? new LocalTextTranslationRunner(),
+    runner: options.textTranslationRunner ?? new MindSporeLiteTranslationRunner({
+      bundleFactory: bundleFactory
+    }),
     languagePairs: languagePairs
   });
 }
@@ -462,6 +504,21 @@ export function createHarmonyPoseService(
 export function createHarmonyGestureService(runner: GestureRunner): GestureService {
   return new GestureService({
     runner: runner
+  });
+}
+
+export function createHarmonyHmsGestureService(
+  options: HarmonyImageClassificationRuntimeOptions,
+  workflow: FeatureWorkflow
+): GestureService {
+  const detector = options.androidGestureModelDetector ?? new HmsGestureModelDetector({
+    resourceManager: options.resourceManager,
+    nativeSessionFactory: options.hmsGestureNativeSessionFactory,
+    imageLoader: options.hmsGestureImageLoader,
+    confidenceThreshold: hmsGestureConfidenceThresholdForLiveMode(workflow.liveMode)
+  });
+  return new GestureService({
+    runner: new AndroidGestureModelRunner(detector)
   });
 }
 

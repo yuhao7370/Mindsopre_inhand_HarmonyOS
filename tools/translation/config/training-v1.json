@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "seed": 20260713,
+  "dataset": {
+    "repo": "Mxode/BiST",
+    "revision": "aca6be897afc319f779009379c8b849c1eb8d63e"
+  },
+  "tokenizer": {
+    "repo": "Helsinki-NLP/opus-mt_tiny_zho-eng",
+    "revision": "4ee3a9342aae4ca6fbae82c930b5dccff5dd68dd",
+    "file": "source.spm",
+    "size": 755175,
+    "sha256": "e5528a5c3685d08f8868902d31febeb763eea8519f9997f43b05964b02554640"
+  },
+  "directions": {
+    "zh-en": {
+      "direction_id": 32001,
+      "subset": "zh-en"
+    },
+    "en-zh": {
+      "direction_id": 32002,
+      "subset": "en-zh"
+    }
+  },
+  "quotas": {
+    "train": 90000,
+    "validation": 5000,
+    "test": 5000
+  },
+  "token_bounds": {
+    "min": 3,
+    "max": 120
+  },
+  "split": {
+    "buckets": 20,
+    "test": [0],
+    "validation": [1],
+    "train": [2, 19]
+  }
+}

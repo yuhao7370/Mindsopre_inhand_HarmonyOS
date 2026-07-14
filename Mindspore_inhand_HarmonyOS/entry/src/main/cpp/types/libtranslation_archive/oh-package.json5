@@ -1,0 +1,6 @@
+{
+  "name": "libtranslation_archive.so",
+  "version": "1.0.0",
+  "description": "Typed boundary for the verified translation model archive extractor.",
+  "types": "./index.d.ts"
+}
