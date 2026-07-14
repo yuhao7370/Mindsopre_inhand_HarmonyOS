@@ -349,6 +349,7 @@ import {
   resetRememberedLiveCameraPositionsForTests,
   runtimeInputKindsForWorkflow,
   visibleInputKindsForWorkflow,
+  shouldShowPrimaryImageInputPreview,
   sampleImageUriForWorkflow,
   shouldAutoRunWorkflowAfterInputReady,
   shouldAutoRunStyleTransferAfterStyleReady,
@@ -9030,6 +9031,22 @@ export default function localUnitTest() {
         expect(JSON.stringify(visibleInputKindsForWorkflow(workflow)))
           .assertEqual(JSON.stringify(['photo', 'camera']));
       });
+    });
+
+    it('replacesOnlyStillPrimaryInputPreviewsAfterTheirOverlayIsReady', 0, () => {
+      const overlayRouteNames: Array<string> = [
+        AppRoute.OBJECT_PHOTO.name,
+        AppRoute.POSENET.name,
+        AppRoute.GESTURE_STILL.name
+      ];
+
+      featureWorkflows.forEach((workflow: FeatureWorkflow) => {
+        expect(shouldShowPrimaryImageInputPreview(workflow, false)).assertTrue();
+        expect(shouldShowPrimaryImageInputPreview(workflow, true))
+          .assertEqual(overlayRouteNames.indexOf(workflow.routeName) < 0);
+      });
+      expect(shouldShowPrimaryImageInputPreview(undefined, false)).assertTrue();
+      expect(shouldShowPrimaryImageInputPreview(undefined, true)).assertTrue();
     });
 
     it('showsPrimaryRunActionOnlyForAndroidManualWorkflows', 0, () => {

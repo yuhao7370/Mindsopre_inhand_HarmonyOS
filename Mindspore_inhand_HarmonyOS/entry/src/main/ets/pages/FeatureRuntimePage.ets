@@ -17,6 +17,7 @@ import {
   permissionLabelKey,
   runtimeInputKindsForWorkflow,
   visibleInputKindsForWorkflow,
+  shouldShowPrimaryImageInputPreview,
   sampleImageUriForWorkflow,
   shouldAutoRunStyleTransferAfterStyleReady,
   shouldDeferRuntimeResultClearUntilPickResult,
@@ -1362,13 +1363,29 @@ struct FeatureRuntimePage {
   }
 
   private hasInputPreview(): boolean {
-    return this.imageInputUri.length > 0 ||
+    return (this.imageInputUri.length > 0 && shouldShowPrimaryImageInputPreview(
+      workflowForRoute(this.routeName),
+      this.primaryOverlayReady()
+    )) ||
       this.contentImageUri.length > 0 ||
       this.styleImageUri.length > 0 ||
       this.backgroundImageUri.length > 0 ||
       this.stylePredictModelInputUri.length > 0 ||
       this.styleTransferModelInputUri.length > 0 ||
       this.modelInputUri.length > 0;
+  }
+
+  private primaryOverlayReady(): boolean {
+    if (this.routeName === AppRoute.OBJECT_PHOTO.name) {
+      return this.objectDetectionImageUri.length > 0 && this.objectDetections.length > 0;
+    }
+    if (this.routeName === AppRoute.POSENET.name) {
+      return this.poseImageUri.length > 0 && this.posePoints.length > 0;
+    }
+    if (this.routeName === AppRoute.GESTURE_STILL.name) {
+      return this.gestureImageUri.length > 0 && this.visibleGestureDetections().length > 0;
+    }
+    return false;
   }
 
   private isStyleTransferWorkflow(): boolean {
@@ -2697,7 +2714,10 @@ struct FeatureRuntimePage {
                 .fontWeight(FontWeight.Medium)
                 .fontColor(AppColor.textPrimary)
                 .width('100%')
-              if (this.imageInputUri.length > 0) {
+              if (this.imageInputUri.length > 0 && shouldShowPrimaryImageInputPreview(
+                workflowForRoute(this.routeName),
+                this.primaryOverlayReady()
+              )) {
                 this.imagePreview('feature_runtime_preview_image', this.imageInputUri)
               }
               if (this.contentImageUri.length > 0) {

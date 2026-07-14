@@ -307,6 +307,17 @@ export function visibleInputKindsForWorkflow(workflow: FeatureWorkflow): Array<F
   });
 }
 
+export function shouldShowPrimaryImageInputPreview(
+  workflow: FeatureWorkflow | undefined,
+  overlayReady: boolean
+): boolean {
+  const routeName = workflow?.routeName ?? '';
+  const replacesPrimaryPreview = routeName === AppRoute.OBJECT_PHOTO.name ||
+    routeName === AppRoute.POSENET.name ||
+    routeName === AppRoute.GESTURE_STILL.name;
+  return !overlayReady || !replacesPrimaryPreview;
+}
+
 export function initialInputKindForWorkflow(workflow: FeatureWorkflow): FeatureInputKind | undefined {
   if (workflow.routeName === AppRoute.OBJECT_PHOTO.name) {
     return 'photo';
