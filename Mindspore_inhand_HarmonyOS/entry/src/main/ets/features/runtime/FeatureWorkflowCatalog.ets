@@ -284,6 +284,20 @@ export function workflowForRoute(routeName: string): FeatureWorkflow | undefined
   return featureWorkflows.find((workflow: FeatureWorkflow) => workflow.routeName === routeName);
 }
 
+export type SpecializedAndroidLiveLayout = 'imageClassification' | 'objectDetection';
+
+export function specializedAndroidLiveLayoutForWorkflow(
+  workflow: FeatureWorkflow | undefined
+): SpecializedAndroidLiveLayout | undefined {
+  if (workflow?.routeName === AppRoute.IMAGE_CAMERA.name) {
+    return 'imageClassification';
+  }
+  if (workflow?.routeName === AppRoute.OBJECT_CAMERA.name) {
+    return 'objectDetection';
+  }
+  return undefined;
+}
+
 export function usesSimpleAndroidLiveLayout(workflow: FeatureWorkflow | undefined): boolean {
   const routeName = workflow?.routeName ?? '';
   return routeName === AppRoute.SEGMENTATION_LIVE.name ||

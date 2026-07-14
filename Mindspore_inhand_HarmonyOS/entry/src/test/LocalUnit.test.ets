@@ -349,6 +349,7 @@ import {
   resetRememberedLiveCameraPositionsForTests,
   runtimeInputKindsForWorkflow,
   visibleInputKindsForWorkflow,
+  specializedAndroidLiveLayoutForWorkflow,
   usesSimpleAndroidLiveLayout,
   shouldShowPrimaryImageInputPreview,
   sampleImageUriForWorkflow,
@@ -9008,6 +9009,19 @@ export default function localUnitTest() {
       expect(usesSimpleAndroidLiveLayout(undefined)).assertFalse();
     });
 
+    it('selectsSpecializedAndroidLiveLayoutOnlyForImageAndObjectCamera', 0, () => {
+      featureWorkflows.forEach((workflow: FeatureWorkflow) => {
+        let expectedLayout: string | undefined = undefined;
+        if (workflow.routeName === AppRoute.IMAGE_CAMERA.name) {
+          expectedLayout = 'imageClassification';
+        } else if (workflow.routeName === AppRoute.OBJECT_CAMERA.name) {
+          expectedLayout = 'objectDetection';
+        }
+        expect(specializedAndroidLiveLayoutForWorkflow(workflow)).assertEqual(expectedLayout);
+      });
+      expect(specializedAndroidLiveLayoutForWorkflow(undefined)).assertUndefined();
+    });
+
     it('hidesAutoStartCameraFromLiveInputChipsLikeAndroidLiveActivities', 0, () => {
       const liveRouteNames: Array<string> = [
         AppRoute.LIVE_SKELETON.name,
@@ -9332,9 +9346,9 @@ export default function localUnitTest() {
       expect(shouldRunLiveImageClassificationLoop('classifyImage', true, false)).assertFalse();
       expect(shouldRunLiveImageClassificationLoop('detectObjects', true, true)).assertFalse();
       expect(shouldRunLiveImageClassificationLoop('classifyImage', false, true)).assertFalse();
-      expect(liveImageClassificationIntervalMs).assertEqual(500);
+      expect(liveImageClassificationIntervalMs).assertEqual(1000);
       expect(liveRuntimeIntervalMs).assertEqual(1000);
-      expect(liveRuntimeIntervalForAiMethod('classifyImage')).assertEqual(500);
+      expect(liveRuntimeIntervalForAiMethod('classifyImage')).assertEqual(1000);
       expect(liveRuntimeIntervalForAiMethod('detectGesture')).assertEqual(500);
       expect(liveRuntimeIntervalForAiMethod('detectScene')).assertEqual(500);
       expect(liveRuntimeIntervalForAiMethod('detectObjects')).assertEqual(1000);
@@ -9387,7 +9401,7 @@ export default function localUnitTest() {
       scheduler.tick();
       await Promise.resolve();
 
-      expect(scheduler.intervalMsValues[0]).assertEqual(500);
+      expect(scheduler.intervalMsValues[0]).assertEqual(1000);
       expect(runner.runCount).assertEqual(2);
     });
 

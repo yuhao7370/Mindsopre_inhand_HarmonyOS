@@ -16,6 +16,7 @@ import {
   rememberLiveCameraPositionForRoute,
   permissionLabelKey,
   runtimeInputKindsForWorkflow,
+  specializedAndroidLiveLayoutForWorkflow,
   usesSimpleAndroidLiveLayout,
   visibleInputKindsForWorkflow,
   shouldShowPrimaryImageInputPreview,
@@ -1893,7 +1894,8 @@ struct FeatureRuntimePage {
       .alignItems(HorizontalAlign.End)
       .padding({ right: 10, bottom: 10 })
     }
-    if (shouldShowLiveClassificationCameraOverlay(workflowForRoute(this.routeName))) {
+    if (shouldShowLiveClassificationCameraOverlay(workflowForRoute(this.routeName)) &&
+      specializedAndroidLiveLayoutForWorkflow(workflowForRoute(this.routeName)) !== 'imageClassification') {
       this.liveClassificationOverlay()
     }
   }
@@ -2461,12 +2463,19 @@ struct FeatureRuntimePage {
   @Builder
   objectDetectionBox(detection: ObjectDetection, index: number) {
     Column() {
-      Text(this.objectDetectionLabel(detection, index))
-        .fontSize(10)
-        .fontColor(objectDetectionOverlayTextColor(index))
-        .backgroundColor(objectDetectionOverlayColor(index))
-        .padding({ left: 4, right: 4, top: 2, bottom: 2 })
-        .maxLines(1)
+      if (this.routeName === AppRoute.OBJECT_CAMERA.name) {
+        Text(this.objectDetectionLabel(detection, index))
+          .fontSize(16)
+          .fontColor(objectDetectionOverlayColor(index))
+          .maxLines(1)
+      } else {
+        Text(this.objectDetectionLabel(detection, index))
+          .fontSize(10)
+          .fontColor(objectDetectionOverlayTextColor(index))
+          .backgroundColor(objectDetectionOverlayColor(index))
+          .padding({ left: 4, right: 4, top: 2, bottom: 2 })
+          .maxLines(1)
+      }
     }
     .width(this.percentLength(this.objectDetectionBoxStyle(detection).width))
     .height(this.percentLength(this.objectDetectionBoxStyle(detection).height))
@@ -2596,32 +2605,92 @@ struct FeatureRuntimePage {
   }
 
   @Builder
-  simpleAndroidLiveLayout() {
-    Column() {
+  runtimeActionToolbar(showActions: boolean) {
+    Row() {
       Row() {
+        Image($r('app.media.icon_back'))
+          .width(11)
+          .height(22)
+          .objectFit(ImageFit.Contain)
+      }
+        .width(40)
+        .height(40)
+        .justifyContent(FlexAlign.Center)
+        .alignItems(VerticalAlign.Center)
+        .onClick(() => router.back())
+      Text(appString(this.titleKey))
+        .fontSize(22)
+        .fontWeight(FontWeight.Bold)
+        .fontColor(AppColor.textPrimary)
+        .layoutWeight(1)
+        .maxLines(1)
+      if (showActions && this.helpContentKey !== undefined) {
         Row() {
-          Image($r('app.media.icon_back'))
-            .width(11)
-            .height(22)
+          Image($r('app.media.icon_help'))
+            .width(24)
+            .height(24)
             .objectFit(ImageFit.Contain)
         }
           .width(40)
           .height(40)
           .justifyContent(FlexAlign.Center)
           .alignItems(VerticalAlign.Center)
-          .onClick(() => router.back())
-        Text(appString(this.titleKey))
-          .fontSize(22)
-          .fontWeight(FontWeight.Bold)
-          .fontColor(AppColor.textPrimary)
-          .layoutWeight(1)
-          .maxLines(1)
+          .margin({ left: AppSpacing.xs })
+          .onClick(() => this.showLocalHelpDialog())
+      }
+      if (showActions && this.helpUrl.length > 0) {
+        Row() {
+          Image($r('app.media.icon_more'))
+            .width(24)
+            .height(24)
+            .objectFit(ImageFit.Contain)
+        }
+          .width(40)
+          .height(40)
+          .justifyContent(FlexAlign.Center)
+          .alignItems(VerticalAlign.Center)
+          .margin({ left: AppSpacing.xs })
+          .onClick(() => this.openHelpPage())
+      }
+    }
+    .width('100%')
+    .height(56)
+    .padding({ left: AppSpacing.page, right: AppSpacing.page })
+    .alignItems(VerticalAlign.Center)
+    .backgroundColor(Color.White)
+  }
+
+  @Builder
+  runtimePermissionRecoveryOverlay() {
+    if (this.shouldShowRuntimePermissionRetry()) {
+      Stack({ alignContent: Alignment.Center }) {
+        Column() {
+          Text(appString(this.statusKey))
+            .fontSize(14)
+            .fontColor(AppColor.textPrimary)
+            .textAlign(TextAlign.Center)
+          Button(appString('splash_permission_retry'))
+            .height(36)
+            .margin({ top: AppSpacing.sm })
+            .onClick(() => this.retryRuntimePermission())
+          Button(appString('app_permission_by_hand'))
+            .height(36)
+            .margin({ top: AppSpacing.sm })
+            .onClick(() => this.openRuntimePermissionSettings())
+        }
+        .padding(AppSpacing.md)
+        .backgroundColor('#E6FFFFFF')
+        .borderRadius(AppRadius.card)
       }
       .width('100%')
-      .height(56)
-      .padding({ left: AppSpacing.page, right: AppSpacing.page })
-      .alignItems(VerticalAlign.Center)
+      .height('100%')
+    }
+  }
 
+  @Builder
+  simpleAndroidLiveLayout() {
+    Column() {
+      this.runtimeActionToolbar(false)
       Stack({ alignContent: Alignment.TopStart }) {
         this.liveCameraSurfaceContent()
         if (this.liveCameraSwitchAvailable) {
@@ -2638,29 +2707,69 @@ struct FeatureRuntimePage {
           .justifyContent(FlexAlign.End)
           .alignItems(HorizontalAlign.Center)
         }
-        if (this.shouldShowRuntimePermissionRetry()) {
-          Stack({ alignContent: Alignment.Center }) {
-            Column() {
-              Text(appString(this.statusKey))
-                .fontSize(14)
-                .fontColor(AppColor.textPrimary)
-                .textAlign(TextAlign.Center)
-              Button(appString('splash_permission_retry'))
-                .height(36)
-                .margin({ top: AppSpacing.sm })
-                .onClick(() => this.retryRuntimePermission())
-              Button(appString('app_permission_by_hand'))
-                .height(36)
-                .margin({ top: AppSpacing.sm })
-                .onClick(() => this.openRuntimePermissionSettings())
-            }
-            .padding(AppSpacing.md)
-            .backgroundColor('#E6FFFFFF')
-            .borderRadius(AppRadius.card)
+        this.runtimePermissionRecoveryOverlay()
+      }
+      .width('100%')
+      .layoutWeight(1)
+      .backgroundColor('#111827')
+    }
+    .width('100%')
+    .height('100%')
+    .backgroundColor(AppColor.pageBackground)
+  }
+
+  @Builder
+  imageClassificationAndroidLiveLayout() {
+    Column() {
+      this.runtimeActionToolbar(true)
+      Stack({ alignContent: Alignment.TopStart }) {
+        this.liveCameraSurfaceContent()
+        Column() {
+          Column() {
+            Text(this.liveClassificationOverlayValue())
+              .fontSize(14)
+              .fontWeight(FontWeight.Bold)
+              .fontColor(AppColor.textPrimary)
+              .maxLines(1)
+              .textOverflow({ overflow: TextOverflow.Ellipsis })
           }
           .width('100%')
-          .height('100%')
+          .height(100)
+          .padding({ left: 15, right: 15 })
+          .justifyContent(FlexAlign.Center)
+          .alignItems(HorizontalAlign.Start)
+          .backgroundColor(Color.White)
         }
+        .width('100%')
+        .height('100%')
+        .justifyContent(FlexAlign.End)
+        this.runtimePermissionRecoveryOverlay()
+      }
+      .width('100%')
+      .layoutWeight(1)
+      .backgroundColor('#111827')
+    }
+    .width('100%')
+    .height('100%')
+    .backgroundColor(AppColor.pageBackground)
+  }
+
+  @Builder
+  objectDetectionAndroidLiveLayout() {
+    Column() {
+      this.runtimeActionToolbar(true)
+      Stack({ alignContent: Alignment.TopStart }) {
+        this.liveCameraSurfaceContent()
+        Column() {
+          Button(appString(workflowInputLabelKey(workflowForRoute(this.routeName), 'modelFile')))
+            .onClick(() => this.prepareInput('modelFile'))
+        }
+        .width('100%')
+        .height('100%')
+        .padding({ right: 16, bottom: 16 })
+        .justifyContent(FlexAlign.End)
+        .alignItems(HorizontalAlign.End)
+        this.runtimePermissionRecoveryOverlay()
       }
       .width('100%')
       .layoutWeight(1)
@@ -2672,7 +2781,11 @@ struct FeatureRuntimePage {
   }
 
   build() {
-    if (usesSimpleAndroidLiveLayout(workflowForRoute(this.routeName))) {
+    if (specializedAndroidLiveLayoutForWorkflow(workflowForRoute(this.routeName)) === 'imageClassification') {
+      this.imageClassificationAndroidLiveLayout()
+    } else if (specializedAndroidLiveLayoutForWorkflow(workflowForRoute(this.routeName)) === 'objectDetection') {
+      this.objectDetectionAndroidLiveLayout()
+    } else if (usesSimpleAndroidLiveLayout(workflowForRoute(this.routeName))) {
       this.simpleAndroidLiveLayout()
     } else {
       Scroll() {
