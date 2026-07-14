@@ -3426,13 +3426,6 @@ struct FeatureRuntimePage {
               .margin({ top: AppSpacing.md })
               .onClick(() => this.copyRecognizedText())
           }
-          if (this.resultText.length > 0) {
-            Text(this.resultText)
-              .fontSize(12)
-              .fontColor(AppColor.textMuted)
-              .margin({ top: AppSpacing.sm })
-              .width('100%')
-          }
         }
         .width('100%')
         .padding(AppSpacing.md)

@@ -324,6 +324,11 @@ Current HarmonyOS behavior:
   but no longer renders those fields directly in normal UI.
 - Selected images and models remain visible through preview rows that show
   user-facing labels and file names, instead of raw picker paths or surface ids.
+- The seven routes that still use the generic runtime fallback show only
+  localized status, structured result rows, and workflow visuals. Raw
+  `detailText` remains internal `resultText` state and is not rendered.
+- Custom Model still exposes its first 10 output values through the existing
+  structured output row.
 - The shared runtime shows a primary action only for PoseNet, Text Translation,
   and Custom Model, matching Android's manual Detect, Translate, and Execute
   controls. The remaining still/style routes and all live routes rely solely on

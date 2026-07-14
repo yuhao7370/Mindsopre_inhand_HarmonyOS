@@ -6,6 +6,7 @@ $source = Get-Content -Raw -Encoding UTF8 -LiteralPath $pagePath
 
 $forbiddenPatterns = @(
   'Text\s*\(\s*this\.(aiMethod|selectedInputSummary)\s*\)',
+  'Text\s*\(\s*this\.resultText\s*\)',
   'this\.resultText\s*=\s*this\.aiMethod',
   'this\.resultText\s*=\s*result\.detailText\.length\s*>\s*0\s*\?\s*result\.detailText\s*:\s*`\$\{result\.aiMethod\}'
 )
