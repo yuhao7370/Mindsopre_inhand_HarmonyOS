@@ -22,8 +22,9 @@ acceptance layer:
 1. replace the placeholder device test with a packaged translation smoke test;
 2. add a license-clean hand-image fixture for deterministic gesture
    preprocessing checks while retaining synthetic decoder contract tests;
-3. verify the main and `ohosTest` packages contain the required model and
-   native-library assets;
+3. verify the main HAP contains the required model and native-library assets,
+   and verify the separate `ohosTest` feature HAP is correctly paired with the
+   main module;
 4. keep translation quality gates and device validation status unchanged.
 
 Continuing training is excluded from this phase. The current tiny model is
@@ -75,19 +76,25 @@ model detects a particular gesture in the image.
 
 ## Package Acceptance Guard
 
-Add one PowerShell guard that accepts an explicit HAP path and fails unless the
-package contains:
+Add one PowerShell guard that accepts explicit main-HAP and optional
+`ohosTest`-HAP paths. The main HAP must contain:
 
 - `models/gesture/GestureDetector.ms`;
 - `models/translation/translation-models.tar.xz` and its runtime metadata;
 - `libgesture_mnn.so`, `libMNN.so`, and `libtranslation_archive.so` for
   `arm64-v8a`.
 
-The guard reuses existing archive tooling or standard SDK commands. It must not
-introduce a new package parser dependency. `build-hap.ps1` calls it for the main
-HAP after assembly; the verification workflow calls the same guard for the
-assembled `ohosTest` HAP. The main build continues to verify source asset hashes
-before assembly; the new guard verifies final package presence after assembly.
+The `ohosTest` HAP is a small feature module and must not duplicate the main
+HAP's model assets. Its `module.json` must identify module `entry_test` with
+`TestAbility`, and `pack.info` must pair `entry_test` with the main `entry`
+module for the same bundle.
+
+The guard reuses Windows `tar` and PowerShell JSON parsing. It must not
+introduce a package parser dependency. `build-hap.ps1` calls it for the main HAP
+after assembly; the verification workflow calls it with both paths after the
+`ohosTest` HAP is assembled. The main build continues to verify source asset
+hashes before assembly; the new guard verifies final package structure after
+assembly.
 
 ## Data Flow
 
@@ -122,7 +129,8 @@ Completion requires fresh evidence for all of the following:
 - all ArkTS/Hypium host tests;
 - all Python translation tests;
 - successful main HAP assembly and post-package inspection;
-- successful `ohosTest` HAP assembly and post-package inspection;
+- successful `ohosTest` HAP assembly and verification that it is paired with
+  the main entry HAP without duplicating the main model assets;
 - clean Git status.
 
 If no device or emulator is available, the translation and gesture device
@@ -142,7 +150,8 @@ explicit follow-up and is not counted as passed.
 ## Success Criteria
 
 This phase is complete when the placeholder device test is gone, both AI
-runtime chains have meaningful packaged-runtime acceptance coverage, both HAP
-variants contain their required model/native assets, all runnable host checks
-pass, both HAP variants build, and the remaining real-device gap is documented
-without being presented as completed verification.
+runtime chains have meaningful packaged-runtime acceptance coverage, the main
+HAP contains the required model/native assets, the `ohosTest` HAP is correctly
+paired with it, all runnable host checks pass, both HAP variants build, and the
+remaining real-device gap is documented without being presented as completed
+verification.
