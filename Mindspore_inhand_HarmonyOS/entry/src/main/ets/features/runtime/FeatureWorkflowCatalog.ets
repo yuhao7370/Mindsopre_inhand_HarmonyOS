@@ -310,6 +310,10 @@ export function usesAndroidPortraitSegmentationLayout(workflow: FeatureWorkflow 
   return workflow?.routeName === AppRoute.PORTRAIT_SEGMENTATION.name;
 }
 
+export function usesAndroidTextRecognitionLayout(workflow: FeatureWorkflow | undefined): boolean {
+  return workflow?.routeName === AppRoute.TEXT_RECOGNITION.name;
+}
+
 export function runtimeInputKindsForWorkflow(workflow: FeatureWorkflow): Array<FeatureInputKind> {
   const kinds: Array<FeatureInputKind> = [];
   workflow.inputKinds.forEach((kind: FeatureInputKind) => appendUniqueInputKind(kinds, kind));

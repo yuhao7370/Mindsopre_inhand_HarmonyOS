@@ -18,6 +18,7 @@ import {
   runtimeInputKindsForWorkflow,
   specializedAndroidLiveLayoutForWorkflow,
   usesAndroidPortraitSegmentationLayout,
+  usesAndroidTextRecognitionLayout,
   usesSimpleAndroidLiveLayout,
   visibleInputKindsForWorkflow,
   shouldShowPrimaryImageInputPreview,
@@ -2945,8 +2946,107 @@ struct FeatureRuntimePage {
     .backgroundColor(AppColor.pageBackground)
   }
 
+  @Builder
+  textRecognitionAndroidLayout() {
+    Stack({ alignContent: Alignment.TopStart }) {
+      Column() {
+        this.runtimeActionToolbar(false)
+        Row() {
+        }
+        .width('100%')
+        .height(1)
+        .backgroundColor('#DBDBDB')
+        Stack({ alignContent: Alignment.Center }) {
+          if (this.imageInputUri.length > 0) {
+            Image(this.imageInputUri)
+              .width('100%')
+              .height('100%')
+              .padding(10)
+              .objectFit(ImageFit.Contain)
+          } else {
+            Column() {
+              Image($r('app.media.icon_style'))
+                .width(69.33)
+                .height(56.33)
+                .objectFit(ImageFit.Contain)
+              Text(appString('workflow_summary_text_recognition_android_prompt'))
+                .fontSize(16)
+                .fontColor('#666666')
+                .textAlign(TextAlign.Center)
+                .margin({ top: 10 })
+            }
+            .alignItems(HorizontalAlign.Center)
+          }
+          if (this.workflowRunning) {
+            LoadingProgress()
+              .width(80)
+              .height(80)
+          }
+        }
+        .width('100%')
+        .layoutWeight(5)
+        .backgroundColor('#E6E6E6')
+        Row() {
+          Button(appString('feature_input_photo_android'), { type: ButtonType.Normal })
+            .layoutWeight(1)
+            .height(37)
+            .fontSize(14)
+            .fontWeight(FontWeight.Normal)
+            .fontColor('#666666')
+            .backgroundColor('#F4F3F8')
+            .borderRadius(5)
+            .onClick(() => this.prepareInput('photo'))
+          Button(appString('feature_input_camera_android'), { type: ButtonType.Normal })
+            .layoutWeight(1)
+            .height(37)
+            .fontSize(14)
+            .fontWeight(FontWeight.Normal)
+            .fontColor('#666666')
+            .backgroundColor('#F4F3F8')
+            .borderRadius(5)
+            .margin({ left: 10 })
+            .onClick(() => this.prepareInput('camera'))
+        }
+        .width('100%')
+        .height(50)
+        .margin({ left: 10, right: 10, top: 14, bottom: 10 })
+        .alignItems(VerticalAlign.Center)
+        Scroll() {
+          Text(this.recognizedTextForCopy())
+            .width('100%')
+            .fontSize(14)
+            .fontColor('#000000')
+            .copyOption(CopyOptions.LocalDevice)
+        }
+        .width('100%')
+        .layoutWeight(3)
+        .padding({ left: 24, right: 24 })
+        .scrollBar(BarState.Auto)
+        .backgroundColor('#E6E6E6')
+        Button(appString('feature_runtime_copy_text'), { type: ButtonType.Normal })
+          .width('100%')
+          .height(48)
+          .fontSize(14)
+          .fontWeight(FontWeight.Normal)
+          .fontColor('#000000')
+          .backgroundColor(Color.White)
+          .borderRadius(10)
+          .onClick(() => this.copyRecognizedText())
+      }
+      .width('100%')
+      .height('100%')
+      .backgroundColor(Color.White)
+      this.runtimePermissionRecoveryOverlay()
+    }
+    .width('100%')
+    .height('100%')
+    .backgroundColor(Color.White)
+  }
+
   build() {
-    if (usesAndroidPortraitSegmentationLayout(workflowForRoute(this.routeName))) {
+    if (usesAndroidTextRecognitionLayout(workflowForRoute(this.routeName))) {
+      this.textRecognitionAndroidLayout()
+    } else if (usesAndroidPortraitSegmentationLayout(workflowForRoute(this.routeName))) {
       this.portraitSegmentationAndroidLayout()
     } else if (specializedAndroidLiveLayoutForWorkflow(workflowForRoute(this.routeName)) === 'imageClassification') {
       this.imageClassificationAndroidLiveLayout()
