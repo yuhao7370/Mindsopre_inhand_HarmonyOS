@@ -87,7 +87,7 @@ export const featureWorkflows: Array<FeatureWorkflow> = [
     titleKey: 'title_pose_net',
     summaryKey: 'workflow_summary_pose',
     aiMethod: 'detectPose',
-    inputKinds: ['sampleImage', 'photo', 'camera'],
+    inputKinds: ['photo', 'camera'],
     requiredPermissions: ['camera', 'media'],
     resultKind: 'poseOverlay',
     liveMode: false,

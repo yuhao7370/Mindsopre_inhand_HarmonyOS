@@ -3736,10 +3736,12 @@ export default function localUnitTest() {
 
     it('recordsPlatformNeedsFromOriginalAndroidFlows', 0, () => {
       const posenet: FeatureWorkflow = workflowForRoute(AppRoute.POSENET.name)!;
+      const posenetInputKinds = runtimeInputKindsForWorkflow(posenet);
       expect(posenet.liveMode).assertFalse();
-      expect(posenet.inputKinds.indexOf('sampleImage') >= 0).assertTrue();
-      expect(posenet.inputKinds.indexOf('camera') >= 0).assertTrue();
-      expect(posenet.inputKinds.indexOf('photo') >= 0).assertTrue();
+      expect(posenetInputKinds.length).assertEqual(2);
+      expect(posenetInputKinds.indexOf('photo') >= 0).assertTrue();
+      expect(posenetInputKinds.indexOf('camera') >= 0).assertTrue();
+      expect(posenetInputKinds.indexOf('sampleImage')).assertEqual(-1);
       expect(posenet.linkedLiveRouteName).assertEqual(AppRoute.LIVE_SKELETON.name);
       expect(sampleImageUriForWorkflow(posenet)).assertEqual('rawfile://posenet/skeleton_image.JPG');
 

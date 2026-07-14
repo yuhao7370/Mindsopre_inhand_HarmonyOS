@@ -79,11 +79,11 @@ separate live skeleton page at `/posenet/LiveSkeletonAnalyseActivity`.
 
 Current HarmonyOS behavior:
 
-- `/hms/PosenetMainActivitys` is a still-image workflow. It offers the Android
-  sample image, album image, and camera capture inputs and auto-runs pose
-  detection after an image input is ready.
-- The Android sample `skeleton_image.JPG` is bundled as
-  `rawfile://posenet/skeleton_image.JPG`.
+- `/hms/PosenetMainActivitys` is a still-image workflow. Its visible image
+  inputs are Photo and Camera, and it auto-runs pose detection after either
+  user-selected image is ready.
+- The Android sample `skeleton_image.JPG` is bundled as the entry preview at
+  `rawfile://posenet/skeleton_image.JPG`, not as a separate visible input.
 - The still page opens with that Android sample image already previewed, but it
   does not auto-run detection until the user taps the run action, matching the
   Android page's default image plus separate Detect button.
