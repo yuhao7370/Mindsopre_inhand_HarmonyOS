@@ -1895,7 +1895,6 @@ struct FeatureRuntimePage {
       .height('100%')
       .justifyContent(FlexAlign.End)
       .alignItems(HorizontalAlign.End)
-      .padding({ right: 10, bottom: 10 })
     }
     if (shouldShowLiveClassificationCameraOverlay(workflowForRoute(this.routeName)) &&
       specializedAndroidLiveLayoutForWorkflow(workflowForRoute(this.routeName)) !== 'imageClassification') {
@@ -1984,24 +1983,14 @@ struct FeatureRuntimePage {
   @Builder
   livePoseTemplateOverlay() {
     Column() {
-      Row() {
-        Text(appString('feature_runtime_result_similarity'))
-          .fontSize(12)
-          .fontColor(Color.White)
-          .fontWeight(FontWeight.Medium)
-        Text(`: ${this.livePoseSimilarityPercent()}`)
-          .fontSize(12)
-          .fontColor(Color.White)
-          .fontWeight(FontWeight.Medium)
-      }
-      .padding({ left: 6, right: 6, top: 3, bottom: 3 })
-      .backgroundColor('#66000000')
-      .borderRadius(4)
+      Text(`similarity:${this.livePoseSimilarityPercent()}`)
+        .fontSize(13)
+        .fontColor(Color.White)
+        .height(18)
       Image($r('app.media.skeleton_template'))
-        .width(92)
-        .aspectRatio(135 / 169)
+        .width(135)
+        .height(169)
         .objectFit(ImageFit.Contain)
-        .margin({ top: 4 })
     }
     .alignItems(HorizontalAlign.Start)
   }

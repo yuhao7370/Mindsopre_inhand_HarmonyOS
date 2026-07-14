@@ -9018,9 +9018,10 @@ export default function localUnitTest() {
       const simpleLiveRouteNames: Array<string> = [
         AppRoute.SEGMENTATION_LIVE.name,
         AppRoute.GESTURE_LIVE.name,
-        AppRoute.SCENE_LIVE.name
+        AppRoute.SCENE_LIVE.name,
+        AppRoute.LIVE_SKELETON.name
       ];
-      expect(new Set<string>(simpleLiveRouteNames).size).assertEqual(3);
+      expect(new Set<string>(simpleLiveRouteNames).size).assertEqual(4);
 
       featureWorkflows.forEach((workflow: FeatureWorkflow) => {
         expect(usesSimpleAndroidLiveLayout(workflow))

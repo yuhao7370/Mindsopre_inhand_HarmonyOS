@@ -302,7 +302,8 @@ export function usesSimpleAndroidLiveLayout(workflow: FeatureWorkflow | undefine
   const routeName = workflow?.routeName ?? '';
   return routeName === AppRoute.SEGMENTATION_LIVE.name ||
     routeName === AppRoute.GESTURE_LIVE.name ||
-    routeName === AppRoute.SCENE_LIVE.name;
+    routeName === AppRoute.SCENE_LIVE.name ||
+    routeName === AppRoute.LIVE_SKELETON.name;
 }
 
 export function runtimeInputKindsForWorkflow(workflow: FeatureWorkflow): Array<FeatureInputKind> {
