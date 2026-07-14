@@ -1,8 +1,15 @@
+param(
+  [string] $PagePath = ''
+)
+
 $ErrorActionPreference = 'Stop'
 
-$pagePath = Join-Path $PSScriptRoot '..\entry\src\main\ets\pages\FeatureRuntimePage.ets'
-$source = Get-Content -Raw -Encoding UTF8 $pagePath
+if (-not $PagePath) {
+  $PagePath = Join-Path $PSScriptRoot '..\entry\src\main\ets\pages\FeatureRuntimePage.ets'
+}
+$source = Get-Content -Raw -Encoding UTF8 $PagePath
 $segmentationViewId = 'segmentationBackgroundReplacementComponentId'
+$segmentationViewIdPattern = '\.id\(\s*' + [regex]::Escape($segmentationViewId) + '\s*\)'
 
 function Get-SourceSlice([string] $text, [string] $startMarker, [string] $endMarker) {
   $start = $text.IndexOf($startMarker)
@@ -16,7 +23,11 @@ function Get-SourceSlice([string] $text, [string] $startMarker, [string] $endMar
   return $text.Substring($start, $end - $start)
 }
 
-$segmentationPreview = Get-SourceSlice `
+$portraitComposite = Get-SourceSlice `
+  $source `
+  'portraitSegmentationComposite()' `
+  'portraitSegmentationBackgroundStrip()'
+$genericSegmentationPreview = Get-SourceSlice `
   $source `
   'segmentationBackgroundReplacementPreview(pixelMap: image.PixelMap)' `
   'segmentationBox(rectangle: SegmentationRectangle)'
@@ -25,12 +36,21 @@ $posePreview = Get-SourceSlice `
   'posePreview(labelKey: AppStringKey, uri: string)' `
   'poseTemplatePreview()'
 
-if ($segmentationPreview -notmatch ('\.id\(' + $segmentationViewId + '\)')) {
-  throw "$segmentationViewId must be attached to the portrait background replacement preview Stack."
+$bindingCount = [regex]::Matches($source, $segmentationViewIdPattern).Count
+if ($bindingCount -ne 1) {
+  throw "$segmentationViewId must appear exactly once in the full page source; found $bindingCount."
 }
 
-if ($posePreview -match ('\.id\(' + $segmentationViewId + '\)')) {
-  throw "$segmentationViewId must not be attached to the pose preview Stack."
+if ($genericSegmentationPreview -match $segmentationViewIdPattern) {
+  throw "$segmentationViewId must not be attached to segmentationBackgroundReplacementPreview."
 }
 
-Write-Output 'Feature runtime view ids are attached to the expected preview components.'
+if ($posePreview -match $segmentationViewIdPattern) {
+  throw "$segmentationViewId must not be attached to posePreview."
+}
+
+if ($portraitComposite -notmatch $segmentationViewIdPattern) {
+  throw "$segmentationViewId must be attached to portraitSegmentationComposite."
+}
+
+Write-Output 'Feature runtime view ids are attached only to the expected portrait composite.'
