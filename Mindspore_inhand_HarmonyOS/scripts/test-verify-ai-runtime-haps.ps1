@@ -50,6 +50,10 @@ $mainEntries = @(
   'libs/arm64-v8a/libMNN.so',
   'libs/arm64-v8a/libtranslation_archive.so'
 )
+$mainModule = @{
+  app = @{ bundleName = 'com.yuhaofeng.mih' }
+  module = @{ name = 'entry'; mainElement = 'EntryAbility'; type = 'entry' }
+} | ConvertTo-Json -Depth 8 -Compress
 
 $testModule = @{
   app = @{ bundleName = 'com.yuhaofeng.mih' }
@@ -76,12 +80,25 @@ try {
   $mainHap = Join-Path $tempRoot 'main.hap'
   $testHap = Join-Path $tempRoot 'test.hap'
   $mainFiles = New-FileMap $mainEntries
+  $mainFiles['module.json'] = $mainModule
   $testFiles = New-FileMap $testEntries
   $testFiles['module.json'] = $testModule
   $testFiles['pack.info'] = $testPack
   New-HapFixture $mainHap $mainFiles
   New-HapFixture $testHap $testFiles
   & $guard -MainHapPath $mainHap -OhosTestHapPath $testHap
+
+  $wrongMainBundleHap = Join-Path $tempRoot 'wrong-main-bundle.hap'
+  $wrongMainBundleFiles = New-FileMap $mainEntries
+  $wrongMainBundleFiles['module.json'] = $mainModule.Replace('com.yuhaofeng.mih', 'com.example.other')
+  New-HapFixture $wrongMainBundleHap $wrongMainBundleFiles
+  Assert-GuardRejects 'wrong main bundle name' $wrongMainBundleHap $testHap
+
+  $wrongMainModuleHap = Join-Path $tempRoot 'wrong-main-module.hap'
+  $wrongMainModuleFiles = New-FileMap $mainEntries
+  $wrongMainModuleFiles['module.json'] = $mainModule.Replace('"entry"', '"other"')
+  New-HapFixture $wrongMainModuleHap $wrongMainModuleFiles
+  Assert-GuardRejects 'wrong main module name' $wrongMainModuleHap $testHap
 
   $missingMainHap = Join-Path $tempRoot 'missing-main-entry.hap'
   New-HapFixture $missingMainHap (New-FileMap @($mainEntries | Select-Object -SkipLast 1))

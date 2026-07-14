@@ -81,6 +81,12 @@ class ProjectTranslationGuardTest(unittest.TestCase):
         self.assertIn("productionTranslationModelBundleFactory", translation)
         self.assertIn("createHarmonyTextTranslationService", translation)
         self.assertIn("resetTranslationModelCacheForTests", translation)
+        self.assertIn("import { application } from '@kit.AbilityKit';", translation)
+        self.assertIn("application.createModuleContext(appContext, 'entry')", translation)
+        gesture = (test_root / "GestureNative.test.ets").read_text(encoding="utf-8")
+        self.assertIn("import { application } from '@kit.AbilityKit';", gesture)
+        self.assertIn("application.createModuleContext(appContext, 'entry')", gesture)
+        self.assertIn("application.createModuleContext(appContext, 'entry_test')", gesture)
         self.assertIn("translationNativeTest();", suite)
         self.assertNotIn("abilityTest", suite)
 

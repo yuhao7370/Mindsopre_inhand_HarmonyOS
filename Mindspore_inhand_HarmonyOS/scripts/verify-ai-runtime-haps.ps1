@@ -42,6 +42,8 @@ $mainEntries = @(
 )
 $mainHapEntries = @(Get-HapEntries $MainHapPath)
 Assert-ExactEntries $mainHapEntries $mainEntries 'Main HAP'
+$mainModule = Read-HapJson $MainHapPath 'module.json'
+if ($mainModule.module.name -ne 'entry') { throw 'Main HAP module name must be entry' }
 
 if ($OhosTestHapPath) {
   $testRequired = @(
@@ -67,8 +69,9 @@ if ($OhosTestHapPath) {
 
   $module = Read-HapJson $OhosTestHapPath 'module.json'
   $pack = Read-HapJson $OhosTestHapPath 'pack.info'
-  if ($module.app.bundleName -ne $pack.summary.app.bundleName) {
-    throw 'ohosTest HAP bundle names do not match'
+  if ($mainModule.app.bundleName -ne $module.app.bundleName -or
+      $module.app.bundleName -ne $pack.summary.app.bundleName) {
+    throw 'Main HAP, ohosTest HAP, and pack.info bundle names must match'
   }
   if ($module.module.name -ne 'entry_test') { throw 'ohosTest HAP module name must be entry_test' }
   if ($module.module.mainElement -ne 'TestAbility') { throw 'ohosTest HAP main element must be TestAbility' }

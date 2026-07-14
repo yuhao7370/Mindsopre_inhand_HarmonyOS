@@ -1,3 +1,5 @@
+import { application } from '@kit.AbilityKit';
+import { resourceManager } from '@kit.LocalizationKit';
 import { abilityDelegatorRegistry } from '@kit.TestKit';
 import { describe, it, expect } from '@ohos/hypium';
 import {
@@ -47,7 +49,13 @@ export default function translationNativeTest() {
   describe('TranslationNativeTest', () => {
     it('translatesBothDirectionsDeterministicallyWithPackagedLocalModel', 0, async () => {
       const appContext = abilityDelegatorRegistry.getAbilityDelegator().getAppContext();
-      const reader = new HarmonyRawfileContentReader(appContext.resourceManager);
+      let mainResourceManager: resourceManager.ResourceManager;
+      try {
+        mainResourceManager = (await application.createModuleContext(appContext, 'entry')).resourceManager;
+      } catch (error) {
+        throw new Error(`Unable to create entry module context. Cause: ${JSON.stringify(error)}`);
+      }
+      const reader = new HarmonyRawfileContentReader(mainResourceManager);
       const translationResourceManager = reader as TranslationModelResourceManager;
       const cacheRoot = `${appContext.cacheDir}/translation-ohos-test`;
       const bundleOptions = new TranslationNativeBundleOptions(translationResourceManager, cacheRoot);

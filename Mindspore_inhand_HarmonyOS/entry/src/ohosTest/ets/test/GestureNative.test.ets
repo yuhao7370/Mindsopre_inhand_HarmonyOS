@@ -1,3 +1,4 @@
+import { application } from '@kit.AbilityKit';
 import { image } from '@kit.ImageKit';
 import { resourceManager } from '@kit.LocalizationKit';
 import { abilityDelegatorRegistry } from '@kit.TestKit';
@@ -85,15 +86,27 @@ function assertExactFiniteOutputs(first: HmsGestureOutputs, second: HmsGestureOu
 export default function gestureNativeTest() {
   describe('GestureNativeTest', () => {
     it('loadsRealModelAndProducesDeterministicFiniteOutputs', 0, async () => {
-      const resourceManager = abilityDelegatorRegistry.getAbilityDelegator().getAppContext().resourceManager;
-      const modelBytes = await resourceManager.getRawFileContent(hmsGestureModelRawfilePath);
+      const appContext = abilityDelegatorRegistry.getAbilityDelegator().getAppContext();
+      let mainResourceManager: resourceManager.ResourceManager;
+      try {
+        mainResourceManager = (await application.createModuleContext(appContext, 'entry')).resourceManager;
+      } catch (error) {
+        throw new Error(`Unable to create entry module context. Cause: ${JSON.stringify(error)}`);
+      }
+      let testResourceManager: resourceManager.ResourceManager;
+      try {
+        testResourceManager = (await application.createModuleContext(appContext, 'entry_test')).resourceManager;
+      } catch (error) {
+        throw new Error(`Unable to create entry_test module context. Cause: ${JSON.stringify(error)}`);
+      }
+      const modelBytes = await mainResourceManager.getRawFileContent(hmsGestureModelRawfilePath);
       const session: HmsGestureNativeSession = await createHarmonyHmsGestureNativeSession();
       try {
         const modelInfo = session.loadModel(modelBytes);
         expect(modelInfo.inputName).assertEqual('data');
         expect(modelInfo.inputShape.join(',')).assertEqual('1,3,224,224');
 
-        const input = await loadOpenPalmGestureInput(resourceManager);
+        const input = await loadOpenPalmGestureInput(testResourceManager);
         expect(input.length).assertEqual(1 * 3 * 224 * 224);
         const firstOutputs = await session.predict(input);
         const secondOutputs = await session.predict(input);
