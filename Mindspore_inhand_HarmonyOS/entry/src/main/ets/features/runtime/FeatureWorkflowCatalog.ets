@@ -458,20 +458,14 @@ export function shouldShowResultSaveAction(
   workflow: FeatureWorkflow | undefined,
   resultImageReady: boolean
 ): boolean {
+  if (workflow?.aiMethod === 'translateText') {
+    return false;
+  }
   if (resultImageReady) {
     return true;
   }
   return workflow?.routeName === AppRoute.STYLE_TRANSFER.name ||
     workflow?.routeName === AppRoute.SEGMENTATION_STILL.name;
-}
-
-export function shouldShowTranslationSnapshotSaveAction(
-  workflow: FeatureWorkflow | undefined,
-  imageInputReady: boolean,
-  translatedTextReady: boolean,
-  textInputVisible: boolean
-): boolean {
-  return workflow?.aiMethod === 'translateText' && imageInputReady && translatedTextReady && !textInputVisible;
 }
 
 export function shouldShowLiveGestureCameraOverlay(workflow: FeatureWorkflow | undefined): boolean {

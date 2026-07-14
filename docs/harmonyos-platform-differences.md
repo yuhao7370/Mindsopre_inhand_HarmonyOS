@@ -264,9 +264,9 @@ Current HarmonyOS behavior:
   features.
 - Blank typed text and blank OCR output are treated as missing or failed input
   instead of successful empty translation/recognition results.
-- Image-based translation only exposes the result snapshot save action after a
-  translated-text row exists. Model failures preserve the OCR source text for
-  copying but do not create a misleading translated snapshot.
+- Image-based translation shows the source and translated text and keeps the
+  copy action, but does not add the unreachable Android result-save action.
+  Model failures preserve the OCR source text for copying.
 - Package, host, and tensor-session checks do not promote this model beyond its
   recorded limitations: `manual-quality-gate-not-passed`,
   `local-learning-only-not-production-approved`, and device-not-validated

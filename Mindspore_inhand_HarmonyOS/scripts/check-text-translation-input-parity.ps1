@@ -20,4 +20,16 @@ if (-not $workflow.Contains("inputKinds: ['text', 'camera', 'photo']")) {
   throw 'Text translation input parity guard failed: expected exactly text, camera, and photo inputs.'
 }
 
+$pagePath = Join-Path $root 'entry\src\main\ets\pages\FeatureRuntimePage.ets'
+$page = (Get-Content -Raw -Encoding UTF8 -LiteralPath $pagePath) -replace "`r`n", "`n"
+foreach ($marker in @(
+  'shouldShowTranslationSnapshotSaveAction',
+  'translationSnapshotPreview',
+  'translationSnapshotComponentId'
+)) {
+  if ($page.Contains($marker)) {
+    throw "Text translation parity guard failed: Android has no reachable translation snapshot save action ($marker)."
+  }
+}
+
 Write-Output 'Text translation input parity guard passed.'

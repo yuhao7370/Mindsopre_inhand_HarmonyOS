@@ -15,8 +15,7 @@ import {
   aiRunResultRows,
   copyableTextForAiResult,
   segmentationMetadataWithBackground,
-  sceneDetectionOverlayRows,
-  translationSnapshotTranslatedTextReady
+  sceneDetectionOverlayRows
 } from '../main/ets/services/ai/AiService';
 import { ClipboardService, TextClipboardWriter } from '../main/ets/services/clipboard/ClipboardService';
 import {
@@ -378,7 +377,6 @@ import {
   shouldRenderLiveCameraPreview,
   liveClassificationEmptyPromptKey,
   shouldMirrorSegmentationForeground,
-  shouldShowTranslationSnapshotSaveAction,
   shouldUseLongTextInput,
   shouldUseLongTextResultRow,
   textInputPlaceholderKeyForWorkflow,
@@ -411,8 +409,7 @@ import {
   portraitSegmentationCustomBackgroundId
 } from '../main/ets/features/runtime/PortraitSegmentationBackgroundCatalog';
 import {
-  segmentationBackgroundReplacementComponentId,
-  translationSnapshotComponentId
+  segmentationBackgroundReplacementComponentId
 } from '../main/ets/features/runtime/FeatureRuntimeViewIds';
 import { featureRuntimeOverlayPreviewImageOrientationFromRotationDegrees } from '../main/ets/features/runtime/FeatureRuntimeOverlayPreview';
 import {
@@ -3502,44 +3499,12 @@ export default function localUnitTest() {
       expect(shouldShowResultSaveAction(classification, false)).assertFalse();
     });
 
-    it('showsImageTranslationSnapshotSaveAfterImageResultIsReady', 0, () => {
+    it('keepsAndroidTranslationCopyWithoutResultImageSave', 0, () => {
       const textTranslation: FeatureWorkflow = workflowForRoute(AppRoute.TEXT_TRANSLATION.name)!;
-      const textRecognition: FeatureWorkflow = workflowForRoute(AppRoute.TEXT_RECOGNITION.name)!;
 
-      expect(shouldShowTranslationSnapshotSaveAction(textTranslation, true, true, false)).assertTrue();
-      expect(shouldShowTranslationSnapshotSaveAction(textTranslation, false, true, false)).assertFalse();
-      expect(shouldShowTranslationSnapshotSaveAction(textTranslation, true, false, false)).assertFalse();
-      expect(shouldShowTranslationSnapshotSaveAction(textTranslation, true, true, true)).assertFalse();
-      expect(shouldShowTranslationSnapshotSaveAction(textRecognition, true, true, false)).assertFalse();
-    });
-
-    it('hidesImageTranslationSnapshotSaveUntilTranslatedTextExists', 0, () => {
-      const textTranslation: FeatureWorkflow = workflowForRoute(AppRoute.TEXT_TRANSLATION.name)!;
-      const sourceRow: AiRunResultRow = {
-        labelKey: 'feature_runtime_result_text',
-        value: 'unmapped phrase'
-      };
-      const translatedRow: AiRunResultRow = {
-        labelKey: 'feature_runtime_result_translated_text',
-        value: '\u4F60\u597D'
-      };
-      const sourceOnlyRows: Array<AiRunResultRow> = [sourceRow];
-      const translatedRows: Array<AiRunResultRow> = [sourceRow, translatedRow];
-
-      expect(translationSnapshotTranslatedTextReady(sourceOnlyRows)).assertFalse();
-      expect(shouldShowTranslationSnapshotSaveAction(
-        textTranslation,
-        true,
-        translationSnapshotTranslatedTextReady(sourceOnlyRows),
-        false
-      )).assertFalse();
-      expect(translationSnapshotTranslatedTextReady(translatedRows)).assertTrue();
-      expect(shouldShowTranslationSnapshotSaveAction(
-        textTranslation,
-        true,
-        translationSnapshotTranslatedTextReady(translatedRows),
-        false
-      )).assertTrue();
+      expect(shouldShowCopyTextAction('translateText')).assertTrue();
+      expect(shouldShowResultSaveAction(textTranslation, false)).assertFalse();
+      expect(shouldShowResultSaveAction(textTranslation, true)).assertFalse();
     });
 
     it('mirrorsOnlyAndroidPortraitForegroundForFrontCamera', 0, () => {
@@ -3763,7 +3728,6 @@ export default function localUnitTest() {
 
     it('targetsPortraitBackgroundReplacementPreviewForCompositeSave', 0, () => {
       expect(segmentationBackgroundReplacementComponentId).assertEqual('segmentationBackgroundReplacementPreview');
-      expect(translationSnapshotComponentId).assertEqual('translationSnapshotPreview');
       expect(hasAppStringKey('feature_runtime_result_background_replacement')).assertTrue();
       expect(hasAppStringKey('feature_runtime_save_image_done')).assertTrue();
       expect(hasAppStringKey('feature_runtime_save_image_failed')).assertTrue();
@@ -7957,7 +7921,6 @@ export default function localUnitTest() {
       expect(result.detailText.indexOf('source=\u4F60\u597D') >= 0).assertTrue();
       expect(result.detailText.indexOf('translated=') >= 0).assertTrue();
       expect(recognitionRunner.seenImageUris[0]).assertEqual('file://selected/translation.jpg');
-      expect(translationSnapshotTranslatedTextReady(aiRunResultRows(result))).assertFalse();
     });
 
     it('runtimeFactoryFailsTypedTranslationHonestlyWhenModelAssetIsMissing', 0, async () => {
@@ -8302,13 +8265,6 @@ export default function localUnitTest() {
       expect(result.code).assertEqual('TEXT_TRANSLATION_FAILED');
       expect(result.messageKey).assertEqual('feature_runtime_text_translation_failed');
       expect(aiRunResultRows(result)[1].value).assertEqual('unmapped phrase\n');
-      expect(translationSnapshotTranslatedTextReady(aiRunResultRows(result))).assertFalse();
-      expect(shouldShowTranslationSnapshotSaveAction(
-        workflow!,
-        true,
-        translationSnapshotTranslatedTextReady(aiRunResultRows(result)),
-        false
-      )).assertFalse();
       expect(copyableTextForAiResult('translateText', aiRunResultRows(result))).assertEqual('unmapped phrase\n');
     });
 
