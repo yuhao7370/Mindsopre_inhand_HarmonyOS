@@ -32,7 +32,7 @@ def _sha(path):
 
 
 class ProjectTranslationGuardTest(unittest.TestCase):
-    def test_external_native_guard_contract_and_deferred_build_hap_activation_order(self):
+    def test_external_native_guard_contract_and_build_hap_activation_order(self):
         guard_source = GUARD.read_text(encoding="utf-8")
         self.assertIn("[string]$NativeDecompressorPath", guard_source)
         self.assertIn("'--decompressor'", guard_source)
@@ -40,19 +40,15 @@ class ProjectTranslationGuardTest(unittest.TestCase):
         self.assertIn("'--release-evidence'", guard_source)
 
         build_source = BUILD_HAP.read_text(encoding="utf-8")
-        self.assertNotIn("verify-translation-model.ps1", build_source)
+        self.assertIn("verify-translation-model.ps1", build_source)
+        self.assertIn("local-learning-authorization-v1.json", build_source)
+        self.assertIn("-ReleaseEvidencePath", build_source)
         ensure_index = build_source.index("ensure-mindspore-models.ps1")
+        guard_index = build_source.index("verify-translation-model.ps1")
         hvigor_index = build_source.index("$hvigor =")
-        self.assertLess(ensure_index, hvigor_index)
-        future_source = build_source.replace(
-            "$hvigor =",
-            "& (Join-Path $PSScriptRoot 'verify-translation-model.ps1')\n$hvigor =",
-            1,
-        )
-        guard_index = future_source.index("verify-translation-model.ps1")
-        future_hvigor_index = future_source.index("$hvigor =")
         self.assertLess(ensure_index, guard_index)
-        self.assertLess(guard_index, future_hvigor_index)
+        self.assertLess(guard_index, hvigor_index)
+        self.assertLess(ensure_index, hvigor_index)
 
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
