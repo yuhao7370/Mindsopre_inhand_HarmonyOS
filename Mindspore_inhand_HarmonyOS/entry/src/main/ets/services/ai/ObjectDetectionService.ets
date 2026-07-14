@@ -59,6 +59,11 @@ export interface ObjectDetectionBoxPercent {
   readonly height: number;
 }
 
+export interface ObjectDetectionLiveLabelOffset {
+  readonly x: number;
+  readonly y: number;
+}
+
 export const objectDetectionOverlayPalette: Array<string> = [
   '#FFFFFF',
   '#6DA7FF',
@@ -436,6 +441,16 @@ export function objectDetectionBoxPercent(
     width: Math.max(0, right - left),
     height: Math.max(0, bottom - top)
   };
+}
+
+export function objectDetectionLiveLabelOffset(
+  topPercent: number,
+  overlayHeightVp: number
+): ObjectDetectionLiveLabelOffset {
+  if (overlayHeightVp <= 0 || topPercent * overlayHeightVp / 100 < 20) {
+    return { x: 5, y: 20 };
+  }
+  return { x: 0, y: -10 };
 }
 
 function objectDetectionPercent(value: number, sourceLength: number): number {

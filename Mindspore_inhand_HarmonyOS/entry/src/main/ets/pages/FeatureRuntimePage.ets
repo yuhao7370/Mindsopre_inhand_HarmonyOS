@@ -140,7 +140,9 @@ import {
 import {
   ObjectDetection,
   ObjectDetectionBoxPercent,
+  ObjectDetectionLiveLabelOffset,
   objectDetectionBoxPercent,
+  objectDetectionLiveLabelOffset,
   objectDetectionOverlayColor,
   objectDetectionOverlayLabel,
   objectDetectionOverlayTextColor
@@ -279,6 +281,7 @@ struct FeatureRuntimePage {
   @State objectDetections: Array<ObjectDetection> = [];
   @State objectDetectionImageWidth: number = 0;
   @State objectDetectionImageHeight: number = 0;
+  @State liveObjectDetectionOverlayHeightVp: number = 0;
   @State segmentationImageUri: string = '';
   @State segmentationImageOrientation: ImageRotateOrientation = ImageRotateOrientation.UP;
   @State segmentationBackgroundImageUri: string = '';
@@ -1866,7 +1869,7 @@ struct FeatureRuntimePage {
     if (this.objectDetections.length > 0 &&
       shouldShowLiveObjectDetectionCameraOverlay(workflowForRoute(this.routeName))) {
       ForEach(this.objectDetections, (detection: ObjectDetection, index: number) => {
-        this.objectDetectionBox(detection, index)
+        this.liveObjectDetectionBox(detection, index)
       }, (detection: ObjectDetection) => `${detection.imageId}-${detection.labelId}-${detection.score}`)
     }
     if (this.posePoints.length > 0 && shouldShowLivePoseCameraOverlay(workflowForRoute(this.routeName))) {
@@ -2096,6 +2099,13 @@ struct FeatureRuntimePage {
       detection,
       this.objectDetectionImageWidth,
       this.objectDetectionImageHeight
+    );
+  }
+
+  private liveObjectDetectionLabelOffset(detection: ObjectDetection): ObjectDetectionLiveLabelOffset {
+    return objectDetectionLiveLabelOffset(
+      this.objectDetectionBoxStyle(detection).top,
+      this.liveObjectDetectionOverlayHeightVp
     );
   }
 
@@ -2463,23 +2473,41 @@ struct FeatureRuntimePage {
   @Builder
   objectDetectionBox(detection: ObjectDetection, index: number) {
     Column() {
-      if (this.routeName === AppRoute.OBJECT_CAMERA.name) {
-        Text(this.objectDetectionLabel(detection, index))
-          .fontSize(16)
-          .fontColor(objectDetectionOverlayColor(index))
-          .maxLines(1)
-      } else {
-        Text(this.objectDetectionLabel(detection, index))
-          .fontSize(10)
-          .fontColor(objectDetectionOverlayTextColor(index))
-          .backgroundColor(objectDetectionOverlayColor(index))
-          .padding({ left: 4, right: 4, top: 2, bottom: 2 })
-          .maxLines(1)
-      }
+      Text(this.objectDetectionLabel(detection, index))
+        .fontSize(10)
+        .fontColor(objectDetectionOverlayTextColor(index))
+        .backgroundColor(objectDetectionOverlayColor(index))
+        .padding({ left: 4, right: 4, top: 2, bottom: 2 })
+        .maxLines(1)
     }
     .width(this.percentLength(this.objectDetectionBoxStyle(detection).width))
     .height(this.percentLength(this.objectDetectionBoxStyle(detection).height))
     .border({ width: 2, color: objectDetectionOverlayColor(index), radius: 2 })
+    .position({
+      x: this.percentLength(this.objectDetectionBoxStyle(detection).left),
+      y: this.percentLength(this.objectDetectionBoxStyle(detection).top)
+    })
+  }
+
+  @Builder
+  liveObjectDetectionBox(detection: ObjectDetection, index: number) {
+    Stack({ alignContent: Alignment.TopStart }) {
+      Column() {
+      }
+      .width('100%')
+      .height('100%')
+      .border({ width: 2, color: objectDetectionOverlayColor(index), radius: 2 })
+      Text(this.objectDetectionLabel(detection, index))
+        .fontSize(16)
+        .fontColor(objectDetectionOverlayColor(index))
+        .maxLines(1)
+        .position({
+          x: this.liveObjectDetectionLabelOffset(detection).x,
+          y: this.liveObjectDetectionLabelOffset(detection).y
+        })
+    }
+    .width(this.percentLength(this.objectDetectionBoxStyle(detection).width))
+    .height(this.percentLength(this.objectDetectionBoxStyle(detection).height))
     .position({
       x: this.percentLength(this.objectDetectionBoxStyle(detection).left),
       y: this.percentLength(this.objectDetectionBoxStyle(detection).top)
@@ -2732,11 +2760,16 @@ struct FeatureRuntimePage {
               .fontColor(AppColor.textPrimary)
               .maxLines(1)
               .textOverflow({ overflow: TextOverflow.Ellipsis })
+              .margin({ top: 6 })
+            Divider()
+              .strokeWidth(0.5)
+              .color('#E6E6E6')
+              .width('100%')
+              .margin({ top: 10 })
           }
           .width('100%')
           .height(100)
           .padding({ left: 15, right: 15 })
-          .justifyContent(FlexAlign.Center)
           .alignItems(HorizontalAlign.Start)
           .backgroundColor(Color.White)
         }
@@ -2762,6 +2795,9 @@ struct FeatureRuntimePage {
         this.liveCameraSurfaceContent()
         Column() {
           Button(appString(workflowInputLabelKey(workflowForRoute(this.routeName), 'modelFile')))
+            .fontSize(16)
+            .fontColor(Color.White)
+            .backgroundColor('#33B5E5')
             .onClick(() => this.prepareInput('modelFile'))
         }
         .width('100%')
@@ -2774,6 +2810,10 @@ struct FeatureRuntimePage {
       .width('100%')
       .layoutWeight(1)
       .backgroundColor('#111827')
+      .onAreaChange((_previousArea: Area, currentArea: Area) => {
+        const height = Number(currentArea.height);
+        this.liveObjectDetectionOverlayHeightVp = Number.isFinite(height) && height > 0 ? height : 0;
+      })
     }
     .width('100%')
     .height('100%')

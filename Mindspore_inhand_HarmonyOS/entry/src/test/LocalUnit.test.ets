@@ -295,10 +295,12 @@ import {
   ObjectDetectionService,
   ObjectDetectionInput,
   ObjectDetectionInputPreprocessor,
+  ObjectDetectionLiveLabelOffset,
   ObjectDetectionMindSporeRunner,
   ObjectDetectionModelOutput,
   ObjectDetectionTensorRunner,
   objectDetectionBoxPercent,
+  objectDetectionLiveLabelOffset,
   decodeSsdObjectDetections,
   generateObjectDetectionDefaultBoxes,
   objectDetectionAnchorCount,
@@ -6527,6 +6529,24 @@ export default function localUnitTest() {
       expect(box.top.toFixed(1)).assertEqual('0.0');
       expect(box.width.toFixed(1)).assertEqual('80.0');
       expect(box.height.toFixed(1)).assertEqual('100.0');
+    });
+
+    it('positionsLiveObjectDetectionLabelsLikeAndroidUsingMeasuredOverlayHeight', 0, () => {
+      const belowThreshold: ObjectDetectionLiveLabelOffset = objectDetectionLiveLabelOffset(3.9, 500);
+      expect(belowThreshold.x).assertEqual(5);
+      expect(belowThreshold.y).assertEqual(20);
+
+      const atThreshold: ObjectDetectionLiveLabelOffset = objectDetectionLiveLabelOffset(4, 500);
+      expect(atThreshold.x).assertEqual(0);
+      expect(atThreshold.y).assertEqual(-10);
+
+      const aboveThreshold: ObjectDetectionLiveLabelOffset = objectDetectionLiveLabelOffset(4.1, 500);
+      expect(aboveThreshold.x).assertEqual(0);
+      expect(aboveThreshold.y).assertEqual(-10);
+
+      const unmeasuredOverlay: ObjectDetectionLiveLabelOffset = objectDetectionLiveLabelOffset(80, 0);
+      expect(unmeasuredOverlay.x).assertEqual(5);
+      expect(unmeasuredOverlay.y).assertEqual(20);
     });
 
     it('usesAndroidObjectDetectionOverlayPaletteByResultOrder', 0, () => {
