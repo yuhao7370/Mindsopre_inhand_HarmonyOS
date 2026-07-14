@@ -73,6 +73,17 @@ class ProjectTranslationGuardTest(unittest.TestCase):
         self.assertLess(guard_index, hvigor_index)
         self.assertLess(ensure_index, hvigor_index)
 
+    def test_ohos_translation_native_suite_replaces_template_test(self):
+        test_root = ROOT / "Mindspore_inhand_HarmonyOS" / "entry" / "src" / "ohosTest" / "ets" / "test"
+        self.assertFalse((test_root / "Ability.test.ets").exists())
+        translation = (test_root / "TranslationNative.test.ets").read_text(encoding="utf-8")
+        suite = (test_root / "List.test.ets").read_text(encoding="utf-8")
+        self.assertIn("productionTranslationModelBundleFactory", translation)
+        self.assertIn("createHarmonyTextTranslationService", translation)
+        self.assertIn("resetTranslationModelCacheForTests", translation)
+        self.assertIn("translationNativeTest();", suite)
+        self.assertNotIn("abilityTest", suite)
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)

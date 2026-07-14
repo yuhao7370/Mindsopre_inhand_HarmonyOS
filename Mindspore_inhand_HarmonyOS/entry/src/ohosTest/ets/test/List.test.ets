@@ -1,7 +1,7 @@
-import abilityTest from './Ability.test';
 import gestureNativeTest from './GestureNative.test';
+import translationNativeTest from './TranslationNative.test';
 
 export default function testsuite() {
-  abilityTest();
   gestureNativeTest();
+  translationNativeTest();
 }
