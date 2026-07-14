@@ -1,0 +1,5 @@
+# These generated translation inputs are verified byte-for-byte.
+tools/translation/fixtures/prototype-package/** -text -diff
+tools/translation/licenses/translation-runtime-LICENSES.md -text -diff
+tools/translation/manifests/** -text -diff
+tools/translation/manual-eval-v1.jsonl -text -diff

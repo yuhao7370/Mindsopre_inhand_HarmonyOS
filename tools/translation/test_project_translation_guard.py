@@ -32,6 +32,29 @@ def _sha(path):
 
 
 class ProjectTranslationGuardTest(unittest.TestCase):
+    def test_byte_bound_release_files_disable_checkout_text_conversion(self):
+        translation_root = ROOT / "Mindspore_inhand_HarmonyOS" / "entry" / "src" / "main" / "resources" / "rawfile" / "models" / "translation"
+        gesture_root = translation_root.parent / "gesture"
+        prototype_root = ROOT / "tools" / "translation" / "fixtures" / "prototype-package"
+        paths = sorted(
+            [path for directory in (translation_root, gesture_root, prototype_root) for path in directory.iterdir() if path.is_file()]
+            + [
+                ROOT / "tools" / "translation" / "licenses" / "translation-runtime-LICENSES.md",
+                ROOT / "tools" / "translation" / "manifests" / "local-learning-authorization-v1.json",
+                ROOT / "tools" / "translation" / "manual-eval-v1.jsonl",
+            ]
+        )
+        result = subprocess.run(
+            ["git", "check-attr", "text", "--", *(str(path.relative_to(ROOT)) for path in paths)],
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+            check=True,
+        )
+        attributes = result.stdout.splitlines()
+        self.assertEqual(len(attributes), len(paths))
+        self.assertTrue(all(line.endswith(": text: unset") for line in attributes), result.stdout)
+
     def test_external_native_guard_contract_and_build_hap_activation_order(self):
         guard_source = GUARD.read_text(encoding="utf-8")
         self.assertIn("[string]$NativeDecompressorPath", guard_source)
