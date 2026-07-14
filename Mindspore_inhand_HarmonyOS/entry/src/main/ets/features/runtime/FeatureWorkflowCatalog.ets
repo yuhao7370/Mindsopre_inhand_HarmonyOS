@@ -403,7 +403,9 @@ export function workflowRuntimeTitleKey(
 }
 
 export function shouldShowPrimaryRunAction(workflow: FeatureWorkflow | undefined): boolean {
-  return workflow !== undefined && autoStartInputKindForWorkflow(workflow) === undefined;
+  return workflow?.routeName === AppRoute.POSENET.name ||
+    workflow?.routeName === AppRoute.TEXT_TRANSLATION.name ||
+    workflow?.routeName === AppRoute.CUSTOM_MODEL.name;
 }
 
 export function workflowInitialStatusKey(workflow: FeatureWorkflow | undefined): AppStringKey {

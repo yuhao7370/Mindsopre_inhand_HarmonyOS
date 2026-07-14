@@ -332,6 +332,7 @@ import {
 import {
   FeatureInputKind,
   FeatureWorkflow,
+  featureWorkflows,
   fixedLiveCameraPositionForWorkflow,
   shouldDeferRuntimeResultClearUntilPickResult,
   WorkflowInputReadyAction,
@@ -8916,17 +8917,27 @@ export default function localUnitTest() {
       expect(autoStartInputKindForWorkflow(workflowForRoute(AppRoute.GESTURE_STILL.name)!)).assertUndefined();
       expect(autoStartInputKindForWorkflow(workflowForRoute(AppRoute.TEXT_RECOGNITION.name)!)).assertUndefined();
 
-      expect(shouldShowPrimaryRunAction(workflowForRoute(AppRoute.IMAGE_CAMERA.name)!)).assertFalse();
-      expect(shouldShowPrimaryRunAction(workflowForRoute(AppRoute.OBJECT_CAMERA.name)!)).assertFalse();
-      expect(shouldShowPrimaryRunAction(workflowForRoute(AppRoute.GESTURE_LIVE.name)!)).assertFalse();
-      expect(shouldShowPrimaryRunAction(workflowForRoute(AppRoute.SCENE_LIVE.name)!)).assertFalse();
-      expect(shouldShowPrimaryRunAction(workflowForRoute(AppRoute.SEGMENTATION_LIVE.name)!)).assertFalse();
-      expect(shouldShowPrimaryRunAction(workflowForRoute(AppRoute.PORTRAIT_SEGMENTATION.name)!)).assertFalse();
-      expect(shouldShowPrimaryRunAction(workflowForRoute(AppRoute.LIVE_SKELETON.name)!)).assertFalse();
-      expect(shouldShowPrimaryRunAction(workflowForRoute(AppRoute.POSENET.name)!)).assertTrue();
-      expect(shouldShowPrimaryRunAction(workflowForRoute(AppRoute.TEXT_TRANSLATION.name)!)).assertTrue();
-      expect(shouldShowPrimaryRunAction(workflowForRoute(AppRoute.STYLE_TRANSFER.name)!)).assertTrue();
-      expect(shouldShowPrimaryRunAction(workflowForRoute(AppRoute.CUSTOM_MODEL.name)!)).assertTrue();
+    });
+
+    it('showsPrimaryRunActionOnlyForAndroidManualWorkflows', 0, () => {
+      expect(featureWorkflows.length).assertEqual(16);
+      expect(shouldShowPrimaryRunAction(workflowForRoute(AppRoute.POSENET.name))).assertTrue();
+      expect(shouldShowPrimaryRunAction(workflowForRoute(AppRoute.TEXT_TRANSLATION.name))).assertTrue();
+      expect(shouldShowPrimaryRunAction(workflowForRoute(AppRoute.CUSTOM_MODEL.name))).assertTrue();
+      expect(shouldShowPrimaryRunAction(workflowForRoute(AppRoute.LIVE_SKELETON.name))).assertFalse();
+      expect(shouldShowPrimaryRunAction(workflowForRoute(AppRoute.SEGMENTATION_STILL.name))).assertFalse();
+      expect(shouldShowPrimaryRunAction(workflowForRoute(AppRoute.SEGMENTATION_LIVE.name))).assertFalse();
+      expect(shouldShowPrimaryRunAction(workflowForRoute(AppRoute.PORTRAIT_SEGMENTATION.name))).assertFalse();
+      expect(shouldShowPrimaryRunAction(workflowForRoute(AppRoute.IMAGE_CAMERA.name))).assertFalse();
+      expect(shouldShowPrimaryRunAction(workflowForRoute(AppRoute.GESTURE_STILL.name))).assertFalse();
+      expect(shouldShowPrimaryRunAction(workflowForRoute(AppRoute.GESTURE_LIVE.name))).assertFalse();
+      expect(shouldShowPrimaryRunAction(workflowForRoute(AppRoute.SCENE_STILL.name))).assertFalse();
+      expect(shouldShowPrimaryRunAction(workflowForRoute(AppRoute.SCENE_LIVE.name))).assertFalse();
+      expect(shouldShowPrimaryRunAction(workflowForRoute(AppRoute.TEXT_RECOGNITION.name))).assertFalse();
+      expect(shouldShowPrimaryRunAction(workflowForRoute(AppRoute.OBJECT_PHOTO.name))).assertFalse();
+      expect(shouldShowPrimaryRunAction(workflowForRoute(AppRoute.OBJECT_CAMERA.name))).assertFalse();
+      expect(shouldShowPrimaryRunAction(workflowForRoute(AppRoute.STYLE_TRANSFER.name))).assertFalse();
+      expect(shouldShowPrimaryRunAction(undefined)).assertFalse();
     });
 
     it('usesAndroidFrontCameraDefaultsForSelfieLiveWorkflows', 0, () => {

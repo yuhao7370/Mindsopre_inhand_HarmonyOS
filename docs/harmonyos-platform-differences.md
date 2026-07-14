@@ -318,9 +318,10 @@ Current HarmonyOS behavior:
   but no longer renders those fields directly in normal UI.
 - Selected images and models remain visible through preview rows that show
   user-facing labels and file names, instead of raw picker paths or surface ids.
-- Camera-only live runtime pages auto-start from the preview and no longer show
-  the generic primary Run button, matching Android live activities that run
-  from camera startup rather than a manual action.
+- The shared runtime shows a primary action only for PoseNet, Text Translation,
+  and Custom Model, matching Android's manual Detect, Translate, and Execute
+  controls. Camera-only live workflows and still/style workflows that run
+  automatically when their input is ready omit the generic Run button.
 - The HAP build helper now runs a static guard to catch accidental re-exposure
   of those debug fields in `FeatureRuntimePage`.
 
@@ -332,8 +333,8 @@ Android still-image model pages such as Style Transfer and Custom Model keep an
 Current HarmonyOS behavior:
 
 - The shared Feature Runtime page now keeps the same still-workflow guard:
-  while a non-live workflow is running, the Run action is disabled and repeated
-  auto-run/manual triggers are ignored.
+  while a non-live workflow is running, the remaining manual action is disabled
+  and repeated manual or automatic input/style-ready triggers are ignored.
 - Live camera workflows only bypass the shared guard after the page is actually
   ready to enter the live runtime loop; fallback async runs are still guarded.
   Inside the live loop, camera refresh continues to use the existing frame guard
