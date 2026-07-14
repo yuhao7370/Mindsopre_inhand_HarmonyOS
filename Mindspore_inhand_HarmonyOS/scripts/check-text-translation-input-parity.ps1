@@ -100,6 +100,12 @@ foreach ($marker in @(
   Assert-Contains $builder $marker "dedicated builder is missing $marker."
 }
 
+$resultRowsMarker = 'this.resultRows'
+$resultRowsCount = ($builder.Length - $builder.Replace($resultRowsMarker, '').Length) / $resultRowsMarker.Length
+if ($resultRowsCount -ne 1) {
+  throw 'Text translation parity guard failed: dedicated builder must render resultRows exactly once as translated text.'
+}
+
 $photoIndex = $builder.IndexOf("Button(appString('feature_input_photo_android')", [StringComparison]::Ordinal)
 $cameraIndex = $builder.IndexOf("Button(appString('feature_input_camera_android')", [StringComparison]::Ordinal)
 $copyIndex = $builder.IndexOf("Button(appString('feature_runtime_copy_text')", [StringComparison]::Ordinal)
@@ -107,7 +113,9 @@ $permissionIndex = $builder.IndexOf('this.runtimePermissionRecoveryOverlay()', [
 if ($photoIndex -lt 0 -or $cameraIndex -le $photoIndex -or $copyIndex -le $cameraIndex) {
   throw 'Text translation parity guard failed: bottom actions must be Photo, Camera, Copy.'
 }
-if ($permissionIndex -le $copyIndex) {
+$expectedPermissionTail = "this.runtimePermissionRecoveryOverlay()`n    }`n    .width('100%')`n    .height('100%')`n    .backgroundColor(Color.White)`n  }`n"
+if ($permissionIndex -le $copyIndex -or
+  -not $builder.Substring($permissionIndex).Equals($expectedPermissionTail, [StringComparison]::Ordinal)) {
   throw 'Text translation parity guard failed: permission recovery must render last.'
 }
 
