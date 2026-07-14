@@ -371,6 +371,7 @@ import {
   shouldShowCompositeSegmentationSaveAction,
   shouldShowResultSaveAction,
   shouldShowStandaloneSegmentationForegroundPreview,
+  shouldShowStandaloneSegmentationOverlayPreview,
   shouldShowLiveClassificationCameraOverlay,
   shouldShowLiveGestureCameraOverlay,
   shouldShowLiveObjectDetectionCameraOverlay,
@@ -3549,6 +3550,20 @@ export default function localUnitTest() {
       expect(shouldShowStandaloneSegmentationForegroundPreview(
         workflowForRoute(AppRoute.STYLE_TRANSFER.name))).assertFalse();
       expect(shouldShowStandaloneSegmentationForegroundPreview(undefined)).assertFalse();
+    });
+
+    it('showsStandaloneSegmentationOverlayOnlyForAndroidStillResult', 0, () => {
+      expect(shouldShowStandaloneSegmentationOverlayPreview(
+        workflowForRoute(AppRoute.SEGMENTATION_STILL.name))).assertTrue();
+      expect(shouldShowStandaloneSegmentationOverlayPreview(
+        workflowForRoute(AppRoute.SEGMENTATION_LIVE.name))).assertFalse();
+      expect(shouldShowStandaloneSegmentationOverlayPreview(
+        workflowForRoute(AppRoute.PORTRAIT_SEGMENTATION.name))).assertFalse();
+      expect(shouldShowStandaloneSegmentationOverlayPreview(
+        workflowForRoute(AppRoute.STYLE_TRANSFER.name))).assertFalse();
+      expect(shouldShowStandaloneSegmentationOverlayPreview(
+        workflowForRoute(AppRoute.OBJECT_PHOTO.name))).assertFalse();
+      expect(shouldShowStandaloneSegmentationOverlayPreview(undefined)).assertFalse();
     });
 
     it('showsCompositeSegmentationSaveOnlyForAndroidPortraitResult', 0, () => {

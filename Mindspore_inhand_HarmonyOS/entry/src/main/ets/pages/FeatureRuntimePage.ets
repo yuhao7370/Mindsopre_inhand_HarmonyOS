@@ -47,6 +47,7 @@ import {
   shouldRenderLiveCameraPreview,
   shouldShowResultSaveAction,
   shouldShowStandaloneSegmentationForegroundPreview,
+  shouldShowStandaloneSegmentationOverlayPreview,
   shouldShowStyleRecoveryControl,
   shouldShowStyleTransferStyledPreview,
   shouldUseLongTextInput,
@@ -2817,7 +2818,8 @@ struct FeatureRuntimePage {
               this.resultComponentImageSaveControl(segmentationBackgroundReplacementComponentId)
             }
           }
-          if (this.segmentationImageUri.length > 0 && this.segmentationRectangles.length > 0) {
+          if (this.segmentationImageUri.length > 0 && this.segmentationRectangles.length > 0 &&
+            shouldShowStandaloneSegmentationOverlayPreview(workflowForRoute(this.routeName))) {
             this.segmentationPreview('feature_runtime_result_segmentation_overlay', this.segmentationImageUri)
           }
           if (this.poseImageUri.length > 0 && this.posePoints.length > 0) {

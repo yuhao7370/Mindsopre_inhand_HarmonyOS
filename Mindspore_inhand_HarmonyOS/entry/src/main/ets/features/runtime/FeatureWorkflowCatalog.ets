@@ -479,6 +479,12 @@ export function shouldShowStandaloneSegmentationForegroundPreview(
   return workflow?.routeName === AppRoute.SEGMENTATION_STILL.name;
 }
 
+export function shouldShowStandaloneSegmentationOverlayPreview(
+  workflow: FeatureWorkflow | undefined
+): boolean {
+  return workflow?.routeName === AppRoute.SEGMENTATION_STILL.name;
+}
+
 export function shouldShowCompositeSegmentationSaveAction(
   workflow: FeatureWorkflow | undefined
 ): boolean {
