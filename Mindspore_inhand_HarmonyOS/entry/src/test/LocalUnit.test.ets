@@ -348,6 +348,7 @@ import {
   rememberLiveCameraPositionForRoute,
   resetRememberedLiveCameraPositionsForTests,
   runtimeInputKindsForWorkflow,
+  visibleInputKindsForWorkflow,
   sampleImageUriForWorkflow,
   shouldAutoRunWorkflowAfterInputReady,
   shouldAutoRunStyleTransferAfterStyleReady,
@@ -8919,6 +8920,47 @@ export default function localUnitTest() {
       expect(autoStartInputKindForWorkflow(workflowForRoute(AppRoute.GESTURE_STILL.name)!)).assertUndefined();
       expect(autoStartInputKindForWorkflow(workflowForRoute(AppRoute.TEXT_RECOGNITION.name)!)).assertUndefined();
 
+    });
+
+    it('hidesAutoStartCameraFromLiveInputChipsLikeAndroidLiveActivities', 0, () => {
+      const liveRouteNames: Array<string> = [
+        AppRoute.LIVE_SKELETON.name,
+        AppRoute.SEGMENTATION_LIVE.name,
+        AppRoute.PORTRAIT_SEGMENTATION.name,
+        AppRoute.IMAGE_CAMERA.name,
+        AppRoute.GESTURE_LIVE.name,
+        AppRoute.SCENE_LIVE.name,
+        AppRoute.OBJECT_CAMERA.name
+      ];
+      expect(liveRouteNames.length).assertEqual(7);
+      expect(new Set<string>(liveRouteNames).size).assertEqual(7);
+
+      let emptyVisibleInputCount = 0;
+      liveRouteNames.forEach((routeName: string) => {
+        const workflow: FeatureWorkflow = workflowForRoute(routeName)!;
+        expect(runtimeInputKindsForWorkflow(workflow).includes('camera')).assertTrue();
+        expect(autoStartInputKindForWorkflow(workflow)).assertEqual('camera');
+        const visibleInputs: Array<FeatureInputKind> = visibleInputKindsForWorkflow(workflow);
+        if (routeName === AppRoute.OBJECT_CAMERA.name) {
+          expect(JSON.stringify(visibleInputs)).assertEqual(JSON.stringify(['modelFile']));
+        } else {
+          expect(visibleInputs.length).assertEqual(0);
+          emptyVisibleInputCount += 1;
+        }
+      });
+      expect(emptyVisibleInputCount).assertEqual(6);
+
+      const stillRouteNames: Array<string> = [
+        AppRoute.POSENET.name,
+        AppRoute.SEGMENTATION_STILL.name,
+        AppRoute.GESTURE_STILL.name,
+        AppRoute.SCENE_STILL.name
+      ];
+      stillRouteNames.forEach((routeName: string) => {
+        const workflow: FeatureWorkflow = workflowForRoute(routeName)!;
+        expect(JSON.stringify(visibleInputKindsForWorkflow(workflow)))
+          .assertEqual(JSON.stringify(['photo', 'camera']));
+      });
     });
 
     it('showsPrimaryRunActionOnlyForAndroidManualWorkflows', 0, () => {

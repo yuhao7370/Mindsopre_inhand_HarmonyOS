@@ -46,6 +46,9 @@ Current HarmonyOS behavior:
 
 - Live runtime routes whose only primary input is camera now start the shared
   camera preview automatically after the HarmonyOS surface is ready.
+- Those auto-start routes no longer show a duplicate Camera input chip or an
+  empty Inputs section. Object Camera still shows Select Model, while Portrait
+  Segmentation keeps its separately rendered background-image grid.
 - PoseNet follows Android's split: the still route does not auto-start camera
   preview, while the live skeleton route does.
 - Shared live AI routes capture each preview frame into the normalized app

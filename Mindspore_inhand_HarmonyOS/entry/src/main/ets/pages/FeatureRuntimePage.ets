@@ -16,6 +16,7 @@ import {
   rememberLiveCameraPositionForRoute,
   permissionLabelKey,
   runtimeInputKindsForWorkflow,
+  visibleInputKindsForWorkflow,
   sampleImageUriForWorkflow,
   shouldAutoRunStyleTransferAfterStyleReady,
   shouldDeferRuntimeResultClearUntilPickResult,
@@ -1386,10 +1387,11 @@ struct FeatureRuntimePage {
   }
 
   private visibleInputKinds(): Array<FeatureInputKind> {
-    if (!this.isPortraitSegmentationWorkflow()) {
-      return this.inputKinds;
+    const workflow = workflowForRoute(this.routeName);
+    if (workflow !== undefined) {
+      return visibleInputKindsForWorkflow(workflow);
     }
-    return this.inputKinds.filter((inputKind: FeatureInputKind) => inputKind !== 'backgroundImage');
+    return this.inputKinds;
   }
 
   private shouldShowSegmentationBackgroundPreview(): boolean {
@@ -2633,6 +2635,8 @@ struct FeatureRuntimePage {
         .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
 
         Column() {
+          if (this.visibleInputKinds().length > 0) {
+        Column() {
           Text(appString('feature_runtime_inputs_title'))
             .fontSize(16)
             .fontWeight(FontWeight.Bold)
@@ -2645,6 +2649,9 @@ struct FeatureRuntimePage {
           }
           .width('100%')
           .margin({ top: AppSpacing.md })
+        }
+        .width('100%')
+          }
           if (this.hasLinkedLiveRoute()) {
             Button(appString(workflowGoLiveLabelKey(workflowForRoute(this.routeName))))
               .height(34)

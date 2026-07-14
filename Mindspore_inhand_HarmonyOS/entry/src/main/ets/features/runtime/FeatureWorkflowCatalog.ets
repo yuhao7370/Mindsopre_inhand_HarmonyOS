@@ -298,6 +298,14 @@ export function autoStartInputKindForWorkflow(workflow: FeatureWorkflow): Featur
   return 'camera';
 }
 
+export function visibleInputKindsForWorkflow(workflow: FeatureWorkflow): Array<FeatureInputKind> {
+  const autoStartInputKind = autoStartInputKindForWorkflow(workflow);
+  return runtimeInputKindsForWorkflow(workflow).filter((inputKind: FeatureInputKind) => {
+    return inputKind !== autoStartInputKind &&
+      (workflow.routeName !== AppRoute.PORTRAIT_SEGMENTATION.name || inputKind !== 'backgroundImage');
+  });
+}
+
 export function initialInputKindForWorkflow(workflow: FeatureWorkflow): FeatureInputKind | undefined {
   if (workflow.routeName === AppRoute.OBJECT_PHOTO.name) {
     return 'photo';
