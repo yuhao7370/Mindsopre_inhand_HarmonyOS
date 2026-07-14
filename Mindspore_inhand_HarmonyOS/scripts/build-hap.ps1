@@ -27,3 +27,5 @@ $hvigor = 'C:\Program Files\Huawei\DevEco Studio\tools\hvigor\bin\hvigorw.bat'
 if ($LASTEXITCODE -ne 0) {
   throw "hvigor assembleHap failed with exit code $LASTEXITCODE"
 }
+$mainHap = Join-Path $PSScriptRoot '..\entry\build\default\outputs\default\entry-default-unsigned.hap'
+& (Join-Path $PSScriptRoot 'verify-ai-runtime-haps.ps1') -MainHapPath $mainHap

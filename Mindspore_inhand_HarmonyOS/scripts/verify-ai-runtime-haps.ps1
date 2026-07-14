@@ -1,0 +1,83 @@
+param(
+  [Parameter(Mandatory = $true)][string]$MainHapPath,
+  [string]$OhosTestHapPath = ''
+)
+$ErrorActionPreference = 'Stop'
+
+function Get-HapEntries([string]$Path) {
+  if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+    throw "HAP does not exist: $Path"
+  }
+  $entries = @(& tar -tf $Path)
+  if ($LASTEXITCODE -ne 0) { throw "Unable to list HAP: $Path" }
+  return $entries
+}
+
+function Read-HapJson([string]$Path, [string]$Entry) {
+  $text = (& tar -xOf $Path $Entry | Out-String)
+  if ($LASTEXITCODE -ne 0) { throw "Unable to read $Entry from $Path" }
+  return $text | ConvertFrom-Json
+}
+
+function Assert-ExactEntries([string[]]$Entries, [string[]]$Required, [string]$Label) {
+  $missing = @($Required | Where-Object { $Entries -notcontains $_ })
+  if ($missing.Count -ne 0) { throw "$Label is missing: $($missing -join ', ')" }
+}
+
+$mainEntries = @(
+  'module.json',
+  'resources/rawfile/models/gesture/GestureDetector.ms',
+  'resources/rawfile/models/gesture/manifest.json',
+  'resources/rawfile/models/gesture/NOTICE.md',
+  'resources/rawfile/models/translation/translation-models.tar.xz',
+  'resources/rawfile/models/translation/tokenizer.model',
+  'resources/rawfile/models/translation/tokenizer_runtime.json',
+  'resources/rawfile/models/translation/vocab.json',
+  'resources/rawfile/models/translation/manifest.json',
+  'resources/rawfile/models/translation/SHA256SUMS',
+  'resources/rawfile/models/translation/LICENSES.md',
+  'libs/arm64-v8a/libgesture_mnn.so',
+  'libs/arm64-v8a/libMNN.so',
+  'libs/arm64-v8a/libtranslation_archive.so'
+)
+$mainHapEntries = @(Get-HapEntries $MainHapPath)
+Assert-ExactEntries $mainHapEntries $mainEntries 'Main HAP'
+
+if ($OhosTestHapPath) {
+  $testRequired = @(
+    'module.json',
+    'pack.info',
+    'ets/modules.abc',
+    'resources/rawfile/fixtures/gesture/open_palm.png'
+  )
+  $testHapEntries = @(Get-HapEntries $OhosTestHapPath)
+  Assert-ExactEntries $testHapEntries $testRequired 'ohosTest HAP'
+
+  $copiedModels = @($testHapEntries | Where-Object { $_.StartsWith('resources/rawfile/models/') })
+  if ($copiedModels.Count -ne 0) {
+    throw "ohosTest HAP contains copied models: $($copiedModels -join ', ')"
+  }
+  $aiLibraries = @('libgesture_mnn.so', 'libMNN.so', 'libtranslation_archive.so')
+  $copiedLibraries = @($testHapEntries | Where-Object { $aiLibraries -contains ($_ -split '/')[-1] })
+  if ($copiedLibraries.Count -ne 0) {
+    throw "ohosTest HAP contains copied AI libraries: $($copiedLibraries -join ', ')"
+  }
+
+  $module = Read-HapJson $OhosTestHapPath 'module.json'
+  $pack = Read-HapJson $OhosTestHapPath 'pack.info'
+  if ($module.app.bundleName -ne $pack.summary.app.bundleName) {
+    throw 'ohosTest HAP bundle names do not match'
+  }
+  if ($module.module.name -ne 'entry_test') { throw 'ohosTest HAP module name must be entry_test' }
+  if ($module.module.mainElement -ne 'TestAbility') { throw 'ohosTest HAP main element must be TestAbility' }
+  if (@($pack.summary.modules | Where-Object { $_.distro.moduleName -eq 'entry_test' }).Count -ne 1) {
+    throw 'ohosTest HAP pack.info must contain exactly one entry_test module'
+  }
+  if (@($pack.summary.modules | Where-Object { $_.distro.moduleName -eq 'entry' }).Count -ne 1) {
+    throw 'ohosTest HAP pack.info must contain exactly one paired entry module'
+  }
+}
+
+$verified = @("main=$MainHapPath")
+if ($OhosTestHapPath) { $verified += "ohosTest=$OhosTestHapPath" }
+Write-Host "Verified AI runtime HAP structure: $($verified -join '; ')"
