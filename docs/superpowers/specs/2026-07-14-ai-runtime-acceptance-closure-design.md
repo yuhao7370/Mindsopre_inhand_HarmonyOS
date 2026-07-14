@@ -63,11 +63,13 @@ Delete `Ability.test.ets`; no template assertion remains in the device suite.
 Add one small test image generated specifically for this repository and record
 its generation note and SHA-256 beside the fixture. It depicts a clearly
 visible hand and is a preprocessing fixture, not a recognition gold label.
-Host tests must decode the image through the same normalization and resize
-rules used by the feature, then verify tensor shape, channel order, finite
-values, value bounds, and determinism. Decoder tests continue to use controlled
-synthetic tensors so class, confidence, coordinate, and non-max-suppression
-assertions remain exact.
+A checked-in RGBA fixture derived from that image lets host tests exercise the
+same normalization and resize function used by the feature. They verify tensor
+shape, channel order, finite values, value bounds, and determinism. The
+`ohosTest` suite separately decodes the PNG with ImageKit and checks that the
+decoded dimensions and production preprocessing contract remain valid.
+Decoder tests continue to use controlled synthetic tensors so class,
+confidence, coordinate, and non-max-suppression assertions remain exact.
 
 The existing `GestureNative.test.ets` continues to load `GestureDetector.ms`
 and verify real MNN output names, shapes, finiteness, and repeatability. It may
