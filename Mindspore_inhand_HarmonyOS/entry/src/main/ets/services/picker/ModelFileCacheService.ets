@@ -23,7 +23,21 @@ export interface CachedModelFileExistenceChecker {
 }
 
 export interface ModelFileCacheWriter {
-  writeModelFile(cacheDir: string, fileName: string, content: Uint8Array): Promise<string>;
+  writeModelFile(
+    cacheDir: string,
+    fileName: string,
+    content: Uint8Array,
+    requestToken: number,
+    isCurrent: () => boolean
+  ): Promise<string | undefined>;
+}
+
+export interface ModelFileCacheFileBackend {
+  open(path: string, mode: number): Promise<fileIo.File>;
+  write(file: fileIo.File, content: Uint8Array): Promise<number>;
+  close(file: fileIo.File): Promise<void>;
+  replace(sourcePath: string, targetPath: string): void;
+  remove(path: string): void;
 }
 
 export interface ModelFileCompatibilityChecker {
@@ -122,12 +136,28 @@ export class RuntimeModelFileCacheService {
     this.compatibilityChecker = compatibilityChecker;
   }
 
-  async cachePickedModelFile(
+  cachePickedModelFile(
     sourceUri: string,
     cacheDir: string,
     routeName: string,
     inputKind: FeatureInputKind
-  ): Promise<ModelFileCacheResult> {
+  ): Promise<ModelFileCacheResult>;
+  cachePickedModelFile(
+    sourceUri: string,
+    cacheDir: string,
+    routeName: string,
+    inputKind: FeatureInputKind,
+    requestToken: number,
+    isCurrent: () => boolean
+  ): Promise<ModelFileCacheResult | undefined>;
+  async cachePickedModelFile(
+    sourceUri: string,
+    cacheDir: string,
+    routeName: string,
+    inputKind: FeatureInputKind,
+    requestToken: number = 0,
+    isCurrent: () => boolean = (): boolean => true
+  ): Promise<ModelFileCacheResult | undefined> {
     if (sourceUri.length === 0 || cacheDir.length === 0) {
       return modelFileCacheFailedResult(routeName, inputKind);
     }
@@ -143,7 +173,10 @@ export class RuntimeModelFileCacheService {
       if (!compatible) {
         return modelFileIncompatibleResult(routeName, inputKind);
       }
-      const uri = await this.writer.writeModelFile(cacheDir, fileName, content);
+      const uri = await this.writer.writeModelFile(cacheDir, fileName, content, requestToken, isCurrent);
+      if (uri === undefined) {
+        return undefined;
+      }
       if (uri.length === 0) {
         return modelFileCacheFailedResult(routeName, inputKind);
       }
@@ -171,21 +204,78 @@ export class RuntimeModelFileCacheService {
   }
 }
 
+class HarmonyModelFileCacheFileBackend implements ModelFileCacheFileBackend {
+  async open(path: string, mode: number): Promise<fileIo.File> {
+    return await fileIo.open(path, mode);
+  }
+
+  async write(file: fileIo.File, content: Uint8Array): Promise<number> {
+    return await fileIo.write(file.fd, content.buffer as ArrayBuffer, {
+      offset: content.byteOffset,
+      length: content.byteLength
+    });
+  }
+
+  async close(file: fileIo.File): Promise<void> {
+    await fileIo.close(file);
+  }
+
+  replace(sourcePath: string, targetPath: string): void {
+    fileIo.moveFileSync(sourcePath, targetPath, 0);
+  }
+
+  remove(path: string): void {
+    fileIo.unlinkSync(path);
+  }
+}
+
+let modelFileCacheTempSequence: number = 0;
+
 export class HarmonyModelFileCacheWriter implements ModelFileCacheWriter {
-  async writeModelFile(cacheDir: string, fileName: string, content: Uint8Array): Promise<string> {
-    const path = modelFileCachePath(cacheDir, fileName);
-    const file = await fileIo.open(path, fileIo.OpenMode.READ_WRITE | fileIo.OpenMode.CREATE | fileIo.OpenMode.TRUNC);
+  private readonly backend: ModelFileCacheFileBackend;
+
+  constructor(backend: ModelFileCacheFileBackend = new HarmonyModelFileCacheFileBackend()) {
+    this.backend = backend;
+  }
+
+  async writeModelFile(
+    cacheDir: string,
+    fileName: string,
+    content: Uint8Array,
+    requestToken: number,
+    isCurrent: () => boolean
+  ): Promise<string | undefined> {
+    const stablePath = modelFileCachePath(cacheDir, fileName);
+    const tempPath = `${stablePath}.tmp-${Date.now()}-${++modelFileCacheTempSequence}-${requestToken}`;
     try {
-      const writtenBytes = await fileIo.write(file.fd, content.buffer as ArrayBuffer, {
-        offset: content.byteOffset,
-        length: content.byteLength
-      });
-      if (!modelFileCacheWriteSucceeded(writtenBytes, content)) {
-        throw new Error('Incomplete model file cache write.');
+      const file = await this.backend.open(
+        tempPath,
+        fileIo.OpenMode.READ_WRITE | fileIo.OpenMode.CREATE | fileIo.OpenMode.TRUNC
+      );
+      try {
+        const writtenBytes = await this.backend.write(file, content);
+        if (!modelFileCacheWriteSucceeded(writtenBytes, content)) {
+          throw new Error('Incomplete model file cache write.');
+        }
+      } finally {
+        await this.backend.close(file);
       }
-      return path;
-    } finally {
-      await fileIo.close(file);
+      if (!isCurrent()) {
+        this.removeTempFile(tempPath);
+        return undefined;
+      }
+      this.backend.replace(tempPath, stablePath);
+      return stablePath;
+    } catch (_) {
+      this.removeTempFile(tempPath);
+      throw new Error('Model file cache publication failed.');
+    }
+  }
+
+  private removeTempFile(path: string): void {
+    try {
+      this.backend.remove(path);
+    } catch (_) {
     }
   }
 }

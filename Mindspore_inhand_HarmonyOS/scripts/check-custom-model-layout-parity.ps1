@@ -175,6 +175,7 @@ if ([string]::IsNullOrWhiteSpace($SourceRoot)) {
 $SourceRoot = [IO.Path]::GetFullPath($SourceRoot)
 $catalogPath = Join-Path $SourceRoot 'entry\src\main\ets\features\runtime\FeatureWorkflowCatalog.ets'
 $pagePath = Join-Path $SourceRoot 'entry\src\main\ets\pages\FeatureRuntimePage.ets'
+$cacheServicePath = Join-Path $SourceRoot 'entry\src\main\ets\services\picker\ModelFileCacheService.ets'
 $buildScriptPath = Join-Path $SourceRoot 'scripts\build-hap.ps1'
 
 $catalog = Remove-ArkTsComments (Get-NormalizedText $catalogPath)
@@ -333,11 +334,58 @@ if ($gateIndex -lt 0 -or $restoreCallIndex -le $gateIndex) {
 }
 
 $cacheCaller = Get-TextSection $page '  private async cacheAndApplyPickedModelFile(' "`n`n  private applyModelFileCacheResult" 'model cache caller'
-$currentIndex = $cacheCaller.IndexOf('isInputPreparationRequestCurrent(requestId, this.inputPreparationRequestId)', [StringComparison]::Ordinal)
+$cacheAwaitIndex = $cacheCaller.IndexOf('.cachePickedModelFile(', [StringComparison]::Ordinal)
+$requestTokenIndex = $cacheCaller.IndexOf('        requestId,', $cacheAwaitIndex, [StringComparison]::Ordinal)
+$predicateIndex = $cacheCaller.IndexOf('(): boolean => isInputPreparationRequestCurrent(requestId, this.inputPreparationRequestId)', $requestTokenIndex, [StringComparison]::Ordinal)
+$currentIndex = $cacheCaller.IndexOf('if (!isInputPreparationRequestCurrent(requestId, this.inputPreparationRequestId))', $predicateIndex, [StringComparison]::Ordinal)
+$staleIndex = $cacheCaller.IndexOf('if (cacheResult === undefined) {', $currentIndex, [StringComparison]::Ordinal)
 $applyCacheIndex = $cacheCaller.IndexOf('this.applyModelFileCacheResult(cacheResult, inputKind);', [StringComparison]::Ordinal)
-if ($currentIndex -lt 0 -or $applyCacheIndex -le $currentIndex) {
-  throw 'Custom Model parity guard failed: model cache feedback must remain behind the current-request check.'
+if ($cacheAwaitIndex -lt 0 -or $requestTokenIndex -le $cacheAwaitIndex -or $predicateIndex -le $requestTokenIndex -or
+  $currentIndex -le $predicateIndex -or $staleIndex -le $currentIndex -or $applyCacheIndex -le $staleIndex) {
+  throw 'Custom Model parity guard failed: cache publication must pass request token/predicate, then suppress stale UI before applying feedback.'
 }
+Assert-Contains $cacheCaller "if (cacheResult === undefined) {`n      return;`n    }" 'stale cache publication must return without status or Toast feedback.'
+
+$cacheService = Remove-ArkTsComments (Get-NormalizedText $cacheServicePath)
+$cacheMethod = Get-TextSection $cacheService '  cachePickedModelFile(' "`n`n  private async isCompatibleModelFile" 'model cache service method'
+foreach ($marker in @(
+  'requestToken: number',
+  'isCurrent: () => boolean',
+  'this.writer.writeModelFile(cacheDir, fileName, content, requestToken, isCurrent)',
+  'if (uri === undefined) {',
+  'return undefined;'
+)) {
+  Assert-Contains $cacheMethod $marker "model cache service is missing publication contract: $marker."
+}
+$writer = Get-TextSection $cacheService 'export class HarmonyModelFileCacheWriter' 'export class HarmonyCachedModelFileExistenceChecker' 'atomic model cache writer'
+foreach ($marker in @(
+  'const stablePath = modelFileCachePath(cacheDir, fileName);',
+  'Date.now()',
+  '++modelFileCacheTempSequence',
+  '${requestToken}',
+  'this.backend.open(',
+  'tempPath,',
+  'fileIo.OpenMode.READ_WRITE | fileIo.OpenMode.CREATE | fileIo.OpenMode.TRUNC',
+  'await this.backend.close(file);',
+  'if (!isCurrent()) {',
+  'this.backend.replace(tempPath, stablePath);',
+  'this.backend.remove(path);'
+)) {
+  Assert-Contains $writer $marker "atomic writer is missing $marker."
+}
+Assert-Count $writer 'fileIo.OpenMode.TRUNC' 1 'TRUNC must occur exactly once on the request-private temp open.'
+Assert-Excludes $writer 'this.backend.open(stablePath' 'stable cache must never be opened or truncated for staging'
+Assert-Count $writer 'this.removeTempFile(tempPath);' 2 'stale and catch paths must each clean only their request temp.'
+$writerCurrentIndex = $writer.IndexOf('if (!isCurrent()) {', [StringComparison]::Ordinal)
+$writerReplaceIndex = $writer.IndexOf('this.backend.replace(tempPath, stablePath);', $writerCurrentIndex, [StringComparison]::Ordinal)
+if ($writerCurrentIndex -lt 0 -or $writerReplaceIndex -le $writerCurrentIndex) {
+  throw 'Custom Model parity guard failed: current predicate must precede atomic replace.'
+}
+$publicationCriticalSection = $writer.Substring($writerCurrentIndex, $writerReplaceIndex - $writerCurrentIndex)
+Assert-Excludes $publicationCriticalSection 'await ' 'no await is allowed between the current predicate and synchronous replace'
+$backend = Get-TextSection $cacheService 'class HarmonyModelFileCacheFileBackend' 'let modelFileCacheTempSequence' 'Harmony cache file backend'
+Assert-Contains $backend 'fileIo.moveFileSync(sourcePath, targetPath, 0);' 'production publication must synchronously overwrite the stable path.'
+Assert-Contains $backend 'fileIo.unlinkSync(path);' 'temp cleanup must be synchronous.'
 
 $cacheResult = Get-TextSection $page '  private applyModelFileCacheResult(' "`n`n  private isLiveCameraInput" 'model cache result handler'
 Assert-Count $cacheResult 'this.showCustomModelCacheToastIfNeeded(result.messageKey);' 2 'current model-cache success and failure must each show one mapped Toast.'

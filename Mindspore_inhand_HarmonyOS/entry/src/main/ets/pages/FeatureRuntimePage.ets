@@ -512,8 +512,18 @@ struct FeatureRuntimePage {
       return;
     }
     const cacheResult = await new RuntimeModelFileCacheService()
-      .cachePickedModelFile(result.uri, cacheDir, this.routeName, inputKind);
+      .cachePickedModelFile(
+        result.uri,
+        cacheDir,
+        this.routeName,
+        inputKind,
+        requestId,
+        (): boolean => isInputPreparationRequestCurrent(requestId, this.inputPreparationRequestId)
+      );
     if (!isInputPreparationRequestCurrent(requestId, this.inputPreparationRequestId)) {
+      return;
+    }
+    if (cacheResult === undefined) {
       return;
     }
     this.applyModelFileCacheResult(cacheResult, inputKind);

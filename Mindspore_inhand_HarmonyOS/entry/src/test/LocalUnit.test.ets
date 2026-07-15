@@ -488,6 +488,8 @@ import {
   CachedModelFileExistenceChecker,
   cachedModelFileInputStateForRoute,
   cachedModelFileNameForInputKind,
+  HarmonyModelFileCacheWriter,
+  ModelFileCacheFileBackend,
   ModelFileTensorMetadata,
   ModelFileCompatibilityChecker,
   ModelFileCompatibilityLoader,
@@ -835,7 +837,13 @@ class RecordingModelFileCacheWriter implements ModelFileCacheWriter {
     this.nextUri = nextUri;
   }
 
-  async writeModelFile(cacheDir: string, fileName: string, content: Uint8Array): Promise<string> {
+  async writeModelFile(
+    cacheDir: string,
+    fileName: string,
+    content: Uint8Array,
+    _requestToken: number,
+    _isCurrent: () => boolean
+  ): Promise<string | undefined> {
     this.seenCacheDirs.push(cacheDir);
     this.seenFileNames.push(fileName);
     this.writtenBytes.push(content.length);
@@ -844,8 +852,94 @@ class RecordingModelFileCacheWriter implements ModelFileCacheWriter {
 }
 
 class RejectingModelFileCacheWriter implements ModelFileCacheWriter {
-  async writeModelFile(_cacheDir: string, _fileName: string, _content: Uint8Array): Promise<string> {
+  async writeModelFile(
+    _cacheDir: string,
+    _fileName: string,
+    _content: Uint8Array,
+    _requestToken: number,
+    _isCurrent: () => boolean
+  ): Promise<string | undefined> {
     throw new Error('model cache write failed');
+  }
+}
+
+class MemoryModelFileCacheFileBackend implements ModelFileCacheFileBackend {
+  readonly events: Array<string> = [];
+  readonly openedPaths: Array<string> = [];
+  readonly replacedStablePaths: Array<string> = [];
+  failStage: string = '';
+  delayedFirstByte: number = -1;
+  private readonly files: Map<string, Uint8Array> = new Map<string, Uint8Array>();
+  private readonly openPaths: Map<number, string> = new Map<number, string>();
+  private nextFd: number = 1;
+  private delayedWriteResolver: (() => void) | undefined = undefined;
+
+  seed(path: string, content: Uint8Array): void {
+    this.files.set(path, content);
+  }
+
+  bytes(path: string): Uint8Array {
+    return this.files.get(path) ?? new Uint8Array(0);
+  }
+
+  has(path: string): boolean {
+    return this.files.has(path);
+  }
+
+  async open(path: string, mode: number): Promise<fileIo.File> {
+    this.events.push(`open:${path}:${mode}`);
+    this.openedPaths.push(path);
+    this.files.set(path, new Uint8Array(0));
+    const file = { fd: this.nextFd++ } as fileIo.File;
+    this.openPaths.set(file.fd, path);
+    return file;
+  }
+
+  async write(file: fileIo.File, content: Uint8Array): Promise<number> {
+    const path = this.openPaths.get(file.fd) ?? '';
+    this.events.push(`write:${path}`);
+    if (content.length > 0 && content[0] === this.delayedFirstByte) {
+      await new Promise<void>((resolve: () => void) => {
+        this.delayedWriteResolver = resolve;
+      });
+    }
+    if (this.failStage === 'write') {
+      throw new Error('write failed');
+    }
+    const written = this.failStage === 'partial' ? Math.max(0, content.length - 1) : content.length;
+    this.files.set(path, content.slice(0, written));
+    return written;
+  }
+
+  async close(file: fileIo.File): Promise<void> {
+    const path = this.openPaths.get(file.fd) ?? '';
+    this.events.push(`close:${path}`);
+    this.openPaths.delete(file.fd);
+    if (this.failStage === 'close') {
+      throw new Error('close failed');
+    }
+  }
+
+  replace(sourcePath: string, targetPath: string): void {
+    this.events.push(`replace:${sourcePath}:${targetPath}`);
+    this.replacedStablePaths.push(targetPath);
+    if (this.failStage === 'replace') {
+      throw new Error('replace failed');
+    }
+    this.files.set(targetPath, this.bytes(sourcePath));
+    this.files.delete(sourcePath);
+  }
+
+  remove(path: string): void {
+    this.events.push(`remove:${path}`);
+    this.files.delete(path);
+  }
+
+  releaseDelayedWrite(): void {
+    if (this.delayedWriteResolver !== undefined) {
+      this.delayedWriteResolver();
+      this.delayedWriteResolver = undefined;
+    }
   }
 }
 
@@ -10004,6 +10098,173 @@ export default function localUnitTest() {
       expect(result.uri).assertEqual('');
       expect(result.messageKey).assertEqual('feature_runtime_model_cache_failed');
       expect(checker.seenRouteNames[0]).assertEqual(AppRoute.CUSTOM_MODEL.name);
+    });
+
+    it('atomicallyPublishesCurrentPickedModelOverStableCache', 0, async () => {
+      const stablePath = '/cache/custom_model.ms';
+      const backend = new MemoryModelFileCacheFileBackend();
+      backend.seed(stablePath, new Uint8Array([9]));
+
+      const result = await new HarmonyModelFileCacheWriter(backend).writeModelFile(
+        '/cache',
+        'custom_model.ms',
+        new Uint8Array([1, 2, 3]),
+        41,
+        (): boolean => true
+      );
+
+      expect(result).assertEqual(stablePath);
+      expect(backend.bytes(stablePath).length).assertEqual(3);
+      expect(backend.bytes(stablePath)[0]).assertEqual(1);
+      expect(backend.has(backend.openedPaths[0])).assertFalse();
+      expect(backend.openedPaths[0] === stablePath).assertFalse();
+    });
+
+    it('dropsStalePickedModelWithoutReplacingLastValidCache', 0, async () => {
+      const stablePath = '/cache/custom_model.ms';
+      const backend = new MemoryModelFileCacheFileBackend();
+      backend.seed(stablePath, new Uint8Array([9]));
+      const service = new RuntimeModelFileCacheService(
+        new FileUriContentReader(new FixedFileUriContentBackend(new Uint8Array([1, 2, 3]))),
+        new HarmonyModelFileCacheWriter(backend),
+        new RecordingModelFileCompatibilityChecker(true)
+      );
+
+      const result = await service.cachePickedModelFile(
+        'file://selected/custom.ms',
+        '/cache',
+        AppRoute.CUSTOM_MODEL.name,
+        'modelFile',
+        42,
+        (): boolean => false
+      );
+
+      expect(result === undefined).assertTrue();
+      expect(backend.bytes(stablePath)[0]).assertEqual(9);
+      expect(backend.has(backend.openedPaths[0])).assertFalse();
+      expect(backend.replacedStablePaths.length).assertEqual(0);
+    });
+
+    it('preservesLastValidCacheWhenTempWriteIsPartial', 0, async () => {
+      const stablePath = '/cache/custom_model.ms';
+      const backend = new MemoryModelFileCacheFileBackend();
+      backend.seed(stablePath, new Uint8Array([9]));
+      backend.failStage = 'partial';
+      let failed = false;
+      try {
+        await new HarmonyModelFileCacheWriter(backend).writeModelFile(
+          '/cache', 'custom_model.ms', new Uint8Array([1, 2]), 43, (): boolean => true
+        );
+      } catch (_) {
+        failed = true;
+      }
+
+      expect(failed).assertTrue();
+      expect(backend.bytes(stablePath)[0]).assertEqual(9);
+      expect(backend.has(backend.openedPaths[0])).assertFalse();
+    });
+
+    it('preservesLastValidCacheWhenTempWriteThrows', 0, async () => {
+      const stablePath = '/cache/custom_model.ms';
+      const backend = new MemoryModelFileCacheFileBackend();
+      backend.seed(stablePath, new Uint8Array([9]));
+      backend.failStage = 'write';
+      let failed = false;
+      try {
+        await new HarmonyModelFileCacheWriter(backend).writeModelFile(
+          '/cache', 'custom_model.ms', new Uint8Array([1]), 44, (): boolean => true
+        );
+      } catch (_) {
+        failed = true;
+      }
+
+      expect(failed).assertTrue();
+      expect(backend.bytes(stablePath)[0]).assertEqual(9);
+      expect(backend.has(backend.openedPaths[0])).assertFalse();
+    });
+
+    it('preservesLastValidCacheWhenTempCloseThrows', 0, async () => {
+      const stablePath = '/cache/custom_model.ms';
+      const backend = new MemoryModelFileCacheFileBackend();
+      backend.seed(stablePath, new Uint8Array([9]));
+      backend.failStage = 'close';
+      let failed = false;
+      try {
+        await new HarmonyModelFileCacheWriter(backend).writeModelFile(
+          '/cache', 'custom_model.ms', new Uint8Array([1]), 45, (): boolean => true
+        );
+      } catch (_) {
+        failed = true;
+      }
+
+      expect(failed).assertTrue();
+      expect(backend.bytes(stablePath)[0]).assertEqual(9);
+      expect(backend.has(backend.openedPaths[0])).assertFalse();
+    });
+
+    it('preservesLastValidCacheWhenAtomicReplaceThrows', 0, async () => {
+      const stablePath = '/cache/custom_model.ms';
+      const backend = new MemoryModelFileCacheFileBackend();
+      backend.seed(stablePath, new Uint8Array([9]));
+      backend.failStage = 'replace';
+      let failed = false;
+      try {
+        await new HarmonyModelFileCacheWriter(backend).writeModelFile(
+          '/cache', 'custom_model.ms', new Uint8Array([1]), 46, (): boolean => true
+        );
+      } catch (_) {
+        failed = true;
+      }
+
+      expect(failed).assertTrue();
+      expect(backend.bytes(stablePath)[0]).assertEqual(9);
+      expect(backend.has(backend.openedPaths[0])).assertFalse();
+    });
+
+    it('preventsDelayedStaleAFromReplacingPublishedB', 0, async () => {
+      const stablePath = '/cache/custom_model.ms';
+      const backend = new MemoryModelFileCacheFileBackend();
+      backend.seed(stablePath, new Uint8Array([9]));
+      backend.delayedFirstByte = 1;
+      const writer = new HarmonyModelFileCacheWriter(backend);
+      let currentRequest = 1;
+      const staleA = writer.writeModelFile(
+        '/cache', 'custom_model.ms', new Uint8Array([1]), 1, (): boolean => currentRequest === 1
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+
+      currentRequest = 2;
+      const currentB = await writer.writeModelFile(
+        '/cache', 'custom_model.ms', new Uint8Array([2]), 2, (): boolean => currentRequest === 2
+      );
+      backend.releaseDelayedWrite();
+      const staleResult = await staleA;
+
+      expect(currentB).assertEqual(stablePath);
+      expect(staleResult === undefined).assertTrue();
+      expect(backend.bytes(stablePath)[0]).assertEqual(2);
+      expect(backend.has(backend.openedPaths[0])).assertFalse();
+      expect(backend.has(backend.openedPaths[1])).assertFalse();
+    });
+
+    it('usesUniqueSameDirectoryTempTokensAndKeepsSiblingStableNames', 0, async () => {
+      const backend = new MemoryModelFileCacheFileBackend();
+      const writer = new HarmonyModelFileCacheWriter(backend);
+
+      await writer.writeModelFile('/cache', 'custom_predict.ms', new Uint8Array([1]), 7, (): boolean => true);
+      await writer.writeModelFile('/cache', 'custom_predict.ms', new Uint8Array([2]), 7, (): boolean => true);
+
+      expect(backend.openedPaths.length).assertEqual(2);
+      expect(backend.openedPaths[0] === backend.openedPaths[1]).assertFalse();
+      expect(backend.openedPaths[0].startsWith('/cache/custom_predict.ms.tmp-')).assertTrue();
+      expect(backend.openedPaths[1].startsWith('/cache/custom_predict.ms.tmp-')).assertTrue();
+      expect(backend.replacedStablePaths[0]).assertEqual('/cache/custom_predict.ms');
+      expect(backend.replacedStablePaths[1]).assertEqual('/cache/custom_predict.ms');
+      expect(cachedModelFileNameForInputKind(AppRoute.OBJECT_PHOTO.name, 'modelFile'))
+        .assertEqual('object_detection_model.ms');
+      expect(cachedModelFileNameForInputKind(AppRoute.STYLE_TRANSFER.name, 'styleTransferModelFile'))
+        .assertEqual('custom_transfer.ms');
     });
 
     it('rejectsShortModelFileCacheWrites', 0, () => {

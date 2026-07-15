@@ -507,6 +507,10 @@ Current HarmonyOS behavior:
 - HarmonyOS keeps the user-selected `.ms` model override, caches it in the app
   cache, and runs it through MindSpore Lite with the Android 224x224 RGB unit
   input contract.
+- Compatible picks are fully written and closed in a same-directory,
+  request-private temporary file before a current-request check synchronously
+  replaces the stable cache path. Stale picks and write/close/replace failures
+  clean only their temporary file, preserving the last valid model bytes.
 - A selected model is accepted only when it exposes exactly one NHWC float32
   input tensor shaped `[1, 224, 224, 3]` with 150,528 elements and 602,112
   bytes. The input uses RGB channel order with values normalized to `[0, 1]`.
