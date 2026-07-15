@@ -119,6 +119,20 @@ Current HarmonyOS behavior:
 - The live camera preview also keeps Android's skeleton template and localized
   similarity readout in the preview layer, defaulting to `0%` until pose results
   arrive.
+- The still PoseNet route now uses Android's dedicated single-preview layout:
+  Back/title toolbar, one divider, a weight-9 gray image/skeleton surface, and
+  the weight-1 Photo, Camera, Real-time, Detect action row.
+- Detect restores the packaged `posenet/skeleton_image.JPG` through the
+  existing initial-preview contract before running the existing pose workflow.
+  Photo and Camera keep automatic detection, and Real-time keeps the linked
+  Live Skeleton route.
+- Current PoseNet still results show localized Android-style success/failure
+  Toasts. Permission denial remains on the recovery overlay. The dedicated
+  route no longer renders generic summary, input, permission, URI, status,
+  result, or debug cards.
+- Real-device letterboxing, EXIF direction, overlay thickness, Toast display,
+  and picker/camera feel remain deferred; models and inference code are
+  unchanged.
 
 ## Gesture Recognition
 

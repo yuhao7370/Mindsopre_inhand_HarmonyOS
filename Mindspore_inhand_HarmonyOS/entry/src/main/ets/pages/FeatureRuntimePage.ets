@@ -15,10 +15,12 @@ import {
   rememberedLiveCameraPositionForWorkflow,
   rememberLiveCameraPositionForRoute,
   permissionLabelKey,
+  poseNetStillToastKey,
   runtimeInputKindsForWorkflow,
   shouldShowGestureStillFailureToast,
   specializedAndroidLiveLayoutForWorkflow,
   usesAndroidGestureStillLayout,
+  usesAndroidPoseNetStillLayout,
   usesAndroidPortraitSegmentationLayout,
   usesAndroidTextRecognitionLayout,
   usesAndroidTextTranslationLayout,
@@ -992,6 +994,7 @@ struct FeatureRuntimePage {
     this.resultRows = [];
     this.clearVisualResults();
     this.showGestureStillFailureToastIfNeeded(false, this.statusKey);
+    this.showPoseNetStillToastIfNeeded(false);
   }
 
   private async prepareLiveFrameImageInput(
@@ -1050,11 +1053,19 @@ struct FeatureRuntimePage {
     this.updateSceneOverlay(result);
     this.updateStyledImagePreview(result, runtimeRequestId);
     this.showGestureStillFailureToastIfNeeded(result.ok, result.messageKey);
+    this.showPoseNetStillToastIfNeeded(result.ok);
   }
 
   private showGestureStillFailureToastIfNeeded(resultOk: boolean, messageKey: AppStringKey): void {
     if (shouldShowGestureStillFailureToast(workflowForRoute(this.routeName), resultOk)) {
       this.showRuntimeToast(messageKey);
+    }
+  }
+
+  private showPoseNetStillToastIfNeeded(resultOk: boolean): void {
+    const toastKey = poseNetStillToastKey(workflowForRoute(this.routeName), resultOk);
+    if (toastKey !== undefined) {
+      this.showRuntimeToast(toastKey);
     }
   }
 
@@ -1465,6 +1476,19 @@ struct FeatureRuntimePage {
 
   private shouldShowRuntimePermissionRetry(): boolean {
     return this.runtimePermissionRecoveryAction() !== 'none';
+  }
+
+  private runPoseNetSampleDetection(): void {
+    const workflow = workflowForRoute(this.routeName);
+    if (!usesAndroidPoseNetStillLayout(workflow)) {
+      return;
+    }
+    const action = workflow === undefined ? undefined : initialPreviewActionForWorkflow(workflow);
+    if (action === undefined) {
+      return;
+    }
+    this.applyPickResult({ ok: true, uri: action.uri }, action.readyKey, action.inputKind, false);
+    this.runWorkflow();
   }
 
   private runPrimaryAction(): void {
@@ -2966,6 +2990,143 @@ struct FeatureRuntimePage {
   }
 
   @Builder
+  poseNetStillPoseLine(line: PoseLine) {
+    Column() {
+    }
+    .width(this.percentLength(this.poseLineStyle(line).length))
+    .height(3)
+    .borderRadius(2)
+    .backgroundColor('#00FF00')
+    .position({
+      x: this.percentLength(this.poseLineStyle(line).startX),
+      y: this.percentLength(this.poseLineStyle(line).startY)
+    })
+    .rotate({
+      x: 0,
+      y: 0,
+      z: 1,
+      angle: this.poseLineStyle(line).angle,
+      centerX: 0,
+      centerY: 1.5
+    })
+  }
+
+  @Builder
+  poseNetStillPosePoint(point: PosePoint) {
+    Column() {
+    }
+    .width(8)
+    .height(8)
+    .borderRadius(4)
+    .backgroundColor('#FF0000')
+    .position({
+      x: this.percentLength(this.posePointStyle(point).x),
+      y: this.percentLength(this.posePointStyle(point).y)
+    })
+  }
+
+  @Builder
+  poseNetStillAndroidPreview() {
+    Stack({ alignContent: Alignment.TopStart }) {
+      if (this.poseImageUri.length > 0 && this.posePoints.length > 0) {
+        Stack({ alignContent: Alignment.TopStart }) {
+          Image(this.poseImageUri)
+            .orientation(this.poseImageOrientation)
+            .width('100%')
+            .height('100%')
+            .objectFit(ImageFit.Fill)
+          ForEach(this.poseLines(), (line: PoseLine) => {
+            this.poseNetStillPoseLine(line)
+          }, (line: PoseLine) => `${line.start.type}-${line.end.type}-${line.start.x}-${line.start.y}`)
+          ForEach(this.visiblePosePoints(), (point: PosePoint) => {
+            this.poseNetStillPosePoint(point)
+          }, (point: PosePoint) => `${point.type}-${point.x}-${point.y}-${point.score}`)
+        }
+        .width('100%')
+        .aspectRatio(this.poseAspectRatio())
+        .clip(true)
+      } else if (this.imageInputUri.length > 0) {
+        Image(this.imageInputUri)
+          .width('100%')
+          .objectFit(ImageFit.Contain)
+      }
+    }
+    .width('100%')
+    .layoutWeight(9)
+    .clip(true)
+    .backgroundColor('#E6E6E6')
+  }
+
+  @Builder
+  poseNetStillAndroidLayout() {
+    Stack({ alignContent: Alignment.TopStart }) {
+      Column() {
+        this.runtimeActionToolbar(false)
+        Row() {
+        }
+        .width('100%')
+        .height(1)
+        .backgroundColor('#E4E4E4')
+        this.poseNetStillAndroidPreview()
+        Row() {
+          Button(appString('feature_input_photo_android'), { type: ButtonType.Normal })
+            .layoutWeight(1)
+            .height(37)
+            .margin({ left: 20, right: 5 })
+            .fontSize(14)
+            .fontWeight(FontWeight.Normal)
+            .fontColor('#666666')
+            .backgroundColor('#F4F3F8')
+            .borderRadius(5)
+            .onClick(() => this.prepareInput('photo'))
+          Button(appString('feature_input_camera_android'), { type: ButtonType.Normal })
+            .layoutWeight(1)
+            .height(37)
+            .margin({ left: 5, right: 5 })
+            .fontSize(14)
+            .fontWeight(FontWeight.Normal)
+            .fontColor('#666666')
+            .backgroundColor('#F4F3F8')
+            .borderRadius(5)
+            .onClick(() => this.prepareInput('camera'))
+          Button(appString('feature_runtime_go_live_android_hms'), { type: ButtonType.Normal })
+            .layoutWeight(1)
+            .height(37)
+            .margin({ left: 5, right: 5 })
+            .fontSize(14)
+            .fontWeight(FontWeight.Normal)
+            .fontColor('#666666')
+            .backgroundColor('#F4F3F8')
+            .borderRadius(5)
+            .onClick(() => this.openLinkedLiveRoute())
+          Button(appString('feature_runtime_pose_detect_android'), { type: ButtonType.Normal })
+            .layoutWeight(1)
+            .height(37)
+            .margin({ left: 5, right: 5 })
+            .fontSize(14)
+            .fontWeight(FontWeight.Normal)
+            .fontColor('#666666')
+            .backgroundColor('#F4F3F8')
+            .borderRadius(5)
+            .enabled(this.runActionEnabled())
+            .onClick(() => this.runPoseNetSampleDetection())
+        }
+        .width('100%')
+        .layoutWeight(1)
+        .margin({ top: 14 })
+        .alignItems(VerticalAlign.Center)
+      }
+      .width('100%')
+      .height('100%')
+      .backgroundColor(Color.White)
+      this.runtimePermissionRecoveryOverlay()
+    }
+    .width('100%')
+    .height('100%')
+    .backgroundColor(Color.White)
+  }
+
+  @Builder
   gestureStillAndroidPreview() {
     Stack({ alignContent: Alignment.Center }) {
       if (this.gestureImageUri.length > 0 && this.visibleGestureDetections().length > 0) {
@@ -3271,6 +3432,8 @@ struct FeatureRuntimePage {
       this.textTranslationAndroidLayout()
     } else if (usesAndroidTextRecognitionLayout(workflowForRoute(this.routeName))) {
       this.textRecognitionAndroidLayout()
+    } else if (usesAndroidPoseNetStillLayout(workflowForRoute(this.routeName))) {
+      this.poseNetStillAndroidLayout()
     } else if (usesAndroidGestureStillLayout(workflowForRoute(this.routeName))) {
       this.gestureStillAndroidLayout()
     } else if (usesAndroidPortraitSegmentationLayout(workflowForRoute(this.routeName))) {
