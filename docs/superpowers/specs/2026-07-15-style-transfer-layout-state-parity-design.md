@@ -61,13 +61,22 @@ Add these pure catalog policies:
 - `shouldResetStyleTransferPageAfterModelCacheResult(workflow, inputKind,
   resultOk)` is true only for successful Style Transfer predict/transfer model
   cache results.
+- Style Transfer content, camera, and style-image inputs preserve the last
+  styled `PixelMap` after a successful pick. Content and camera picks switch
+  the visible preview to the new original; a style-image pick leaves the
+  currently visible preview in place until the new run succeeds.
+- Style Transfer does not clear its visual result at run start, on a failed AI
+  result, or on a thrown run. The existing portrait-segmentation preservation
+  behavior remains unchanged.
 
 All sibling routes, other input kinds, successful inference, and failed model
 cache work remain negative.
 
 ## Dedicated Page
 
-The page is a full-height white `Column`:
+The page is a full-height white `Stack` containing the Android-shaped `Column`
+and the existing `runtimePermissionRecoveryOverlay`, so permission denial does
+not lose its recovery path when the generic Permissions card is absent:
 
 1. Reuse the existing 56vp Android action toolbar with Back, localized title,
    Help, and More, followed by a 1vp divider.
@@ -83,45 +92,62 @@ The page is a full-height white `Column`:
 4. Render a second 37vp row for Select Predict Model and Select Transfer Model.
 5. Render the existing localized Choose a Style title and existing 19+1 grid
    in four columns with Android-equivalent 20vp outer margins and 10vp gaps.
+   The grid consumes the remaining height and scrolls vertically, so all five
+   rows remain reachable on short screens.
 
 All input and style-selection actions are disabled or rejected by the existing
-non-live runtime guard while a transfer is running. The dedicated builder
-contains no generic summary, Inputs, Permissions, status/result row, debug,
-file-preview, separate styled-result, or generic Run cards.
+non-live runtime guard while a transfer is running. Recovery and the secure
+SaveButton are also visibly disabled and defensively rejected in their
+handlers while `workflowRunning`; this covers programmatic or delayed clicks,
+not only the rendered control state. The dedicated builder contains no generic
+summary, Inputs, Permissions, status/result row, debug, file-preview, separate
+styled-result, or generic Run cards.
 
 ## State And Error Flow
 
-- Content selection updates the original preview without auto-running.
+- Content selection updates the original preview without auto-running and
+  retains the previous styled `PixelMap` as the Save target, matching
+  Android's separate `originBitmap` and `resultBitmap` fields.
 - Built-in or custom style selection retains the existing content-required
-  guard and automatically starts the existing Style Transfer pipeline.
+  guard and automatically starts the existing Style Transfer pipeline. The
+  visible preview remains stable while that asynchronous run is pending.
 - Successful inference displays the styled `PixelMap`; Recovery displays the
   original again without destroying the last styled `PixelMap`, so Save still
   saves the last generated result like Android's separate `originBitmap` and
   `resultBitmap`.
 - Failed results and thrown runs show the existing localized Style Transfer
-  failure Toast because the generic status card is no longer visible.
+  failure Toast because the generic status card is no longer visible. Neither
+  path clears the visible preview or the last styled Save target: after a new
+  content pick this leaves the new original visible, while after a new style
+  pick it leaves whichever original or styled preview was already visible.
 - Recovery without an original image shows the existing original-required
-  Toast.
+  Toast. Recovery is a no-op while a transfer is running.
 - Save invokes the current `ResultImageSaveService` and surfaces its existing
-  missing/success/failure message as a Toast. A denied secure SaveButton click
-  maps to the existing save-failed message.
+  missing/success/failure message as a Toast through a Style-Transfer-only
+  wrapper; the shared segmentation save path gains no Toast. A denied secure
+  SaveButton click immediately maps to the existing save-failed Toast. Save is
+  a no-op while a transfer is running.
 - Predict/transfer model cache results show their existing slot-specific
   success/failure Toast.
 - After a successful compatible model is atomically published and the stale
-  request check has passed, clear content/style/result preview state while
-  retaining both cached model paths and the invalidated inference session.
-  This matches Android's `recreate()` page reset. Cancelled, incompatible,
-  failed, undefined, or stale model work preserves the current page and last
-  stable cache.
+  request check has passed, retain both model URIs, discard the current
+  inference session, and reset `imageInputUri`, `contentImageUri`,
+  `styleImageUri`, selected-input summary, styled result, preview-recovery
+  flag, result rows, and status back to the workflow's initial value. This
+  matches Android's `recreate()` page reset. Cancelled, incompatible, failed,
+  undefined, or stale model work preserves the current page, session, visible
+  preview, Save target, and last stable cache.
 
 ## Verification
 
 - Hypium tests cover the exact Style Transfer selector, result Toast, model
-  cache Toast, and successful-reset policies with sibling-route and failed
-  result negatives.
+  cache Toast, successful-reset policy, original-preview switching, old-result
+  preservation, and run-start/failure preservation with sibling-route,
+  model-kind, and successful-result negatives.
 - A dependency-free PowerShell guard bounds the dedicated builder and critical
-  result/cache call sites, rejects generic cards, checks exact layout/order,
-  and verifies top-level build wiring.
+  result/cache/save/recovery call sites, rejects generic cards, checks exact
+  layout/order, full-page permission recovery, remaining-height scrolling,
+  running guards, route-scoped Toasts, and top-level build wiring.
 - Mutation fixtures prove comments, template raw text, quoted strings, wrong
   selectors, stale-gate decoys, and executable generic-card injections cannot
   make the guard pass.
@@ -129,4 +155,3 @@ file-preview, separate styled-result, or generic Run cards.
   model, Custom Model, Object Photo, and i18n tests remain green.
 - Fresh Hypium and unified acceptance must pass in the feature worktree and
   again on merged `master`; main and `ohosTest` HAP payloads remain verified.
-
