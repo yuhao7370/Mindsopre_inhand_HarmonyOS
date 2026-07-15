@@ -103,6 +103,13 @@ function Assert-GuardAcceptsInFreshProcess([string]$MainHapPath, [string]$OhosTe
 
 $mainEntries = @(
   'module.json',
+  'resources/rawfile/model/mobilenetv2.ms',
+  'resources/rawfile/model/resnet18-place365.ms',
+  'resources/rawfile/model/ssd.ms',
+  'resources/rawfile/model/style_predict_quant.ms',
+  'resources/rawfile/model/style_transfer_quant.ms',
+  'resources/rawfile/model/LICENSE-Apache-2.0.txt',
+  'resources/rawfile/model/NOTICE.md',
   'resources/rawfile/models/gesture/GestureDetector.ms',
   'resources/rawfile/models/gesture/manifest.json',
   'resources/rawfile/models/gesture/NOTICE.md',
@@ -170,6 +177,16 @@ try {
   $expectedModelPath = Join-Path $expectedRawfileRoot 'models/gesture/GestureDetector.ms'
   Assert-GuardRejects 'tampered model content' $tamperedModelHap $testHap `
     "payload differs from expected file: $tamperedModelEntry; expected source path: $expectedModelPath"
+
+  $tamperedAppModelHap = Join-Path $tempRoot 'tampered-app-model.hap'
+  $tamperedAppModelFiles = New-FileMap $mainEntries
+  $tamperedAppModelFiles['module.json'] = $mainModule
+  $tamperedAppModelEntry = 'resources/rawfile/model/ssd.ms'
+  $tamperedAppModelFiles[$tamperedAppModelEntry] = 'fixturf'
+  New-HapFixture $tamperedAppModelHap $tamperedAppModelFiles
+  $expectedAppModelPath = Join-Path $expectedRawfileRoot 'model/ssd.ms'
+  Assert-GuardRejects 'tampered app model content' $tamperedAppModelHap $testHap `
+    "payload differs from expected file: $tamperedAppModelEntry; expected source path: $expectedAppModelPath"
 
   $duplicateModelHap = Join-Path $tempRoot 'duplicate-model.hap'
   Copy-Item -LiteralPath $mainHap -Destination $duplicateModelHap

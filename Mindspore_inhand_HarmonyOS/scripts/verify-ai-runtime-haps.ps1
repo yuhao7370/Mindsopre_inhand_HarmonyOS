@@ -76,6 +76,13 @@ function Assert-HapPayloadHashes([string]$Path, [object[]]$Payloads) {
 }
 
 $resourceEntries = @(
+  'resources/rawfile/model/mobilenetv2.ms',
+  'resources/rawfile/model/resnet18-place365.ms',
+  'resources/rawfile/model/ssd.ms',
+  'resources/rawfile/model/style_predict_quant.ms',
+  'resources/rawfile/model/style_transfer_quant.ms',
+  'resources/rawfile/model/LICENSE-Apache-2.0.txt',
+  'resources/rawfile/model/NOTICE.md',
   'resources/rawfile/models/gesture/GestureDetector.ms',
   'resources/rawfile/models/gesture/manifest.json',
   'resources/rawfile/models/gesture/NOTICE.md',

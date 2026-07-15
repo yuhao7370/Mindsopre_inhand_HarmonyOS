@@ -154,4 +154,21 @@ foreach ($contract in $contracts) {
 $build = Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot 'build-hap.ps1')
 Assert-Contains $build "& (Join-Path `$PSScriptRoot 'check-core-model-assets.ps1')" 'build-hap.ps1 must execute the core model asset guard.'
 
+$hapVerifier = Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot 'verify-ai-runtime-haps.ps1')
+$hapFixture = Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot 'test-verify-ai-runtime-haps.ps1')
+foreach ($entry in @(
+  'resources/rawfile/model/mobilenetv2.ms',
+  'resources/rawfile/model/resnet18-place365.ms',
+  'resources/rawfile/model/ssd.ms',
+  'resources/rawfile/model/style_predict_quant.ms',
+  'resources/rawfile/model/style_transfer_quant.ms',
+  'resources/rawfile/model/LICENSE-Apache-2.0.txt',
+  'resources/rawfile/model/NOTICE.md'
+)) {
+  Assert-Contains $hapVerifier "'$entry'" "main HAP verifier is missing $entry."
+  Assert-Contains $hapFixture "'$entry'" "HAP fixture is missing $entry."
+}
+Assert-Contains $hapVerifier 'Assert-HapPayloadHashes $MainHapPath $payloads' 'main HAP must reuse exact payload hash verification.'
+Assert-Contains $hapFixture "`$tamperedAppModelEntry = 'resources/rawfile/model/ssd.ms'" 'HAP fixture must reject a tampered core model.'
+
 Write-Host 'Core model asset guard passed.'
