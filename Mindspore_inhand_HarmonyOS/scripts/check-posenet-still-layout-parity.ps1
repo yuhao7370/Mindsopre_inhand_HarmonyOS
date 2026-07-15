@@ -96,7 +96,7 @@ Assert-Contains $detect 'this.runWorkflow();' 'Detect must run the existing pose
 $runtimeFailure = Get-TextSection $page '  private applyRuntimeFailure(): void {' "`n`n  private async prepareLiveFrameImageInput" 'runtime failure Toast call site'
 Assert-Contains $runtimeFailure 'this.showPoseNetStillToastIfNeeded(false);' 'runtime exceptions must show the PoseNet failure Toast.'
 
-$aiResult = Get-TextSection $page '  private applyAiResult(result: AiRunResult, runtimeRequestId: number): void {' "`n`n  private showGestureStillFailureToastIfNeeded" 'AI result Toast call site'
+$aiResult = Get-TextSection $page '  private async applyAiResult(result: AiRunResult, runtimeRequestId: number): Promise<void> {' "`n`n  private showGestureStillFailureToastIfNeeded" 'AI result Toast call site'
 Assert-Contains $aiResult 'this.showPoseNetStillToastIfNeeded(result.ok);' 'current PoseNet results must show success or failure Toast.'
 
 $toast = Get-TextSection $page '  private showPoseNetStillToastIfNeeded' "`n`n  private clearRuntimeResultState" 'PoseNet Toast helper'

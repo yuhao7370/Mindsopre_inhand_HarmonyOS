@@ -413,7 +413,7 @@ Assert-Contains $runAsync "'' : permission.requested.join(', ')" 'Custom Model p
 $runtimeFailure = Get-TextSection $page '  private applyRuntimeFailure(): void {' "`n`n  private async prepareLiveFrameImageInput" 'runtime failure handling'
 Assert-Contains $runtimeFailure "this.customModelTerminalFailureText()" 'runtime exceptions must store the localized terminal failure output.'
 
-$aiResult = Get-TextSection $page '  private applyAiResult(result: AiRunResult, runtimeRequestId: number): void {' "`n`n  private showGestureStillFailureToastIfNeeded" 'AI result handling'
+$aiResult = Get-TextSection $page '  private async applyAiResult(result: AiRunResult, runtimeRequestId: number): Promise<void> {' "`n`n  private showGestureStillFailureToastIfNeeded" 'AI result handling'
 Assert-Contains $aiResult 'result.ok ? result.detailText : this.customModelTerminalFailureText()' 'failed Custom Model results must store the localized terminal failure output.'
 
 $outputResolver = Get-TextSection $page '  private customModelOutputText(): ResourceStr {' "`n`n  private runCustomModelAndroidAction(): void" 'output resolver'

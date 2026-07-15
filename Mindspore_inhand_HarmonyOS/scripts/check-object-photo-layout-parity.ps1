@@ -205,7 +205,7 @@ $catalog = Remove-ArkTsCommentsAndTemplateRaw (Get-NormalizedText $catalogPath)
 $selector = Get-TextSection `
   $catalog `
   'export function usesAndroidObjectPhotoLayout' `
-  'export function objectPhotoResultToastKey' `
+  'export function usesAndroidStyleTransferLayout' `
   'Object Photo selector'
 Assert-CodeLine $selector 'return workflow?.routeName === AppRoute.OBJECT_PHOTO.name;' 'selector must target only Object Photo.'
 Assert-Count $selector 'AppRoute.' 1 'selector must contain exactly one route target.'
@@ -216,12 +216,12 @@ $pageWithLiterals = Remove-ArkTsCommentsAndTemplateRaw $pageSource $true
 $builder = Get-TextSection `
   $page `
   '  objectPhotoAndroidLayout() {' `
-  "`n`n  @Builder`n  customModelAndroidLayout()" `
+  "`n`n  @Builder`n  styleTransferAndroidLayout()" `
   'dedicated Object Photo builder'
 $builderWithLiterals = Get-TextSection `
   $pageWithLiterals `
   '  objectPhotoAndroidLayout() {' `
-  "`n`n  @Builder`n  customModelAndroidLayout()" `
+  "`n`n  @Builder`n  styleTransferAndroidLayout()" `
   'dedicated Object Photo builder with literal values'
 
 foreach ($line in @(
@@ -292,7 +292,7 @@ Assert-Contains $builderWithLiterals ".width('100%')`n    .height('100%')`n    .
 
 $aiResult = Get-TextSection `
   $page `
-  '  private applyAiResult(result: AiRunResult, runtimeRequestId: number): void {' `
+  '  private async applyAiResult(result: AiRunResult, runtimeRequestId: number): Promise<void> {' `
   "`n`n  private showObjectPhotoFailureToastIfNeeded" `
   'AI result Object Photo Toast call site'
 Assert-CodeLine $aiResult 'this.showObjectPhotoFailureToastIfNeeded(result.ok);' 'failed AI results must reach the Object Photo Toast policy.'

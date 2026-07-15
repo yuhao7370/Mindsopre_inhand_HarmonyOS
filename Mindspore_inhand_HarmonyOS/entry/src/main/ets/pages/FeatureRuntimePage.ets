@@ -24,9 +24,11 @@ import {
   customModelOutputFallbackKey,
   objectPhotoFollowupInputKindAfterModelCacheSuccess,
   objectPhotoResultToastKey,
+  shouldResetStyleTransferPageAfterModelCacheResult,
   usesAndroidGestureStillLayout,
   usesAndroidCustomModelLayout,
   usesAndroidObjectPhotoLayout,
+  usesAndroidStyleTransferLayout,
   usesAndroidPoseNetStillLayout,
   usesAndroidPortraitSegmentationLayout,
   usesAndroidTextRecognitionLayout,
@@ -43,6 +45,7 @@ import {
   shouldPreserveRuntimeResultAfterInputReady,
   shouldRestoreCachedModelFileInputs,
   shouldPreserveRuntimeVisualResultOnAiResult,
+  shouldShowStyleOriginalAfterInputReady,
   runtimeSegmentationBackgroundImageUri,
   shouldStartWorkflowRun,
   shouldAllowRuntimeInputChange,
@@ -71,6 +74,8 @@ import {
   shouldUseLongTextInput,
   shouldUseLongTextResultRow,
   styleTransferRecoveryStatusKey,
+  styleTransferModelCacheToastKey,
+  styleTransferResultToastKey,
   styleTransferStyleReadyStatusKey,
   textInputPlaceholderKeyForWorkflow,
   workflowInitialStatusKey,
@@ -541,6 +546,7 @@ struct FeatureRuntimePage {
       this.statusKey = result.messageKey;
       this.applyPickedInputState(runtimePickedInputStateAfterModelCacheFailure(inputKind, this.pickedInputState()));
       this.showCustomModelCacheToastIfNeeded(result.messageKey);
+      this.showStyleTransferModelCacheToastIfNeeded(inputKind, result.messageKey);
       return;
     }
     this.runtimeAiServiceSession.invalidate();
@@ -549,6 +555,10 @@ struct FeatureRuntimePage {
       uri: result.uri
     }, result.messageKey, inputKind);
     this.showCustomModelCacheToastIfNeeded(result.messageKey);
+    this.showStyleTransferModelCacheToastIfNeeded(inputKind, result.messageKey);
+    if (shouldResetStyleTransferPageAfterModelCacheResult(workflow, inputKind, result.ok)) {
+      this.resetStyleTransferPageAfterModelCacheSuccess();
+    }
     const followupInputKind = objectPhotoFollowupInputKindAfterModelCacheSuccess(workflow, inputKind);
     if (followupInputKind !== undefined) {
       this.prepareInput(followupInputKind, true);
@@ -560,6 +570,28 @@ struct FeatureRuntimePage {
     if (toastKey !== undefined) {
       this.showRuntimeToast(toastKey);
     }
+  }
+
+  private showStyleTransferModelCacheToastIfNeeded(
+    inputKind: FeatureInputKind,
+    messageKey: AppStringKey
+  ): void {
+    const toastKey = styleTransferModelCacheToastKey(workflowForRoute(this.routeName), inputKind, messageKey);
+    if (toastKey !== undefined) {
+      this.showRuntimeToast(toastKey);
+    }
+  }
+
+  private resetStyleTransferPageAfterModelCacheSuccess(): void {
+    this.imageInputUri = '';
+    this.contentImageUri = '';
+    this.styleImageUri = '';
+    this.selectedInputSummary = '';
+    this.styledImagePixelMap = clearRuntimePixelMapState(this.styledImagePixelMapOwner);
+    this.styleOriginalPreviewRecovered = false;
+    this.resultRows = [];
+    this.resultText = '';
+    this.statusKey = workflowInitialStatusKey(workflowForRoute(this.routeName));
   }
 
   private isLiveCameraInput(inputKind: FeatureInputKind): boolean {
@@ -810,6 +842,10 @@ struct FeatureRuntimePage {
       return;
     }
     this.pendingPickTextInputVisible = undefined;
+    if (usesAndroidStyleTransferLayout(workflow) && (inputKind === 'contentImage' ||
+      inputKind === 'camera' || inputKind === 'styleImage')) {
+      this.styledImagePixelMapOwner.invalidatePendingReplacement();
+    }
     if (!shouldPreserveRuntimeResultAfterInputReady(workflow, inputKind)) {
       this.clearRuntimeResultState();
     }
@@ -825,12 +861,19 @@ struct FeatureRuntimePage {
       this.styleTransferModelInputUri = result.uri;
     } else if (inputKind === 'contentImage') {
       this.contentImageUri = result.uri;
+      this.imageInputUri = '';
+    } else if (inputKind === 'camera' && usesAndroidStyleTransferLayout(workflow)) {
+      this.contentImageUri = result.uri;
+      this.imageInputUri = '';
     } else if (inputKind === 'styleImage') {
       this.styleImageUri = result.uri;
     } else if (inputKind === 'backgroundImage') {
       this.applyPortraitBackgroundUri(result.uri, portraitSegmentationCustomBackgroundId);
     } else {
       this.imageInputUri = result.uri;
+    }
+    if (shouldShowStyleOriginalAfterInputReady(workflow, inputKind)) {
+      this.styleOriginalPreviewRecovered = true;
     }
     if (workflow && shouldRunReadyWorkflow) {
       const inputReadyAction = workflowInputReadyAction(workflow, inputKind, this.userText);
@@ -1038,7 +1081,9 @@ struct FeatureRuntimePage {
         this.resultText = usesAndroidCustomModelLayout(workflow) ?
           '' : permission.requested.join(', ');
         this.resultRows = [];
-        this.clearVisualResults();
+        if (!usesAndroidStyleTransferLayout(workflow)) {
+          this.clearVisualResults();
+        }
         return;
       }
       const frameInputReady = await this.prepareLiveFrameImageInput(context, runtimeRequestId, liveGeneration);
@@ -1058,7 +1103,7 @@ struct FeatureRuntimePage {
       if (!this.isRuntimeRequestCurrent(runtimeRequestId, liveGeneration)) {
         return;
       }
-      this.applyAiResult(result, runtimeRequestId);
+      await this.applyAiResult(result, runtimeRequestId);
     } catch (_) {
       if (this.isRuntimeRequestCurrent(runtimeRequestId, liveGeneration)) {
         this.applyRuntimeFailure();
@@ -1071,7 +1116,10 @@ struct FeatureRuntimePage {
     this.statusKey = 'feature_runtime_run_failed';
     this.resultText = usesAndroidCustomModelLayout(workflow) ? this.customModelTerminalFailureText() : '';
     this.resultRows = [];
-    this.clearVisualResults();
+    if (!shouldPreserveRuntimeVisualResultOnAiResult(workflow, false, '')) {
+      this.clearVisualResults();
+    }
+    this.showStyleTransferFailureToastIfNeeded(false);
     this.showGestureStillFailureToastIfNeeded(false, this.statusKey);
     this.showPoseNetStillToastIfNeeded(false);
   }
@@ -1118,7 +1166,7 @@ struct FeatureRuntimePage {
     return true;
   }
 
-  private applyAiResult(result: AiRunResult, runtimeRequestId: number): void {
+  private async applyAiResult(result: AiRunResult, runtimeRequestId: number): Promise<void> {
     const workflow = workflowForRoute(this.routeName);
     this.statusKey = result.messageKey;
     this.resultText = usesAndroidCustomModelLayout(workflow) ?
@@ -1133,7 +1181,8 @@ struct FeatureRuntimePage {
     this.updatePosePreview(result);
     this.updateGesturePreview(result);
     this.updateSceneOverlay(result);
-    this.updateStyledImagePreview(result, runtimeRequestId);
+    await this.updateStyledImagePreview(result, runtimeRequestId);
+    this.showStyleTransferFailureToastIfNeeded(result.ok);
     this.showObjectPhotoFailureToastIfNeeded(result.ok);
     this.showGestureStillFailureToastIfNeeded(result.ok, result.messageKey);
     this.showPoseNetStillToastIfNeeded(result.ok);
@@ -1141,6 +1190,13 @@ struct FeatureRuntimePage {
 
   private showObjectPhotoFailureToastIfNeeded(resultOk: boolean): void {
     const toastKey = objectPhotoResultToastKey(workflowForRoute(this.routeName), resultOk);
+    if (toastKey !== undefined) {
+      this.showRuntimeToast(toastKey);
+    }
+  }
+
+  private showStyleTransferFailureToastIfNeeded(resultOk: boolean): void {
+    const toastKey = styleTransferResultToastKey(workflowForRoute(this.routeName), resultOk);
     if (toastKey !== undefined) {
       this.showRuntimeToast(toastKey);
     }
@@ -1372,9 +1428,12 @@ struct FeatureRuntimePage {
     return height;
   }
 
-  private updateStyledImagePreview(result: AiRunResult, runtimeRequestId: number): void {
+  private async updateStyledImagePreview(result: AiRunResult, runtimeRequestId: number): Promise<void> {
     const data = result.data;
     if (data === undefined || data.kind !== 'styleTransfer') {
+      return;
+    }
+    if (!result.ok) {
       return;
     }
 
@@ -1382,12 +1441,17 @@ struct FeatureRuntimePage {
     const width = data.result.outputImageWidth ?? 0;
     const height = data.result.outputImageHeight ?? 0;
     if (rgba === undefined || rgba.byteLength === 0 || width <= 0 || height <= 0) {
+      this.styledImagePixelMapOwner.invalidatePendingReplacement();
+      this.statusKey = 'feature_runtime_style_transfer_failed';
+      this.showStyleTransferFailureToastIfNeeded(false);
       return;
     }
 
     const requestId = this.styledImagePixelMapOwner.beginReplacement();
-    styleTransferPixelMapFromRgbaOutput(rgba, width, height).then((pixelMap: image.PixelMap) => {
+    try {
+      const pixelMap = await styleTransferPixelMapFromRgbaOutput(rgba, width, height);
       if (!this.runtimeRequestGeneration.isCurrent(runtimeRequestId)) {
+        this.styledImagePixelMapOwner.invalidatePendingReplacement();
         this.styledImagePixelMapOwner.accept(requestId, pixelMap);
         return;
       }
@@ -1395,14 +1459,14 @@ struct FeatureRuntimePage {
         this.styledImagePixelMap = pixelMap;
         this.styleOriginalPreviewRecovered = false;
       }
-    }).catch(() => {
+    } catch (_) {
       if (this.runtimeRequestGeneration.isCurrent(runtimeRequestId) &&
         this.styledImagePixelMapOwner.isCurrent(requestId)) {
-        this.styledImagePixelMapOwner.clear();
-        this.styledImagePixelMap = undefined;
-        this.styleOriginalPreviewRecovered = false;
+        this.styledImagePixelMapOwner.invalidatePendingReplacement();
+        this.statusKey = 'feature_runtime_style_transfer_failed';
+        this.showStyleTransferFailureToastIfNeeded(false);
       }
-    });
+    }
   }
 
   private openHelpPage(): void {
@@ -1619,6 +1683,7 @@ struct FeatureRuntimePage {
       this.statusKey = 'feature_runtime_status_running';
       return;
     }
+    this.styledImagePixelMapOwner.invalidatePendingReplacement();
     this.styleImageUri = builtInStyleTransferUri(style);
     this.selectedInputSummary = style.rawfilePath;
     this.statusKey = workflow ?
@@ -1639,8 +1704,12 @@ struct FeatureRuntimePage {
   }
 
   private recoverStyleOriginalPreview(): void {
+    if (this.workflowRunning) {
+      return;
+    }
     if (!this.styleTransferContentInputReady()) {
       this.statusKey = styleTransferRecoveryStatusKey(false);
+      this.showRuntimeToast(this.statusKey);
       return;
     }
     this.styleOriginalPreviewRecovered = true;
@@ -1712,6 +1781,24 @@ struct FeatureRuntimePage {
     });
   }
 
+  private saveStyleTransferResultImage(): void {
+    if (this.workflowRunning) {
+      return;
+    }
+    this.saveStyleTransferResultImageAsync().catch(() => {
+      this.statusKey = 'feature_runtime_save_image_failed';
+      this.showRuntimeToast(this.statusKey);
+    });
+  }
+
+  private async saveStyleTransferResultImageAsync(): Promise<void> {
+    if (this.workflowRunning) {
+      return;
+    }
+    await this.saveResultPixelMapAsync(this.styledImagePixelMap);
+    this.showRuntimeToast(this.statusKey);
+  }
+
   private async saveResultComponentImageAsync(componentId: string): Promise<void> {
     const pixelMap = await componentSnapshot.get(componentId, { waitUntilRenderFinished: true });
     await withCallerOwnedPixelMap(pixelMap, async (snapshot: image.PixelMap | undefined): Promise<void> => {
@@ -1777,13 +1864,16 @@ struct FeatureRuntimePage {
         }
       }
       .columnsTemplate('1fr 1fr 1fr 1fr')
-      .columnsGap(AppSpacing.sm)
-      .rowsGap(AppSpacing.sm)
+      .columnsGap(10)
+      .rowsGap(10)
       .width('100%')
+      .layoutWeight(1)
+      .scrollBar(BarState.Auto)
       .margin({ top: AppSpacing.sm })
     }
     .width('100%')
-    .margin({ top: AppSpacing.md })
+    .layoutWeight(1)
+    .margin({ left: 20, right: 20, top: 10 })
   }
 
   @Builder
@@ -1800,6 +1890,7 @@ struct FeatureRuntimePage {
       radius: AppRadius.card
     })
     .clip(true)
+    .enabled(!this.workflowRunning)
     .onClick(() => this.selectBuiltInStyle(style))
   }
 
@@ -1835,6 +1926,7 @@ struct FeatureRuntimePage {
     })
     .backgroundColor('#F7F8FA')
     .clip(true)
+    .enabled(!this.workflowRunning)
     .onClick(() => this.prepareInput('styleImage'))
   }
 
@@ -3129,6 +3221,150 @@ struct FeatureRuntimePage {
   }
 
   @Builder
+  styleTransferAndroidLayout() {
+    Stack({ alignContent: Alignment.TopStart }) {
+      Column() {
+        this.runtimeActionToolbar(true)
+        Row() {
+        }
+        .width('100%')
+        .height(1)
+        .backgroundColor('#E4E4E4')
+        Stack({ alignContent: Alignment.Center }) {
+          if (this.styledImagePixelMap !== undefined && !this.styleOriginalPreviewRecovered) {
+            Image(this.styledImagePixelMap)
+              .width(256)
+              .height(256)
+              .objectFit(ImageFit.Contain)
+          } else if (this.styleTransferContentInputReady()) {
+            Image(this.contentImageUri.length > 0 ? this.contentImageUri : this.imageInputUri)
+              .width(256)
+              .height(256)
+              .objectFit(ImageFit.Contain)
+          } else {
+            Column() {
+              Image($r('app.media.icon_default'))
+                .width(64)
+                .height(64)
+                .objectFit(ImageFit.Contain)
+              Text(appString('feature_runtime_style_choose_image'))
+                .fontSize(14)
+                .fontColor('#666666')
+                .margin({ top: 8 })
+            }
+            .alignItems(HorizontalAlign.Center)
+          }
+          if (this.workflowRunning) {
+            LoadingProgress()
+              .width(80)
+              .height(80)
+          }
+        }
+        .width('100%')
+        .height(265)
+        .backgroundColor('#F4F3F8')
+        Row() {
+          Button(appString('feature_runtime_style_album'), { type: ButtonType.Normal })
+            .layoutWeight(1)
+            .height(37)
+            .margin({ left: 20, right: 5 })
+            .fontSize(14)
+            .fontWeight(FontWeight.Normal)
+            .fontColor('#666666')
+            .backgroundColor('#F4F3F8')
+            .borderRadius(5)
+            .enabled(!this.workflowRunning)
+            .onClick(() => this.prepareInput('contentImage'))
+          Button(appString(workflowInputLabelKey(workflowForRoute(this.routeName), 'camera')), { type: ButtonType.Normal })
+            .layoutWeight(1)
+            .height(37)
+            .margin({ left: 5, right: 5 })
+            .fontSize(14)
+            .fontWeight(FontWeight.Normal)
+            .fontColor('#666666')
+            .backgroundColor('#F4F3F8')
+            .borderRadius(5)
+            .enabled(!this.workflowRunning)
+            .onClick(() => this.prepareInput('camera'))
+          Button(appString('feature_runtime_style_recovery'), { type: ButtonType.Normal })
+            .layoutWeight(1)
+            .height(37)
+            .margin({ left: 5, right: 5 })
+            .fontSize(14)
+            .fontWeight(FontWeight.Normal)
+            .fontColor('#666666')
+            .backgroundColor('#F4F3F8')
+            .borderRadius(5)
+            .enabled(!this.workflowRunning)
+            .onClick(() => this.recoverStyleOriginalPreview())
+          Column() {
+            SaveButton({
+              icon: SaveIconStyle.FULL_FILLED,
+              text: SaveDescription.SAVE_IMAGE,
+              buttonType: ButtonType.Capsule
+            })
+              .width('100%')
+              .height(37)
+              .fontSize(14)
+              .fontColor('#666666')
+              .backgroundColor('#F4F3F8')
+              .enabled(!this.workflowRunning)
+              .onClick((_event: ClickEvent, result: SaveButtonOnClickResult) => {
+                if (result === SaveButtonOnClickResult.SUCCESS) {
+                  this.saveStyleTransferResultImage()
+                  return;
+                }
+                this.statusKey = 'feature_runtime_save_image_failed';
+                this.showRuntimeToast(this.statusKey);
+              })
+          }
+          .layoutWeight(1)
+          .height(37)
+          .margin({ left: 5, right: 20 })
+        }
+        .width('100%')
+        .height(37)
+        .margin({ top: 14 })
+        Row() {
+          Button(appString(workflowInputLabelKey(workflowForRoute(this.routeName), 'stylePredictModelFile')), { type: ButtonType.Normal })
+            .layoutWeight(1)
+            .height(37)
+            .margin({ left: 20, right: 5 })
+            .fontSize(14)
+            .fontWeight(FontWeight.Normal)
+            .fontColor('#666666')
+            .backgroundColor('#F4F3F8')
+            .borderRadius(5)
+            .enabled(!this.workflowRunning)
+            .onClick(() => this.prepareInput('stylePredictModelFile'))
+          Button(appString(workflowInputLabelKey(workflowForRoute(this.routeName), 'styleTransferModelFile')), { type: ButtonType.Normal })
+            .layoutWeight(1)
+            .height(37)
+            .margin({ left: 5, right: 20 })
+            .fontSize(14)
+            .fontWeight(FontWeight.Normal)
+            .fontColor('#666666')
+            .backgroundColor('#F4F3F8')
+            .borderRadius(5)
+            .enabled(!this.workflowRunning)
+            .onClick(() => this.prepareInput('styleTransferModelFile'))
+        }
+        .width('100%')
+        .height(37)
+        .margin({ top: 8 })
+        this.styleTransferStyleGrid()
+      }
+      .width('100%')
+      .height('100%')
+      .backgroundColor(Color.White)
+      this.runtimePermissionRecoveryOverlay()
+    }
+    .width('100%')
+    .height('100%')
+    .backgroundColor(Color.White)
+  }
+
+  @Builder
   customModelAndroidLayout() {
     Stack({ alignContent: Alignment.TopStart }) {
       Column() {
@@ -3686,6 +3922,8 @@ struct FeatureRuntimePage {
       this.gestureStillAndroidLayout()
     } else if (usesAndroidObjectPhotoLayout(workflowForRoute(this.routeName))) {
       this.objectPhotoAndroidLayout()
+    } else if (usesAndroidStyleTransferLayout(workflowForRoute(this.routeName))) {
+      this.styleTransferAndroidLayout()
     } else if (usesAndroidCustomModelLayout(workflowForRoute(this.routeName))) {
       this.customModelAndroidLayout()
     } else if (usesAndroidPortraitSegmentationLayout(workflowForRoute(this.routeName))) {

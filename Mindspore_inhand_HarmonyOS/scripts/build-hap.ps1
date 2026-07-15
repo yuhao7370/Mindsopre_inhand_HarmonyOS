@@ -10,6 +10,8 @@ $env:PATH = 'C:\Program Files\Huawei\DevEco Studio\jbr\bin;' + $env:PATH
 & (Join-Path $PSScriptRoot 'check-posenet-still-layout-parity.ps1')
 & (Join-Path $PSScriptRoot 'check-object-photo-layout-parity.ps1')
 & (Join-Path $PSScriptRoot 'test-object-photo-layout-parity-guard.ps1')
+& (Join-Path $PSScriptRoot 'check-style-transfer-layout-parity.ps1')
+& (Join-Path $PSScriptRoot 'test-style-transfer-layout-parity-guard.ps1')
 & (Join-Path $PSScriptRoot 'check-custom-model-layout-parity.ps1')
 & (Join-Path $PSScriptRoot 'test-feature-runtime-view-ids.ps1')
 & (Join-Path $PSScriptRoot 'check-feature-runtime-view-ids.ps1')

@@ -365,7 +365,8 @@ Current HarmonyOS behavior:
   but no longer renders those fields directly in normal UI.
 - Selected images and models remain visible through preview rows that show
   user-facing labels and file names, instead of raw picker paths or surface ids.
-- The three routes that still use the generic runtime fallback show only
+- The two routes that still use the generic runtime fallback (still image
+  segmentation and still scene detection) show only
   localized status, structured result rows, and workflow visuals. Raw
   `detailText` remains internal `resultText` state and is not rendered.
 - Custom Model still exposes its first 10 output values through the existing
@@ -572,8 +573,10 @@ the preview to the original content image after a styled result is shown.
 
 Current HarmonyOS behavior:
 
-- The shared runtime exposes the Android top-input order: Album, Camera, then
-  the optional predict and transfer `.ms` model selectors.
+- The route now uses Android's dedicated Back/Help/More toolbar, divider,
+  fixed gray preview, Album/Camera/Recovery/secure-Save row, predict/transfer
+  model row, and four-column scrollable style grid instead of generic runtime
+  cards.
 - The `styleImage` runtime capability remains intact for preset/custom
   selection, but it is not rendered as a duplicate top action. The final
   custom-style add tile is the sole custom style-image picker action.
@@ -603,6 +606,10 @@ Current HarmonyOS behavior:
   specific load feedback (`loaded predict`, `failed predict`, `loaded
   transfer`, `failed transfer`) instead of the shared generic model-ready or
   incompatible messages used by other model-based routes.
+- A successful compatible model replacement retains both model slots, drops
+  the active inference session, and resets the page like Android `recreate()`;
+  cancelled, failed, incompatible, undefined, or stale cache work preserves
+  the current page and last stable models.
 - HarmonyOS shows the localized Recovery control whenever the Style Transfer
   page is open, matching Android's always-visible button. If no original image
   has been selected yet, the action reports the Android-style original-image
@@ -610,6 +617,10 @@ Current HarmonyOS behavior:
 - After a styled output is produced, Recovery switches the visible preview back
   to the original/content image while keeping the last styled result saveable,
   matching Android's `originBitmap`/`resultBitmap` split.
+- Failed runs and route-scoped Recovery/Save outcomes use localized Toasts now
+  that the generic status card is absent. Styled RGBA conversion is awaited so
+  a current result atomically replaces the previous owned `PixelMap`; stale or
+  failed conversion cannot erase the existing preview or Save target.
 - Android APK update/download-new-version behavior is intentionally not
   migrated.
 

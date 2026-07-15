@@ -103,7 +103,7 @@ Assert-Contains `
 
 $aiResult = Get-TextSection `
   $page `
-  '  private applyAiResult(result: AiRunResult, runtimeRequestId: number): void {' `
+  '  private async applyAiResult(result: AiRunResult, runtimeRequestId: number): Promise<void> {' `
   "`n`n  private showGestureStillFailureToastIfNeeded" `
   'AI result Toast call site'
 Assert-Contains `

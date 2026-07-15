@@ -96,6 +96,13 @@ function Assert-Count([string]$Text, [string]$Marker, [int]$Expected, [string]$M
   }
 }
 
+function Assert-CodeLineCount([string]$Text, [string]$Line, [int]$Expected, [string]$Message) {
+  $matches = [regex]::Matches($Text, "(?m)^[\t ]*$([regex]::Escape($Line))[\t ]*$")
+  if ($matches.Count -ne $Expected) {
+    throw "Style Transfer parity guard failed: $Message Expected $Expected, found $($matches.Count)."
+  }
+}
+
 function Get-CodeLineIndex([string]$Text, [string]$Line, [int]$StartAt = 0) {
   $pattern = "^[\t ]*$([regex]::Escape($Line))[\t ]*$"
   $match = [regex]::new($pattern, [Text.RegularExpressions.RegexOptions]::Multiline).Match($Text, $StartAt)
@@ -148,13 +155,13 @@ foreach ($line in @(
   '} else if (this.styleTransferContentInputReady()) {',
   "Image(this.contentImageUri.length > 0 ? this.contentImageUri : this.imageInputUri)",
   "Image(`$r('app.media.icon_default'))",
-  "Text(appString('feature_runtime_style_content_required'))",
+  "Text(appString('feature_runtime_style_choose_image'))",
   'if (this.workflowRunning) {',
   'LoadingProgress()',
   '.width(80)',
   '.height(80)',
   '.height(265)',
-  "Button(appString(workflowInputLabelKey(workflowForRoute(this.routeName), 'contentImage')), { type: ButtonType.Normal })",
+  "Button(appString('feature_runtime_style_album'), { type: ButtonType.Normal })",
   ".onClick(() => this.prepareInput('contentImage'))",
   "Button(appString(workflowInputLabelKey(workflowForRoute(this.routeName), 'camera')), { type: ButtonType.Normal })",
   ".onClick(() => this.prepareInput('camera'))",
@@ -189,20 +196,34 @@ $toolbarIndex = Get-CodeLineIndex $builder 'this.runtimeActionToolbar(true)'
 $previewIndex = Get-CodeLineIndex $builder 'Stack({ alignContent: Alignment.Center }) {' ($toolbarIndex + 1)
 $albumIndex = Get-CodeLineIndex $builder ".onClick(() => this.prepareInput('contentImage'))" ($previewIndex + 1)
 $cameraIndex = Get-CodeLineIndex $builder ".onClick(() => this.prepareInput('camera'))" ($albumIndex + 1)
-$recoveryIndex = Get-CodeLineIndex $builder '.onClick(() => this.recoverStyleOriginalPreview())' ($cameraIndex + 1)
+$recoveryButtonIndex = Get-CodeLineIndex $builder `
+  "Button(appString('feature_runtime_style_recovery'), { type: ButtonType.Normal })" ($cameraIndex + 1)
+$recoveryIndex = Get-CodeLineIndex $builder '.onClick(() => this.recoverStyleOriginalPreview())' ($recoveryButtonIndex + 1)
 $saveIndex = Get-CodeLineIndex $builder 'SaveButton({' ($recoveryIndex + 1)
-$predictIndex = Get-CodeLineIndex $builder ".onClick(() => this.prepareInput('stylePredictModelFile'))" ($saveIndex + 1)
+$predictButtonIndex = Get-CodeLineIndex $builder `
+  "Button(appString(workflowInputLabelKey(workflowForRoute(this.routeName), 'stylePredictModelFile')), { type: ButtonType.Normal })" `
+  ($saveIndex + 1)
+$predictIndex = Get-CodeLineIndex $builder ".onClick(() => this.prepareInput('stylePredictModelFile'))" ($predictButtonIndex + 1)
 $transferIndex = Get-CodeLineIndex $builder ".onClick(() => this.prepareInput('styleTransferModelFile'))" ($predictIndex + 1)
 $gridIndex = Get-CodeLineIndex $builder 'this.styleTransferStyleGrid()' ($transferIndex + 1)
 if ($toolbarIndex -lt 0 -or $previewIndex -le $toolbarIndex -or $albumIndex -le $previewIndex -or
-  $cameraIndex -le $albumIndex -or $recoveryIndex -le $cameraIndex -or $saveIndex -le $recoveryIndex -or
-  $predictIndex -le $saveIndex -or $transferIndex -le $predictIndex -or $gridIndex -le $transferIndex) {
+  $cameraIndex -le $albumIndex -or $recoveryButtonIndex -le $cameraIndex -or $recoveryIndex -le $recoveryButtonIndex -or
+  $saveIndex -le $recoveryIndex -or $predictButtonIndex -le $saveIndex -or
+  $predictIndex -le $predictButtonIndex -or $transferIndex -le $predictIndex -or $gridIndex -le $transferIndex) {
   throw 'Style Transfer parity guard failed: content order must match Android.'
 }
+$recoveryControl = $builder.Substring($recoveryButtonIndex, $saveIndex - $recoveryButtonIndex)
+$saveControl = $builder.Substring($saveIndex, $predictButtonIndex - $saveIndex)
+Assert-CodeLine $recoveryControl '.enabled(!this.workflowRunning)' `
+  'Recovery must render disabled while Style Transfer is running.'
+Assert-CodeLine $saveControl '.enabled(!this.workflowRunning)' `
+  'secure Save must render disabled while Style Transfer is running.'
+Assert-CodeLine $saveControl 'this.showRuntimeToast(this.statusKey);' `
+  'denied secure Save must immediately show failure Toast.'
 
 foreach ($marker in @(
   'this.summaryKey', 'feature_runtime_inputs_title', 'feature_runtime_permissions_title',
-  'workflowResultTitleKey(', 'this.resultRow(', 'this.statusKey)', 'this.resultText',
+  'workflowResultTitleKey(', 'this.resultRow(', 'Text(appString(this.statusKey))', 'this.resultText',
   'feature_runtime_debug', 'filePreview(', 'pixelMapPreview(', 'resultImageSaveControl(',
   'shouldShowPrimaryRunAction(', 'this.runPrimaryAction()'
 )) { Assert-Excludes $builder $marker 'dedicated builder contains generic UI' }
@@ -214,6 +235,12 @@ Assert-CodeLine $pick 'this.styledImagePixelMapOwner.invalidatePendingReplacemen
   'accepted Style Transfer picks must invalidate pending styled replacement.'
 Assert-CodeLine $pick 'if (shouldShowStyleOriginalAfterInputReady(workflow, inputKind)) {' `
   'content/camera picks must switch to original preview.'
+Assert-CodeLine $pick "} else if (inputKind === 'camera' && usesAndroidStyleTransferLayout(workflow)) {" `
+  'Style Transfer camera input must replace the effective content image.'
+Assert-CodeLineCount $pick 'this.contentImageUri = result.uri;' 2 `
+  'Album and Camera must each replace the effective Style Transfer content image.'
+Assert-CodeLineCount $pick "this.imageInputUri = '';" 2 `
+  'Album and Camera must clear the alternate primary-image slot.'
 
 $builtIn = Get-TextSection $page '  private selectBuiltInStyle(' `
   "`n`n  private shouldRunStyleTransferAfterStyleReady" 'built-in style selection'
@@ -273,6 +300,12 @@ foreach ($line in @(
   "this.statusKey = 'feature_runtime_style_transfer_failed';",
   'this.showStyleTransferFailureToastIfNeeded(false);'
 )) { Assert-CodeLine $styled $line "atomic styled replacement is missing: $line." }
+Assert-CodeLineCount $styled 'this.styledImagePixelMapOwner.invalidatePendingReplacement();' 3 `
+  'invalid, stale, and rejected conversions must each invalidate pending replacement.'
+Assert-CodeLineCount $styled 'this.showStyleTransferFailureToastIfNeeded(false);' 2 `
+  'invalid and rejected current conversions must each show one failure Toast.'
+Assert-CodeLineCount $styled "this.statusKey = 'feature_runtime_style_transfer_failed';" 2 `
+  'invalid and rejected current conversions must each map to the Style Transfer failure status.'
 Assert-Excludes $styled 'this.styledImagePixelMapOwner.clear();' `
   'conversion failure/success must not clear the previous styled owner before atomic acceptance'
 Assert-Excludes $styled 'this.styledImagePixelMap = undefined;' `
@@ -285,8 +318,10 @@ Assert-CodeLine $recovery 'this.showRuntimeToast(this.statusKey);' `
   'Recovery without an original must show a Toast.'
 
 $save = Get-TextSection $page '  private saveStyleTransferResultImage()' `
-  "`n`n  private saveResultComponentImage" 'Style Transfer Save wrapper'
+  "`n`n  private async saveResultComponentImageAsync" 'Style Transfer Save wrapper'
 Assert-CodeLine $save 'if (this.workflowRunning) {' 'Save must be handler-guarded while running.'
+Assert-CodeLineCount $save 'if (this.workflowRunning) {' 2 `
+  'both the Save click wrapper and async service path must reject while running.'
 Assert-CodeLine $save 'await this.saveResultPixelMapAsync(this.styledImagePixelMap);' `
   'Style Transfer Save must reuse the shared save service.'
 Assert-CodeLine $save 'this.showRuntimeToast(this.statusKey);' `
