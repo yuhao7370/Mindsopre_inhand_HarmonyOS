@@ -20,6 +20,11 @@ import {
   TextTranslationRunner
 } from './TextRecognitionService';
 import { mindSporeLiteCpuContext } from './MindSporeLiteModelRunner';
+import {
+  isTranslatableTranslationText,
+  prepareTranslationInput,
+  TranslationInputSegment
+} from './TranslationInputPolicy';
 
 export type TranslationGraphName = 'encoder' | 'decoder_prefill' | 'decoder_step';
 
@@ -108,16 +113,19 @@ export class MindSporeLiteTranslationRunner implements TextTranslationRunner {
     if (targetLanguage !== 'en' && targetLanguage !== 'zh') {
       return failedTranslation(text, targetLanguage);
     }
+    const segments = prepareTranslationInput(text);
+    if (segments.length === 0 || text.trim().length === 0) {
+      return failedTranslation(text, targetLanguage);
+    }
+    if (!hasTranslationModelSegment(segments)) {
+      return successfulTranslation(text, text, targetLanguage);
+    }
     try {
       // The production bundle loads and validates tokenizer_runtime.json. It must
       // be ready before the first call to encodeTranslationText().
       const bundle = await cachedTranslationBundle(this.bundleFactory);
-      const chunks = encodeTranslationText(text, targetLanguage);
-      if (chunks.length === 0) {
-        return failedTranslation(text, targetLanguage);
-      }
       return await bundle.requestQueue.runExclusive(async (): Promise<TextTranslationResult> => {
-        return await translateChunks(bundle, chunks, text, targetLanguage);
+        return await translateInputSegments(bundle, segments, text, targetLanguage);
       });
     } catch (_) {
       return failedTranslation(text, targetLanguage);
@@ -125,30 +133,71 @@ export class MindSporeLiteTranslationRunner implements TextTranslationRunner {
   }
 }
 
-async function translateChunks(
+async function translateInputSegments(
   bundle: TranslationModelBundle,
-  chunks: Array<TranslationChunk>,
+  segments: Array<TranslationInputSegment>,
   text: string,
   targetLanguage: string
 ): Promise<TextTranslationResult> {
   let translatedText = '';
-  for (let index = 0; index < chunks.length; index++) {
-    const decoded = await decodeChunk(bundle, chunks[index]);
-    if (decoded.length === 0) {
+  for (let index = 0; index < segments.length; index++) {
+    const segment = segments[index];
+    if (segment.kind === 'protected' || !isTranslatableTranslationText(segment.text)) {
+      translatedText += segment.text;
+      continue;
+    }
+    const chunks = encodeTranslationText(segment.text, targetLanguage);
+    if (chunks.length === 0) {
       return failedTranslation(text, targetLanguage);
     }
-    translatedText += chunks[index].separatorBefore + decoded + chunks[index].separatorAfter;
+    const translatedSegment = await translateChunksToText(bundle, chunks);
+    if (translatedSegment.length === 0) {
+      return failedTranslation(text, targetLanguage);
+    }
+    translatedText += translatedSegment;
   }
   if (translatedText.trim().length === 0) {
     return failedTranslation(text, targetLanguage);
   }
+  return successfulTranslation(text, translatedText, targetLanguage);
+}
+
+async function translateChunksToText(
+  bundle: TranslationModelBundle,
+  chunks: Array<TranslationChunk>
+): Promise<string> {
+  let translatedText = '';
+  for (let index = 0; index < chunks.length; index++) {
+    const decoded = await decodeChunk(bundle, chunks[index]);
+    if (decoded.length === 0) {
+      return '';
+    }
+    translatedText += chunks[index].separatorBefore + decoded + chunks[index].separatorAfter;
+  }
+  return translatedText;
+}
+
+function successfulTranslation(
+  sourceText: string,
+  translatedText: string,
+  targetLanguage: string
+): TextTranslationResult {
   return {
     ok: true,
-    sourceText: text,
+    sourceText: sourceText,
     translatedText: translatedText,
     targetLanguage: targetLanguage,
     runtimeSource: 'localModel'
   };
+}
+
+function hasTranslationModelSegment(segments: Array<TranslationInputSegment>): boolean {
+  for (let index = 0; index < segments.length; index++) {
+    if (segments[index].kind === 'model' && isTranslatableTranslationText(segments[index].text)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 export function productionTranslationModelBundleFactory(
