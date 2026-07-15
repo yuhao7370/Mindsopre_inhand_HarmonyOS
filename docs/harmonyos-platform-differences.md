@@ -365,7 +365,7 @@ Current HarmonyOS behavior:
   but no longer renders those fields directly in normal UI.
 - Selected images and models remain visible through preview rows that show
   user-facing labels and file names, instead of raw picker paths or surface ids.
-- The seven routes that still use the generic runtime fallback show only
+- The three routes that still use the generic runtime fallback show only
   localized status, structured result rows, and workflow visuals. Raw
   `detailText` remains internal `resultText` state and is not rendered.
 - Custom Model still exposes its first 10 output values through the existing
@@ -641,6 +641,14 @@ Current HarmonyOS behavior:
 - `/imageobject/ObjectPhotoActivity` follows the Android page flow: opening the
   route prepares the album image input once, and a selected image immediately
   runs object detection.
+- The Object Detection Photo route now uses its own full-height white page with
+  the Android 56vp toolbar, one centered image/box overlay surface, and the
+  blue `Select Model` action fixed 16vp from the bottom-right corner. Generic
+  summary, input, permission, status, result, debug, save, and Run cards are
+  not rendered on this route.
+- Failed still-image detection keeps the selected image visible and reports
+  the existing localized object-detection failure through a route-scoped
+  Toast; Object Camera and other workflows do not use this feedback path.
 - Because that initial album picker already supplies the photo, the Object
   Detection Photo page shows only `Select Model` as an input action, matching
   Android instead of exposing a redundant Photo action.
@@ -657,6 +665,14 @@ Current HarmonyOS behavior:
   the file into the app cache as `object_detection_model.ms` before runtime use,
   so the MindSpore Lite runner receives an app-owned path instead of depending
   on the picker URI lifetime.
+- After a compatible Object Photo model is published to that fixed cache slot,
+  HarmonyOS immediately opens the initial-semantics photo picker, matching the
+  Android activity recreation flow. Cancelled, incompatible, failed, or stale
+  model work neither starts this follow-up nor replaces the last valid cache.
+- The dedicated page continues to use the real bundled/cached SSD pipeline and
+  existing orientation-aware box geometry. Picker presentation, rendered box
+  alignment, Toast appearance, model accuracy, latency, and memory behavior
+  remain deferred to device validation.
 - Android APK update/download-new-version behavior is intentionally not
   migrated.
 

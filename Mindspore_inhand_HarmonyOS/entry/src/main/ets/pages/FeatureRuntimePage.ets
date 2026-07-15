@@ -22,8 +22,11 @@ import {
   customModelExecutePreflightToastKey,
   customModelModelCacheToastKey,
   customModelOutputFallbackKey,
+  objectPhotoFollowupInputKindAfterModelCacheSuccess,
+  objectPhotoResultToastKey,
   usesAndroidGestureStillLayout,
   usesAndroidCustomModelLayout,
+  usesAndroidObjectPhotoLayout,
   usesAndroidPoseNetStillLayout,
   usesAndroidPortraitSegmentationLayout,
   usesAndroidTextRecognitionLayout,
@@ -546,6 +549,10 @@ struct FeatureRuntimePage {
       uri: result.uri
     }, result.messageKey, inputKind);
     this.showCustomModelCacheToastIfNeeded(result.messageKey);
+    const followupInputKind = objectPhotoFollowupInputKindAfterModelCacheSuccess(workflow, inputKind);
+    if (followupInputKind !== undefined) {
+      this.prepareInput(followupInputKind, true);
+    }
   }
 
   private showCustomModelCacheToastIfNeeded(messageKey: AppStringKey): void {
@@ -1127,8 +1134,16 @@ struct FeatureRuntimePage {
     this.updateGesturePreview(result);
     this.updateSceneOverlay(result);
     this.updateStyledImagePreview(result, runtimeRequestId);
+    this.showObjectPhotoFailureToastIfNeeded(result.ok);
     this.showGestureStillFailureToastIfNeeded(result.ok, result.messageKey);
     this.showPoseNetStillToastIfNeeded(result.ok);
+  }
+
+  private showObjectPhotoFailureToastIfNeeded(resultOk: boolean): void {
+    const toastKey = objectPhotoResultToastKey(workflowForRoute(this.routeName), resultOk);
+    if (toastKey !== undefined) {
+      this.showRuntimeToast(toastKey);
+    }
   }
 
   private showGestureStillFailureToastIfNeeded(resultOk: boolean, messageKey: AppStringKey): void {
@@ -3065,6 +3080,55 @@ struct FeatureRuntimePage {
   }
 
   @Builder
+  objectPhotoAndroidLayout() {
+    Column() {
+      this.runtimeActionToolbar(true)
+      Stack({ alignContent: Alignment.Center }) {
+        if (this.objectDetectionImageUri.length > 0 && this.objectDetections.length > 0) {
+          Stack({ alignContent: Alignment.TopStart }) {
+            Image(this.objectDetectionImageUri)
+              .orientation(this.objectDetectionImageOrientation)
+              .width('100%')
+              .height('100%')
+              .objectFit(ImageFit.Fill)
+            ForEach(this.objectDetections, (detection: ObjectDetection, index: number) => {
+              this.objectDetectionBox(detection, index)
+            }, (detection: ObjectDetection) => `${detection.imageId}-${detection.labelId}-${detection.score}`)
+          }
+          .width('100%')
+          .aspectRatio(this.objectDetectionAspectRatio())
+          .clip(true)
+        } else if (this.imageInputUri.length > 0) {
+          Image(this.imageInputUri)
+            .width('100%')
+            .height('100%')
+            .objectFit(ImageFit.Contain)
+        }
+        Column() {
+          Button(appString(workflowInputLabelKey(workflowForRoute(this.routeName), 'modelFile')), { type: ButtonType.Normal })
+            .fontSize(16)
+            .fontColor(Color.White)
+            .backgroundColor('#33B5E5')
+            .enabled(!this.workflowRunning)
+            .onClick(() => this.prepareInput('modelFile'))
+        }
+        .width('100%')
+        .height('100%')
+        .padding({ right: 16, bottom: 16 })
+        .justifyContent(FlexAlign.End)
+        .alignItems(HorizontalAlign.End)
+        this.runtimePermissionRecoveryOverlay()
+      }
+      .width('100%')
+      .layoutWeight(1)
+      .backgroundColor(Color.White)
+    }
+    .width('100%')
+    .height('100%')
+    .backgroundColor(Color.White)
+  }
+
+  @Builder
   customModelAndroidLayout() {
     Stack({ alignContent: Alignment.TopStart }) {
       Column() {
@@ -3620,6 +3684,8 @@ struct FeatureRuntimePage {
       this.poseNetStillAndroidLayout()
     } else if (usesAndroidGestureStillLayout(workflowForRoute(this.routeName))) {
       this.gestureStillAndroidLayout()
+    } else if (usesAndroidObjectPhotoLayout(workflowForRoute(this.routeName))) {
+      this.objectPhotoAndroidLayout()
     } else if (usesAndroidCustomModelLayout(workflowForRoute(this.routeName))) {
       this.customModelAndroidLayout()
     } else if (usesAndroidPortraitSegmentationLayout(workflowForRoute(this.routeName))) {
