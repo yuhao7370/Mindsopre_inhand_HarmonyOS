@@ -65,12 +65,18 @@ Add these pure catalog policies:
   styled `PixelMap` after a successful pick. Content and camera picks switch
   the visible preview to the new original; a style-image pick leaves the
   currently visible preview in place until the new run succeeds.
+- Style Transfer predict/transfer model inputs also preserve the current page
+  while cache work is cancelled, incompatible, failed, undefined, or stale.
+  The successful cache path performs its explicit recreate-style reset only
+  after the stale gate and compatible atomic publish.
 - Style Transfer does not clear its visual result at run start, on a failed AI
-  result, or on a thrown run. The existing portrait-segmentation preservation
-  behavior remains unchanged.
+  result, on the successful AI result before its `PixelMap` replacement is
+  ready, on permission failure, or on a thrown run. The existing
+  portrait-segmentation preservation behavior remains unchanged.
 
-All sibling routes, other input kinds, successful inference, and failed model
-cache work remain negative.
+The selector and Toast/reset policies remain negative for sibling routes,
+unrelated input kinds, successful inference Toasts, and failed cache resets.
+The preservation policies use the explicit positives above.
 
 ## Dedicated Page
 
@@ -107,19 +113,32 @@ styled-result, or generic Run cards.
 
 - Content selection updates the original preview without auto-running and
   retains the previous styled `PixelMap` as the Save target, matching
-  Android's separate `originBitmap` and `resultBitmap` fields.
+  Android's separate `originBitmap` and `resultBitmap` fields. Every accepted
+  content, camera, or style pick first invalidates any pending styled-image
+  replacement without releasing the current owner value, so an older async
+  conversion cannot overwrite the newly selected page state.
 - Built-in or custom style selection retains the existing content-required
   guard and automatically starts the existing Style Transfer pipeline. The
   visible preview remains stable while that asynchronous run is pending.
 - Successful inference displays the styled `PixelMap`; Recovery displays the
   original again without destroying the last styled `PixelMap`, so Save still
   saves the last generated result like Android's separate `originBitmap` and
-  `resultBitmap`.
+  `resultBitmap`. A successful AI result preserves the old preview and Save
+  target while the new RGBA output is converted. The run remains
+  `workflowRunning` until conversion settles; only a current owner request may
+  atomically accept the new `PixelMap` and release the old one.
 - Failed results and thrown runs show the existing localized Style Transfer
   failure Toast because the generic status card is no longer visible. Neither
   path clears the visible preview or the last styled Save target: after a new
   content pick this leaves the new original visible, while after a new style
   pick it leaves whichever original or styled preview was already visible.
+- Invalid output dimensions/bytes or a rejected `PixelMap` conversion follow
+  the same failed-run status and Toast path, invalidate the pending owner
+  request, preserve the prior preview/Save target, and settle before
+  `workflowRunning` becomes false. A stale conversion releases its newly
+  created map and produces no user feedback.
+- Permission failure preserves the previous preview/Save target while the
+  full-page permission-recovery overlay presents retry/settings actions.
 - Recovery without an original image shows the existing original-required
   Toast. Recovery is a no-op while a transfer is running.
 - Save invokes the current `ResultImageSaveService` and surfaces its existing
@@ -142,12 +161,13 @@ styled-result, or generic Run cards.
 
 - Hypium tests cover the exact Style Transfer selector, result Toast, model
   cache Toast, successful-reset policy, original-preview switching, old-result
-  preservation, and run-start/failure preservation with sibling-route,
-  model-kind, and successful-result negatives.
+  preservation, and run-start/failure/success-before-replacement preservation
+  with sibling-route, model-kind, and data-kind negatives.
 - A dependency-free PowerShell guard bounds the dedicated builder and critical
   result/cache/save/recovery call sites, rejects generic cards, checks exact
   layout/order, full-page permission recovery, remaining-height scrolling,
-  running guards, route-scoped Toasts, and top-level build wiring.
+  running guards, permission/result/conversion preservation, pending-owner
+  invalidation, route-scoped Toasts, and top-level build wiring.
 - Mutation fixtures prove comments, template raw text, quoted strings, wrong
   selectors, stale-gate decoys, and executable generic-card injections cannot
   make the guard pass.

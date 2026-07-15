@@ -14,8 +14,10 @@
 - Do not duplicate inference/session/picker/cache/save logic in a separate page.
 - Preserve both cached model URIs after one compatible model slot is replaced; discard only the active inference session.
 - Cancelled, failed, incompatible, undefined, or stale model cache work must preserve the current page and last stable cache.
-- Content/camera/style picks preserve the last styled Save target. Content/camera picks show the new original; style picks keep the current preview until success.
-- Run start, failed AI result, permission failure, and thrown run must not clear the Style Transfer preview or Save target.
+- Content/camera/style picks preserve the last styled Save target and invalidate pending styled-image replacement without releasing its current owner value. Content/camera picks show the new original; style picks keep the current preview until success.
+- Model-slot inputs preserve the current page on failure; a successful compatible cache applies an explicit reset after the stale gate.
+- Run start, successful AI result before replacement, failed AI result, permission failure, thrown run, and conversion rejection must not clear the Style Transfer preview or Save target.
+- New RGBA conversion remains part of the running lifecycle. `workflowRunning` becomes false only after the current owner accepts the new map or conversion failure/staleness settles.
 - Recovery and secure Save are disabled and handler-guarded while inference runs.
 - Style Transfer save feedback is Toast-based without adding Toast behavior to the shared segmentation save path.
 - Real-device validation remains deferred. Build/test/package evidence is not a claim about device rendering, picker/camera feel, secure SaveButton presentation, accuracy, latency, memory, or lifecycle stability.
@@ -65,9 +67,9 @@ For `styleTransferModelCacheToastKey`, require the supplied success/failure key 
 
 For `shouldResetStyleTransferPageAfterModelCacheResult`, require true only for successful predict/transfer model results and false for failed results, non-model kinds, siblings, and undefined workflows.
 
-Require result preservation after Style Transfer `contentImage`, `camera`, and `styleImage`, while the existing Custom Model and portrait cases remain true and a Style Transfer model input remains false. Require original-preview switching after `contentImage` and `camera`, but not after `styleImage` or either model input.
+Require result preservation after Style Transfer `contentImage`, `camera`, `styleImage`, `stylePredictModelFile`, and `styleTransferModelFile`, while the existing Custom Model and portrait cases remain true. Require original-preview switching after `contentImage` and `camera`, but not after `styleImage` or either model input. The successful model-cache path will clear explicitly after compatibility and stale checks; the shared preservation policy protects cache failure.
 
-Require `shouldClearRuntimeResultAtWorkflowStart(styleWorkflow)` false. Require `shouldPreserveRuntimeVisualResultOnAiResult(styleWorkflow, false, '')` true and the same for a failed `styleTransfer` result. Preserve the existing successful portrait segmentation positive and keep unrelated failed/successful route negatives.
+Require `shouldClearRuntimeResultAtWorkflowStart(styleWorkflow)` false. Require `shouldPreserveRuntimeVisualResultOnAiResult(styleWorkflow, false, '')` true, the same for a failed `styleTransfer` result, and true for a successful `styleTransfer` result so the old map remains until atomic replacement. Require false for a successful Style Transfer result with any other data kind. Preserve the existing successful portrait segmentation positive and keep unrelated failed/successful route negatives.
 
 - [ ] **Step 2: Run host tests and verify RED**
 
@@ -122,6 +124,8 @@ Reuse the proven comment/string/template-raw stripping and exact-code-line helpe
 - Recovery and Save rendered disabled while running and handler-side running guards;
 - full-page `runtimePermissionRecoveryOverlay()`;
 - exact result-failure/throw Toast calls, cache stale gate before apply/reset/Toast, route-scoped save Toast wrapper, and denied secure-save Toast;
+- accepted content/camera/style picks invalidate pending styled replacement without clearing the current owner; successful Style Transfer results preserve old visuals until awaited replacement;
+- permission failure preserves visuals; conversion failure invalidates only the pending replacement, maps to the Style Transfer failure status/Toast, and settles before the running flag is released;
 - absence inside the dedicated builder of generic summary, Inputs, Permissions, status/result, debug, file-preview, styled-result, and generic Run markers;
 - exact call from `build-hap.ps1`.
 
@@ -136,6 +140,10 @@ Copy only the three guarded source files into a verified temporary directory. Re
 - save Toast moved into the shared segmentation path;
 - cache Toast/reset moved before the stale request gate;
 - result/throw failure Toast removed;
+- model-cache failure clears the current Style Transfer page;
+- successful Style Transfer result clears the old `PixelMap` before replacement;
+- content/camera/style pick omits pending-owner invalidation;
+- permission failure clears visuals, or conversion reject clears the owner/omits failure Toast/settles after `workflowRunning` is released;
 - executable generic Inputs, Permissions, status, result, debug, file-preview, or Run marker injected into the dedicated builder.
 
 Temporary cleanup must resolve the absolute path, verify it is inside the OS temp parent, then delete it in one PowerShell/.NET path flow.
@@ -172,9 +180,11 @@ git commit -m "test: define style transfer layout parity guard"
 
 - [ ] **Step 1: Wire route-scoped state preservation and feedback**
 
-Import the Task 1 policies. In `applyPickResult`, preserve the styled result for content/camera/style picks and set `styleOriginalPreviewRecovered = true` only after a successful content/camera pick. Built-in style selection keeps the visible flag unchanged.
+Import the Task 1 policies. In `applyPickResult`, preserve the styled result for content/camera/style/model-slot picks. For an accepted content/camera/style pick, first call `styledImagePixelMapOwner.invalidatePendingReplacement()` without clearing the current value; then set `styleOriginalPreviewRecovered = true` only for successful content/camera picks. Apply the same pending invalidation to built-in style selection while keeping its visible flag unchanged.
 
-Do not clear visual results for Style Transfer at run start, permission failure, failed `AiRunResult`, thrown run, or failed styled-output replacement. Show `styleTransferResultToastKey` for both failed AI results and thrown runs. Successful styled `PixelMap` ownership replacement sets `styleOriginalPreviewRecovered = false` exactly as today.
+Do not clear visual results for Style Transfer at run start, permission failure, failed `AiRunResult`, successful Style Transfer `AiRunResult` before conversion, thrown run, or failed styled-output replacement. Show `styleTransferResultToastKey` for failed AI results, thrown runs, and current conversion failure. Successful styled `PixelMap` ownership replacement sets `styleOriginalPreviewRecovered = false` exactly as today.
+
+Convert `applyAiResult`/`updateStyledImagePreview` into an awaited path for Style Transfer. Keep `workflowRunning` true until RGBA validation and `styleTransferPixelMapFromRgbaOutput` settle. On current success, atomically `accept` the new map. On invalid bytes/dimensions or conversion rejection, invalidate the pending replacement, set the Style Transfer failure status, show its Toast, and preserve the old owner value. On staleness, release any newly created map through the owner and do not Toast.
 
 - [ ] **Step 2: Apply atomic model-cache feedback and Android recreate semantics**
 
@@ -183,7 +193,7 @@ Only after `isInputPreparationRequestCurrent` succeeds and `cacheResult` is defi
 - apply the existing cache result;
 - Toast the slot-specific cache message for Style Transfer;
 - on a successful predict/transfer slot result, preserve both model URIs, invalidate the session, then clear `imageInputUri`, `contentImageUri`, `styleImageUri`, selected-input summary, styled owner/result, recovery flag, result rows/text, and restore `workflowInitialStatusKey(workflow)`;
-- on cancel/failure/incompatible/undefined/stale work, preserve page/session/result and stable cache.
+- on cancel/failure/incompatible/undefined/stale work, preserve page/session/result and stable cache. The model-slot result-preservation policy must prevent the current failure branch from calling `clearRuntimeResultState()`.
 
 Keep the existing Custom Model Toast and Object Photo follow-up behavior unchanged.
 
