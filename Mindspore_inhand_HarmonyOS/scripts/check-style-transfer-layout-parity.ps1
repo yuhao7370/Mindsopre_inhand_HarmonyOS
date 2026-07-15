@@ -249,7 +249,7 @@ Assert-CodeLine $permission 'await this.applyAiResult(result, runtimeRequestId);
 
 $failure = Get-TextSection $page '  private applyRuntimeFailure()' `
   "`n`n  private async prepareLiveFrameImageInput" 'thrown-run failure handler'
-Assert-CodeLine $failure 'if (!shouldPreserveRuntimeVisualResultOnAiResult(workflow, false, '"'"''"'"')) {' `
+Assert-CodeLine $failure "if (!shouldPreserveRuntimeVisualResultOnAiResult(workflow, false, '')) {" `
   'thrown Style Transfer runs must preserve visuals.'
 Assert-CodeLine $failure 'this.showStyleTransferFailureToastIfNeeded(false);' `
   'thrown Style Transfer runs must show the route-scoped Toast.'
