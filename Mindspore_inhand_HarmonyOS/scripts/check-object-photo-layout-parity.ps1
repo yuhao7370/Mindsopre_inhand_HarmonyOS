@@ -268,19 +268,23 @@ if ($toolbarIndex -lt 0 -or $previewIndex -le $toolbarIndex -or $buttonIndex -le
 
 foreach ($marker in @(
   'this.summaryKey',
-  'feature_runtime_inputs_title',
-  'feature_runtime_permissions_title',
   'workflowResultTitleKey(',
   'this.resultRow(',
   'this.statusKey',
   'this.resultText',
-  'feature_runtime_debug',
   'resultImageSaveControl(',
   'resultComponentImageSaveControl(',
   'shouldShowPrimaryRunAction(',
   'this.runPrimaryAction()'
 )) {
   Assert-Excludes $builder $marker 'dedicated builder contains generic card/result/debug/save/Run UI'
+}
+foreach ($marker in @(
+  'feature_runtime_inputs_title',
+  'feature_runtime_permissions_title',
+  'feature_runtime_debug'
+)) {
+  Assert-Excludes $builderWithLiterals $marker 'dedicated builder contains generic literal card/debug UI'
 }
 Assert-Count $builder 'this.runtimeActionToolbar(true)' 1 'dedicated builder must contain one Android toolbar.'
 Assert-Count $builderWithLiterals ".onClick(() => this.prepareInput('modelFile'))" 1 'dedicated builder must contain one Select Model action.'
