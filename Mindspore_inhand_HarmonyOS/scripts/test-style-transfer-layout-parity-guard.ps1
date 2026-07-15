@@ -8,8 +8,13 @@ $tempParent = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd(
 )
 $tempRoot = [IO.Path]::GetFullPath((Join-Path $tempParent ("mindspore-style-transfer-guard-" + [guid]::NewGuid().ToString('N'))))
 $tempPrefix = $tempParent + [IO.Path]::DirectorySeparatorChar
+$utf8 = [Text.UTF8Encoding]::new($false)
 if (-not $tempRoot.StartsWith($tempPrefix, [StringComparison]::OrdinalIgnoreCase)) {
   throw 'Style Transfer guard fixture refused an unsafe temporary path.'
+}
+
+function Normalize-Newlines([string]$Text) {
+  return $Text.Replace("`r`n", "`n").Replace("`r", "`n")
 }
 
 function Copy-GuardedSources([string]$Destination) {
@@ -25,12 +30,18 @@ function Copy-GuardedSources([string]$Destination) {
 }
 
 function Replace-Once([string]$Path, [string]$Before, [string]$After) {
-  $text = [IO.File]::ReadAllText($Path)
+  $text = Normalize-Newlines ([IO.File]::ReadAllText($Path))
+  $Before = Normalize-Newlines $Before
+  $After = Normalize-Newlines $After
   $first = $text.IndexOf($Before, [StringComparison]::Ordinal)
   if ($first -lt 0 -or $text.IndexOf($Before, $first + $Before.Length, [StringComparison]::Ordinal) -ge 0) {
     throw "Style Transfer guard fixture expected one mutation target: $Before"
   }
-  [IO.File]::WriteAllText($Path, $text.Substring(0, $first) + $After + $text.Substring($first + $Before.Length))
+  [IO.File]::WriteAllText(
+    $Path,
+    $text.Substring(0, $first) + $After + $text.Substring($first + $Before.Length),
+    $utf8
+  )
 }
 
 function Replace-OnceInSection(
@@ -40,7 +51,11 @@ function Replace-OnceInSection(
   [string]$Before,
   [string]$After
 ) {
-  $text = [IO.File]::ReadAllText($Path)
+  $text = Normalize-Newlines ([IO.File]::ReadAllText($Path))
+  $StartMarker = Normalize-Newlines $StartMarker
+  $EndMarker = Normalize-Newlines $EndMarker
+  $Before = Normalize-Newlines $Before
+  $After = Normalize-Newlines $After
   $start = $text.IndexOf($StartMarker, [StringComparison]::Ordinal)
   $end = if ($start -ge 0) { $text.IndexOf($EndMarker, $start + $StartMarker.Length, [StringComparison]::Ordinal) } else { -1 }
   if ($start -lt 0 -or $end -le $start) {
@@ -52,7 +67,11 @@ function Replace-OnceInSection(
     throw "Style Transfer guard fixture expected one section mutation target: $Before"
   }
   $absolute = $start + $relative
-  [IO.File]::WriteAllText($Path, $text.Substring(0, $absolute) + $After + $text.Substring($absolute + $Before.Length))
+  [IO.File]::WriteAllText(
+    $Path,
+    $text.Substring(0, $absolute) + $After + $text.Substring($absolute + $Before.Length),
+    $utf8
+  )
 }
 
 function Replace-NthInSection(
@@ -63,7 +82,11 @@ function Replace-NthInSection(
   [string]$After,
   [int]$Occurrence
 ) {
-  $text = [IO.File]::ReadAllText($Path)
+  $text = Normalize-Newlines ([IO.File]::ReadAllText($Path))
+  $StartMarker = Normalize-Newlines $StartMarker
+  $EndMarker = Normalize-Newlines $EndMarker
+  $Before = Normalize-Newlines $Before
+  $After = Normalize-Newlines $After
   $start = $text.IndexOf($StartMarker, [StringComparison]::Ordinal)
   $end = if ($start -ge 0) { $text.IndexOf($EndMarker, $start + $StartMarker.Length, [StringComparison]::Ordinal) } else { -1 }
   if ($start -lt 0 -or $end -le $start -or $Occurrence -lt 1) {
@@ -78,7 +101,11 @@ function Replace-NthInSection(
     $searchAt = $relative + $Before.Length
   }
   $absolute = $start + $relative
-  [IO.File]::WriteAllText($Path, $text.Substring(0, $absolute) + $After + $text.Substring($absolute + $Before.Length))
+  [IO.File]::WriteAllText(
+    $Path,
+    $text.Substring(0, $absolute) + $After + $text.Substring($absolute + $Before.Length),
+    $utf8
+  )
 }
 
 function Assert-GuardFails([string]$Root, [string]$Description) {
@@ -119,7 +146,11 @@ function Assert-PageSectionDesiredMutationFails(
 ) {
   $root = New-MutationRoot $Name
   $path = Join-Path $root 'entry\src\main\ets\pages\FeatureRuntimePage.ets'
-  $text = [IO.File]::ReadAllText($path)
+  $text = Normalize-Newlines ([IO.File]::ReadAllText($path))
+  $StartMarker = Normalize-Newlines $StartMarker
+  $EndMarker = Normalize-Newlines $EndMarker
+  $Desired = Normalize-Newlines $Desired
+  $CurrentMarker = Normalize-Newlines $CurrentMarker
   $start = $text.IndexOf($StartMarker, [StringComparison]::Ordinal)
   $end = if ($start -ge 0) { $text.IndexOf($EndMarker, $start + $StartMarker.Length, [StringComparison]::Ordinal) } else { -1 }
   if ($start -lt 0 -or $end -le $start) {
@@ -276,7 +307,7 @@ try {
 
   $saveEntryRoot = New-MutationRoot 'secure-save-entry-unguarded'
   $saveEntryPage = Join-Path $saveEntryRoot 'entry\src\main\ets\pages\FeatureRuntimePage.ets'
-  $saveEntryText = [IO.File]::ReadAllText($saveEntryPage)
+  $saveEntryText = Normalize-Newlines ([IO.File]::ReadAllText($saveEntryPage))
   $saveEntryGuard = "                if (this.workflowRunning) {`n                  return;`n                }`n"
   if ($saveEntryText.Contains($saveEntryGuard)) {
     Replace-Once $saveEntryPage $saveEntryGuard ''
@@ -289,7 +320,7 @@ try {
 
   $saveEntryDecoyRoot = New-MutationRoot 'secure-save-entry-quoted-guard'
   $saveEntryDecoyPage = Join-Path $saveEntryDecoyRoot 'entry\src\main\ets\pages\FeatureRuntimePage.ets'
-  $saveEntryDecoyText = [IO.File]::ReadAllText($saveEntryDecoyPage)
+  $saveEntryDecoyText = Normalize-Newlines ([IO.File]::ReadAllText($saveEntryDecoyPage))
   if ($saveEntryDecoyText.Contains($saveEntryGuard)) {
     Replace-Once $saveEntryDecoyPage $saveEntryGuard `
       "                const runningGuardDecoy = 'if (this.workflowRunning) { return; }';`n"
