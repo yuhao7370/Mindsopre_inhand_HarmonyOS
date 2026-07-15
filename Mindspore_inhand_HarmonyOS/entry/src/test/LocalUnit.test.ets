@@ -356,10 +356,13 @@ import {
   customModelExecutePreflightToastKey,
   customModelModelCacheToastKey,
   customModelOutputFallbackKey,
+  objectPhotoFollowupInputKindAfterModelCacheSuccess,
+  objectPhotoResultToastKey,
   shouldShowGestureStillFailureToast,
   poseNetStillToastKey,
   shouldRestoreCachedModelFileInputs,
   usesAndroidCustomModelLayout,
+  usesAndroidObjectPhotoLayout,
   usesAndroidPortraitSegmentationLayout,
   usesAndroidGestureStillLayout,
   usesAndroidPoseNetStillLayout,
@@ -9242,6 +9245,40 @@ export default function localUnitTest() {
       expect(hasAppStringKey('feature_runtime_pose_detect_android')).assertTrue();
       expect(hasAppStringKey('feature_runtime_pose_detect_success_android')).assertTrue();
       expect(hasAppStringKey('feature_runtime_pose_detect_failed_android')).assertTrue();
+    });
+
+    it('usesAndroidObjectPhotoLayoutOnlyForObjectPhoto', 0, () => {
+      featureWorkflows.forEach((workflow: FeatureWorkflow) => {
+        expect(usesAndroidObjectPhotoLayout(workflow))
+          .assertEqual(workflow.routeName === AppRoute.OBJECT_PHOTO.name);
+      });
+      expect(usesAndroidObjectPhotoLayout(undefined)).assertFalse();
+    });
+
+    it('mapsObjectPhotoFailureToastOnlyForFailedObjectPhoto', 0, () => {
+      const objectPhoto = workflowForRoute(AppRoute.OBJECT_PHOTO.name);
+      const objectCamera = workflowForRoute(AppRoute.OBJECT_CAMERA.name);
+      const styleTransfer = workflowForRoute(AppRoute.STYLE_TRANSFER.name);
+
+      expect(objectPhotoResultToastKey(objectPhoto, false))
+        .assertEqual('feature_runtime_object_detection_failed');
+      expect(objectPhotoResultToastKey(objectPhoto, true)).assertUndefined();
+      expect(objectPhotoResultToastKey(objectCamera, false)).assertUndefined();
+      expect(objectPhotoResultToastKey(styleTransfer, false)).assertUndefined();
+      expect(objectPhotoResultToastKey(undefined, false)).assertUndefined();
+    });
+
+    it('repicksPhotoOnlyAfterObjectPhotoModelCacheSuccess', 0, () => {
+      const objectPhoto = workflowForRoute(AppRoute.OBJECT_PHOTO.name);
+      const objectCamera = workflowForRoute(AppRoute.OBJECT_CAMERA.name);
+      const styleTransfer = workflowForRoute(AppRoute.STYLE_TRANSFER.name);
+
+      expect(objectPhotoFollowupInputKindAfterModelCacheSuccess(objectPhoto, 'modelFile')).assertEqual('photo');
+      expect(objectPhotoFollowupInputKindAfterModelCacheSuccess(objectPhoto, 'photo')).assertUndefined();
+      expect(objectPhotoFollowupInputKindAfterModelCacheSuccess(objectPhoto, 'camera')).assertUndefined();
+      expect(objectPhotoFollowupInputKindAfterModelCacheSuccess(objectCamera, 'modelFile')).assertUndefined();
+      expect(objectPhotoFollowupInputKindAfterModelCacheSuccess(styleTransfer, 'modelFile')).assertUndefined();
+      expect(objectPhotoFollowupInputKindAfterModelCacheSuccess(undefined, 'modelFile')).assertUndefined();
     });
 
     it('usesAndroidCustomModelLayoutOnlyForCustomModel', 0, () => {

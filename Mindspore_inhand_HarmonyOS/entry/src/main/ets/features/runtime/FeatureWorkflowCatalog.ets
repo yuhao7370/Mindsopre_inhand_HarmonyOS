@@ -322,6 +322,25 @@ export function usesAndroidPoseNetStillLayout(workflow: FeatureWorkflow | undefi
   return workflow?.routeName === AppRoute.POSENET.name;
 }
 
+export function usesAndroidObjectPhotoLayout(workflow: FeatureWorkflow | undefined): boolean {
+  return workflow?.routeName === AppRoute.OBJECT_PHOTO.name;
+}
+
+export function objectPhotoResultToastKey(
+  workflow: FeatureWorkflow | undefined,
+  resultOk: boolean
+): AppStringKey | undefined {
+  return usesAndroidObjectPhotoLayout(workflow) && !resultOk ?
+    'feature_runtime_object_detection_failed' : undefined;
+}
+
+export function objectPhotoFollowupInputKindAfterModelCacheSuccess(
+  workflow: FeatureWorkflow | undefined,
+  inputKind: FeatureInputKind
+): FeatureInputKind | undefined {
+  return usesAndroidObjectPhotoLayout(workflow) && inputKind === 'modelFile' ? 'photo' : undefined;
+}
+
 export function usesAndroidCustomModelLayout(workflow: FeatureWorkflow | undefined): boolean {
   return workflow?.routeName === AppRoute.CUSTOM_MODEL.name;
 }
