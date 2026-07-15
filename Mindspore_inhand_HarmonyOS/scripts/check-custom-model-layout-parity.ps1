@@ -13,6 +13,7 @@ function Remove-ArkTsComments([string]$Text) {
   $state = 'code'
   $terminator = [char]0
   $escaped = $false
+  $interpolationDepths = [Collections.Generic.List[int]]::new()
   for ($index = 0; $index -lt $Text.Length; $index++) {
     $current = $Text[$index]
     $next = if ($index + 1 -lt $Text.Length) { $Text[$index + 1] } else { [char]0 }
@@ -37,13 +38,29 @@ function Remove-ArkTsComments([string]$Text) {
       }
       continue
     }
-    if ($state -eq 'literal') {
+    if ($state -eq 'quotedLiteral') {
       [void]$result.Append($current)
       if ($escaped) {
         $escaped = $false
       } elseif ($current -eq [char]0x5C) {
         $escaped = $true
       } elseif ($current -eq $terminator) {
+        $state = 'code'
+      }
+      continue
+    }
+    if ($state -eq 'templateRaw') {
+      [void]$result.Append($current)
+      if ($escaped) {
+        $escaped = $false
+      } elseif ($current -eq [char]0x5C) {
+        $escaped = $true
+      } elseif ($current -eq [char]0x60) {
+        $state = 'code'
+      } elseif ($current -eq [char]0x24 -and $next -eq [char]0x7B) {
+        [void]$result.Append($next)
+        $index++
+        $interpolationDepths.Add(1)
         $state = 'code'
       }
       continue
@@ -56,11 +73,27 @@ function Remove-ArkTsComments([string]$Text) {
       [void]$result.Append('  ')
       $index++
       $state = 'blockComment'
-    } elseif ($current -eq [char]0x27 -or $current -eq [char]0x22 -or $current -eq [char]0x60) {
+    } elseif ($current -eq [char]0x27 -or $current -eq [char]0x22) {
       [void]$result.Append($current)
       $terminator = $current
       $escaped = $false
-      $state = 'literal'
+      $state = 'quotedLiteral'
+    } elseif ($current -eq [char]0x60) {
+      [void]$result.Append($current)
+      $escaped = $false
+      $state = 'templateRaw'
+    } elseif ($interpolationDepths.Count -gt 0 -and $current -eq [char]0x7B) {
+      $last = $interpolationDepths.Count - 1
+      $interpolationDepths[$last]++
+      [void]$result.Append($current)
+    } elseif ($interpolationDepths.Count -gt 0 -and $current -eq [char]0x7D) {
+      $last = $interpolationDepths.Count - 1
+      $interpolationDepths[$last]--
+      [void]$result.Append($current)
+      if ($interpolationDepths[$last] -eq 0) {
+        $interpolationDepths.RemoveAt($last)
+        $state = 'templateRaw'
+      }
     } else {
       [void]$result.Append($current)
     }
@@ -99,6 +132,41 @@ function Assert-Count([string]$Text, [string]$Marker, [int]$Expected, [string]$M
   if ($actual -ne $Expected) {
     throw "Custom Model parity guard failed: $Message Expected $Expected, found $actual."
   }
+}
+
+$commentStripperProbe = @'
+const single = 'it\'s https://single.example/*STRING_RAW_MARKER*/'; /* SINGLE_COMMENT_MARKER */
+const double = "say \"hello\" https://double.example/*DOUBLE_RAW_MARKER*/"; // DOUBLE_COMMENT_MARKER
+const template = `raw \` tick https://template.example/*TEMPLATE_RAW_MARKER*/ ${/* INTERPOLATION_COMMENT_MARKER */ value}`;
+const nested = `outer ${`inner /*NESTED_TEMPLATE_RAW_MARKER*/ ${/* NESTED_INTERPOLATION_COMMENT_MARKER */ value}`}`;
+/* BLOCK_COMMENT_MARKER
+   BLOCK_COMMENT_CONTINUATION */
+const after = true;
+'@
+$strippedProbe = Remove-ArkTsComments $commentStripperProbe
+foreach ($marker in @(
+  'https://single.example/*STRING_RAW_MARKER*/',
+  'https://double.example/*DOUBLE_RAW_MARKER*/',
+  'https://template.example/*TEMPLATE_RAW_MARKER*/',
+  '/*NESTED_TEMPLATE_RAW_MARKER*/',
+  'const after = true;'
+)) {
+  Assert-Contains $strippedProbe $marker "comment stripper must preserve literal content: $marker."
+}
+foreach ($marker in @(
+  'SINGLE_COMMENT_MARKER',
+  'DOUBLE_COMMENT_MARKER',
+  'INTERPOLATION_COMMENT_MARKER',
+  'NESTED_INTERPOLATION_COMMENT_MARKER',
+  'BLOCK_COMMENT_MARKER',
+  'BLOCK_COMMENT_CONTINUATION'
+)) {
+  Assert-Excludes $strippedProbe $marker 'comment stripper must remove executable-code comments'
+}
+$probeNewlines = $commentStripperProbe.Length - $commentStripperProbe.Replace("`n", '').Length
+$strippedProbeNewlines = $strippedProbe.Length - $strippedProbe.Replace("`n", '').Length
+if ($probeNewlines -ne $strippedProbeNewlines) {
+  throw 'Custom Model parity guard failed: comment stripper must preserve source newlines.'
 }
 
 if ([string]::IsNullOrWhiteSpace($SourceRoot)) {
