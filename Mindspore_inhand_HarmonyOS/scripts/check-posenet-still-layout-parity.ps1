@@ -28,7 +28,7 @@ function Assert-Excludes([string]$Text, [string]$Marker, [string]$Message) {
 $root = Split-Path -Parent $PSScriptRoot
 $catalog = Get-NormalizedText (Join-Path $root 'entry\src\main\ets\features\runtime\FeatureWorkflowCatalog.ets')
 $selector = Get-TextSection $catalog 'export function usesAndroidPoseNetStillLayout' 'export function usesAndroidGestureStillLayout' 'PoseNet still selector'
-Assert-Contains $selector 'AppRoute.POSENET.name' 'selector must target only PoseNet still.'
+Assert-Contains $selector 'return workflow?.routeName === AppRoute.POSENET.name;' 'selector must target only PoseNet still.'
 Assert-Contains $selector 'poseNetStillToastKey' 'Toast policy must share the route boundary.'
 
 $page = Get-NormalizedText (Join-Path $root 'entry\src\main\ets\pages\FeatureRuntimePage.ets')
@@ -47,11 +47,14 @@ foreach ($marker in @(
   "backgroundColor('#FF0000')",
   'this.runtimePermissionRecoveryOverlay()',
   '.layoutWeight(9)',
-  '.layoutWeight(1)',
   '.margin({ top: 14 })'
 )) {
   Assert-Contains $builder $marker "dedicated builder is missing $marker."
 }
+
+$actionRow = Get-TextSection $builder "        Row() {`n          Button(appString('feature_input_photo_android')" "      }`n      .width('100%')" 'PoseNet still action row'
+$actionRowLayout = "        }`n        .width('100%')`n        .layoutWeight(1)`n        .margin({ top: 14 })`n        .alignItems(VerticalAlign.Center)"
+Assert-Contains $actionRow $actionRowLayout 'action row must keep its Android width, weight, margin, and alignment.'
 
 $dividerHeight = '.height(1)'
 $dividerColor = ".backgroundColor('#E4E4E4')"
@@ -75,6 +78,8 @@ foreach ($marker in @(
   'feature_runtime_permissions_title',
   'workflowResultTitleKey(',
   'this.resultRow(',
+  'this.statusKey',
+  'this.selectedInputSummary',
   'this.resultText',
   'this.posePreview(',
   'resultImageSaveControl(',
@@ -106,6 +111,7 @@ if ($selectorIndex -lt 0 -or $genericIndex -lt 0 -or $selectorIndex -ge $generic
 }
 
 $buildScript = Get-NormalizedText (Join-Path $root 'scripts\build-hap.ps1')
-Assert-Contains $buildScript 'check-posenet-still-layout-parity.ps1' 'build-hap must execute the guard.'
+$buildGuardCall = "& (Join-Path `$PSScriptRoot 'check-posenet-still-layout-parity.ps1')"
+Assert-Contains "`n$buildScript`n" "`n$buildGuardCall`n" 'build-hap must execute the guard.'
 
 Write-Output 'PoseNet still layout parity guard passed.'
