@@ -358,11 +358,13 @@ import {
   customModelOutputFallbackKey,
   objectPhotoFollowupInputKindAfterModelCacheSuccess,
   objectPhotoResultToastKey,
+  shouldResetStyleTransferPageAfterModelCacheResult,
   shouldShowGestureStillFailureToast,
   poseNetStillToastKey,
   shouldRestoreCachedModelFileInputs,
   usesAndroidCustomModelLayout,
   usesAndroidObjectPhotoLayout,
+  usesAndroidStyleTransferLayout,
   usesAndroidPortraitSegmentationLayout,
   usesAndroidGestureStillLayout,
   usesAndroidPoseNetStillLayout,
@@ -381,6 +383,9 @@ import {
   shouldStartWorkflowRun,
   shouldPreserveRuntimeResultAfterInputReady,
   shouldPreserveRuntimeVisualResultOnAiResult,
+  shouldShowStyleOriginalAfterInputReady,
+  styleTransferModelCacheToastKey,
+  styleTransferResultToastKey,
   runtimeSegmentationBackgroundImageUri,
   shouldHideTextInputWhenPreparingInput,
   textInputVisibleAfterCancelledPick,
@@ -3862,7 +3867,7 @@ export default function localUnitTest() {
       expect(shouldPreserveRuntimeResultAfterInputReady(portraitSegmentation, 'backgroundImage')).assertTrue();
       expect(shouldPreserveRuntimeResultAfterInputReady(portraitSegmentation, 'camera')).assertFalse();
       expect(shouldPreserveRuntimeResultAfterInputReady(stillSegmentation, 'backgroundImage')).assertFalse();
-      expect(shouldPreserveRuntimeResultAfterInputReady(styleTransfer, 'styleImage')).assertFalse();
+      expect(shouldPreserveRuntimeResultAfterInputReady(styleTransfer, 'styleImage')).assertTrue();
 
       expect(shouldPreserveRuntimeVisualResultOnAiResult(portraitSegmentation, true, 'segmentation')).assertTrue();
       expect(shouldPreserveRuntimeVisualResultOnAiResult(portraitSegmentation, false, 'segmentation')).assertFalse();
@@ -9268,6 +9273,87 @@ export default function localUnitTest() {
       expect(objectPhotoResultToastKey(undefined, false)).assertUndefined();
     });
 
+    it('usesAndroidStyleTransferLayoutOnlyForStyleTransfer', 0, () => {
+      const styleTransfer = workflowForRoute(AppRoute.STYLE_TRANSFER.name);
+      const objectPhoto = workflowForRoute(AppRoute.OBJECT_PHOTO.name);
+
+      expect(usesAndroidStyleTransferLayout(styleTransfer)).assertTrue();
+      expect(usesAndroidStyleTransferLayout(objectPhoto)).assertFalse();
+      expect(usesAndroidStyleTransferLayout(undefined)).assertFalse();
+    });
+
+    it('mapsStyleTransferFailureToastOnlyForFailedStyleTransfer', 0, () => {
+      const styleTransfer = workflowForRoute(AppRoute.STYLE_TRANSFER.name);
+      const objectPhoto = workflowForRoute(AppRoute.OBJECT_PHOTO.name);
+
+      expect(styleTransferResultToastKey(styleTransfer, false))
+        .assertEqual('feature_runtime_style_transfer_failed');
+      expect(styleTransferResultToastKey(styleTransfer, true)).assertUndefined();
+      expect(styleTransferResultToastKey(objectPhoto, false)).assertUndefined();
+      expect(styleTransferResultToastKey(undefined, false)).assertUndefined();
+    });
+
+    it('mapsStyleTransferModelCacheToastOnlyForExactModelSlots', 0, () => {
+      const styleTransfer = workflowForRoute(AppRoute.STYLE_TRANSFER.name);
+      const objectPhoto = workflowForRoute(AppRoute.OBJECT_PHOTO.name);
+      const successKey = 'feature_runtime_model_ready';
+      const failureKey = 'feature_runtime_model_cache_failed';
+
+      expect(styleTransferModelCacheToastKey(styleTransfer, 'stylePredictModelFile', successKey))
+        .assertEqual(successKey);
+      expect(styleTransferModelCacheToastKey(styleTransfer, 'styleTransferModelFile', failureKey))
+        .assertEqual(failureKey);
+      expect(styleTransferModelCacheToastKey(styleTransfer, 'photo', successKey)).assertUndefined();
+      expect(styleTransferModelCacheToastKey(styleTransfer, 'styleImage', successKey)).assertUndefined();
+      expect(styleTransferModelCacheToastKey(styleTransfer, 'modelFile', successKey)).assertUndefined();
+      expect(styleTransferModelCacheToastKey(objectPhoto, 'stylePredictModelFile', successKey)).assertUndefined();
+      expect(styleTransferModelCacheToastKey(undefined, 'styleTransferModelFile', successKey)).assertUndefined();
+    });
+
+    it('resetsStyleTransferPageOnlyAfterSuccessfulModelSlotCache', 0, () => {
+      const styleTransfer = workflowForRoute(AppRoute.STYLE_TRANSFER.name);
+      const objectPhoto = workflowForRoute(AppRoute.OBJECT_PHOTO.name);
+
+      expect(shouldResetStyleTransferPageAfterModelCacheResult(
+        styleTransfer, 'stylePredictModelFile', true)).assertTrue();
+      expect(shouldResetStyleTransferPageAfterModelCacheResult(
+        styleTransfer, 'styleTransferModelFile', true)).assertTrue();
+      expect(shouldResetStyleTransferPageAfterModelCacheResult(
+        styleTransfer, 'stylePredictModelFile', false)).assertFalse();
+      expect(shouldResetStyleTransferPageAfterModelCacheResult(
+        styleTransfer, 'styleImage', true)).assertFalse();
+      expect(shouldResetStyleTransferPageAfterModelCacheResult(
+        objectPhoto, 'stylePredictModelFile', true)).assertFalse();
+      expect(shouldResetStyleTransferPageAfterModelCacheResult(
+        undefined, 'styleTransferModelFile', true)).assertFalse();
+    });
+
+    it('preservesStyleTransferResultUntilExplicitAtomicReplacementOrReset', 0, () => {
+      const styleTransfer = workflowForRoute(AppRoute.STYLE_TRANSFER.name);
+      const objectPhoto = workflowForRoute(AppRoute.OBJECT_PHOTO.name);
+
+      expect(shouldPreserveRuntimeResultAfterInputReady(styleTransfer, 'contentImage')).assertTrue();
+      expect(shouldPreserveRuntimeResultAfterInputReady(styleTransfer, 'camera')).assertTrue();
+      expect(shouldPreserveRuntimeResultAfterInputReady(styleTransfer, 'styleImage')).assertTrue();
+      expect(shouldPreserveRuntimeResultAfterInputReady(styleTransfer, 'stylePredictModelFile')).assertTrue();
+      expect(shouldPreserveRuntimeResultAfterInputReady(styleTransfer, 'styleTransferModelFile')).assertTrue();
+      expect(shouldShowStyleOriginalAfterInputReady(styleTransfer, 'contentImage')).assertTrue();
+      expect(shouldShowStyleOriginalAfterInputReady(styleTransfer, 'camera')).assertTrue();
+      expect(shouldShowStyleOriginalAfterInputReady(styleTransfer, 'styleImage')).assertFalse();
+      expect(shouldShowStyleOriginalAfterInputReady(styleTransfer, 'stylePredictModelFile')).assertFalse();
+      expect(shouldShowStyleOriginalAfterInputReady(styleTransfer, 'styleTransferModelFile')).assertFalse();
+      expect(shouldShowStyleOriginalAfterInputReady(objectPhoto, 'contentImage')).assertFalse();
+      expect(shouldShowStyleOriginalAfterInputReady(undefined, 'camera')).assertFalse();
+
+      expect(shouldClearRuntimeResultAtWorkflowStart(styleTransfer)).assertFalse();
+      expect(shouldPreserveRuntimeVisualResultOnAiResult(styleTransfer, false, '')).assertTrue();
+      expect(shouldPreserveRuntimeVisualResultOnAiResult(styleTransfer, false, 'styleTransfer')).assertTrue();
+      expect(shouldPreserveRuntimeVisualResultOnAiResult(styleTransfer, true, 'styleTransfer')).assertTrue();
+      expect(shouldPreserveRuntimeVisualResultOnAiResult(styleTransfer, true, 'classification')).assertFalse();
+      expect(shouldPreserveRuntimeVisualResultOnAiResult(objectPhoto, false, 'styleTransfer')).assertFalse();
+      expect(shouldPreserveRuntimeVisualResultOnAiResult(undefined, false, '')).assertFalse();
+    });
+
     it('repicksPhotoOnlyAfterObjectPhotoModelCacheSuccess', 0, () => {
       const objectPhoto = workflowForRoute(AppRoute.OBJECT_PHOTO.name);
       const objectCamera = workflowForRoute(AppRoute.OBJECT_CAMERA.name);
@@ -9345,7 +9431,7 @@ export default function localUnitTest() {
       expect(shouldPreserveRuntimeResultAfterInputReady(customModel, 'text')).assertFalse();
       expect(shouldPreserveRuntimeResultAfterInputReady(portraitSegmentation, 'backgroundImage')).assertTrue();
       expect(shouldPreserveRuntimeResultAfterInputReady(portraitSegmentation, 'camera')).assertFalse();
-      expect(shouldPreserveRuntimeResultAfterInputReady(styleTransfer, 'styleImage')).assertFalse();
+      expect(shouldPreserveRuntimeResultAfterInputReady(styleTransfer, 'styleImage')).assertTrue();
     });
 
     it('blocksOnlyRunningCustomModelAndStyleTransferInputChanges', 0, () => {

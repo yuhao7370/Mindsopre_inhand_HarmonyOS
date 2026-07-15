@@ -326,6 +326,47 @@ export function usesAndroidObjectPhotoLayout(workflow: FeatureWorkflow | undefin
   return workflow?.routeName === AppRoute.OBJECT_PHOTO.name;
 }
 
+export function usesAndroidStyleTransferLayout(workflow: FeatureWorkflow | undefined): boolean {
+  return workflow?.routeName === AppRoute.STYLE_TRANSFER.name;
+}
+
+export function styleTransferResultToastKey(
+  workflow: FeatureWorkflow | undefined,
+  resultOk: boolean
+): AppStringKey | undefined {
+  return usesAndroidStyleTransferLayout(workflow) && !resultOk ?
+    'feature_runtime_style_transfer_failed' : undefined;
+}
+
+function isStyleTransferModelInput(inputKind: FeatureInputKind): boolean {
+  return inputKind === 'stylePredictModelFile' || inputKind === 'styleTransferModelFile';
+}
+
+export function styleTransferModelCacheToastKey(
+  workflow: FeatureWorkflow | undefined,
+  inputKind: FeatureInputKind,
+  messageKey: AppStringKey
+): AppStringKey | undefined {
+  return usesAndroidStyleTransferLayout(workflow) && isStyleTransferModelInput(inputKind) ?
+    messageKey : undefined;
+}
+
+export function shouldResetStyleTransferPageAfterModelCacheResult(
+  workflow: FeatureWorkflow | undefined,
+  inputKind: FeatureInputKind,
+  resultOk: boolean
+): boolean {
+  return resultOk && usesAndroidStyleTransferLayout(workflow) && isStyleTransferModelInput(inputKind);
+}
+
+export function shouldShowStyleOriginalAfterInputReady(
+  workflow: FeatureWorkflow | undefined,
+  inputKind: FeatureInputKind
+): boolean {
+  return usesAndroidStyleTransferLayout(workflow) &&
+    (inputKind === 'contentImage' || inputKind === 'camera');
+}
+
 export function objectPhotoResultToastKey(
   workflow: FeatureWorkflow | undefined,
   resultOk: boolean
@@ -670,7 +711,8 @@ export function liveClassificationEmptyPromptKey(workflow: FeatureWorkflow | und
 
 export function shouldClearRuntimeResultAtWorkflowStart(workflow: FeatureWorkflow | undefined): boolean {
   return !shouldShowLiveClassificationCameraOverlay(workflow) &&
-    workflow?.routeName !== AppRoute.PORTRAIT_SEGMENTATION.name;
+    workflow?.routeName !== AppRoute.PORTRAIT_SEGMENTATION.name &&
+    !usesAndroidStyleTransferLayout(workflow);
 }
 
 export function shouldKeepScreenOnForWorkflow(workflow: FeatureWorkflow | undefined): boolean {
@@ -725,7 +767,10 @@ export function shouldPreserveRuntimeResultAfterInputReady(
 ): boolean {
   return (workflow?.routeName === AppRoute.PORTRAIT_SEGMENTATION.name && inputKind === 'backgroundImage') ||
     (usesAndroidCustomModelLayout(workflow) &&
-      (inputKind === 'modelFile' || inputKind === 'photo' || inputKind === 'camera'));
+      (inputKind === 'modelFile' || inputKind === 'photo' || inputKind === 'camera')) ||
+    (usesAndroidStyleTransferLayout(workflow) &&
+      (inputKind === 'contentImage' || inputKind === 'camera' || inputKind === 'styleImage' ||
+        isStyleTransferModelInput(inputKind)));
 }
 
 export function shouldPreserveRuntimeVisualResultOnAiResult(
@@ -733,6 +778,9 @@ export function shouldPreserveRuntimeVisualResultOnAiResult(
   resultOk: boolean,
   dataKind: string
 ): boolean {
+  if (usesAndroidStyleTransferLayout(workflow)) {
+    return !resultOk || dataKind === 'styleTransfer';
+  }
   return workflow?.routeName === AppRoute.PORTRAIT_SEGMENTATION.name &&
     resultOk &&
     dataKind === 'segmentation';
