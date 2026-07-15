@@ -9728,6 +9728,30 @@ export default function localUnitTest() {
       expect(specializedAndroidLiveLayoutForWorkflow(undefined)).assertUndefined();
     });
 
+    it('coversEveryRegisteredWorkflowWithExactlyOneAndroidLayoutFamily', 0, () => {
+      const layoutMatchCount = (workflow: FeatureWorkflow | undefined): number => [
+        usesAndroidTextTranslationLayout(workflow),
+        usesAndroidTextRecognitionLayout(workflow),
+        usesAndroidPoseNetStillLayout(workflow),
+        usesAndroidGestureStillLayout(workflow),
+        usesAndroidObjectPhotoLayout(workflow),
+        usesAndroidStyleTransferLayout(workflow),
+        usesAndroidCustomModelLayout(workflow),
+        usesAndroidStillSegmentationLayout(workflow),
+        usesAndroidStillSceneLayout(workflow),
+        usesAndroidPortraitSegmentationLayout(workflow),
+        specializedAndroidLiveLayoutForWorkflow(workflow) === 'imageClassification',
+        specializedAndroidLiveLayoutForWorkflow(workflow) === 'objectDetection',
+        usesSimpleAndroidLiveLayout(workflow)
+      ].filter((matches: boolean) => matches).length;
+
+      expect(featureWorkflows.length).assertEqual(16);
+      featureWorkflows.forEach((workflow: FeatureWorkflow) => {
+        expect(layoutMatchCount(workflow)).assertEqual(1);
+      });
+      expect(layoutMatchCount(undefined)).assertEqual(0);
+    });
+
     it('hidesAutoStartCameraFromLiveInputChipsLikeAndroidLiveActivities', 0, () => {
       const liveRouteNames: Array<string> = [
         AppRoute.LIVE_SKELETON.name,
