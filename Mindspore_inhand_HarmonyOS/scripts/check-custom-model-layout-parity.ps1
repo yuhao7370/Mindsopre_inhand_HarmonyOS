@@ -8,6 +8,66 @@ function Get-NormalizedText([string]$Path) {
   return (Get-Content -Raw -Encoding UTF8 -LiteralPath $Path).Replace("`r`n", "`n").Replace("`r", "`n")
 }
 
+function Remove-ArkTsComments([string]$Text) {
+  $result = [Text.StringBuilder]::new($Text.Length)
+  $state = 'code'
+  $terminator = [char]0
+  $escaped = $false
+  for ($index = 0; $index -lt $Text.Length; $index++) {
+    $current = $Text[$index]
+    $next = if ($index + 1 -lt $Text.Length) { $Text[$index + 1] } else { [char]0 }
+    if ($state -eq 'lineComment') {
+      if ($current -eq [char]0x0A) {
+        [void]$result.Append($current)
+        $state = 'code'
+      } else {
+        [void]$result.Append(' ')
+      }
+      continue
+    }
+    if ($state -eq 'blockComment') {
+      if ($current -eq [char]0x2A -and $next -eq [char]0x2F) {
+        [void]$result.Append('  ')
+        $index++
+        $state = 'code'
+      } elseif ($current -eq [char]0x0A) {
+        [void]$result.Append($current)
+      } else {
+        [void]$result.Append(' ')
+      }
+      continue
+    }
+    if ($state -eq 'literal') {
+      [void]$result.Append($current)
+      if ($escaped) {
+        $escaped = $false
+      } elseif ($current -eq [char]0x5C) {
+        $escaped = $true
+      } elseif ($current -eq $terminator) {
+        $state = 'code'
+      }
+      continue
+    }
+    if ($current -eq [char]0x2F -and $next -eq [char]0x2F) {
+      [void]$result.Append('  ')
+      $index++
+      $state = 'lineComment'
+    } elseif ($current -eq [char]0x2F -and $next -eq [char]0x2A) {
+      [void]$result.Append('  ')
+      $index++
+      $state = 'blockComment'
+    } elseif ($current -eq [char]0x27 -or $current -eq [char]0x22 -or $current -eq [char]0x60) {
+      [void]$result.Append($current)
+      $terminator = $current
+      $escaped = $false
+      $state = 'literal'
+    } else {
+      [void]$result.Append($current)
+    }
+  }
+  return $result.ToString()
+}
+
 function Get-TextSection(
   [string]$Text,
   [string]$StartMarker,
@@ -49,7 +109,7 @@ $catalogPath = Join-Path $SourceRoot 'entry\src\main\ets\features\runtime\Featur
 $pagePath = Join-Path $SourceRoot 'entry\src\main\ets\pages\FeatureRuntimePage.ets'
 $buildScriptPath = Join-Path $SourceRoot 'scripts\build-hap.ps1'
 
-$catalog = Get-NormalizedText $catalogPath
+$catalog = Remove-ArkTsComments (Get-NormalizedText $catalogPath)
 $selector = Get-TextSection `
   $catalog `
   'export function usesAndroidCustomModelLayout' `
@@ -58,7 +118,7 @@ $selector = Get-TextSection `
 Assert-Contains $selector 'return workflow?.routeName === AppRoute.CUSTOM_MODEL.name;' 'selector must target only Custom Model.'
 Assert-Count $selector 'AppRoute.' 1 'selector must contain exactly one route target.'
 
-$page = Get-NormalizedText $pagePath
+$page = Remove-ArkTsComments (Get-NormalizedText $pagePath)
 $builder = Get-TextSection `
   $page `
   '  customModelAndroidLayout() {' `
