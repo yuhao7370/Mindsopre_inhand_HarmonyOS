@@ -88,6 +88,21 @@ class RuntimeInputPolicyTest(unittest.TestCase):
             "https://example.com/help",
         )
 
+    def test_copies_non_linguistic_separators_without_calling_model(self):
+        calls = []
+
+        def translate(values):
+            calls.append(values)
+            return ["该指南位于"]
+
+        self.assertEqual(
+            translate_with_policy(
+                "The guide is at https://help.example.com/v4/setup.", translate
+            ),
+            "该指南位于https://help.example.com/v4/setup.",
+        )
+        self.assertEqual(calls, [["The guide is at "]])
+
     def test_rejects_missing_or_empty_model_outputs(self):
         with self.assertRaises(RuntimeInputPolicyError):
             translate_with_policy("translate report_v5", lambda _: [])

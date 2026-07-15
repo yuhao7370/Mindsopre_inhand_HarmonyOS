@@ -62,7 +62,11 @@ def translate_with_policy(
     text: str, translate: Callable[[List[str]], Sequence[str]]
 ) -> str:
     segments = prepare_translation_segments(text)
-    model_texts = [segment.text for segment in segments if segment.kind == "model"]
+    model_texts = [
+        segment.text
+        for segment in segments
+        if segment.kind == "model" and _contains_zh_or_en_text(segment.text)
+    ]
     outputs = list(translate(model_texts)) if model_texts else []
     if len(outputs) != len(model_texts) or any(
         not isinstance(output, str) or not output for output in outputs
@@ -71,12 +75,23 @@ def translate_with_policy(
     output_index = 0
     result = []
     for segment in segments:
-        if segment.kind == "protected":
+        if segment.kind == "protected" or not _contains_zh_or_en_text(segment.text):
             result.append(segment.text)
         else:
             result.append(outputs[output_index])
             output_index += 1
     return "".join(result)
+
+
+def _contains_zh_or_en_text(text: str) -> bool:
+    return any(
+        "A" <= character <= "Z"
+        or "a" <= character <= "z"
+        or "\u3400" <= character <= "\u4dbf"
+        or "\u4e00" <= character <= "\u9fff"
+        or "\uf900" <= character <= "\ufaff"
+        for character in text
+    )
 
 
 def _protected_ranges(text: str) -> List[Tuple[int, int]]:
