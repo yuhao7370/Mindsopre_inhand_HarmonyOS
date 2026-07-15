@@ -41,7 +41,8 @@ export function shouldPreserveRuntimeTextResultOnAiResult(workflow: FeatureWorkf
 
   Write-FixtureFile $Root 'entry\src\main\ets\services\ai\SceneDetectionService.ets' @'
 function emptySceneResult(): SceneDetectionResult {
-  return { ok: false, scenes: [], failureKind: 'empty' };
+  const scenes: Array<SceneDetection> = [];
+  return { ok: false, scenes: scenes, failureKind: scenes.length === 0 ? 'empty' : undefined };
 }
 
 function runtimeSceneResult(): SceneDetectionResult {
@@ -59,6 +60,10 @@ export function androidStillSceneResultRows(result: SceneDetectionResult): Array
     rows.push(resultRow('feature_runtime_scene_overlay_score', formatAndroidSceneScore(scene.score)));
   });
   return rows;
+}
+
+function androidSceneScorePercent(score: number): string {
+  return `${score}`;
 }
 
 export function sceneDetectionOverlayRows(result: SceneDetectionResult): Array<SceneDetectionOverlayRow> {
@@ -167,6 +172,7 @@ export function sceneDetectionOverlayRows(result: SceneDetectionResult): Array<S
                 .height(56.33)
               Text(appString('workflow_summary_scene_still_android_prompt'))
                 .fontSize(16)
+                .fontColor('#666666')
             }
           }
         }
@@ -309,6 +315,9 @@ try {
   Assert-MutationRejected $validRoot 'wrong-frame-color' $pagePath `
     ".backgroundColor('#E6E6E6')" `
     ".backgroundColor('#E5E5E5')"
+  Assert-MutationRejected $validRoot 'wrong-prompt-color' $pagePath `
+    "Text(appString('workflow_summary_scene_still_android_prompt'))`n                .fontSize(16)`n                .fontColor('#666666')" `
+    "Text(appString('workflow_summary_scene_still_android_prompt'))`n                .fontSize(16)`n                .fontColor('#333333')"
   Assert-MutationRejected $validRoot 'wrong-photo-margin' $pagePath `
     '.margin({ left: 20, right: 5 })' `
     '.margin({ left: 5, right: 5 })'

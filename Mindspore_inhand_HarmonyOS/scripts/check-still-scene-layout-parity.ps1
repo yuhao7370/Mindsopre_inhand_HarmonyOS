@@ -162,7 +162,7 @@ foreach ($line in @(
 )) { Assert-CodeLine $builder $line "dedicated builder is missing executable line: $line." }
 Assert-CodeLineCount $builder '.height(37)' 3 'all three actions must be 37vp high.'
 Assert-CodeLineCount $builder '.enabled(!this.workflowRunning)' 3 'all three actions must visibly disable while running.'
-Assert-CodeLineCount $builder ".fontColor('#666666')" 3 'all actions must use Android neutral foreground.'
+Assert-CodeLineCount $builder ".fontColor('#666666')" 4 'prompt and all actions must use Android neutral foreground.'
 Assert-CodeLineCount $builder ".backgroundColor('#F4F3F8')" 3 'all actions must use Android neutral background.'
 Assert-CodeLineCount $builder '.borderRadius(5)' 3 'all actions must use Android 5vp radius.'
 Assert-CodeLineCount $builder '.margin({ left: 20, right: 5 })' 1 'Photo must use Android 20/5 margins.'
@@ -221,7 +221,7 @@ Assert-CodeLine $toastHelper 'const toastKey = stillSceneResultToastKey(workflow
 Assert-CodeLine $toastHelper 'this.showRuntimeToast(toastKey);' 'mapped empty results must use the existing Toast path.'
 
 $rowAdapter = Get-TextSection $aiService 'export function androidStillSceneResultRows(' `
-  "`n`nexport function sceneDetectionOverlayRows" 'Android still-scene row adapter'
+  "`n`nfunction androidSceneScorePercent" 'Android still-scene row adapter'
 foreach ($key in @('feature_runtime_result_scene_count', 'feature_runtime_scene_overlay_scene', 'feature_runtime_scene_overlay_score')) {
   Assert-Contains $rowAdapter $key "row adapter is missing exact row key: $key."
 }
@@ -230,7 +230,7 @@ Assert-Excludes $rowAdapter 'feature_runtime_result_image' 'row adapter must omi
 Assert-Excludes $rowAdapter 'feature_runtime_result_execution_time' 'row adapter must omit execution time'
 Assert-Contains $aiService "'SCENE_DETECTION_FAILED'" 'AiService must retain the empty-result code.'
 Assert-Contains $aiService "'SCENE_DETECTION_RUNTIME_FAILED'" 'AiService must expose a distinct runtime-failure code.'
-Assert-Contains $sceneService "failureKind: 'empty'" 'scene service must preserve empty-result provenance.'
+Assert-Contains $sceneService "failureKind: scenes.length === 0 ? 'empty' : undefined" 'scene service must preserve empty-result provenance.'
 Assert-Contains $sceneService "failureKind: 'runtime'" 'scene service must preserve runtime-failure provenance.'
 
 $buildStart = $page.IndexOf('  build() {', [StringComparison]::Ordinal)

@@ -369,10 +369,9 @@ Current HarmonyOS behavior:
   page with Photo, Camera, Real-time, and secure Save controls. New inputs and
   failed runs retain the previous foreground Save target until a current local
   foreground conversion atomically succeeds.
-- The one route that still uses the generic runtime fallback (still scene
-  detection) retains the shared summary, Inputs, Permissions, localized
-  status, structured result rows, and workflow visual cards. Raw `detailText`
-  remains internal `resultText` state and is not rendered.
+- No registered workflow now uses the generic runtime fallback. The fallback
+  remains only as an unknown-route defense; raw `detailText` stays internal
+  `resultText` state and is not rendered.
 - Custom Model still exposes its first 10 output values through the existing
   structured output row.
 - The shared runtime shows a primary action only for PoseNet, Text Translation,
@@ -432,6 +431,15 @@ Current HarmonyOS behavior:
   Real-time action when that hidden capability is opened explicitly.
 - The still scene route exposes the Android-style Real-time action and
   auto-runs scene analysis after album or camera image input is ready.
+- The still route now uses Android's title-only toolbar, fixed 376vp gray
+  preview frame, 266x356 fill image or `icon_style` prompt, exact Photo/Camera/
+  Real-time row, and remaining-height scrollable Scene Count/Scene/Score rows
+  instead of generic runtime cards. Android's declared but never-shown loading
+  view remains absent.
+- Accepted or cancelled input, run start, permission denial, empty results,
+  and runtime failures retain the previous preview and successful text rows
+  until a current non-empty result replaces them. Empty analyzer results alone
+  show the existing failure Toast; runtime exceptions remain silent.
 - The default HarmonyOS runtime now uses the bundled
   `model/resnet18-place365.ms` Places365 scene model with
   `labels/places365.txt`, then maps top Places365 labels into Android-style

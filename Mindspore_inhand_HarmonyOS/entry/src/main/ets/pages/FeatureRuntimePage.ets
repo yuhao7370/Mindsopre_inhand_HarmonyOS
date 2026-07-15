@@ -30,6 +30,7 @@ import {
   usesAndroidObjectPhotoLayout,
   usesAndroidStyleTransferLayout,
   usesAndroidStillSegmentationLayout,
+  usesAndroidStillSceneLayout,
   usesAndroidPoseNetStillLayout,
   usesAndroidPortraitSegmentationLayout,
   usesAndroidTextRecognitionLayout,
@@ -44,6 +45,7 @@ import {
   cancelledPickStatusKeyForWorkflow,
   cancelledPickToastStatusKeyForWorkflow,
   shouldPreserveRuntimeResultAfterInputReady,
+  shouldPreserveRuntimeTextResultOnAiResult,
   shouldRestoreCachedModelFileInputs,
   shouldPreserveRuntimeVisualResultOnAiResult,
   shouldShowStyleOriginalAfterInputReady,
@@ -78,6 +80,7 @@ import {
   styleTransferModelCacheToastKey,
   styleTransferResultToastKey,
   stillSegmentationResultToastKey,
+  stillSceneResultToastKey,
   styleTransferStyleSelectionToastKey,
   styleTransferStyleReadyStatusKey,
   textInputPlaceholderKeyForWorkflow,
@@ -107,6 +110,7 @@ import {
   DefaultAiService,
   SceneDetectionOverlayRow,
   SegmentationBackgroundMetadata,
+  androidStillSceneResultRows,
   aiRunResultRows,
   copyableTextForAiResult,
   translatedTextForAiResult,
@@ -229,6 +233,8 @@ import {
   RuntimeHelpRouteOptions,
   openRuntimeHelpSource
 } from '../services/web/RuntimeHelpLinkService';
+
+type AiResultRow = AiRunResultRow;
 
 interface FeatureRuntimeParams {
   titleKey?: AppStringKey;
@@ -402,6 +408,11 @@ struct FeatureRuntimePage {
   }
 
   private prepareInput(inputKind: FeatureInputKind, initialPick: boolean = false): void {
+    const workflow = workflowForRoute(this.routeName);
+    if (!shouldAllowRuntimeInputChange(workflow, inputKind, this.workflowRunning)) {
+      this.statusKey = 'feature_runtime_status_running';
+      return;
+    }
     const requestId = ++this.inputPreparationRequestId;
     this.prepareInputAsync(inputKind, initialPick, requestId);
   }
@@ -1067,7 +1078,7 @@ struct FeatureRuntimePage {
     const context = this.uiAbilityContext();
     if (!context) {
       this.statusKey = 'feature_runtime_permission_denied';
-      if (usesAndroidCustomModelLayout(workflow)) {
+      if (!shouldPreserveRuntimeTextResultOnAiResult(workflow, false) && usesAndroidCustomModelLayout(workflow)) {
         this.resultText = '';
       }
       return;
@@ -1085,9 +1096,11 @@ struct FeatureRuntimePage {
       }
       if (!permission.ok) {
         this.statusKey = 'feature_runtime_permission_denied';
-        this.resultText = usesAndroidCustomModelLayout(workflow) ?
-          '' : permission.requested.join(', ');
-        this.resultRows = [];
+        if (!shouldPreserveRuntimeTextResultOnAiResult(workflow, false)) {
+          this.resultText = usesAndroidCustomModelLayout(workflow) ?
+            '' : permission.requested.join(', ');
+          this.resultRows = [];
+        }
         if (!shouldPreserveRuntimeVisualResultOnAiResult(workflow, false, '')) {
           this.clearVisualResults();
         }
@@ -1121,8 +1134,10 @@ struct FeatureRuntimePage {
   private applyRuntimeFailure(): void {
     const workflow = workflowForRoute(this.routeName);
     this.statusKey = 'feature_runtime_run_failed';
-    this.resultText = usesAndroidCustomModelLayout(workflow) ? this.customModelTerminalFailureText() : '';
-    this.resultRows = [];
+    if (!shouldPreserveRuntimeTextResultOnAiResult(workflow, false)) {
+      this.resultText = usesAndroidCustomModelLayout(workflow) ? this.customModelTerminalFailureText() : '';
+      this.resultRows = [];
+    }
     if (!shouldPreserveRuntimeVisualResultOnAiResult(workflow, false, '')) {
       this.clearVisualResults();
     }
@@ -1177,10 +1192,15 @@ struct FeatureRuntimePage {
   private async applyAiResult(result: AiRunResult, runtimeRequestId: number): Promise<void> {
     const workflow = workflowForRoute(this.routeName);
     this.statusKey = result.messageKey;
-    this.resultText = usesAndroidCustomModelLayout(workflow) ?
-      (result.ok ? result.detailText : this.customModelTerminalFailureText()) :
-      result.detailText;
-    this.resultRows = aiRunResultRows(result);
+    if (!shouldPreserveRuntimeTextResultOnAiResult(workflow, result.ok)) {
+      this.resultText = usesAndroidCustomModelLayout(workflow) ?
+        (result.ok ? result.detailText : this.customModelTerminalFailureText()) :
+        result.detailText;
+      this.resultRows = aiRunResultRows(result);
+    }
+    if (usesAndroidStillSceneLayout(workflow) && result.ok && result.data?.kind === 'scenes') {
+      this.resultRows = androidStillSceneResultRows(result.data.result);
+    }
     if (!this.shouldPreserveVisualResultsOnAiResult(result)) {
       this.clearVisualResults();
     }
@@ -1190,11 +1210,19 @@ struct FeatureRuntimePage {
     this.updateGesturePreview(result);
     this.updateSceneOverlay(result);
     await this.updateStyledImagePreview(result, runtimeRequestId);
+    this.showStillSceneFailureToastIfNeeded(result.code);
     this.showStyleTransferFailureToastIfNeeded(result.ok);
     this.showStillSegmentationFailureToastIfNeeded(result.ok);
     this.showObjectPhotoFailureToastIfNeeded(result.ok);
     this.showGestureStillFailureToastIfNeeded(result.ok, result.messageKey);
     this.showPoseNetStillToastIfNeeded(result.ok);
+  }
+
+  private showStillSceneFailureToastIfNeeded(resultCode: string): void {
+    const toastKey = stillSceneResultToastKey(workflowForRoute(this.routeName), resultCode);
+    if (toastKey !== undefined) {
+      this.showRuntimeToast(toastKey);
+    }
   }
 
   private showObjectPhotoFailureToastIfNeeded(resultOk: boolean): void {
@@ -1577,6 +1605,13 @@ struct FeatureRuntimePage {
   private hasLinkedLiveRoute(): boolean {
     const workflow = workflowForRoute(this.routeName);
     return (workflow?.linkedLiveRouteName ?? '').length > 0;
+  }
+
+  private openStillSceneLiveRoute(): void {
+    if (this.workflowRunning) {
+      return;
+    }
+    this.openLinkedLiveRoute();
   }
 
   private openLinkedLiveRoute(): void {
@@ -3119,6 +3154,112 @@ struct FeatureRuntimePage {
   }
 
   @Builder
+  stillSceneAndroidLayout() {
+    Stack({ alignContent: Alignment.TopStart }) {
+      Column() {
+        this.runtimeActionToolbar(false)
+        Row() {
+        }
+        .width('100%')
+        .height(1)
+        .backgroundColor('#E4E4E4')
+        Stack({ alignContent: Alignment.Center }) {
+          if (this.imageInputUri.length > 0) {
+            Image(this.imageInputUri)
+              .width(266)
+              .height(356)
+              .objectFit(ImageFit.Fill)
+          } else {
+            Column({ space: 10 }) {
+              Image($r('app.media.icon_style'))
+                .width(69.33)
+                .height(56.33)
+                .objectFit(ImageFit.Contain)
+              Text(appString('workflow_summary_scene_still_android_prompt'))
+                .fontSize(16)
+                .fontColor('#666666')
+                .textAlign(TextAlign.Center)
+            }
+            .alignItems(HorizontalAlign.Center)
+          }
+        }
+        .width('100%')
+        .height(376)
+        .backgroundColor('#E6E6E6')
+        Row() {
+          Button(appString('feature_input_photo_android'), { type: ButtonType.Normal })
+            .layoutWeight(1)
+            .height(37)
+            .margin({ left: 20, right: 5 })
+            .fontSize(14)
+            .fontWeight(FontWeight.Normal)
+            .fontColor('#666666')
+            .backgroundColor('#F4F3F8')
+            .borderRadius(5)
+            .enabled(!this.workflowRunning)
+            .onClick(() => this.prepareInput('photo'))
+          Button(appString('feature_input_camera_android'), { type: ButtonType.Normal })
+            .layoutWeight(1)
+            .height(37)
+            .margin({ left: 5, right: 5 })
+            .fontSize(14)
+            .fontWeight(FontWeight.Normal)
+            .fontColor('#666666')
+            .backgroundColor('#F4F3F8')
+            .borderRadius(5)
+            .enabled(!this.workflowRunning)
+            .onClick(() => this.prepareInput('camera'))
+          Button(appString('feature_runtime_go_live_android_hms'), { type: ButtonType.Normal })
+            .layoutWeight(1)
+            .height(37)
+            .margin({ left: 5, right: 5 })
+            .fontSize(14)
+            .fontWeight(FontWeight.Normal)
+            .fontColor('#666666')
+            .backgroundColor('#F4F3F8')
+            .borderRadius(5)
+            .enabled(!this.workflowRunning)
+            .onClick(() => {
+              this.openStillSceneLiveRoute()
+            })
+        }
+        .width('100%')
+        .margin({ top: 14 })
+        .alignItems(VerticalAlign.Center)
+        Scroll() {
+          Column() {
+            ForEach(this.resultRows, (row: AiResultRow) => {
+              Row() {
+                Text(appString(row.labelKey))
+                  .fontSize(16)
+                  .fontColor(Color.Black)
+                Text(this.resultRowValue(row))
+                  .fontSize(16)
+                  .fontColor(Color.Black)
+                  .margin({ left: 4 })
+              }
+              .width('100%')
+              .margin({ bottom: 8 })
+            }, (row: AiResultRow, index: number) => `${index}-${row.labelKey}-${row.value}`)
+          }
+          .width('100%')
+          .alignItems(HorizontalAlign.Start)
+        }
+        .width('100%')
+        .layoutWeight(1)
+        .margin({ left: 20, right: 20, top: 14 })
+      }
+      .width('100%')
+      .height('100%')
+      .backgroundColor(Color.White)
+      this.runtimePermissionRecoveryOverlay()
+    }
+    .width('100%')
+    .height('100%')
+    .backgroundColor(Color.White)
+  }
+
+  @Builder
   portraitSegmentationAndroidLayout() {
     Column() {
       this.portraitSegmentationToolbar()
@@ -4132,6 +4273,8 @@ struct FeatureRuntimePage {
       this.customModelAndroidLayout()
     } else if (usesAndroidStillSegmentationLayout(workflowForRoute(this.routeName))) {
       this.stillSegmentationAndroidLayout()
+    } else if (usesAndroidStillSceneLayout(workflowForRoute(this.routeName))) {
+      this.stillSceneAndroidLayout()
     } else if (usesAndroidPortraitSegmentationLayout(workflowForRoute(this.routeName))) {
       this.portraitSegmentationAndroidLayout()
     } else if (specializedAndroidLiveLayoutForWorkflow(workflowForRoute(this.routeName)) === 'imageClassification') {

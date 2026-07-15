@@ -92,7 +92,7 @@ try {
   $root = New-MutationRoot 'selector'
   Replace-OnceInSection (Join-Path $root 'entry\src\main\ets\features\runtime\FeatureWorkflowCatalog.ets') `
     'export function usesAndroidStillSegmentationLayout' `
-    'export function stillSegmentationResultToastKey' `
+    'export function usesAndroidStillSceneLayout' `
     'return workflow?.routeName === AppRoute.SEGMENTATION_STILL.name;' `
     'return workflow?.routeName === AppRoute.SEGMENTATION_LIVE.name;'
   Assert-GuardFails $root 'selector targets live segmentation'

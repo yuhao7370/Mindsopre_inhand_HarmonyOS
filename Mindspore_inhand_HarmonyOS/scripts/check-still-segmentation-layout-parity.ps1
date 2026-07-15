@@ -104,7 +104,7 @@ $page = Remove-ArkTsCommentsAndTemplateRaw (Get-NormalizedText (Join-Path $Sourc
 $build = Remove-ArkTsCommentsAndTemplateRaw (Get-NormalizedText (Join-Path $SourceRoot 'scripts\build-hap.ps1'))
 
 $selector = Get-TextSection $catalog 'export function usesAndroidStillSegmentationLayout' `
-  'export function stillSegmentationResultToastKey' 'exact still-segmentation selector'
+  'export function usesAndroidStillSceneLayout' 'exact still-segmentation selector'
 Assert-CodeLine $selector 'return workflow?.routeName === AppRoute.SEGMENTATION_STILL.name;' `
   'selector must target only SEGMENTATION_STILL.'
 if (([regex]::Matches($selector, 'AppRoute\.')).Count -ne 1) {
