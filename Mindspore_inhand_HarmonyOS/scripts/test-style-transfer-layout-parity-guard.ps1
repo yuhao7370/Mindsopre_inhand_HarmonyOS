@@ -157,6 +157,13 @@ try {
     '      // this.styleTransferAndroidLayout()'
   Assert-GuardFails $commentBuildRoot 'builder selection exists only in a comment'
 
+  $swappedBuilderRoot = New-MutationRoot 'swapped-style-custom-builders'
+  Replace-Once `
+    (Join-Path $swappedBuilderRoot 'entry\src\main\ets\pages\FeatureRuntimePage.ets') `
+    "} else if (usesAndroidStyleTransferLayout(workflowForRoute(this.routeName))) {`n      this.styleTransferAndroidLayout()`n    } else if (usesAndroidCustomModelLayout(workflowForRoute(this.routeName))) {`n      this.customModelAndroidLayout()" `
+    "} else if (usesAndroidStyleTransferLayout(workflowForRoute(this.routeName))) {`n      this.customModelAndroidLayout()`n    } else if (usesAndroidCustomModelLayout(workflowForRoute(this.routeName))) {`n      this.styleTransferAndroidLayout()"
+  Assert-GuardFails $swappedBuilderRoot 'Style and Custom selectors render each other builder'
+
   Assert-PageSectionMutationFails 'missing-toolbar' `
     '  styleTransferAndroidLayout() {' '  customModelAndroidLayout() {' `
     'this.runtimeActionToolbar(true)' "const toolbarDecoy = 'this.runtimeActionToolbar(true)';" `
@@ -165,6 +172,20 @@ try {
     '  styleTransferAndroidLayout() {' '  customModelAndroidLayout() {' `
     '.height(265)' "const previewDecoy = '.height(265)';" `
     'fixed Android preview height exists only as a literal decoy'
+
+  $previewWidthRoot = New-MutationRoot 'second-preview-width-not-256'
+  Replace-NthInSection `
+    (Join-Path $previewWidthRoot 'entry\src\main\ets\pages\FeatureRuntimePage.ets') `
+    '  styleTransferAndroidLayout() {' '  customModelAndroidLayout() {' `
+    '.width(256)' '.width(255)' 2
+  Assert-GuardFails $previewWidthRoot 'original preview is not exactly 256vp wide'
+
+  $previewHeightRoot = New-MutationRoot 'second-preview-height-not-256'
+  Replace-NthInSection `
+    (Join-Path $previewHeightRoot 'entry\src\main\ets\pages\FeatureRuntimePage.ets') `
+    '  styleTransferAndroidLayout() {' '  customModelAndroidLayout() {' `
+    '.height(256)' '.height(255)' 2
+  Assert-GuardFails $previewHeightRoot 'original preview is not exactly 256vp high'
   Assert-PageSectionMutationFails 'missing-album-action' `
     '  styleTransferAndroidLayout() {' '  customModelAndroidLayout() {' `
     "Button(appString('feature_runtime_style_album'), { type: ButtonType.Normal })" `
@@ -192,6 +213,33 @@ try {
     ".enabled(!this.workflowRunning)`n              .onClick((_event: ClickEvent, result: SaveButtonOnClickResult) => {" `
     ".enabled(true)`n              .onClick((_event: ClickEvent, result: SaveButtonOnClickResult) => {"
   Assert-GuardFails $saveEnabledRoot 'secure Save is not rendered disabled while running'
+
+  $saveEntryRoot = New-MutationRoot 'secure-save-entry-unguarded'
+  $saveEntryPage = Join-Path $saveEntryRoot 'entry\src\main\ets\pages\FeatureRuntimePage.ets'
+  $saveEntryText = [IO.File]::ReadAllText($saveEntryPage)
+  $saveEntryGuard = "                if (this.workflowRunning) {`n                  return;`n                }`n"
+  if ($saveEntryText.Contains($saveEntryGuard)) {
+    Replace-Once $saveEntryPage $saveEntryGuard ''
+  } elseif (-not $saveEntryText.Contains(
+      '              .onClick((_event: ClickEvent, result: SaveButtonOnClickResult) => {'
+    )) {
+    throw 'Style Transfer guard fixture could not find the secure Save handler entry.'
+  }
+  Assert-GuardFails $saveEntryRoot 'secure Save handler entry no longer rejects while running'
+
+  $saveEntryDecoyRoot = New-MutationRoot 'secure-save-entry-quoted-guard'
+  $saveEntryDecoyPage = Join-Path $saveEntryDecoyRoot 'entry\src\main\ets\pages\FeatureRuntimePage.ets'
+  $saveEntryDecoyText = [IO.File]::ReadAllText($saveEntryDecoyPage)
+  if ($saveEntryDecoyText.Contains($saveEntryGuard)) {
+    Replace-Once $saveEntryDecoyPage $saveEntryGuard `
+      "                const runningGuardDecoy = 'if (this.workflowRunning) { return; }';`n"
+  } else {
+    Replace-Once $saveEntryDecoyPage `
+      '              .onClick((_event: ClickEvent, result: SaveButtonOnClickResult) => {' `
+      "              .onClick((_event: ClickEvent, result: SaveButtonOnClickResult) => {`n                const runningGuardDecoy = 'if (this.workflowRunning) { return; }';"
+  }
+  Assert-GuardFails $saveEntryDecoyRoot 'secure Save running guard exists only in a quoted decoy'
+
   Assert-PageSectionMutationFails 'recovery-handler-unguarded' `
     '  private recoverStyleOriginalPreview()' '  private selectPortraitBackgroundPreset' `
     'if (this.workflowRunning) {' 'if (false) {' `
@@ -219,6 +267,11 @@ try {
     'if (!isInputPreparationRequestCurrent(requestId, this.inputPreparationRequestId)) {' `
     "this.showStyleTransferModelCacheToastIfNeeded(inputKind, cacheResult!.messageKey); this.resetStyleTransferPageAfterModelCacheSuccess(); if (!isInputPreparationRequestCurrent(requestId, this.inputPreparationRequestId)) {" `
     'cache Toast/reset moved before the stale request gate'
+  Assert-PageSectionMutationFails 'duplicate-cache-apply-before-stale-gate' `
+    '  private async cacheAndApplyPickedModelFile(' '  private applyModelFileCacheResult' `
+    'if (!isInputPreparationRequestCurrent(requestId, this.inputPreparationRequestId)) {' `
+    "this.applyModelFileCacheResult(cacheResult, inputKind);`n    if (!isInputPreparationRequestCurrent(requestId, this.inputPreparationRequestId)) {" `
+    'cache result is applied once before and once after the stale gate'
   Assert-PageSectionMutationFails 'cache-failure-clears-page' `
     '  private applyModelFileCacheResult(' '  private showCustomModelCacheToastIfNeeded' `
     'if (!shouldPreserveRuntimeResultAfterInputReady(workflow, inputKind)) {' `

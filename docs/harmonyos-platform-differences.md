@@ -366,9 +366,10 @@ Current HarmonyOS behavior:
 - Selected images and models remain visible through preview rows that show
   user-facing labels and file names, instead of raw picker paths or surface ids.
 - The two routes that still use the generic runtime fallback (still image
-  segmentation and still scene detection) show only
-  localized status, structured result rows, and workflow visuals. Raw
-  `detailText` remains internal `resultText` state and is not rendered.
+  segmentation and still scene detection) retain the shared summary, Inputs,
+  Permissions, localized status, structured result rows, and workflow visual
+  cards. Raw `detailText` remains internal `resultText` state and is not
+  rendered.
 - Custom Model still exposes its first 10 output values through the existing
   structured output row.
 - The shared runtime shows a primary action only for PoseNet, Text Translation,

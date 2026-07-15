@@ -3310,6 +3310,9 @@ struct FeatureRuntimePage {
               .backgroundColor('#F4F3F8')
               .enabled(!this.workflowRunning)
               .onClick((_event: ClickEvent, result: SaveButtonOnClickResult) => {
+                if (this.workflowRunning) {
+                  return;
+                }
                 if (result === SaveButtonOnClickResult.SUCCESS) {
                   this.saveStyleTransferResultImage()
                   return;

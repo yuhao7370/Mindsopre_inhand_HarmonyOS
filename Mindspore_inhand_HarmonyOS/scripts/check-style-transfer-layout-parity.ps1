@@ -182,6 +182,10 @@ foreach ($line in @(
   ".height('100%')",
   '.backgroundColor(Color.White)'
 )) { Assert-CodeLine $builder $line "dedicated builder is missing executable line: $line." }
+Assert-CodeLineCount $builder '.width(256)' 2 `
+  'styled and original previews must each be exactly 256vp wide.'
+Assert-CodeLineCount $builder '.height(256)' 2 `
+  'styled and original previews must each be exactly 256vp high.'
 
 foreach ($line in @(
   ".columnsTemplate('1fr 1fr 1fr 1fr')",
@@ -220,6 +224,16 @@ Assert-CodeLine $saveControl '.enabled(!this.workflowRunning)' `
   'secure Save must render disabled while Style Transfer is running.'
 Assert-CodeLine $saveControl 'this.showRuntimeToast(this.statusKey);' `
   'denied secure Save must immediately show failure Toast.'
+$saveOnClick = Get-TextSection $saveControl `
+  '.onClick((_event: ClickEvent, result: SaveButtonOnClickResult) => {' `
+  "`n              })" 'secure Save click handler'
+Assert-CodeLineCount $saveOnClick 'if (this.workflowRunning) {' 1 `
+  'secure Save click handler must reject delayed/programmatic callbacks while running.'
+$saveRunningIndex = Get-CodeLineIndex $saveOnClick 'if (this.workflowRunning) {'
+$saveResultIndex = Get-CodeLineIndex $saveOnClick 'if (result === SaveButtonOnClickResult.SUCCESS) {'
+if ($saveRunningIndex -lt 0 -or $saveResultIndex -le $saveRunningIndex) {
+  throw 'Style Transfer parity guard failed: secure Save running guard must precede result handling.'
+}
 
 foreach ($marker in @(
   'this.summaryKey', 'feature_runtime_inputs_title', 'feature_runtime_permissions_title',
@@ -255,7 +269,14 @@ $applyIndex = Get-CodeLineIndex $cacheCaller 'this.applyModelFileCacheResult(cac
 if ($currentIndex -lt 0 -or $undefinedIndex -le $currentIndex -or $applyIndex -le $undefinedIndex) {
   throw 'Style Transfer parity guard failed: stale/undefined cache results must be rejected before apply/reset/Toast.'
 }
-Assert-Excludes $cacheCaller.Substring(0, $currentIndex) 'showStyleTransferModelCacheToastIfNeeded' `
+$preStaleCache = $cacheCaller.Substring(0, $currentIndex)
+Assert-CodeLineCount $cacheCaller 'this.applyModelFileCacheResult(cacheResult, inputKind);' 1 `
+  'model-cache result must be applied exactly once.'
+Assert-CodeLineCount $preStaleCache 'this.applyModelFileCacheResult(cacheResult, inputKind);' 0 `
+  'model-cache result must not be applied before the stale gate.'
+Assert-Excludes $preStaleCache 'resetStyleTransferPageAfterModelCacheSuccess' `
+  'model-cache reset must not run before the stale gate'
+Assert-Excludes $preStaleCache 'showStyleTransferModelCacheToastIfNeeded' `
   'model-cache Toast must not run before the stale gate'
 
 $cacheResult = Get-TextSection $page '  private applyModelFileCacheResult(' `
@@ -341,7 +362,18 @@ if ($objectIndex -lt 0 -or $styleIndex -le $objectIndex -or $customIndex -le $st
   throw 'Style Transfer parity guard failed: dedicated selector must be after Object Photo and before generic fallback.'
 }
 Assert-CodeLine $build $styleSelector 'build must select Style Transfer in executable code.'
-Assert-CodeLine $build 'this.styleTransferAndroidLayout()' 'Style Transfer selector must render the dedicated builder.'
+$styleBranch = Get-TextSection $build $styleSelector `
+  '} else if (usesAndroidCustomModelLayout(workflowForRoute(this.routeName))) {' 'Style Transfer build branch'
+Assert-CodeLineCount $styleBranch 'this.styleTransferAndroidLayout()' 1 `
+  'Style Transfer selector must render the dedicated builder exactly once.'
+$styleBranchBuilderCalls = @([regex]::Matches(
+    $styleBranch,
+    '(?m)^[\t ]*this\.([A-Za-z_][A-Za-z0-9_]*Layout)\(\)[\t ]*$'
+  ))
+if ($styleBranchBuilderCalls.Count -ne 1 -or
+  $styleBranchBuilderCalls[0].Value.Trim() -ne 'this.styleTransferAndroidLayout()') {
+  throw 'Style Transfer parity guard failed: Style Transfer selector must not render a sibling builder.'
+}
 
 $buildScript = Get-NormalizedText $buildScriptPath
 $guardCall = "& (Join-Path `$PSScriptRoot 'check-style-transfer-layout-parity.ps1')"
