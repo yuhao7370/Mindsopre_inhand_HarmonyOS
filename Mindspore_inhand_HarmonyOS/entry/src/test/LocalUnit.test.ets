@@ -12,6 +12,7 @@ import {
   AiRunResultRow,
   DefaultAiService,
   SegmentationBackgroundMetadata,
+  androidStillSceneResultRows,
   aiRunResultRows,
   copyableTextForAiResult,
   translatedTextForAiResult,
@@ -365,6 +366,7 @@ import {
   usesAndroidCustomModelLayout,
   usesAndroidObjectPhotoLayout,
   usesAndroidStyleTransferLayout,
+  usesAndroidStillSceneLayout,
   usesAndroidStillSegmentationLayout,
   usesAndroidPortraitSegmentationLayout,
   usesAndroidGestureStillLayout,
@@ -383,12 +385,14 @@ import {
   cancelledPickToastStatusKeyForWorkflow,
   shouldStartWorkflowRun,
   shouldPreserveRuntimeResultAfterInputReady,
+  shouldPreserveRuntimeTextResultOnAiResult,
   shouldPreserveRuntimeVisualResultOnAiResult,
   shouldShowStyleOriginalAfterInputReady,
   styleTransferModelCacheToastKey,
   styleTransferResultToastKey,
   styleTransferStyleSelectionToastKey,
   stillSegmentationResultToastKey,
+  stillSceneResultToastKey,
   runtimeSegmentationBackgroundImageUri,
   shouldHideTextInputWhenPreparingInput,
   textInputVisibleAfterCancelledPick,
@@ -5637,6 +5641,22 @@ export default function localUnitTest() {
       expect(result.code).assertEqual('MISSING_INPUT');
     });
 
+    it('sceneDetectionServiceDistinguishesEmptyResultsFromRuntimeFailures', 0, async () => {
+      const emptyResult = await new SceneDetectionService({
+        runner: new FixedSceneDetectionRunner({
+          ok: true,
+          scenes: [],
+          executionMs: 3
+        })
+      }).detectScenes('file://selected/empty.jpg');
+      const runtimeFailure = await new SceneDetectionService({
+        runner: new RejectingSceneDetectionRunner()
+      }).detectScenes('file://selected/broken.jpg');
+
+      expect(emptyResult.failureKind).assertEqual('empty');
+      expect(runtimeFailure.failureKind).assertEqual('runtime');
+    });
+
     it('aiServiceUsesSceneDetectionServiceWhenProvided', 0, async () => {
       const workflow = workflowForRoute(AppRoute.SCENE_STILL.name);
       expect(workflow !== undefined).assertTrue();
@@ -5699,6 +5719,34 @@ export default function localUnitTest() {
       expect(rows[3].labelKey).assertEqual('feature_runtime_result_execution_time');
     });
 
+    it('androidStillSceneResultRowsUseSeparateSceneAndTrimmedScoreLines', 0, () => {
+      const rows = androidStillSceneResultRows({
+        ok: true,
+        scenes: [
+          { label: 'beach', score: 0.5 },
+          { label: 'mountain', score: 0.741 },
+          { label: 'restaurant', score: 0.7412 }
+        ],
+        executionMs: 9
+      });
+
+      expect(rows.length).assertEqual(7);
+      expect(rows[0].labelKey).assertEqual('feature_runtime_result_scene_count');
+      expect(rows[0].value).assertEqual('3');
+      expect(rows[1].labelKey).assertEqual('feature_runtime_scene_overlay_scene');
+      expect(rows[1].value).assertEqual('beach');
+      expect(rows[2].labelKey).assertEqual('feature_runtime_scene_overlay_score');
+      expect(rows[2].value).assertEqual('50%');
+      expect(rows[3].labelKey).assertEqual('feature_runtime_scene_overlay_scene');
+      expect(rows[3].value).assertEqual('mountain');
+      expect(rows[4].labelKey).assertEqual('feature_runtime_scene_overlay_score');
+      expect(rows[4].value).assertEqual('74.1%');
+      expect(rows[5].labelKey).assertEqual('feature_runtime_scene_overlay_scene');
+      expect(rows[5].value).assertEqual('restaurant');
+      expect(rows[6].labelKey).assertEqual('feature_runtime_scene_overlay_score');
+      expect(rows[6].value).assertEqual('74.12%');
+    });
+
     it('sceneDetectionOverlayRowsMirrorAndroidLiveGraphicLabels', 0, () => {
       const rows = sceneDetectionOverlayRows({
         ok: true,
@@ -5725,7 +5773,7 @@ export default function localUnitTest() {
       expect(rows[4].value).assertEqual('82.00%');
     });
 
-    it('aiServiceReportsSceneDetectionFailureWithI18nKey', 0, async () => {
+    it('aiServiceReportsSceneDetectionRuntimeFailureWithDistinctCode', 0, async () => {
       const workflow = workflowForRoute(AppRoute.SCENE_STILL.name);
       expect(workflow !== undefined).assertTrue();
       const service = new SceneDetectionService({
@@ -5734,6 +5782,26 @@ export default function localUnitTest() {
 
       const result = await new DefaultAiService({ sceneDetectionService: service }).run(workflow!, {
         imageUri: 'file://selected/unknown.jpg'
+      });
+
+      expect(result.ok).assertFalse();
+      expect(result.code).assertEqual('SCENE_DETECTION_RUNTIME_FAILED');
+      expect(result.messageKey).assertEqual('feature_runtime_scene_failed');
+    });
+
+    it('aiServiceReportsEmptySceneResultWithToastEligibleCode', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.SCENE_STILL.name);
+      expect(workflow !== undefined).assertTrue();
+      const service = new SceneDetectionService({
+        runner: new FixedSceneDetectionRunner({
+          ok: true,
+          scenes: [],
+          executionMs: 4
+        })
+      });
+
+      const result = await new DefaultAiService({ sceneDetectionService: service }).run(workflow!, {
+        imageUri: 'file://selected/empty.jpg'
       });
 
       expect(result.ok).assertFalse();
@@ -5778,6 +5846,25 @@ export default function localUnitTest() {
 
       expect(result.ok).assertFalse();
       expect(result.scenes.length).assertEqual(0);
+      expect(result.failureKind).assertEqual('runtime');
+    });
+
+    it('sceneDetectionRunnersRetainEmptyAndRuntimeFailureProvenance', 0, async () => {
+      const androidEmpty = await new AndroidSceneModelRunner(
+        new FixedAndroidSceneModelDetector({ scenes: [], executionMs: 2 })
+      ).detectScenes('file://selected/empty.jpg');
+      const localEmpty = await new ImageClassificationSceneDetectionRunner({
+        labels: ['beach'],
+        scoreRunner: new FixedScoreRunner([])
+      }).detectScenes('file://selected/empty.jpg');
+      const localRuntimeFailure = await new ImageClassificationSceneDetectionRunner({
+        labels: ['beach'],
+        scoreRunner: new RejectingScoreRunner()
+      }).detectScenes('file://selected/broken.jpg');
+
+      expect(androidEmpty.failureKind).assertEqual('empty');
+      expect(localEmpty.failureKind).assertEqual('empty');
+      expect(localRuntimeFailure.failureKind).assertEqual('runtime');
     });
 
     it('localSceneDetectionRunnerMapsClassificationLabelsToScenes', 0, async () => {
@@ -9294,6 +9381,72 @@ export default function localUnitTest() {
       expect(styleTransferResultToastKey(styleTransfer, true)).assertUndefined();
       expect(styleTransferResultToastKey(objectPhoto, false)).assertUndefined();
       expect(styleTransferResultToastKey(undefined, false)).assertUndefined();
+    });
+
+    it('usesAndroidStillSceneLayoutOnlyForStillScene', 0, () => {
+      featureWorkflows.forEach((workflow: FeatureWorkflow) => {
+        expect(usesAndroidStillSceneLayout(workflow))
+          .assertEqual(workflow.routeName === AppRoute.SCENE_STILL.name);
+      });
+      expect(usesAndroidStillSceneLayout(undefined)).assertFalse();
+    });
+
+    it('mapsOnlyStillSceneEmptyResultCodeToFailureToast', 0, () => {
+      const stillScene = workflowForRoute(AppRoute.SCENE_STILL.name);
+      const liveScene = workflowForRoute(AppRoute.SCENE_LIVE.name);
+      const stillSegmentation = workflowForRoute(AppRoute.SEGMENTATION_STILL.name);
+      const styleTransfer = workflowForRoute(AppRoute.STYLE_TRANSFER.name);
+      const objectPhoto = workflowForRoute(AppRoute.OBJECT_PHOTO.name);
+
+      expect(stillSceneResultToastKey(stillScene, 'SCENE_DETECTION_FAILED'))
+        .assertEqual('feature_runtime_scene_failed');
+      expect(stillSceneResultToastKey(stillScene, 'SCENE_DETECTION_RUNTIME_FAILED')).assertUndefined();
+      expect(stillSceneResultToastKey(stillScene, 'SCENE_DETECTION_DONE')).assertUndefined();
+      expect(stillSceneResultToastKey(liveScene, 'SCENE_DETECTION_FAILED')).assertUndefined();
+      expect(stillSceneResultToastKey(stillSegmentation, 'SCENE_DETECTION_FAILED')).assertUndefined();
+      expect(stillSceneResultToastKey(styleTransfer, 'SCENE_DETECTION_FAILED')).assertUndefined();
+      expect(stillSceneResultToastKey(objectPhoto, 'SCENE_DETECTION_FAILED')).assertUndefined();
+      expect(stillSceneResultToastKey(undefined, 'SCENE_DETECTION_FAILED')).assertUndefined();
+    });
+
+    it('preservesTextOnlyForFailedStillSceneResults', 0, () => {
+      const stillScene = workflowForRoute(AppRoute.SCENE_STILL.name);
+      const liveScene = workflowForRoute(AppRoute.SCENE_LIVE.name);
+      const stillSegmentation = workflowForRoute(AppRoute.SEGMENTATION_STILL.name);
+      const styleTransfer = workflowForRoute(AppRoute.STYLE_TRANSFER.name);
+      const objectPhoto = workflowForRoute(AppRoute.OBJECT_PHOTO.name);
+
+      expect(shouldPreserveRuntimeTextResultOnAiResult(stillScene, false)).assertTrue();
+      expect(shouldPreserveRuntimeTextResultOnAiResult(stillScene, true)).assertFalse();
+      expect(shouldPreserveRuntimeTextResultOnAiResult(liveScene, false)).assertFalse();
+      expect(shouldPreserveRuntimeTextResultOnAiResult(stillSegmentation, false)).assertFalse();
+      expect(shouldPreserveRuntimeTextResultOnAiResult(styleTransfer, false)).assertFalse();
+      expect(shouldPreserveRuntimeTextResultOnAiResult(objectPhoto, false)).assertFalse();
+      expect(shouldPreserveRuntimeTextResultOnAiResult(undefined, false)).assertFalse();
+    });
+
+    it('preservesStillSceneRowsAndRejectsOnlyRunningPrimaryInputChanges', 0, () => {
+      const stillScene = workflowForRoute(AppRoute.SCENE_STILL.name);
+      const liveScene = workflowForRoute(AppRoute.SCENE_LIVE.name);
+      const stillSegmentation = workflowForRoute(AppRoute.SEGMENTATION_STILL.name);
+      const styleTransfer = workflowForRoute(AppRoute.STYLE_TRANSFER.name);
+
+      expect(shouldPreserveRuntimeResultAfterInputReady(stillScene, 'photo')).assertTrue();
+      expect(shouldPreserveRuntimeResultAfterInputReady(stillScene, 'camera')).assertTrue();
+      expect(shouldPreserveRuntimeResultAfterInputReady(stillScene, 'backgroundImage')).assertFalse();
+      expect(shouldPreserveRuntimeResultAfterInputReady(liveScene, 'photo')).assertFalse();
+      expect(shouldPreserveRuntimeResultAfterInputReady(stillSegmentation, 'photo')).assertTrue();
+      expect(shouldPreserveRuntimeResultAfterInputReady(styleTransfer, 'contentImage')).assertTrue();
+      expect(shouldClearRuntimeResultAtWorkflowStart(stillScene)).assertFalse();
+      expect(shouldClearRuntimeResultAtWorkflowStart(liveScene)).assertTrue();
+
+      expect(shouldAllowRuntimeInputChange(stillScene, 'photo', true)).assertFalse();
+      expect(shouldAllowRuntimeInputChange(stillScene, 'camera', true)).assertFalse();
+      expect(shouldAllowRuntimeInputChange(stillScene, 'backgroundImage', true)).assertTrue();
+      expect(shouldAllowRuntimeInputChange(stillScene, 'photo', false)).assertTrue();
+      expect(shouldAllowRuntimeInputChange(liveScene, 'photo', true)).assertTrue();
+      expect(shouldAllowRuntimeInputChange(stillSegmentation, 'photo', true)).assertTrue();
+      expect(shouldAllowRuntimeInputChange(styleTransfer, 'contentImage', true)).assertFalse();
     });
 
     it('usesAndroidStillSegmentationLayoutOnlyForStillSegmentation', 0, () => {

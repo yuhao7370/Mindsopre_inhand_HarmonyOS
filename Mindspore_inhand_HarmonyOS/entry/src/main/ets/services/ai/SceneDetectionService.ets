@@ -8,10 +8,13 @@ export interface SceneDetection {
 export interface SceneDetectionResult {
   readonly ok: boolean;
   readonly scenes: Array<SceneDetection>;
+  readonly failureKind?: SceneDetectionFailureKind;
   readonly imageWidth?: number;
   readonly imageHeight?: number;
   readonly executionMs: number;
 }
+
+export type SceneDetectionFailureKind = 'empty' | 'runtime';
 
 export interface SceneDetectionRunner {
   detectScenes(imageUri: string): Promise<SceneDetectionResult>;
@@ -204,6 +207,7 @@ export class SceneDetectionService {
       return {
         ok: false,
         scenes: [],
+        failureKind: 'runtime',
         executionMs: Date.now() - startMs
       };
     }
@@ -225,6 +229,7 @@ export class AndroidSceneModelRunner implements SceneDetectionRunner {
       return {
         ok: scenes.length > 0,
         scenes: scenes,
+        failureKind: scenes.length === 0 ? 'empty' : undefined,
         imageWidth: modelResult.imageWidth,
         imageHeight: modelResult.imageHeight,
         executionMs: modelResult.executionMs ?? Date.now() - startMs
@@ -233,6 +238,7 @@ export class AndroidSceneModelRunner implements SceneDetectionRunner {
       return {
         ok: false,
         scenes: [],
+        failureKind: 'runtime',
         executionMs: Date.now() - startMs
       };
     }
@@ -258,12 +264,14 @@ export class ImageClassificationSceneDetectionRunner implements SceneDetectionRu
       return {
         ok: scenes.length > 0,
         scenes: scenes,
+        failureKind: scenes.length === 0 ? 'empty' : undefined,
         executionMs: Date.now() - startMs
       };
     } catch (_) {
       return {
         ok: false,
         scenes: [],
+        failureKind: 'runtime',
         executionMs: Date.now() - startMs
       };
     }
@@ -406,6 +414,7 @@ function localizedSceneDetectionResult(result: SceneDetectionResult, labelLocale
   return {
     ok: result.ok,
     scenes: scenes,
+    failureKind: result.failureKind ?? (scenes.length === 0 ? 'empty' : undefined),
     imageWidth: result.imageWidth,
     imageHeight: result.imageHeight,
     executionMs: result.executionMs

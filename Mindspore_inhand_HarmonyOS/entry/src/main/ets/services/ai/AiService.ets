@@ -70,7 +70,8 @@ export type AiRunCode =
   'GESTURE_DETECTION_DONE' |
   'GESTURE_DETECTION_FAILED' |
   'SCENE_DETECTION_DONE' |
-  'SCENE_DETECTION_FAILED';
+  'SCENE_DETECTION_FAILED' |
+  'SCENE_DETECTION_RUNTIME_FAILED';
 
 export interface AiRunInputs {
   readonly imageUri?: string;
@@ -343,7 +344,8 @@ export class DefaultAiService {
     if (!result.ok || result.scenes.length === 0) {
       return {
         ok: false,
-        code: 'SCENE_DETECTION_FAILED',
+        code: result.failureKind === 'runtime' ?
+          'SCENE_DETECTION_RUNTIME_FAILED' : 'SCENE_DETECTION_FAILED',
         aiMethod: 'detectScene',
         messageKey: 'feature_runtime_scene_failed',
         detailText: this.sceneDetectionSummary(result, imageUri)
@@ -1059,6 +1061,21 @@ export function aiRunResultRows(result: AiRunResult): Array<AiRunResultRow> {
         resultRow('feature_runtime_result_execution_time', `${data.executionMs}ms`)
       ];
   }
+}
+
+export function androidStillSceneResultRows(result: SceneDetectionResult): Array<AiRunResultRow> {
+  const rows: Array<AiRunResultRow> = [
+    resultRow('feature_runtime_result_scene_count', `${result.scenes.length}`)
+  ];
+  result.scenes.forEach((scene: SceneDetection) => {
+    rows.push(resultRow('feature_runtime_scene_overlay_scene', scene.label));
+    rows.push(resultRow('feature_runtime_scene_overlay_score', androidSceneScorePercent(scene.score)));
+  });
+  return rows;
+}
+
+function androidSceneScorePercent(score: number): string {
+  return `${Number((score * 100).toFixed(2))}%`;
 }
 
 function customModelOutputRowValue(detailText: string, outputCount: number): string {

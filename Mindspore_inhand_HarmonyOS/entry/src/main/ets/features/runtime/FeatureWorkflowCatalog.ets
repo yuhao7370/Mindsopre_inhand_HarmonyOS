@@ -342,6 +342,18 @@ export function usesAndroidStillSegmentationLayout(workflow: FeatureWorkflow | u
   return workflow?.routeName === AppRoute.SEGMENTATION_STILL.name;
 }
 
+export function usesAndroidStillSceneLayout(workflow: FeatureWorkflow | undefined): boolean {
+  return workflow?.routeName === AppRoute.SCENE_STILL.name;
+}
+
+export function stillSceneResultToastKey(
+  workflow: FeatureWorkflow | undefined,
+  resultCode: string
+): AppStringKey | undefined {
+  return usesAndroidStillSceneLayout(workflow) && resultCode === 'SCENE_DETECTION_FAILED' ?
+    'feature_runtime_scene_failed' : undefined;
+}
+
 export function stillSegmentationResultToastKey(
   workflow: FeatureWorkflow | undefined,
   resultOk: boolean
@@ -734,7 +746,8 @@ export function shouldClearRuntimeResultAtWorkflowStart(workflow: FeatureWorkflo
   return !shouldShowLiveClassificationCameraOverlay(workflow) &&
     workflow?.routeName !== AppRoute.PORTRAIT_SEGMENTATION.name &&
     !usesAndroidStyleTransferLayout(workflow) &&
-    !usesAndroidStillSegmentationLayout(workflow);
+    !usesAndroidStillSegmentationLayout(workflow) &&
+    !usesAndroidStillSceneLayout(workflow);
 }
 
 export function shouldKeepScreenOnForWorkflow(workflow: FeatureWorkflow | undefined): boolean {
@@ -793,7 +806,15 @@ export function shouldPreserveRuntimeResultAfterInputReady(
     (usesAndroidStyleTransferLayout(workflow) &&
       (inputKind === 'contentImage' || inputKind === 'camera' || inputKind === 'styleImage' ||
         isStyleTransferModelInput(inputKind))) ||
-    (usesAndroidStillSegmentationLayout(workflow) && (inputKind === 'photo' || inputKind === 'camera'));
+    (usesAndroidStillSegmentationLayout(workflow) && (inputKind === 'photo' || inputKind === 'camera')) ||
+    (usesAndroidStillSceneLayout(workflow) && (inputKind === 'photo' || inputKind === 'camera'));
+}
+
+export function shouldPreserveRuntimeTextResultOnAiResult(
+  workflow: FeatureWorkflow | undefined,
+  resultOk: boolean
+): boolean {
+  return usesAndroidStillSceneLayout(workflow) && !resultOk;
 }
 
 export function shouldPreserveRuntimeVisualResultOnAiResult(
@@ -953,6 +974,9 @@ export function shouldAllowRuntimeInputChange(
     return true;
   }
   if (workflow?.routeName === AppRoute.STYLE_TRANSFER.name) {
+    return false;
+  }
+  if (usesAndroidStillSceneLayout(workflow) && (inputKind === 'photo' || inputKind === 'camera')) {
     return false;
   }
   return !usesAndroidCustomModelLayout(workflow) ||
