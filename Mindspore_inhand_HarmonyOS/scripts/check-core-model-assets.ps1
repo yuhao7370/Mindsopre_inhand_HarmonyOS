@@ -81,17 +81,23 @@ if ($ensureInvocations.Count -ne $requiredVerifiers.Count) {
 
 foreach ($contract in $contracts) {
   $verifierAst = Read-CoreGuardPowerShellAst (Join-Path $PSScriptRoot $contract.Verifier)
-  $verifierContractVariable = if ($contract.Verifier -eq 'verify-style-transfer-models.ps1') { 'models' } else { 'expectedModelSize' }
-  $verifierHashVariable = if ($contract.Verifier -eq 'verify-style-transfer-models.ps1') { 'models' } else { 'expectedModelSha256' }
-  Assert-CoreGuardAssignmentLiteral $verifierAst $verifierContractVariable $contract.Bytes "$($contract.Verifier) must pin $($contract.Name) byte length."
-  Assert-CoreGuardAssignmentLiteral $verifierAst $verifierHashVariable $contract.Sha256 "$($contract.Verifier) must pin $($contract.Name) SHA-256."
+  if ($contract.Verifier -eq 'verify-style-transfer-models.ps1') {
+    Assert-CoreGuardObjectArrayContract $verifierAst 'models' $contract.Name $contract.Bytes $contract.Sha256 `
+      "$($contract.Verifier) model contract."
+  } else {
+    Assert-CoreGuardAssignmentLiteral $verifierAst 'expectedModelSize' $contract.Bytes "$($contract.Verifier) must pin $($contract.Name) byte length."
+    Assert-CoreGuardAssignmentLiteral $verifierAst 'expectedModelSha256' $contract.Sha256 "$($contract.Verifier) must pin $($contract.Name) SHA-256."
+  }
   Assert-CoreGuardExecutableCommand $verifierAst 'Get-FileHash -LiteralPath $modelPath -Algorithm SHA256' "$($contract.Verifier) must hash the executable model path."
 
   $downloaderAst = Read-CoreGuardPowerShellAst (Join-Path $PSScriptRoot $contract.Downloader)
-  $downloaderContractVariable = if ($contract.Downloader -eq 'download-style-transfer-models.ps1') { 'models' } else { 'expectedModelSize' }
-  $downloaderHashVariable = if ($contract.Downloader -eq 'download-style-transfer-models.ps1') { 'models' } else { 'expectedModelSha256' }
-  Assert-CoreGuardAssignmentLiteral $downloaderAst $downloaderContractVariable $contract.Bytes "$($contract.Downloader) must pin $($contract.Name) byte length."
-  Assert-CoreGuardAssignmentLiteral $downloaderAst $downloaderHashVariable $contract.Sha256 "$($contract.Downloader) must pin $($contract.Name) SHA-256."
+  if ($contract.Downloader -eq 'download-style-transfer-models.ps1') {
+    Assert-CoreGuardObjectArrayContract $downloaderAst 'models' $contract.Name $contract.Bytes $contract.Sha256 `
+      "$($contract.Downloader) model contract."
+  } else {
+    Assert-CoreGuardAssignmentLiteral $downloaderAst 'expectedModelSize' $contract.Bytes "$($contract.Downloader) must pin $($contract.Name) byte length."
+    Assert-CoreGuardAssignmentLiteral $downloaderAst 'expectedModelSha256' $contract.Sha256 "$($contract.Downloader) must pin $($contract.Name) SHA-256."
+  }
 }
 
 foreach ($downloaderName in @(
@@ -151,15 +157,7 @@ $buildAst = Read-CoreGuardPowerShellAst (Join-Path $PSScriptRoot 'build-hap.ps1'
 Assert-CoreGuardExecutableCommand $buildAst "& (Join-Path `$PSScriptRoot 'check-core-model-assets.ps1')" 'build-hap.ps1 must execute the core model asset guard.'
 Assert-CoreGuardExecutableCommand $buildAst "& (Join-Path `$PSScriptRoot 'test-core-model-assets-guard.ps1')" 'build-hap.ps1 must execute core model guard fixtures.'
 Assert-CoreGuardExecutableCommand $buildAst "& (Join-Path `$PSScriptRoot 'ensure-mindspore-models.ps1')" 'build-hap.ps1 must execute verifier-only model ensure wiring.'
-$buildDownloadCalls = @($buildAst.FindAll({
-  param($node)
-  $node -is [Management.Automation.Language.CommandAst] -and
-    $node.InvocationOperator -eq [Management.Automation.Language.TokenKind]::Ampersand -and
-    $node.Extent.Text -match 'download-.*model'
-}, $true))
-if ($buildDownloadCalls.Count -ne 0) {
-  throw 'Core model asset guard failed: normal build must not execute a model downloader.'
-}
+Assert-CoreGuardNoDownloaderCommand $buildAst 'normal build'
 
 $hapVerifierAst = Read-CoreGuardPowerShellAst (Join-Path $PSScriptRoot 'verify-ai-runtime-haps.ps1')
 $hapFixtureAst = Read-CoreGuardPowerShellAst (Join-Path $PSScriptRoot 'test-verify-ai-runtime-haps.ps1')
@@ -172,8 +170,8 @@ foreach ($entry in @(
   'resources/rawfile/model/LICENSE-Apache-2.0.txt',
   'resources/rawfile/model/NOTICE.md'
 )) {
-  Assert-CoreGuardAssignmentLiteral $hapVerifierAst 'resourceEntries' $entry "main HAP verifier is missing $entry."
-  Assert-CoreGuardAssignmentLiteral $hapFixtureAst 'mainEntries' $entry "HAP fixture is missing $entry."
+  Assert-CoreGuardStringArrayContains $hapVerifierAst 'resourceEntries' $entry "main HAP verifier is missing $entry."
+  Assert-CoreGuardStringArrayContains $hapFixtureAst 'mainEntries' $entry "HAP fixture is missing $entry."
 }
 Assert-CoreGuardExecutableCommand $hapVerifierAst 'Assert-HapPayloadHashes $MainHapPath $payloads' 'main HAP must reuse exact payload hash verification.'
 Assert-CoreGuardAssignmentLiteral $hapFixtureAst 'tamperedAppModelEntry' 'resources/rawfile/model/ssd.ms' 'HAP fixture must reject a tampered core model.'

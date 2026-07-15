@@ -13,8 +13,11 @@ function Assert-Rejects([scriptblock]$Action, [string]$Label) {
     Write-Host "Rejected invalid core guard fixture: $Label"
     return
   }
-  throw "Core model guard fixture unexpectedly accepted: $Label"
+  $script:unexpectedAcceptances.Add($Label)
+  Write-Host "UNEXPECTEDLY accepted invalid core guard fixture: $Label"
 }
+
+$script:unexpectedAcceptances = [Collections.Generic.List[string]]::new()
 
 $commandMarker = "& (Join-Path `$PSScriptRoot 'check-core-model-assets.ps1')"
 $commandDecoy = @"
@@ -65,6 +68,97 @@ Assert-Rejects {
 $assignmentAst = ConvertTo-CoreGuardPowerShellAst "`$expectedModelSha256 = 'EXPECTED'" 'real assignment'
 Assert-CoreGuardAssignmentLiteral $assignmentAst 'expectedModelSha256' 'EXPECTED' 'real assignment'
 
+$deadBranchAssignment = @'
+$expectedModelSha256 = if ($false) { 'EXPECTED' } else { 'WRONG' }
+'@
+$deadBranchAssignmentAst = ConvertTo-CoreGuardPowerShellAst $deadBranchAssignment 'dead branch assignment'
+Assert-Rejects {
+  Assert-CoreGuardAssignmentLiteral $deadBranchAssignmentAst 'expectedModelSha256' 'EXPECTED' 'dead branch assignment'
+} 'literal only in a dead assignment branch'
+
+$unsafeFinally = @'
+try {
+  [System.IO.File]::Replace($tmpPath, $modelPath, $backupPath)
+} finally {
+  Remove-Item -LiteralPath $tmpPath -Force -ErrorAction SilentlyContinue
+  Test-Path -LiteralPath $modelPath
+  Remove-Item -LiteralPath $backupPath -Force -ErrorAction SilentlyContinue
+}
+'@
+$unsafeFinallyAst = ConvertTo-CoreGuardPowerShellAst $unsafeFinally 'unsafe finally cleanup'
+Assert-Rejects {
+  Assert-CoreGuardFinallyCleanup $unsafeFinallyAst 'unsafe finally cleanup'
+} 'unconditional backup deletion after unrelated Test-Path'
+
+$quotedAliasMutation = @'
+$stableAlias = "$modelPath"
+Set-Content -LiteralPath $stableAlias -Value 'bad'
+'@
+$quotedAliasMutationAst = ConvertTo-CoreGuardPowerShellAst $quotedAliasMutation 'quoted stable alias mutation'
+Assert-Rejects {
+  Assert-CoreGuardNoStableMutation $quotedAliasMutationAst 'quoted stable alias mutation'
+} 'stable path mutation through an expandable-string alias'
+
+$pipelineMutationAst = ConvertTo-CoreGuardPowerShellAst 'Get-Item $modelPath | Remove-Item' 'pipeline stable mutation'
+Assert-Rejects {
+  Assert-CoreGuardNoStableMutation $pipelineMutationAst 'pipeline stable mutation'
+} 'stable path mutation through a pipeline'
+
+$qualifiedMutationAst = ConvertTo-CoreGuardPowerShellAst `
+  'Microsoft.PowerShell.Management\Set-Content -LiteralPath $modelPath -Value bad' `
+  'module-qualified stable mutation'
+Assert-Rejects {
+  Assert-CoreGuardNoStableMutation $qualifiedMutationAst 'module-qualified stable mutation'
+} 'stable path mutation through a module-qualified command'
+
+$misboundModels = @'
+$models = @(
+  [pscustomobject]@{ Name = 'first.ms'; Bytes = 2; Sha256 = 'SECOND' },
+  [pscustomobject]@{ Name = 'second.ms'; Bytes = 1; Sha256 = 'FIRST' }
+)
+'@
+$misboundModelsAst = ConvertTo-CoreGuardPowerShellAst $misboundModels 'misbound model array'
+Assert-Rejects {
+  Assert-CoreGuardObjectArrayContract $misboundModelsAst 'models' 'first.ms' 1 'FIRST' 'misbound first model'
+} 'model constants not bound to the expected Name'
+$boundModels = $misboundModels.Replace("Bytes = 2; Sha256 = 'SECOND'", "Bytes = 1; Sha256 = 'FIRST'")
+$boundModelsAst = ConvertTo-CoreGuardPowerShellAst $boundModels 'bound model array'
+Assert-CoreGuardObjectArrayContract $boundModelsAst 'models' 'first.ms' 1 'FIRST' 'bound first model'
+
+$deadBranchArray = @'
+$resourceEntries = @(
+  if ($false) { 'resources/rawfile/model/required.ms' }
+  'resources/rawfile/model/other.ms'
+)
+'@
+$deadBranchArrayAst = ConvertTo-CoreGuardPowerShellAst $deadBranchArray 'dead branch resource array'
+Assert-Rejects {
+  Assert-CoreGuardStringArrayContains $deadBranchArrayAst 'resourceEntries' `
+    'resources/rawfile/model/required.ms' 'dead branch resource entry'
+} 'HAP entry only in a dead array branch'
+$literalArrayAst = ConvertTo-CoreGuardPowerShellAst `
+  "`$resourceEntries = @('resources/rawfile/model/required.ms')" `
+  'literal resource array'
+Assert-CoreGuardStringArrayContains $literalArrayAst 'resourceEntries' `
+  'resources/rawfile/model/required.ms' 'literal resource entry'
+
+$dotSourcedDownloaderAst = ConvertTo-CoreGuardPowerShellAst `
+  ". (Join-Path `$PSScriptRoot 'download-image-classification-model.ps1')" `
+  'dot-sourced downloader'
+Assert-Rejects {
+  Assert-CoreGuardNoDownloaderCommand $dotSourcedDownloaderAst 'dot-sourced downloader'
+} 'dot-sourced downloader in normal build'
+$directDownloaderAst = ConvertTo-CoreGuardPowerShellAst `
+  "powershell.exe -File (Join-Path `$PSScriptRoot 'download-style-transfer-models.ps1')" `
+  'direct powershell downloader'
+Assert-Rejects {
+  Assert-CoreGuardNoDownloaderCommand $directDownloaderAst 'direct powershell downloader'
+} 'powershell -File downloader in normal build'
+$verifierOnlyBuildAst = ConvertTo-CoreGuardPowerShellAst `
+  "& (Join-Path `$PSScriptRoot 'ensure-mindspore-models.ps1')" `
+  'verifier-only build'
+Assert-CoreGuardNoDownloaderCommand $verifierOnlyBuildAst 'verifier-only build'
+
 $wrongTargetJson5 = @'
 {
   "targets": [
@@ -85,6 +179,10 @@ $rightTargetJson5 = $wrongTargetJson5.Replace('"*.ms", "NOTICE.md"', '"*.ms", "N
 $rightTargetValues = @(Get-CoreGuardJson5ArrayForNamedObject $rightTargetJson5 'ohosTest' 'ignoreResourcePattern')
 if ($rightTargetValues -notcontains 'LICENSE-Apache-2.0.txt') {
   throw 'Core model guard fixture rejected an exclusion in the ohosTest ignoreResourcePattern.'
+}
+
+if ($script:unexpectedAcceptances.Count -ne 0) {
+  throw "Core model guard fixture unexpectedly accepted: $($script:unexpectedAcceptances -join '; ')"
 }
 
 Write-Host 'Core model asset guard fixtures passed.'
