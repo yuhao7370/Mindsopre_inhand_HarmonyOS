@@ -42,22 +42,50 @@ export function shouldPreserveRuntimeTextResultOnAiResult(workflow: FeatureWorkf
   Write-FixtureFile $Root 'entry\src\main\ets\services\ai\SceneDetectionService.ets' @'
 function emptySceneResult(): SceneDetectionResult {
   const scenes: Array<SceneDetection> = [];
-  return { ok: false, scenes: scenes, failureKind: scenes.length === 0 ? 'empty' : undefined };
+  return {
+    ok: false,
+    scenes: scenes,
+    failureKind: scenes.length === 0 ? 'empty' : undefined,
+    executionMs: 0
+  };
 }
 
 function runtimeSceneResult(): SceneDetectionResult {
-  return { ok: false, scenes: [], failureKind: 'runtime' };
+  return {
+    ok: false,
+    scenes: [],
+    failureKind: 'runtime',
+    executionMs: 0
+  };
 }
 '@
 
   Write-FixtureFile $Root 'entry\src\main\ets\services\ai\AiService.ets' @'
 type AiRunCode = 'SCENE_DETECTION_FAILED' | 'SCENE_DETECTION_RUNTIME_FAILED';
 
-export function androidStillSceneResultRows(result: SceneDetectionResult): Array<AiResultRow> {
-  const rows: Array<AiResultRow> = [resultRow('feature_runtime_result_scene_count', `${result.scenes.length}`)];
+class DefaultAiService {
+  private async detectScene(inputs: AiRunInputs): Promise<AiRunResult> {
+    const result: SceneDetectionResult = await this.sceneDetectionService.detectScenes(inputs.imageUri ?? '');
+    return {
+      ok: false,
+      code: result.failureKind === 'runtime' ?
+        'SCENE_DETECTION_RUNTIME_FAILED' : 'SCENE_DETECTION_FAILED',
+      aiMethod: 'detectScene'
+    };
+  }
+
+  private async detectPose(inputs: AiRunInputs): Promise<AiRunResult> {
+    return { ok: false };
+  }
+}
+
+export function androidStillSceneResultRows(result: SceneDetectionResult): Array<AiRunResultRow> {
+  const rows: Array<AiRunResultRow> = [
+    resultRow('feature_runtime_result_scene_count', `${result.scenes.length}`)
+  ];
   result.scenes.forEach((scene: SceneDetection) => {
     rows.push(resultRow('feature_runtime_scene_overlay_scene', scene.label));
-    rows.push(resultRow('feature_runtime_scene_overlay_score', formatAndroidSceneScore(scene.score)));
+    rows.push(resultRow('feature_runtime_scene_overlay_score', androidSceneScorePercent(scene.score)));
   });
   return rows;
 }
@@ -73,14 +101,18 @@ export function sceneDetectionOverlayRows(result: SceneDetectionResult): Array<S
 
   Write-FixtureFile $Root 'entry\src\main\ets\pages\FeatureRuntimePage.ets' @'
   private prepareInput(inputKind: FeatureInputKind): void {
+    const requestId = ++this.inputPreparationRequestId;
+    this.prepareInputAsync(inputKind, false, requestId);
+  }
+
+  private async prepareInputAsync(inputKind: FeatureInputKind, initialPick: boolean, requestId: number): Promise<void> {
     const workflow = workflowForRoute(this.routeName);
     if (!shouldAllowRuntimeInputChange(workflow, inputKind, this.workflowRunning)) {
       return;
     }
-    this.prepareInputAsync(inputKind);
   }
 
-  private async prepareInputAsync(inputKind: FeatureInputKind): Promise<void> {
+  private async cacheAndApplyPickedModelFile(): Promise<void> {
   }
 
   private applyPickResult(inputKind: FeatureInputKind): void {
@@ -123,8 +155,10 @@ export function sceneDetectionOverlayRows(result: SceneDetectionResult): Array<S
     if (!shouldPreserveRuntimeTextResultOnAiResult(workflow, result.ok)) {
       this.resultRows = [];
     }
-    if (usesAndroidStillSceneLayout(workflow) && result.ok && result.data?.kind === 'sceneDetection') {
+    if (usesAndroidStillSceneLayout(workflow) && result.ok && result.data?.kind === 'scenes') {
       this.resultRows = androidStillSceneResultRows(result.data.result);
+    }
+    if (!this.shouldPreserveVisualResultsOnAiResult(result)) {
     }
     this.showStillSceneFailureToastIfNeeded(result.code);
   }
@@ -214,9 +248,14 @@ export function sceneDetectionOverlayRows(result: SceneDetectionResult): Array<S
         .margin({ top: 14 })
         Scroll() {
           Column() {
-            ForEach(this.resultRows, (row: AiResultRow) => {
-              Text(appString(row.labelKey))
-              Text(row.value)
+            ForEach(this.resultRows, (row: AiRunResultRow) => {
+              Text() {
+                Span(appString(row.labelKey))
+                Span('\uFF1A')
+                Span(this.resultRowValue(row))
+              }
+              .fontSize(14)
+              .fontColor(Color.Black)
             })
           }
         }
@@ -239,9 +278,10 @@ export function sceneDetectionOverlayRows(result: SceneDetectionResult): Array<S
 
   build() {
     if (false) {
-      this.portraitSegmentationAndroidLayout()
     } else if (usesAndroidStillSceneLayout(workflowForRoute(this.routeName))) {
       this.stillSceneAndroidLayout()
+    } else if (usesAndroidPortraitSegmentationLayout(workflowForRoute(this.routeName))) {
+      this.portraitSegmentationAndroidLayout()
     } else {
       Scroll() {
       }
@@ -333,18 +373,30 @@ try {
   Assert-MutationRejected $validRoot 'missing-input-handler-policy' $pagePath `
     'if (!shouldAllowRuntimeInputChange(workflow, inputKind, this.workflowRunning)) {' `
     'if (false) {'
+  Assert-MutationRejected $validRoot 'sibling-sync-input-semantics' $pagePath `
+    'const requestId = ++this.inputPreparationRequestId;' `
+    "if (!shouldAllowRuntimeInputChange(workflowForRoute(this.routeName), inputKind, this.workflowRunning)) { return; }`n    const requestId = ++this.inputPreparationRequestId;"
   Assert-MutationRejected $validRoot 'generic-loading-injected' $pagePath `
     'this.runtimePermissionRecoveryOverlay()' `
     "LoadingProgress()`n      this.runtimePermissionRecoveryOverlay()"
   Assert-MutationRejected $validRoot 'combined-scene-rows' $aiPath `
     "rows.push(resultRow('feature_runtime_scene_overlay_scene', scene.label));" `
     "rows.push(resultRow('feature_runtime_result_scenes', scene.label));"
+  Assert-MutationRejected $validRoot 'missing-android-colon' $pagePath `
+    "Span('\uFF1A')" `
+    "Span('')"
   Assert-MutationRejected $validRoot 'missing-runtime-provenance' $scenePath `
     "failureKind: 'runtime'" `
     "failureKind: 'empty'"
+  Assert-MutationRejected $validRoot 'runtime-provenance-string-decoy' $scenePath `
+    "failureKind: 'runtime',`n    executionMs: 0" `
+    "failureKind: 'empty',`n    provenanceDecoy: \"failureKind: 'runtime',\",`n    executionMs: 0"
   Assert-MutationRejected $validRoot 'missing-permission-preservation' $pagePath `
     "if (!permission.ok) {`n      if (!shouldPreserveRuntimeTextResultOnAiResult(workflow, false)) {" `
     "if (!permission.ok) {`n      if (true) {"
+  Assert-MutationRejected $validRoot 'permission-preservation-string-decoy' $pagePath `
+    "if (!permission.ok) {`n      if (!shouldPreserveRuntimeTextResultOnAiResult(workflow, false)) {" `
+    "if (!permission.ok) {`n      const preservationDecoy = 'if (!shouldPreserveRuntimeTextResultOnAiResult(workflow, false)) {';`n      if (true) {"
   Assert-MutationRejected $validRoot 'runtime-failure-toasts' $catalogPath `
     "resultCode === 'SCENE_DETECTION_FAILED'" `
     "resultCode === 'SCENE_DETECTION_RUNTIME_FAILED'"
@@ -354,9 +406,21 @@ try {
   Assert-MutationRejected $validRoot 'missing-successful-row-replacement' $pagePath `
     'this.resultRows = androidStillSceneResultRows(result.data.result);' `
     "const rowDecoy = 'this.resultRows = androidStillSceneResultRows(result.data.result);';"
+  Assert-MutationRejected $validRoot 'ungated-successful-row-replacement' $pagePath `
+    "if (usesAndroidStillSceneLayout(workflow) && result.ok && result.data?.kind === 'scenes') {" `
+    'if (true) {'
+  Assert-MutationRejected $validRoot 'swapped-still-scene-builder' $pagePath `
+    "} else if (usesAndroidStillSceneLayout(workflowForRoute(this.routeName))) {`n      this.stillSceneAndroidLayout()`n    } else if (usesAndroidPortraitSegmentationLayout(workflowForRoute(this.routeName))) {`n      this.portraitSegmentationAndroidLayout()" `
+    "} else if (usesAndroidStillSceneLayout(workflowForRoute(this.routeName))) {`n      this.portraitSegmentationAndroidLayout()`n    } else if (usesAndroidPortraitSegmentationLayout(workflowForRoute(this.routeName))) {`n      this.stillSceneAndroidLayout()"
   Assert-MutationRejected $validRoot 'missing-production-build-wire' $buildPath `
     "& (Join-Path `$PSScriptRoot 'check-still-scene-layout-parity.ps1')" `
     "# & (Join-Path `$PSScriptRoot 'check-still-scene-layout-parity.ps1')"
+  Assert-MutationRejected $validRoot 'nested-production-build-wire' $buildPath `
+    "& (Join-Path `$PSScriptRoot 'check-still-scene-layout-parity.ps1')" `
+    "function Invoke-StillSceneGuard {`n  & (Join-Path `$PSScriptRoot 'check-still-scene-layout-parity.ps1')`n}"
+  Assert-MutationRejected $validRoot 'herestring-fixture-build-wire' $buildPath `
+    "& (Join-Path `$PSScriptRoot 'test-still-scene-layout-parity-guard.ps1')" `
+    "`$guardDecoy = @'`n& (Join-Path `$PSScriptRoot 'test-still-scene-layout-parity-guard.ps1')`n'@"
 
   Write-Output 'Still scene layout parity guard mutation fixtures passed.'
 } finally {

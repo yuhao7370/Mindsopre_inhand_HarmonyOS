@@ -234,8 +234,6 @@ import {
   openRuntimeHelpSource
 } from '../services/web/RuntimeHelpLinkService';
 
-type AiResultRow = AiRunResultRow;
-
 interface FeatureRuntimeParams {
   titleKey?: AppStringKey;
   routeName?: string;
@@ -408,11 +406,6 @@ struct FeatureRuntimePage {
   }
 
   private prepareInput(inputKind: FeatureInputKind, initialPick: boolean = false): void {
-    const workflow = workflowForRoute(this.routeName);
-    if (!shouldAllowRuntimeInputChange(workflow, inputKind, this.workflowRunning)) {
-      this.statusKey = 'feature_runtime_status_running';
-      return;
-    }
     const requestId = ++this.inputPreparationRequestId;
     this.prepareInputAsync(inputKind, initialPick, requestId);
   }
@@ -3228,19 +3221,16 @@ struct FeatureRuntimePage {
         .alignItems(VerticalAlign.Center)
         Scroll() {
           Column() {
-            ForEach(this.resultRows, (row: AiResultRow) => {
-              Row() {
-                Text(appString(row.labelKey))
-                  .fontSize(16)
-                  .fontColor(Color.Black)
-                Text(this.resultRowValue(row))
-                  .fontSize(16)
-                  .fontColor(Color.Black)
-                  .margin({ left: 4 })
+            ForEach(this.resultRows, (row: AiRunResultRow) => {
+              Text() {
+                Span(appString(row.labelKey))
+                Span('\uFF1A')
+                Span(this.resultRowValue(row))
               }
+              .fontSize(14)
+              .fontColor(Color.Black)
               .width('100%')
-              .margin({ bottom: 8 })
-            }, (row: AiResultRow, index: number) => `${index}-${row.labelKey}-${row.value}`)
+            }, (row: AiRunResultRow, index: number) => `${index}-${row.labelKey}-${row.value}`)
           }
           .width('100%')
           .alignItems(HorizontalAlign.Start)
