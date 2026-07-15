@@ -44,6 +44,7 @@
               "GestureDetector.ms",
               "manifest.json",
               "NOTICE.md",
+              "LICENSE-Apache-2.0.txt",
               "translation-models.tar.xz",
               "tokenizer.model",
               "tokenizer_runtime.json",

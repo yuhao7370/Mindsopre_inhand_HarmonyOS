@@ -171,4 +171,9 @@ foreach ($entry in @(
 Assert-Contains $hapVerifier 'Assert-HapPayloadHashes $MainHapPath $payloads' 'main HAP must reuse exact payload hash verification.'
 Assert-Contains $hapFixture "`$tamperedAppModelEntry = 'resources/rawfile/model/ssd.ms'" 'HAP fixture must reject a tampered core model.'
 
+$entryBuildProfile = Get-Content -Raw -LiteralPath (Join-Path $projectRoot 'entry/build-profile.json5')
+foreach ($testHapExclusion in @('*.ms', 'NOTICE.md', 'LICENSE-Apache-2.0.txt')) {
+  Assert-Contains $entryBuildProfile "`"$testHapExclusion`"" "ohosTest resource filtering must exclude $testHapExclusion."
+}
+
 Write-Host 'Core model asset guard passed.'
