@@ -318,6 +318,22 @@ export function usesAndroidTextTranslationLayout(workflow: FeatureWorkflow | und
   return workflow?.routeName === AppRoute.TEXT_TRANSLATION.name;
 }
 
+export function usesAndroidPoseNetStillLayout(workflow: FeatureWorkflow | undefined): boolean {
+  return workflow?.routeName === AppRoute.POSENET.name;
+}
+
+export function poseNetStillToastKey(
+  workflow: FeatureWorkflow | undefined,
+  resultOk: boolean
+): AppStringKey | undefined {
+  if (!usesAndroidPoseNetStillLayout(workflow)) {
+    return undefined;
+  }
+  return resultOk ?
+    'feature_runtime_pose_detect_success_android' :
+    'feature_runtime_pose_detect_failed_android';
+}
+
 export function usesAndroidGestureStillLayout(workflow: FeatureWorkflow | undefined): boolean {
   return workflow?.routeName === AppRoute.GESTURE_STILL.name;
 }

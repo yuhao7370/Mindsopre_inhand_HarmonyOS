@@ -354,8 +354,10 @@ import {
   visibleInputKindsForWorkflow,
   specializedAndroidLiveLayoutForWorkflow,
   shouldShowGestureStillFailureToast,
+  poseNetStillToastKey,
   usesAndroidPortraitSegmentationLayout,
   usesAndroidGestureStillLayout,
+  usesAndroidPoseNetStillLayout,
   usesAndroidTextRecognitionLayout,
   usesAndroidTextTranslationLayout,
   usesSimpleAndroidLiveLayout,
@@ -9115,6 +9117,32 @@ export default function localUnitTest() {
           .assertEqual(workflow.routeName === AppRoute.TEXT_TRANSLATION.name);
       });
       expect(usesAndroidTextTranslationLayout(undefined)).assertFalse();
+    });
+
+    it('usesAndroidPoseNetStillLayoutOnlyForPoseNetStill', 0, () => {
+      expect(featureWorkflows.length).assertEqual(16);
+      featureWorkflows.forEach((workflow: FeatureWorkflow) => {
+        expect(usesAndroidPoseNetStillLayout(workflow))
+          .assertEqual(workflow.routeName === AppRoute.POSENET.name);
+      });
+      expect(usesAndroidPoseNetStillLayout(undefined)).assertFalse();
+    });
+
+    it('mapsAndroidPoseNetStillToastOnlyForPoseNetStill', 0, () => {
+      featureWorkflows.forEach((workflow: FeatureWorkflow) => {
+        const isPoseNetStill = workflow.routeName === AppRoute.POSENET.name;
+        expect(poseNetStillToastKey(workflow, true)).assertEqual(
+          isPoseNetStill ? 'feature_runtime_pose_detect_success_android' : undefined
+        );
+        expect(poseNetStillToastKey(workflow, false)).assertEqual(
+          isPoseNetStill ? 'feature_runtime_pose_detect_failed_android' : undefined
+        );
+      });
+      expect(poseNetStillToastKey(undefined, true)).assertUndefined();
+      expect(poseNetStillToastKey(undefined, false)).assertUndefined();
+      expect(hasAppStringKey('feature_runtime_pose_detect_android')).assertTrue();
+      expect(hasAppStringKey('feature_runtime_pose_detect_success_android')).assertTrue();
+      expect(hasAppStringKey('feature_runtime_pose_detect_failed_android')).assertTrue();
     });
 
     it('usesAndroidGestureStillLayoutOnlyForStaticGesture', 0, () => {
