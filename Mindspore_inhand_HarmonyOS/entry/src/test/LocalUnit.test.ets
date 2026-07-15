@@ -365,6 +365,7 @@ import {
   usesAndroidCustomModelLayout,
   usesAndroidObjectPhotoLayout,
   usesAndroidStyleTransferLayout,
+  usesAndroidStillSegmentationLayout,
   usesAndroidPortraitSegmentationLayout,
   usesAndroidGestureStillLayout,
   usesAndroidPoseNetStillLayout,
@@ -387,6 +388,7 @@ import {
   styleTransferModelCacheToastKey,
   styleTransferResultToastKey,
   styleTransferStyleSelectionToastKey,
+  stillSegmentationResultToastKey,
   runtimeSegmentationBackgroundImageUri,
   shouldHideTextInputWhenPreparingInput,
   textInputVisibleAfterCancelledPick,
@@ -3873,7 +3875,7 @@ export default function localUnitTest() {
       expect(shouldPreserveRuntimeVisualResultOnAiResult(portraitSegmentation, true, 'segmentation')).assertTrue();
       expect(shouldPreserveRuntimeVisualResultOnAiResult(portraitSegmentation, false, 'segmentation')).assertFalse();
       expect(shouldPreserveRuntimeVisualResultOnAiResult(portraitSegmentation, true, '')).assertFalse();
-      expect(shouldPreserveRuntimeVisualResultOnAiResult(stillSegmentation, true, 'segmentation')).assertFalse();
+      expect(shouldPreserveRuntimeVisualResultOnAiResult(stillSegmentation, true, 'segmentation')).assertTrue();
     });
 
     it('usesCurrentPortraitBackgroundWhenApplyingStaleSegmentationResult', 0, () => {
@@ -9292,6 +9294,58 @@ export default function localUnitTest() {
       expect(styleTransferResultToastKey(styleTransfer, true)).assertUndefined();
       expect(styleTransferResultToastKey(objectPhoto, false)).assertUndefined();
       expect(styleTransferResultToastKey(undefined, false)).assertUndefined();
+    });
+
+    it('usesAndroidStillSegmentationLayoutOnlyForStillSegmentation', 0, () => {
+      const stillSegmentation = workflowForRoute(AppRoute.SEGMENTATION_STILL.name);
+      const liveSegmentation = workflowForRoute(AppRoute.SEGMENTATION_LIVE.name);
+      const portraitSegmentation = workflowForRoute(AppRoute.PORTRAIT_SEGMENTATION.name);
+      const styleTransfer = workflowForRoute(AppRoute.STYLE_TRANSFER.name);
+
+      expect(usesAndroidStillSegmentationLayout(stillSegmentation)).assertTrue();
+      expect(usesAndroidStillSegmentationLayout(liveSegmentation)).assertFalse();
+      expect(usesAndroidStillSegmentationLayout(portraitSegmentation)).assertFalse();
+      expect(usesAndroidStillSegmentationLayout(styleTransfer)).assertFalse();
+      expect(usesAndroidStillSegmentationLayout(undefined)).assertFalse();
+    });
+
+    it('mapsStillSegmentationFailureToastOnlyForFailedStillSegmentation', 0, () => {
+      const stillSegmentation = workflowForRoute(AppRoute.SEGMENTATION_STILL.name);
+      const liveSegmentation = workflowForRoute(AppRoute.SEGMENTATION_LIVE.name);
+      const portraitSegmentation = workflowForRoute(AppRoute.PORTRAIT_SEGMENTATION.name);
+      const styleTransfer = workflowForRoute(AppRoute.STYLE_TRANSFER.name);
+
+      expect(stillSegmentationResultToastKey(stillSegmentation, false))
+        .assertEqual('feature_runtime_segmentation_failed');
+      expect(stillSegmentationResultToastKey(stillSegmentation, true)).assertUndefined();
+      expect(stillSegmentationResultToastKey(liveSegmentation, false)).assertUndefined();
+      expect(stillSegmentationResultToastKey(portraitSegmentation, false)).assertUndefined();
+      expect(stillSegmentationResultToastKey(styleTransfer, false)).assertUndefined();
+      expect(stillSegmentationResultToastKey(undefined, false)).assertUndefined();
+    });
+
+    it('preservesStillSegmentationForegroundUntilAtomicReplacement', 0, () => {
+      const stillSegmentation = workflowForRoute(AppRoute.SEGMENTATION_STILL.name);
+      const liveSegmentation = workflowForRoute(AppRoute.SEGMENTATION_LIVE.name);
+      const portraitSegmentation = workflowForRoute(AppRoute.PORTRAIT_SEGMENTATION.name);
+      const styleTransfer = workflowForRoute(AppRoute.STYLE_TRANSFER.name);
+
+      expect(shouldPreserveRuntimeResultAfterInputReady(stillSegmentation, 'photo')).assertTrue();
+      expect(shouldPreserveRuntimeResultAfterInputReady(stillSegmentation, 'camera')).assertTrue();
+      expect(shouldPreserveRuntimeResultAfterInputReady(stillSegmentation, 'backgroundImage')).assertFalse();
+      expect(shouldPreserveRuntimeResultAfterInputReady(stillSegmentation, 'styleImage')).assertFalse();
+      expect(shouldPreserveRuntimeResultAfterInputReady(liveSegmentation, 'photo')).assertFalse();
+      expect(shouldPreserveRuntimeResultAfterInputReady(portraitSegmentation, 'camera')).assertFalse();
+      expect(shouldPreserveRuntimeResultAfterInputReady(portraitSegmentation, 'backgroundImage')).assertTrue();
+      expect(shouldPreserveRuntimeResultAfterInputReady(styleTransfer, 'contentImage')).assertTrue();
+
+      expect(shouldClearRuntimeResultAtWorkflowStart(stillSegmentation)).assertFalse();
+      expect(shouldPreserveRuntimeVisualResultOnAiResult(stillSegmentation, false, '')).assertTrue();
+      expect(shouldPreserveRuntimeVisualResultOnAiResult(stillSegmentation, true, 'segmentation')).assertTrue();
+      expect(shouldPreserveRuntimeVisualResultOnAiResult(stillSegmentation, true, 'classification')).assertFalse();
+      expect(shouldPreserveRuntimeVisualResultOnAiResult(liveSegmentation, false, '')).assertFalse();
+      expect(shouldPreserveRuntimeVisualResultOnAiResult(portraitSegmentation, true, 'segmentation')).assertTrue();
+      expect(shouldPreserveRuntimeVisualResultOnAiResult(styleTransfer, true, 'styleTransfer')).assertTrue();
     });
 
     it('mapsStyleSelectionOriginalRequiredToastOnlyForStyleTransferWithoutContent', 0, () => {
