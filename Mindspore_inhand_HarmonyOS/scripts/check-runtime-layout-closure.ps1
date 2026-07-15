@@ -119,12 +119,22 @@ $pagePath = Join-Path $SourceRoot 'entry\src\main\ets\pages\FeatureRuntimePage.e
 $buildScriptPath = Join-Path $SourceRoot 'scripts\build-hap.ps1'
 $page = ConvertTo-ArkTsStructuralText (Get-NormalizedText $pagePath)
 
-$buildMatches = [regex]::Matches($page, '(?m)^[\t ]{2}build\(\)[\t ]*\{[\t ]*$')
-if ($buildMatches.Count -ne 1) {
-  throw "Runtime layout closure guard failed: expected one real build() method, found $($buildMatches.Count)."
+$structMatches = [regex]::Matches(
+  $page,
+  '(?m)^[\t ]*(?:export[\t ]+)?struct[\t ]+FeatureRuntimePage[\t ]*\{[\t ]*$'
+)
+if ($structMatches.Count -ne 1) {
+  throw "Runtime layout closure guard failed: expected one real FeatureRuntimePage struct, found $($structMatches.Count)."
 }
-$openBrace = $page.IndexOf('{', $buildMatches[0].Index, [StringComparison]::Ordinal)
-$buildBody = Get-BracedSection $page $openBrace
+$structOpenBrace = $page.IndexOf('{', $structMatches[0].Index, [StringComparison]::Ordinal)
+$featureRuntimePageBody = Get-BracedSection $page $structOpenBrace
+
+$buildMatches = [regex]::Matches($featureRuntimePageBody, '(?m)^[\t ]*build\(\)[\t ]*\{[\t ]*$')
+if ($buildMatches.Count -ne 1) {
+  throw "Runtime layout closure guard failed: expected one real FeatureRuntimePage.build() method, found $($buildMatches.Count)."
+}
+$openBrace = $featureRuntimePageBody.IndexOf('{', $buildMatches[0].Index, [StringComparison]::Ordinal)
+$buildBody = Get-BracedSection $featureRuntimePageBody $openBrace
 $actualLines = @($buildBody.Split("`n") | ForEach-Object { $_.Trim() } | Where-Object { $_.Length -gt 0 })
 
 $rawExpectedLines = @(

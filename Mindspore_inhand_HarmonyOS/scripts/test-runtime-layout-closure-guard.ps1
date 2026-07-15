@@ -196,6 +196,22 @@ try {
       "  // build() { this.textRecognitionAndroidLayout() }`n  private buildDecoy2: string = ```n  build() {`n  }```;`n  render() {"
   }
 
+  Assert-GuardRejectsMutation $validRoot 'sibling-component-real-build' {
+    param($root)
+    $path = Join-Path $root $pagePath
+    Replace-Once $path 'struct FeatureRuntimePage {' 'struct SiblingDecoyPage {'
+    [IO.File]::AppendAllText($path, @'
+
+@Component
+struct FeatureRuntimePage {
+    build() {
+      Column() {
+      }
+    }
+}
+'@, $utf8)
+  }
+
   Assert-GuardRejectsMutation $validRoot 'missing-guard-wiring' {
     param($root)
     Replace-Once (Join-Path $root $buildPath) `
