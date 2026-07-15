@@ -365,11 +365,14 @@ Current HarmonyOS behavior:
   but no longer renders those fields directly in normal UI.
 - Selected images and models remain visible through preview rows that show
   user-facing labels and file names, instead of raw picker paths or surface ids.
-- The two routes that still use the generic runtime fallback (still image
-  segmentation and still scene detection) retain the shared summary, Inputs,
-  Permissions, localized status, structured result rows, and workflow visual
-  cards. Raw `detailText` remains internal `resultText` state and is not
-  rendered.
+- Still image segmentation now uses Android's dedicated black double-preview
+  page with Photo, Camera, Real-time, and secure Save controls. New inputs and
+  failed runs retain the previous foreground Save target until a current local
+  foreground conversion atomically succeeds.
+- The one route that still uses the generic runtime fallback (still scene
+  detection) retains the shared summary, Inputs, Permissions, localized
+  status, structured result rows, and workflow visual cards. Raw `detailText`
+  remains internal `resultText` state and is not rendered.
 - Custom Model still exposes its first 10 output values through the existing
   structured output row.
 - The shared runtime shows a primary action only for PoseNet, Text Translation,

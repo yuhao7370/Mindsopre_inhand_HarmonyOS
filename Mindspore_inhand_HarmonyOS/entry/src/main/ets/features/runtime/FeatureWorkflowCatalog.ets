@@ -330,16 +330,16 @@ export function usesAndroidStyleTransferLayout(workflow: FeatureWorkflow | undef
   return workflow?.routeName === AppRoute.STYLE_TRANSFER.name;
 }
 
-export function usesAndroidStillSegmentationLayout(workflow: FeatureWorkflow | undefined): boolean {
-  return workflow?.routeName === AppRoute.SEGMENTATION_STILL.name;
-}
-
 export function styleTransferResultToastKey(
   workflow: FeatureWorkflow | undefined,
   resultOk: boolean
 ): AppStringKey | undefined {
   return usesAndroidStyleTransferLayout(workflow) && !resultOk ?
     'feature_runtime_style_transfer_failed' : undefined;
+}
+
+export function usesAndroidStillSegmentationLayout(workflow: FeatureWorkflow | undefined): boolean {
+  return workflow?.routeName === AppRoute.SEGMENTATION_STILL.name;
 }
 
 export function stillSegmentationResultToastKey(

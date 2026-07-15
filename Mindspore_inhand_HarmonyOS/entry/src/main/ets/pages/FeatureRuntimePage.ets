@@ -29,6 +29,7 @@ import {
   usesAndroidCustomModelLayout,
   usesAndroidObjectPhotoLayout,
   usesAndroidStyleTransferLayout,
+  usesAndroidStillSegmentationLayout,
   usesAndroidPoseNetStillLayout,
   usesAndroidPortraitSegmentationLayout,
   usesAndroidTextRecognitionLayout,
@@ -76,6 +77,7 @@ import {
   styleTransferRecoveryStatusKey,
   styleTransferModelCacheToastKey,
   styleTransferResultToastKey,
+  stillSegmentationResultToastKey,
   styleTransferStyleSelectionToastKey,
   styleTransferStyleReadyStatusKey,
   textInputPlaceholderKeyForWorkflow,
@@ -847,6 +849,9 @@ struct FeatureRuntimePage {
       inputKind === 'camera' || inputKind === 'styleImage')) {
       this.styledImagePixelMapOwner.invalidatePendingReplacement();
     }
+    if (usesAndroidStillSegmentationLayout(workflow) && (inputKind === 'photo' || inputKind === 'camera')) {
+      this.segmentationForegroundPixelMapOwner.invalidatePendingReplacement();
+    }
     if (!shouldPreserveRuntimeResultAfterInputReady(workflow, inputKind)) {
       this.clearRuntimeResultState();
     }
@@ -1083,7 +1088,7 @@ struct FeatureRuntimePage {
         this.resultText = usesAndroidCustomModelLayout(workflow) ?
           '' : permission.requested.join(', ');
         this.resultRows = [];
-        if (!usesAndroidStyleTransferLayout(workflow)) {
+        if (!shouldPreserveRuntimeVisualResultOnAiResult(workflow, false, '')) {
           this.clearVisualResults();
         }
         return;
@@ -1122,6 +1127,7 @@ struct FeatureRuntimePage {
       this.clearVisualResults();
     }
     this.showStyleTransferFailureToastIfNeeded(false);
+    this.showStillSegmentationFailureToastIfNeeded(false);
     this.showGestureStillFailureToastIfNeeded(false, this.statusKey);
     this.showPoseNetStillToastIfNeeded(false);
   }
@@ -1179,12 +1185,13 @@ struct FeatureRuntimePage {
       this.clearVisualResults();
     }
     this.updateObjectDetectionPreview(result);
-    this.updateSegmentationPreview(result, runtimeRequestId);
+    await this.updateSegmentationPreview(result, runtimeRequestId);
     this.updatePosePreview(result);
     this.updateGesturePreview(result);
     this.updateSceneOverlay(result);
     await this.updateStyledImagePreview(result, runtimeRequestId);
     this.showStyleTransferFailureToastIfNeeded(result.ok);
+    this.showStillSegmentationFailureToastIfNeeded(result.ok);
     this.showObjectPhotoFailureToastIfNeeded(result.ok);
     this.showGestureStillFailureToastIfNeeded(result.ok, result.messageKey);
     this.showPoseNetStillToastIfNeeded(result.ok);
@@ -1199,6 +1206,13 @@ struct FeatureRuntimePage {
 
   private showStyleTransferFailureToastIfNeeded(resultOk: boolean): void {
     const toastKey = styleTransferResultToastKey(workflowForRoute(this.routeName), resultOk);
+    if (toastKey !== undefined) {
+      this.showRuntimeToast(toastKey);
+    }
+  }
+
+  private showStillSegmentationFailureToastIfNeeded(resultOk: boolean): void {
+    const toastKey = stillSegmentationResultToastKey(workflowForRoute(this.routeName), resultOk);
     if (toastKey !== undefined) {
       this.showRuntimeToast(toastKey);
     }
@@ -1283,16 +1297,20 @@ struct FeatureRuntimePage {
     this.objectDetectionImageHeight = this.objectDetectionSourceHeight(data.detections);
   }
 
-  private updateSegmentationPreview(result: AiRunResult, runtimeRequestId: number): void {
+  private async updateSegmentationPreview(result: AiRunResult, runtimeRequestId: number): Promise<void> {
+    const workflow = workflowForRoute(this.routeName);
     const data = result.data;
-    if (data === undefined || data.kind !== 'segmentation' || data.result.rectangles.length === 0) {
+    if (data === undefined || data.kind !== 'segmentation' || !result.ok) {
+      return;
+    }
+    if (data.result.rectangles.length === 0 && !usesAndroidStillSegmentationLayout(workflow)) {
       return;
     }
 
     this.segmentationImageUri = data.imageUri;
     this.updateSegmentationImageOrientation(data.imageUri);
     const backgroundImageUri = runtimeSegmentationBackgroundImageUri(
-      workflowForRoute(this.routeName),
+      workflow,
       this.backgroundImageUri,
       data.backgroundImageUri
     );
@@ -1305,19 +1323,32 @@ struct FeatureRuntimePage {
     this.segmentationRectangles = data.result.rectangles;
     this.segmentationImageWidth = data.result.imageWidth ?? this.segmentationSourceWidth(data.result.rectangles);
     this.segmentationImageHeight = data.result.imageHeight ?? this.segmentationSourceHeight(data.result.rectangles);
-    this.updateSegmentationForegroundPreview(data.result, runtimeRequestId);
+    const foregroundUpdate = this.updateSegmentationForegroundPreview(data.result, runtimeRequestId);
+    if (usesAndroidStillSegmentationLayout(workflow)) {
+      await foregroundUpdate;
+    }
   }
 
-  private updateSegmentationForegroundPreview(result: SegmentationResult, runtimeRequestId: number): void {
+  private async updateSegmentationForegroundPreview(
+    result: SegmentationResult,
+    runtimeRequestId: number
+  ): Promise<void> {
+    const stillSegmentation = usesAndroidStillSegmentationLayout(workflowForRoute(this.routeName));
     const rgba = result.foregroundImageRgba;
     const width = result.foregroundImageWidth ?? 0;
     const height = result.foregroundImageHeight ?? 0;
     if (rgba === undefined || rgba.byteLength === 0 || width <= 0 || height <= 0) {
+      if (stillSegmentation) {
+        this.segmentationForegroundPixelMapOwner.invalidatePendingReplacement();
+        this.statusKey = 'feature_runtime_segmentation_failed';
+        this.showStillSegmentationFailureToastIfNeeded(false);
+      }
       return;
     }
 
     const requestId = this.segmentationForegroundPixelMapOwner.beginReplacement();
-    styleTransferPixelMapFromRgbaOutput(rgba, width, height).then((pixelMap: image.PixelMap) => {
+    try {
+      const pixelMap = await styleTransferPixelMapFromRgbaOutput(rgba, width, height);
       if (!this.runtimeRequestGeneration.isCurrent(runtimeRequestId)) {
         this.segmentationForegroundPixelMapOwner.accept(requestId, pixelMap);
         return;
@@ -1325,13 +1356,19 @@ struct FeatureRuntimePage {
       if (this.segmentationForegroundPixelMapOwner.accept(requestId, pixelMap)) {
         this.segmentationForegroundPixelMap = pixelMap;
       }
-    }).catch(() => {
+    } catch (_) {
       if (this.runtimeRequestGeneration.isCurrent(runtimeRequestId) &&
         this.segmentationForegroundPixelMapOwner.isCurrent(requestId)) {
-        this.segmentationForegroundPixelMapOwner.clear();
-        this.segmentationForegroundPixelMap = undefined;
+        if (stillSegmentation) {
+          this.segmentationForegroundPixelMapOwner.invalidatePendingReplacement();
+          this.statusKey = 'feature_runtime_segmentation_failed';
+          this.showStillSegmentationFailureToastIfNeeded(false);
+        } else {
+          this.segmentationForegroundPixelMapOwner.clear();
+          this.segmentationForegroundPixelMap = undefined;
+        }
       }
-    });
+    }
   }
 
   private updatePosePreview(result: AiRunResult): void {
@@ -1557,6 +1594,13 @@ struct FeatureRuntimePage {
         titleKey: linkedWorkflow?.titleKey ?? this.titleKey
       }
     });
+  }
+
+  private openStillSegmentationLiveRoute(): void {
+    if (this.workflowRunning) {
+      return;
+    }
+    this.openLinkedLiveRoute();
   }
 
   private hasInputPreview(): boolean {
@@ -1810,6 +1854,24 @@ struct FeatureRuntimePage {
       return;
     }
     await this.saveResultPixelMapAsync(this.styledImagePixelMap);
+    this.showRuntimeToast(this.statusKey);
+  }
+
+  private saveStillSegmentationResultImage(): void {
+    if (this.workflowRunning) {
+      return;
+    }
+    this.saveStillSegmentationResultImageAsync().catch(() => {
+      this.statusKey = 'feature_runtime_save_image_failed';
+      this.showRuntimeToast(this.statusKey);
+    });
+  }
+
+  private async saveStillSegmentationResultImageAsync(): Promise<void> {
+    if (this.workflowRunning) {
+      return;
+    }
+    await this.saveResultPixelMapAsync(this.segmentationForegroundPixelMap);
     this.showRuntimeToast(this.statusKey);
   }
 
@@ -3382,6 +3444,131 @@ struct FeatureRuntimePage {
   }
 
   @Builder
+  stillSegmentationAndroidLayout() {
+    Stack({ alignContent: Alignment.TopStart }) {
+      Column() {
+        this.runtimeActionToolbar(false)
+        Row() {
+        }
+        .width('100%')
+        .height(1)
+        .backgroundColor('#E4E4E4')
+        Column() {
+          Stack({ alignContent: Alignment.Center }) {
+            if (this.imageInputUri.length > 0) {
+              Image(this.imageInputUri)
+                .width('100%')
+                .height('100%')
+                .objectFit(ImageFit.Contain)
+            } else {
+              Image($r('app.media.icon_default'))
+                .width('100%')
+                .height('100%')
+                .objectFit(ImageFit.Contain)
+            }
+          }
+          .width('100%')
+          .layoutWeight(4)
+          Stack({ alignContent: Alignment.Center }) {
+            if (this.segmentationForegroundPixelMap !== undefined) {
+              Image(this.segmentationForegroundPixelMap)
+                .width('100%')
+                .height('100%')
+                .objectFit(ImageFit.Contain)
+            } else {
+              Image($r('app.media.icon_default'))
+                .width('100%')
+                .height('100%')
+                .objectFit(ImageFit.Contain)
+            }
+          }
+          .width('100%')
+          .layoutWeight(4)
+          .margin({ top: 20 })
+          Row() {
+            Button(appString(workflowInputLabelKey(workflowForRoute(this.routeName), 'photo')), { type: ButtonType.Normal })
+              .layoutWeight(1)
+              .height(37)
+              .margin({ left: 20, right: 5 })
+              .fontSize(14)
+              .fontWeight(FontWeight.Normal)
+              .fontColor('#666666')
+              .backgroundColor('#F4F3F8')
+              .borderRadius(5)
+              .enabled(!this.workflowRunning)
+              .onClick(() => this.prepareInput('photo'))
+            Button(appString(workflowInputLabelKey(workflowForRoute(this.routeName), 'camera')), { type: ButtonType.Normal })
+              .layoutWeight(1)
+              .height(37)
+              .margin({ left: 5, right: 5 })
+              .fontSize(14)
+              .fontWeight(FontWeight.Normal)
+              .fontColor('#666666')
+              .backgroundColor('#F4F3F8')
+              .borderRadius(5)
+              .enabled(!this.workflowRunning)
+              .onClick(() => this.prepareInput('camera'))
+            Button(appString(workflowGoLiveLabelKey(workflowForRoute(this.routeName))), { type: ButtonType.Normal })
+              .layoutWeight(1)
+              .height(37)
+              .margin({ left: 5, right: 5 })
+              .fontSize(14)
+              .fontWeight(FontWeight.Normal)
+              .fontColor('#666666')
+              .backgroundColor('#F4F3F8')
+              .borderRadius(5)
+              .enabled(!this.workflowRunning)
+              .onClick(() => {
+                this.openStillSegmentationLiveRoute()
+              })
+            Column() {
+              SaveButton({
+                icon: SaveIconStyle.FULL_FILLED,
+                text: SaveDescription.SAVE_IMAGE,
+                buttonType: ButtonType.Capsule
+              })
+                .width('100%')
+                .height(37)
+                .fontSize(14)
+                .fontColor('#666666')
+                .backgroundColor('#F4F3F8')
+                .enabled(!this.workflowRunning)
+                .onClick((_event: ClickEvent, result: SaveButtonOnClickResult) => {
+                  if (this.workflowRunning) {
+                    return;
+                  }
+                  if (result === SaveButtonOnClickResult.SUCCESS) {
+                    this.saveStillSegmentationResultImage()
+                    return;
+                  }
+                  this.statusKey = 'feature_runtime_save_image_failed';
+                  this.showRuntimeToast(this.statusKey);
+                })
+            }
+            .layoutWeight(1)
+            .height(37)
+            .margin({ left: 5, right: 20 })
+          }
+          .width('100%')
+          .layoutWeight(1)
+          .margin({ top: 14 })
+          .alignItems(VerticalAlign.Top)
+        }
+        .width('100%')
+        .layoutWeight(1)
+        .backgroundColor(Color.Black)
+      }
+      .width('100%')
+      .height('100%')
+      .backgroundColor(Color.White)
+      this.runtimePermissionRecoveryOverlay()
+    }
+    .width('100%')
+    .height('100%')
+    .backgroundColor(Color.White)
+  }
+
+  @Builder
   customModelAndroidLayout() {
     Stack({ alignContent: Alignment.TopStart }) {
       Column() {
@@ -3943,6 +4130,8 @@ struct FeatureRuntimePage {
       this.styleTransferAndroidLayout()
     } else if (usesAndroidCustomModelLayout(workflowForRoute(this.routeName))) {
       this.customModelAndroidLayout()
+    } else if (usesAndroidStillSegmentationLayout(workflowForRoute(this.routeName))) {
+      this.stillSegmentationAndroidLayout()
     } else if (usesAndroidPortraitSegmentationLayout(workflowForRoute(this.routeName))) {
       this.portraitSegmentationAndroidLayout()
     } else if (specializedAndroidLiveLayoutForWorkflow(workflowForRoute(this.routeName)) === 'imageClassification') {

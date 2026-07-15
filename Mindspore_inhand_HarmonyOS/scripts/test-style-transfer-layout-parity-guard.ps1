@@ -222,21 +222,21 @@ try {
   Assert-GuardFails $swappedBuilderRoot 'Style and Custom selectors render each other builder'
 
   Assert-PageSectionMutationFails 'missing-toolbar' `
-    '  styleTransferAndroidLayout() {' '  customModelAndroidLayout() {' `
+    '  styleTransferAndroidLayout() {' '  stillSegmentationAndroidLayout() {' `
     'this.runtimeActionToolbar(true)' "const toolbarDecoy = 'this.runtimeActionToolbar(true)';" `
     'toolbar exists only as a literal decoy'
   Assert-PageSectionMutationFails 'missing-preview-height' `
-    '  styleTransferAndroidLayout() {' '  customModelAndroidLayout() {' `
+    '  styleTransferAndroidLayout() {' '  stillSegmentationAndroidLayout() {' `
     '.height(265)' "const previewDecoy = '.height(265)';" `
     'fixed Android preview height exists only as a literal decoy'
 
   Assert-PageSectionDesiredMutationFails 'empty-preview-wrong-icon' `
-    '  styleTransferAndroidLayout() {' '  customModelAndroidLayout() {' `
+    '  styleTransferAndroidLayout() {' '  stillSegmentationAndroidLayout() {' `
     "Image(`$r('app.media.icon_style'))" "Image(`$r('app.media.icon_default'))" `
     "Image(`$r('app.media.icon_default'))" `
     'empty preview does not use Android icon_style'
   Assert-PageSectionDesiredMutationFails 'empty-preview-wrong-font-size' `
-    '  styleTransferAndroidLayout() {' '  customModelAndroidLayout() {' `
+    '  styleTransferAndroidLayout() {' '  stillSegmentationAndroidLayout() {' `
     "Text(appString('feature_runtime_style_choose_image'))`n                .fontSize(16)" `
     "Text(appString('feature_runtime_style_choose_image'))`n                .fontSize(14)" `
     "Text(appString('feature_runtime_style_choose_image'))`n                .fontSize(15)" `
@@ -267,18 +267,18 @@ try {
   $previewWidthRoot = New-MutationRoot 'second-preview-width-not-256'
   Replace-NthInSection `
     (Join-Path $previewWidthRoot 'entry\src\main\ets\pages\FeatureRuntimePage.ets') `
-    '  styleTransferAndroidLayout() {' '  customModelAndroidLayout() {' `
+    '  styleTransferAndroidLayout() {' '  stillSegmentationAndroidLayout() {' `
     '.width(256)' '.width(255)' 2
   Assert-GuardFails $previewWidthRoot 'original preview is not exactly 256vp wide'
 
   $previewHeightRoot = New-MutationRoot 'second-preview-height-not-256'
   Replace-NthInSection `
     (Join-Path $previewHeightRoot 'entry\src\main\ets\pages\FeatureRuntimePage.ets') `
-    '  styleTransferAndroidLayout() {' '  customModelAndroidLayout() {' `
+    '  styleTransferAndroidLayout() {' '  stillSegmentationAndroidLayout() {' `
     '.height(256)' '.height(255)' 2
   Assert-GuardFails $previewHeightRoot 'original preview is not exactly 256vp high'
   Assert-PageSectionMutationFails 'missing-album-action' `
-    '  styleTransferAndroidLayout() {' '  customModelAndroidLayout() {' `
+    '  styleTransferAndroidLayout() {' '  stillSegmentationAndroidLayout() {' `
     "Button(appString('feature_runtime_style_album'), { type: ButtonType.Normal })" `
     "const albumDecoy = `"Button(appString('feature_runtime_style_album'), { type: ButtonType.Normal })`";" `
     'Album action exists only as a literal decoy'
@@ -287,7 +287,7 @@ try {
     ".columnsTemplate('1fr 1fr 1fr 1fr')" "const gridDecoy = `".columnsTemplate('1fr 1fr 1fr 1fr')`";" `
     'four-column grid exists only as a literal decoy'
   Assert-PageSectionMutationFails 'missing-permission-overlay' `
-    '  styleTransferAndroidLayout() {' '  customModelAndroidLayout() {' `
+    '  styleTransferAndroidLayout() {' '  stillSegmentationAndroidLayout() {' `
     'this.runtimePermissionRecoveryOverlay()' "const overlayDecoy = 'this.runtimePermissionRecoveryOverlay()';" `
     'permission overlay exists only as a literal decoy'
 
@@ -339,12 +339,12 @@ try {
   $saveGuardRoot = New-MutationRoot 'save-handler-unguarded'
   Replace-NthInSection `
     (Join-Path $saveGuardRoot 'entry\src\main\ets\pages\FeatureRuntimePage.ets') `
-    '  private saveStyleTransferResultImage()' '  private async saveResultComponentImageAsync' `
+    '  private saveStyleTransferResultImage()' '  private saveStillSegmentationResultImage' `
     'if (this.workflowRunning) {' 'if (false) {' 1
   Assert-GuardFails $saveGuardRoot 'Save click wrapper no longer rejects while running'
 
   Assert-PageSectionMutationFails 'denied-save-no-toast' `
-    '  styleTransferAndroidLayout() {' '  customModelAndroidLayout() {' `
+    '  styleTransferAndroidLayout() {' '  stillSegmentationAndroidLayout() {' `
     'this.showRuntimeToast(this.statusKey);' "const deniedToastDecoy = 'this.showRuntimeToast(this.statusKey);';" `
     'denied secure Save no longer shows immediate failure Toast'
   Assert-PageSectionMutationFails 'save-toast-leaks-to-segmentation' `
@@ -381,7 +381,7 @@ try {
     'thrown run no longer reaches Style Transfer Toast'
   Assert-PageSectionMutationFails 'permission-failure-clears-visuals' `
     '  private async runWorkflowAsync(' '  private applyRuntimeFailure' `
-    'if (!usesAndroidStyleTransferLayout(workflow)) {' `
+    "if (!shouldPreserveRuntimeVisualResultOnAiResult(workflow, false, '')) {" `
     'if (usesAndroidStyleTransferLayout(workflow)) {' `
     'permission failure clears Style Transfer visuals'
   Assert-PageSectionMutationFails 'conversion-not-awaited' `
@@ -477,7 +477,7 @@ try {
   )
   foreach ($mutation in $genericMutations) {
     Assert-PageSectionMutationFails $mutation.Name `
-      '  styleTransferAndroidLayout() {' '  customModelAndroidLayout() {' `
+      '  styleTransferAndroidLayout() {' '  stillSegmentationAndroidLayout() {' `
       '  styleTransferAndroidLayout() {' `
       ("  styleTransferAndroidLayout() {`r`n    " + $mutation.Code) `
       ("executable generic UI injected: " + $mutation.Name)

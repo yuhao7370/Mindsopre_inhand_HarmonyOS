@@ -140,7 +140,7 @@ Assert-Count $selector 'AppRoute.' 1 'selector must contain exactly one route ta
 
 $page = Remove-ArkTsCommentsAndTemplateRaw (Get-NormalizedText $pagePath)
 $builder = Get-TextSection $page '  styleTransferAndroidLayout() {' `
-  "`n`n  @Builder`n  customModelAndroidLayout()" 'dedicated Style Transfer builder'
+  "`n`n  @Builder`n  stillSegmentationAndroidLayout()" 'dedicated Style Transfer builder'
 $grid = Get-TextSection $page '  styleTransferStyleGrid() {' `
   "`n`n  @Builder`n  styleTransferStyleItem" 'Style Transfer grid'
 
@@ -314,7 +314,7 @@ foreach ($line in @(
 
 $permission = Get-TextSection $page '  private async runWorkflowAsync(' `
   "`n`n  private applyRuntimeFailure" 'run and permission flow'
-Assert-CodeLine $permission 'if (!usesAndroidStyleTransferLayout(workflow)) {' `
+Assert-CodeLine $permission "if (!shouldPreserveRuntimeVisualResultOnAiResult(workflow, false, '')) {" `
   'permission failure must preserve Style Transfer visuals.'
 Assert-CodeLine $permission 'await this.applyAiResult(result, runtimeRequestId);' `
   'run lifecycle must await styled PixelMap conversion.'
@@ -363,7 +363,7 @@ Assert-CodeLine $recovery 'this.showRuntimeToast(this.statusKey);' `
   'Recovery without an original must show a Toast.'
 
 $save = Get-TextSection $page '  private saveStyleTransferResultImage()' `
-  "`n`n  private async saveResultComponentImageAsync" 'Style Transfer Save wrapper'
+  "`n`n  private saveStillSegmentationResultImage" 'Style Transfer Save wrapper'
 Assert-CodeLine $save 'if (this.workflowRunning) {' 'Save must be handler-guarded while running.'
 Assert-CodeLineCount $save 'if (this.workflowRunning) {' 2 `
   'both the Save click wrapper and async service path must reject while running.'

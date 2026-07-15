@@ -90,7 +90,9 @@ try {
   & $guardPath -SourceRoot $validRoot | Out-Null
 
   $root = New-MutationRoot 'selector'
-  Replace-Once (Join-Path $root 'entry\src\main\ets\features\runtime\FeatureWorkflowCatalog.ets') `
+  Replace-OnceInSection (Join-Path $root 'entry\src\main\ets\features\runtime\FeatureWorkflowCatalog.ets') `
+    'export function usesAndroidStillSegmentationLayout' `
+    'export function stillSegmentationResultToastKey' `
     'return workflow?.routeName === AppRoute.SEGMENTATION_STILL.name;' `
     'return workflow?.routeName === AppRoute.SEGMENTATION_LIVE.name;'
   Assert-GuardFails $root 'selector targets live segmentation'
@@ -128,7 +130,7 @@ try {
 
   $root = New-MutationRoot 'throw-toast'
   Replace-OnceInSection (Join-Path $root 'entry\src\main\ets\pages\FeatureRuntimePage.ets') `
-    '  private applyRuntimeFailure() {' "`n`n  private async prepareLiveFrameImageInput" `
+    '  private applyRuntimeFailure(): void {' "`n`n  private async prepareLiveFrameImageInput" `
     'this.showStillSegmentationFailureToastIfNeeded(false);' `
     '// this.showStillSegmentationFailureToastIfNeeded(false);'
   Assert-GuardFails $root 'thrown-run Toast is removed'

@@ -104,7 +104,7 @@ $page = Remove-ArkTsCommentsAndTemplateRaw (Get-NormalizedText (Join-Path $Sourc
 $build = Remove-ArkTsCommentsAndTemplateRaw (Get-NormalizedText (Join-Path $SourceRoot 'scripts\build-hap.ps1'))
 
 $selector = Get-TextSection $catalog 'export function usesAndroidStillSegmentationLayout' `
-  'export function styleTransferResultToastKey' 'exact still-segmentation selector'
+  'export function stillSegmentationResultToastKey' 'exact still-segmentation selector'
 Assert-CodeLine $selector 'return workflow?.routeName === AppRoute.SEGMENTATION_STILL.name;' `
   'selector must target only SEGMENTATION_STILL.'
 if (([regex]::Matches($selector, 'AppRoute\.')).Count -ne 1) {
@@ -197,7 +197,7 @@ Assert-CodeLine $apply 'await this.updateSegmentationPreview(result, runtimeRequ
   'still foreground conversion must participate in the running lifecycle.'
 Assert-CodeLine $apply 'this.showStillSegmentationFailureToastIfNeeded(result.ok);' `
   'failed AI results must surface the route-scoped Toast.'
-$failure = Get-TextSection $page '  private applyRuntimeFailure() {' "`n`n  private async prepareLiveFrameImageInput" 'thrown-run failure path'
+$failure = Get-TextSection $page '  private applyRuntimeFailure(): void {' "`n`n  private async prepareLiveFrameImageInput" 'thrown-run failure path'
 Assert-CodeLine $failure 'this.showStillSegmentationFailureToastIfNeeded(false);' `
   'thrown runs must surface the route-scoped Toast.'
 
@@ -217,7 +217,7 @@ Assert-Contains $segmentation 'this.segmentationForegroundPixelMapOwner.invalida
 Assert-Contains $segmentation 'this.showStillSegmentationFailureToastIfNeeded(false);' `
   'current invalid/rejected foreground must Toast failure.'
 
-$saveWrapper = Get-TextSection $page '  private saveStillSegmentationResultImage() {' `
+$saveWrapper = Get-TextSection $page '  private saveStillSegmentationResultImage(): void {' `
   "`n`n  private async saveResultComponentImageAsync" 'still-segmentation save wrapper'
 Assert-CodeLineCount $saveWrapper 'if (this.workflowRunning) {' 2 `
   'save entry and async wrapper must both reject running-state calls.'
@@ -226,9 +226,9 @@ Assert-CodeLine $saveWrapper 'await this.saveResultPixelMapAsync(this.segmentati
 Assert-CodeLine $saveWrapper 'this.showRuntimeToast(this.statusKey);' `
   'save wrapper must Toast missing/success/failure status.'
 
-Assert-Contains $build "& (Join-Path `$PSScriptRoot 'check-still-segmentation-layout-parity.ps1')" `
+Assert-CodeLine $build "& (Join-Path `$PSScriptRoot 'check-still-segmentation-layout-parity.ps1')" `
   'build-hap.ps1 must execute the production parity guard.'
-Assert-Contains $build "& (Join-Path `$PSScriptRoot 'test-still-segmentation-layout-parity-guard.ps1')" `
+Assert-CodeLine $build "& (Join-Path `$PSScriptRoot 'test-still-segmentation-layout-parity-guard.ps1')" `
   'build-hap.ps1 must execute the mutation fixture suite.'
 
 Write-Host 'Still image segmentation Android layout/state parity checks passed.'
