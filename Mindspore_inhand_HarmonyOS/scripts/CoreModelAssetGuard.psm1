@@ -52,6 +52,19 @@ function Assert-CoreGuardExecutableMemberCall(
   }
 }
 
+function Get-CoreGuardAssignmentVariableName(
+  [Management.Automation.Language.AssignmentStatementAst]$Assignment
+) {
+  $left = $Assignment.Left
+  while ($left -is [Management.Automation.Language.AttributedExpressionAst]) {
+    $left = $left.Child
+  }
+  if ($left -is [Management.Automation.Language.VariableExpressionAst]) {
+    return $left.VariablePath.UserPath
+  }
+  return $null
+}
+
 function Get-CoreGuardAssignment(
   [Management.Automation.Language.Ast]$Ast,
   [string]$VariableName,
@@ -60,8 +73,7 @@ function Get-CoreGuardAssignment(
   $matches = @($Ast.FindAll({
     param($node)
     $node -is [Management.Automation.Language.AssignmentStatementAst] -and
-      $node.Left -is [Management.Automation.Language.VariableExpressionAst] -and
-      $node.Left.VariablePath.UserPath -ceq $VariableName
+      (Get-CoreGuardAssignmentVariableName $node) -ceq $VariableName
   }, $true))
   if ($matches.Count -ne 1) {
     throw "Core model asset guard failed: $Message Expected one assignment to `$$VariableName, found $($matches.Count)."
@@ -234,7 +246,8 @@ function Assert-CoreGuardNoStableMutation(
   while ($changed) {
     $changed = $false
     foreach ($assignment in @($Ast.FindAll({ param($node) $node -is [Management.Automation.Language.AssignmentStatementAst] }, $true))) {
-      if ($assignment.Left -isnot [Management.Automation.Language.VariableExpressionAst]) {
+      $assignedVariable = Get-CoreGuardAssignmentVariableName $assignment
+      if ($null -eq $assignedVariable) {
         continue
       }
       $rightExpression = Get-CoreGuardDirectExpression $assignment.Right
@@ -248,7 +261,7 @@ function Assert-CoreGuardNoStableMutation(
           $innerText = $rightExpression.Extent.Text.Substring(1, $rightExpression.Extent.Text.Length - 2)
           $isAlias = $innerText -ceq "`$$stableVariable" -or $innerText -ceq "`${$stableVariable}"
         }
-        if ($isAlias -and $stableVariables.Add($assignment.Left.VariablePath.UserPath)) {
+        if ($isAlias -and $stableVariables.Add($assignedVariable)) {
           $changed = $true
           break
         }
@@ -262,10 +275,20 @@ function Assert-CoreGuardNoStableMutation(
     'Move-Item', 'New-Item', 'Out-File', 'Remove-Item', 'Rename-Item', 'Set-Content',
     'Start-BitsTransfer', 'Tee-Object', 'curl', 'wget'
   )
+  $mutatingAliases = @{
+    'ac' = 'Add-Content'; 'clc' = 'Clear-Content'; 'cp' = 'Copy-Item'; 'cpi' = 'Copy-Item'
+    'irm' = 'Invoke-RestMethod'; 'iwr' = 'Invoke-WebRequest'; 'mi' = 'Move-Item'; 'move' = 'Move-Item'
+    'mv' = 'Move-Item'; 'ni' = 'New-Item'; 'del' = 'Remove-Item'; 'erase' = 'Remove-Item'
+    'rd' = 'Remove-Item'; 'ri' = 'Remove-Item'; 'rm' = 'Remove-Item'; 'rmdir' = 'Remove-Item'
+    'ren' = 'Rename-Item'; 'rni' = 'Rename-Item'; 'sc' = 'Set-Content'; 'tee' = 'Tee-Object'
+  }
   foreach ($command in @($Ast.FindAll({ param($node) $node -is [Management.Automation.Language.CommandAst] }, $true))) {
     $commandName = $command.GetCommandName()
     if ($null -eq $commandName) { continue }
     $unqualifiedCommandName = ($commandName -split '\\')[-1]
+    if ($mutatingAliases.ContainsKey($unqualifiedCommandName)) {
+      $unqualifiedCommandName = $mutatingAliases[$unqualifiedCommandName]
+    }
     $pipeline = $command.Parent
     while ($null -ne $pipeline -and $pipeline -isnot [Management.Automation.Language.PipelineAst]) {
       $pipeline = $pipeline.Parent
@@ -302,13 +325,40 @@ function Assert-CoreGuardNoDownloaderCommand(
   [Management.Automation.Language.Ast]$Ast,
   [string]$Message
 ) {
-  $matches = @($Ast.FindAll({
+  $downloaderPattern = '(?i)download-[^\s''"]*models?\.ps1\b'
+  $downloaderVariables = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+  foreach ($assignment in @($Ast.FindAll({
     param($node)
-    $node -is [Management.Automation.Language.CommandAst] -and
-      $node.Extent.Text -match '(?i)download-[^\s''"]*models?\.ps1\b'
-  }, $true))
-  if ($matches.Count -ne 0) {
-    throw "Core model asset guard failed: $Message executes or dot-sources a model downloader."
+    $node -is [Management.Automation.Language.AssignmentStatementAst]
+  }, $true))) {
+    $assignedVariable = Get-CoreGuardAssignmentVariableName $assignment
+    $literal = Get-CoreGuardDirectLiteral $assignment.Right
+    if ($null -ne $assignedVariable -and $literal.IsLiteral -and
+        [string]$literal.Value -match $downloaderPattern) {
+      [void]$downloaderVariables.Add($assignedVariable)
+    }
+  }
+
+  foreach ($command in @($Ast.FindAll({ param($node) $node -is [Management.Automation.Language.CommandAst] }, $true))) {
+    if ($command.Extent.Text -match $downloaderPattern) {
+      throw "Core model asset guard failed: $Message executes or dot-sources a model downloader."
+    }
+    $commandName = $command.GetCommandName()
+    $unqualifiedCommandName = if ($null -ne $commandName) { ($commandName -split '\\')[-1] } else { '' }
+    $isProcessInvocation = @('powershell', 'powershell.exe', 'pwsh', 'pwsh.exe', 'cmd', 'cmd.exe') -icontains $unqualifiedCommandName
+    if ($command.InvocationOperator -notin @(
+        [Management.Automation.Language.TokenKind]::Ampersand,
+        [Management.Automation.Language.TokenKind]::Dot
+      ) -and -not $isProcessInvocation) {
+      continue
+    }
+    $referencedVariables = @($command.FindAll({
+      param($node)
+      $node -is [Management.Automation.Language.VariableExpressionAst]
+    }, $true) | ForEach-Object { $_.VariablePath.UserPath })
+    if (@($referencedVariables | Where-Object { $downloaderVariables.Contains($_) }).Count -ne 0) {
+      throw "Core model asset guard failed: $Message invokes a model downloader through a direct literal variable."
+    }
   }
 }
 

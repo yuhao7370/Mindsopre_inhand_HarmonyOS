@@ -111,6 +111,22 @@ Assert-Rejects {
   Assert-CoreGuardNoStableMutation $qualifiedMutationAst 'module-qualified stable mutation'
 } 'stable path mutation through a module-qualified command'
 
+$typedAliasMutation = @'
+[string]$stableAlias = $modelPath
+Set-Content -LiteralPath $stableAlias -Value 'bad'
+'@
+$typedAliasMutationAst = ConvertTo-CoreGuardPowerShellAst $typedAliasMutation 'typed stable alias mutation'
+Assert-Rejects {
+  Assert-CoreGuardNoStableMutation $typedAliasMutationAst 'typed stable alias mutation'
+} 'stable path mutation through a typed alias'
+
+$builtinAliasMutationAst = ConvertTo-CoreGuardPowerShellAst `
+  'sc -LiteralPath $modelPath -Value bad' `
+  'built-in alias stable mutation'
+Assert-Rejects {
+  Assert-CoreGuardNoStableMutation $builtinAliasMutationAst 'built-in alias stable mutation'
+} 'stable path mutation through the built-in sc alias'
+
 $misboundModels = @'
 $models = @(
   [pscustomobject]@{ Name = 'first.ms'; Bytes = 2; Sha256 = 'SECOND' },
@@ -154,6 +170,14 @@ $directDownloaderAst = ConvertTo-CoreGuardPowerShellAst `
 Assert-Rejects {
   Assert-CoreGuardNoDownloaderCommand $directDownloaderAst 'direct powershell downloader'
 } 'powershell -File downloader in normal build'
+$variableDownloader = @'
+$downloader = 'download-image-classification-model.ps1'
+& (Join-Path $PSScriptRoot $downloader)
+'@
+$variableDownloaderAst = ConvertTo-CoreGuardPowerShellAst $variableDownloader 'literal variable downloader'
+Assert-Rejects {
+  Assert-CoreGuardNoDownloaderCommand $variableDownloaderAst 'literal variable downloader'
+} 'downloader invoked through a direct literal variable'
 $verifierOnlyBuildAst = ConvertTo-CoreGuardPowerShellAst `
   "& (Join-Path `$PSScriptRoot 'ensure-mindspore-models.ps1')" `
   'verifier-only build'
