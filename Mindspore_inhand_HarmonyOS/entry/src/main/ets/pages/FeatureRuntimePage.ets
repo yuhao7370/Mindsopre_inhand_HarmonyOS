@@ -16,7 +16,9 @@ import {
   rememberLiveCameraPositionForRoute,
   permissionLabelKey,
   runtimeInputKindsForWorkflow,
+  shouldShowGestureStillFailureToast,
   specializedAndroidLiveLayoutForWorkflow,
+  usesAndroidGestureStillLayout,
   usesAndroidPortraitSegmentationLayout,
   usesAndroidTextRecognitionLayout,
   usesAndroidTextTranslationLayout,
@@ -989,6 +991,7 @@ struct FeatureRuntimePage {
     this.resultText = '';
     this.resultRows = [];
     this.clearVisualResults();
+    this.showGestureStillFailureToastIfNeeded(false, this.statusKey);
   }
 
   private async prepareLiveFrameImageInput(
@@ -1046,6 +1049,13 @@ struct FeatureRuntimePage {
     this.updateGesturePreview(result);
     this.updateSceneOverlay(result);
     this.updateStyledImagePreview(result, runtimeRequestId);
+    this.showGestureStillFailureToastIfNeeded(result.ok, result.messageKey);
+  }
+
+  private showGestureStillFailureToastIfNeeded(resultOk: boolean, messageKey: AppStringKey): void {
+    if (shouldShowGestureStillFailureToast(workflowForRoute(this.routeName), resultOk)) {
+      this.showRuntimeToast(messageKey);
+    }
   }
 
   private clearRuntimeResultState(): void {
@@ -2956,6 +2966,114 @@ struct FeatureRuntimePage {
   }
 
   @Builder
+  gestureStillAndroidPreview() {
+    Stack({ alignContent: Alignment.Center }) {
+      if (this.gestureImageUri.length > 0 && this.visibleGestureDetections().length > 0) {
+        Stack({ alignContent: Alignment.TopStart }) {
+          Image(this.gestureImageUri)
+            .orientation(this.gestureImageOrientation)
+            .width('100%')
+            .height('100%')
+            .objectFit(ImageFit.Fill)
+          ForEach(this.visibleGestureDetections(), (gesture: GestureDetection) => {
+            this.gestureBox(gesture)
+          }, (gesture: GestureDetection) =>
+            `${gesture.category}-${gesture.score}-${gesture.rect?.left}-${gesture.rect?.top}`)
+        }
+        .width('100%')
+        .aspectRatio(this.gestureAspectRatio())
+        .clip(true)
+      } else if (this.imageInputUri.length > 0) {
+        Image(this.imageInputUri)
+          .width('100%')
+          .height('100%')
+          .objectFit(ImageFit.Contain)
+      } else {
+        Column() {
+          Image($r('app.media.icon_style'))
+            .width(69.33)
+            .height(56.33)
+            .objectFit(ImageFit.Contain)
+          Text(appString('workflow_summary_gesture_still_android_prompt'))
+            .fontSize(16)
+            .fontColor('#666666')
+            .textAlign(TextAlign.Center)
+            .margin({ top: 10 })
+        }
+        .alignItems(HorizontalAlign.Center)
+      }
+    }
+    .width('100%')
+    .layoutWeight(9)
+    .padding(50)
+    .clip(true)
+    .backgroundColor('#E6E6E6')
+  }
+
+  @Builder
+  gestureStillAndroidLayout() {
+    Stack({ alignContent: Alignment.TopStart }) {
+      Column() {
+        this.runtimeActionToolbar(false)
+        Row() {
+        }
+        .width('100%')
+        .height(1)
+        .backgroundColor('#E4E4E4')
+        Row() {
+        }
+        .width('100%')
+        .height(1)
+        .backgroundColor('#E4E4E4')
+        this.gestureStillAndroidPreview()
+        Row() {
+          Button(appString('feature_input_photo_android'), { type: ButtonType.Normal })
+            .layoutWeight(1)
+            .height(37)
+            .margin({ left: 20, right: 5 })
+            .fontSize(14)
+            .fontWeight(FontWeight.Normal)
+            .fontColor('#666666')
+            .backgroundColor('#F4F3F8')
+            .borderRadius(5)
+            .onClick(() => this.prepareInput('photo'))
+          Button(appString('feature_input_camera_android'), { type: ButtonType.Normal })
+            .layoutWeight(1)
+            .height(37)
+            .margin({ left: 5, right: 5 })
+            .fontSize(14)
+            .fontWeight(FontWeight.Normal)
+            .fontColor('#666666')
+            .backgroundColor('#F4F3F8')
+            .borderRadius(5)
+            .onClick(() => this.prepareInput('camera'))
+          Button(appString('feature_runtime_go_live_android_hms'), { type: ButtonType.Normal })
+            .layoutWeight(1)
+            .height(37)
+            .margin({ left: 5, right: 5 })
+            .fontSize(14)
+            .fontWeight(FontWeight.Normal)
+            .fontColor('#666666')
+            .backgroundColor('#F4F3F8')
+            .borderRadius(5)
+            .onClick(() => this.openLinkedLiveRoute())
+        }
+        .width('100%')
+        .layoutWeight(1)
+        .margin({ top: 14 })
+        .alignItems(VerticalAlign.Center)
+      }
+      .width('100%')
+      .height('100%')
+      .backgroundColor(Color.White)
+      this.runtimePermissionRecoveryOverlay()
+    }
+    .width('100%')
+    .height('100%')
+    .backgroundColor(Color.White)
+  }
+
+  @Builder
   textRecognitionAndroidLayout() {
     Stack({ alignContent: Alignment.TopStart }) {
       Column() {
@@ -3153,6 +3271,8 @@ struct FeatureRuntimePage {
       this.textTranslationAndroidLayout()
     } else if (usesAndroidTextRecognitionLayout(workflowForRoute(this.routeName))) {
       this.textRecognitionAndroidLayout()
+    } else if (usesAndroidGestureStillLayout(workflowForRoute(this.routeName))) {
+      this.gestureStillAndroidLayout()
     } else if (usesAndroidPortraitSegmentationLayout(workflowForRoute(this.routeName))) {
       this.portraitSegmentationAndroidLayout()
     } else if (specializedAndroidLiveLayoutForWorkflow(workflowForRoute(this.routeName)) === 'imageClassification') {

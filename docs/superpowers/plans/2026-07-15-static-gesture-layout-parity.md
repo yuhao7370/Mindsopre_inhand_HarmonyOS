@@ -133,7 +133,7 @@ Assert-Contains $selector 'shouldShowGestureStillFailureToast' 'failure Toast po
 $page = Get-NormalizedText (Join-Path $root 'entry\src\main\ets\pages\FeatureRuntimePage.ets')
 $builder = Get-TextSection `
   $page `
-  '  gestureStillAndroidLayout() {' `
+  '  gestureStillAndroidPreview() {' `
   "`n`n  @Builder`n  textRecognitionAndroidLayout()" `
   'dedicated static gesture builder'
 
@@ -180,6 +180,26 @@ foreach ($marker in @(
 )) {
   Assert-Excludes $builder $marker 'dedicated builder contains generic card/result/save UI'
 }
+
+$runtimeFailure = Get-TextSection `
+  $page `
+  '  private applyRuntimeFailure(): void {' `
+  "`n`n  private async prepareLiveFrameImageInput" `
+  'runtime failure Toast call site'
+Assert-Contains `
+  $runtimeFailure `
+  'this.showGestureStillFailureToastIfNeeded(false, this.statusKey);' `
+  'runtime failures must keep Gesture Still Toast feedback.'
+
+$aiResult = Get-TextSection `
+  $page `
+  '  private applyAiResult(result: AiRunResult, runtimeRequestId: number): void {' `
+  "`n`n  private showGestureStillFailureToastIfNeeded" `
+  'AI result Toast call site'
+Assert-Contains `
+  $aiResult `
+  'this.showGestureStillFailureToastIfNeeded(result.ok, result.messageKey);' `
+  'AI results must keep Gesture Still Toast feedback.'
 
 $failureMethod = Get-TextSection `
   $page `

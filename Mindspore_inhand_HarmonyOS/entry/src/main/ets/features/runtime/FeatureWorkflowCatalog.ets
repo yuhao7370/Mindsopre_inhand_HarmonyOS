@@ -318,6 +318,17 @@ export function usesAndroidTextTranslationLayout(workflow: FeatureWorkflow | und
   return workflow?.routeName === AppRoute.TEXT_TRANSLATION.name;
 }
 
+export function usesAndroidGestureStillLayout(workflow: FeatureWorkflow | undefined): boolean {
+  return workflow?.routeName === AppRoute.GESTURE_STILL.name;
+}
+
+export function shouldShowGestureStillFailureToast(
+  workflow: FeatureWorkflow | undefined,
+  resultOk: boolean
+): boolean {
+  return usesAndroidGestureStillLayout(workflow) && !resultOk;
+}
+
 export function runtimeInputKindsForWorkflow(workflow: FeatureWorkflow): Array<FeatureInputKind> {
   const kinds: Array<FeatureInputKind> = [];
   workflow.inputKinds.forEach((kind: FeatureInputKind) => appendUniqueInputKind(kinds, kind));

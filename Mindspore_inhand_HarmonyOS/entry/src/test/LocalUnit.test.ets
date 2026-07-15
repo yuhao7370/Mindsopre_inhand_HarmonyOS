@@ -353,7 +353,9 @@ import {
   runtimeInputKindsForWorkflow,
   visibleInputKindsForWorkflow,
   specializedAndroidLiveLayoutForWorkflow,
+  shouldShowGestureStillFailureToast,
   usesAndroidPortraitSegmentationLayout,
+  usesAndroidGestureStillLayout,
   usesAndroidTextRecognitionLayout,
   usesAndroidTextTranslationLayout,
   usesSimpleAndroidLiveLayout,
@@ -9113,6 +9115,25 @@ export default function localUnitTest() {
           .assertEqual(workflow.routeName === AppRoute.TEXT_TRANSLATION.name);
       });
       expect(usesAndroidTextTranslationLayout(undefined)).assertFalse();
+    });
+
+    it('usesAndroidGestureStillLayoutOnlyForStaticGesture', 0, () => {
+      expect(featureWorkflows.length).assertEqual(16);
+      featureWorkflows.forEach((workflow: FeatureWorkflow) => {
+        expect(usesAndroidGestureStillLayout(workflow))
+          .assertEqual(workflow.routeName === AppRoute.GESTURE_STILL.name);
+      });
+      expect(usesAndroidGestureStillLayout(undefined)).assertFalse();
+    });
+
+    it('showsAndroidGestureFailureToastOnlyForFailedStaticGesture', 0, () => {
+      featureWorkflows.forEach((workflow: FeatureWorkflow) => {
+        expect(shouldShowGestureStillFailureToast(workflow, false))
+          .assertEqual(workflow.routeName === AppRoute.GESTURE_STILL.name);
+        expect(shouldShowGestureStillFailureToast(workflow, true)).assertFalse();
+      });
+      expect(shouldShowGestureStillFailureToast(undefined, false)).assertFalse();
+      expect(shouldShowGestureStillFailureToast(undefined, true)).assertFalse();
     });
 
     it('selectsSpecializedAndroidLiveLayoutOnlyForImageAndObjectCamera', 0, () => {
