@@ -103,6 +103,15 @@ foreach ($downloaderName in @(
   )) {
     Assert-Excludes $downloader $forbidden "$downloaderName must never delete, truncate, or non-atomically overwrite the stable model ($forbidden)."
   }
+  $backupCleanup = 'Remove-Item -LiteralPath $backupPath -Force -ErrorAction SilentlyContinue'
+  $backupCleanupIndex = $downloader.LastIndexOf($backupCleanup, [StringComparison]::Ordinal)
+  $backupCleanupPrefixStart = [Math]::Max(0, $backupCleanupIndex - 120)
+  $backupCleanupPrefix = if ($backupCleanupIndex -ge 0) {
+    $downloader.Substring($backupCleanupPrefixStart, $backupCleanupIndex - $backupCleanupPrefixStart)
+  } else {
+    ''
+  }
+  Assert-Contains $backupCleanupPrefix 'if (Test-Path -LiteralPath $modelPath) {' "$downloaderName may clean a recovery backup only after the stable path exists."
 }
 
 $licensePath = Join-Path $modelRoot 'LICENSE-Apache-2.0.txt'
