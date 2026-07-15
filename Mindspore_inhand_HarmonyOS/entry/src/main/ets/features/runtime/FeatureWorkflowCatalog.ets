@@ -272,7 +272,7 @@ export const featureWorkflows: Array<FeatureWorkflow> = [
     summaryKey: 'workflow_summary_custom_model',
     aiMethod: 'runCustomModel',
     inputKinds: ['modelFile', 'photo', 'camera'],
-    requiredPermissions: ['camera', 'media'],
+    requiredPermissions: [],
     resultKind: 'tensorSummary',
     liveMode: false,
     helpUrl: customModelMoreUrl,
@@ -320,6 +320,57 @@ export function usesAndroidTextTranslationLayout(workflow: FeatureWorkflow | und
 
 export function usesAndroidPoseNetStillLayout(workflow: FeatureWorkflow | undefined): boolean {
   return workflow?.routeName === AppRoute.POSENET.name;
+}
+
+export function usesAndroidCustomModelLayout(workflow: FeatureWorkflow | undefined): boolean {
+  return workflow?.routeName === AppRoute.CUSTOM_MODEL.name;
+}
+
+export function customModelExecutePreflightToastKey(
+  workflow: FeatureWorkflow | undefined,
+  imageReady: boolean,
+  modelReady: boolean,
+  workflowRunning: boolean
+): AppStringKey | undefined {
+  if (!usesAndroidCustomModelLayout(workflow)) {
+    return undefined;
+  }
+  if (!imageReady) {
+    return 'feature_runtime_custom_model_image_required';
+  }
+  if (!modelReady) {
+    return 'feature_runtime_custom_model_model_required';
+  }
+  return workflowRunning ? 'feature_runtime_custom_model_already_running' : undefined;
+}
+
+export function customModelOutputFallbackKey(
+  workflow: FeatureWorkflow | undefined,
+  workflowRunning: boolean,
+  permissionDenied: boolean,
+  terminalResultText: string
+): AppStringKey | undefined {
+  if (!usesAndroidCustomModelLayout(workflow)) {
+    return undefined;
+  }
+  if (workflowRunning) {
+    return 'feature_runtime_custom_model_running_output';
+  }
+  if (permissionDenied) {
+    return 'feature_runtime_permission_denied';
+  }
+  return terminalResultText.length > 0 ? undefined : 'feature_runtime_custom_model_output_placeholder';
+}
+
+export function shouldRestoreCachedModelFileInputs(workflow: FeatureWorkflow | undefined): boolean {
+  return workflow !== undefined && !usesAndroidCustomModelLayout(workflow);
+}
+
+export function customModelModelCacheToastKey(
+  workflow: FeatureWorkflow | undefined,
+  messageKey: AppStringKey
+): AppStringKey | undefined {
+  return usesAndroidCustomModelLayout(workflow) ? messageKey : undefined;
 }
 
 export function poseNetStillToastKey(
@@ -653,8 +704,9 @@ export function shouldPreserveRuntimeResultAfterInputReady(
   workflow: FeatureWorkflow | undefined,
   inputKind: FeatureInputKind
 ): boolean {
-  return workflow?.routeName === AppRoute.PORTRAIT_SEGMENTATION.name &&
-    inputKind === 'backgroundImage';
+  return (workflow?.routeName === AppRoute.PORTRAIT_SEGMENTATION.name && inputKind === 'backgroundImage') ||
+    (usesAndroidCustomModelLayout(workflow) &&
+      (inputKind === 'modelFile' || inputKind === 'photo' || inputKind === 'camera'));
 }
 
 export function shouldPreserveRuntimeVisualResultOnAiResult(
@@ -801,10 +853,17 @@ export function shouldStartWorkflowRun(workflow: FeatureWorkflow, workflowRunnin
 
 export function shouldAllowRuntimeInputChange(
   workflow: FeatureWorkflow | undefined,
-  _inputKind: FeatureInputKind,
+  inputKind: FeatureInputKind,
   workflowRunning: boolean
 ): boolean {
-  return !workflowRunning || workflow?.routeName !== AppRoute.STYLE_TRANSFER.name;
+  if (!workflowRunning) {
+    return true;
+  }
+  if (workflow?.routeName === AppRoute.STYLE_TRANSFER.name) {
+    return false;
+  }
+  return !usesAndroidCustomModelLayout(workflow) ||
+    (inputKind !== 'modelFile' && inputKind !== 'photo' && inputKind !== 'camera');
 }
 
 export function workflowInputReadyAction(workflow: FeatureWorkflow, inputKind: FeatureInputKind,

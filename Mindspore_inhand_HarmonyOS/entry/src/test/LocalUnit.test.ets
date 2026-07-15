@@ -353,8 +353,13 @@ import {
   runtimeInputKindsForWorkflow,
   visibleInputKindsForWorkflow,
   specializedAndroidLiveLayoutForWorkflow,
+  customModelExecutePreflightToastKey,
+  customModelModelCacheToastKey,
+  customModelOutputFallbackKey,
   shouldShowGestureStillFailureToast,
   poseNetStillToastKey,
+  shouldRestoreCachedModelFileInputs,
+  usesAndroidCustomModelLayout,
   usesAndroidPortraitSegmentationLayout,
   usesAndroidGestureStillLayout,
   usesAndroidPoseNetStillLayout,
@@ -9143,6 +9148,114 @@ export default function localUnitTest() {
       expect(hasAppStringKey('feature_runtime_pose_detect_android')).assertTrue();
       expect(hasAppStringKey('feature_runtime_pose_detect_success_android')).assertTrue();
       expect(hasAppStringKey('feature_runtime_pose_detect_failed_android')).assertTrue();
+    });
+
+    it('usesAndroidCustomModelLayoutOnlyForCustomModel', 0, () => {
+      expect(featureWorkflows.length).assertEqual(16);
+      featureWorkflows.forEach((workflow: FeatureWorkflow) => {
+        expect(usesAndroidCustomModelLayout(workflow))
+          .assertEqual(workflow.routeName === AppRoute.CUSTOM_MODEL.name);
+      });
+      expect(usesAndroidCustomModelLayout(undefined)).assertFalse();
+    });
+
+    it('removesOnlyCustomModelExecutePermissions', 0, () => {
+      expect(workflowForRoute(AppRoute.CUSTOM_MODEL.name)!.requiredPermissions.length).assertEqual(0);
+      expect(JSON.stringify(workflowForRoute(AppRoute.POSENET.name)!.requiredPermissions))
+        .assertEqual(JSON.stringify(['camera', 'media']));
+      expect(JSON.stringify(workflowForRoute(AppRoute.OBJECT_PHOTO.name)!.requiredPermissions))
+        .assertEqual(JSON.stringify(['media']));
+      expect(JSON.stringify(workflowForRoute(AppRoute.OBJECT_CAMERA.name)!.requiredPermissions))
+        .assertEqual(JSON.stringify(['camera']));
+      expect(JSON.stringify(workflowForRoute(AppRoute.STYLE_TRANSFER.name)!.requiredPermissions))
+        .assertEqual(JSON.stringify(['camera', 'media']));
+    });
+
+    it('ordersCustomModelExecutePreflightLikeAndroid', 0, () => {
+      const customModel = workflowForRoute(AppRoute.CUSTOM_MODEL.name);
+      const styleTransfer = workflowForRoute(AppRoute.STYLE_TRANSFER.name);
+
+      expect(customModelExecutePreflightToastKey(customModel, false, false, false))
+        .assertEqual('feature_runtime_custom_model_image_required');
+      expect(customModelExecutePreflightToastKey(customModel, false, false, true))
+        .assertEqual('feature_runtime_custom_model_image_required');
+      expect(customModelExecutePreflightToastKey(customModel, true, false, true))
+        .assertEqual('feature_runtime_custom_model_model_required');
+      expect(customModelExecutePreflightToastKey(customModel, true, true, true))
+        .assertEqual('feature_runtime_custom_model_already_running');
+      expect(customModelExecutePreflightToastKey(customModel, true, true, false)).assertUndefined();
+      expect(customModelExecutePreflightToastKey(styleTransfer, false, false, true)).assertUndefined();
+      expect(customModelExecutePreflightToastKey(undefined, false, false, true)).assertUndefined();
+    });
+
+    it('resolvesCustomModelOutputFallbackInVisiblePriorityOrder', 0, () => {
+      const customModel = workflowForRoute(AppRoute.CUSTOM_MODEL.name);
+      const styleTransfer = workflowForRoute(AppRoute.STYLE_TRANSFER.name);
+
+      expect(customModelOutputFallbackKey(customModel, true, true, 'terminal output'))
+        .assertEqual('feature_runtime_custom_model_running_output');
+      expect(customModelOutputFallbackKey(customModel, false, true, 'terminal output'))
+        .assertEqual('feature_runtime_permission_denied');
+      expect(customModelOutputFallbackKey(customModel, false, false, 'terminal output')).assertUndefined();
+      expect(customModelOutputFallbackKey(customModel, false, false, ''))
+        .assertEqual('feature_runtime_custom_model_output_placeholder');
+      expect(customModelOutputFallbackKey(styleTransfer, true, true, '')).assertUndefined();
+      expect(customModelOutputFallbackKey(undefined, true, true, '')).assertUndefined();
+    });
+
+    it('preservesCustomModelTerminalOutputAcrossInputReadyChanges', 0, () => {
+      const customModel = workflowForRoute(AppRoute.CUSTOM_MODEL.name);
+      const portraitSegmentation = workflowForRoute(AppRoute.PORTRAIT_SEGMENTATION.name);
+      const styleTransfer = workflowForRoute(AppRoute.STYLE_TRANSFER.name);
+
+      expect(shouldPreserveRuntimeResultAfterInputReady(customModel, 'modelFile')).assertTrue();
+      expect(shouldPreserveRuntimeResultAfterInputReady(customModel, 'photo')).assertTrue();
+      expect(shouldPreserveRuntimeResultAfterInputReady(customModel, 'camera')).assertTrue();
+      expect(shouldPreserveRuntimeResultAfterInputReady(customModel, 'text')).assertFalse();
+      expect(shouldPreserveRuntimeResultAfterInputReady(portraitSegmentation, 'backgroundImage')).assertTrue();
+      expect(shouldPreserveRuntimeResultAfterInputReady(portraitSegmentation, 'camera')).assertFalse();
+      expect(shouldPreserveRuntimeResultAfterInputReady(styleTransfer, 'styleImage')).assertFalse();
+    });
+
+    it('blocksOnlyRunningCustomModelAndStyleTransferInputChanges', 0, () => {
+      const customModel = workflowForRoute(AppRoute.CUSTOM_MODEL.name);
+      const styleTransfer = workflowForRoute(AppRoute.STYLE_TRANSFER.name);
+      const textRecognition = workflowForRoute(AppRoute.TEXT_RECOGNITION.name);
+
+      expect(shouldAllowRuntimeInputChange(customModel, 'modelFile', true)).assertFalse();
+      expect(shouldAllowRuntimeInputChange(customModel, 'photo', true)).assertFalse();
+      expect(shouldAllowRuntimeInputChange(customModel, 'camera', true)).assertFalse();
+      expect(shouldAllowRuntimeInputChange(customModel, 'text', true)).assertTrue();
+      expect(shouldAllowRuntimeInputChange(customModel, 'photo', false)).assertTrue();
+      expect(shouldAllowRuntimeInputChange(styleTransfer, 'styleImage', true)).assertFalse();
+      expect(shouldAllowRuntimeInputChange(textRecognition, 'photo', true)).assertTrue();
+      expect(shouldAllowRuntimeInputChange(undefined, 'photo', true)).assertTrue();
+    });
+
+    it('skipsOnlyCustomModelCachedModelRestore', 0, () => {
+      featureWorkflows.forEach((workflow: FeatureWorkflow) => {
+        expect(shouldRestoreCachedModelFileInputs(workflow))
+          .assertEqual(workflow.routeName !== AppRoute.CUSTOM_MODEL.name);
+      });
+      expect(shouldRestoreCachedModelFileInputs(undefined)).assertFalse();
+    });
+
+    it('mapsCustomModelCacheToastsAndDeclaresAndroidOutputStrings', 0, () => {
+      const customModel = workflowForRoute(AppRoute.CUSTOM_MODEL.name);
+      const styleTransfer = workflowForRoute(AppRoute.STYLE_TRANSFER.name);
+
+      expect(customModelModelCacheToastKey(customModel, 'feature_runtime_model_ready'))
+        .assertEqual('feature_runtime_model_ready');
+      expect(customModelModelCacheToastKey(customModel, 'feature_runtime_model_cache_failed'))
+        .assertEqual('feature_runtime_model_cache_failed');
+      expect(customModelModelCacheToastKey(customModel, 'feature_runtime_model_incompatible'))
+        .assertEqual('feature_runtime_model_incompatible');
+      expect(customModelModelCacheToastKey(styleTransfer, 'feature_runtime_model_ready')).assertUndefined();
+      expect(customModelModelCacheToastKey(undefined, 'feature_runtime_model_ready')).assertUndefined();
+      expect(hasAppStringKey('feature_runtime_custom_model_execute')).assertTrue();
+      expect(hasAppStringKey('feature_runtime_custom_model_running_output')).assertTrue();
+      expect(hasAppStringKey('feature_runtime_custom_model_already_running')).assertTrue();
+      expect(hasAppStringKey('feature_runtime_custom_model_failure_output')).assertTrue();
     });
 
     it('usesAndroidGestureStillLayoutOnlyForStaticGesture', 0, () => {

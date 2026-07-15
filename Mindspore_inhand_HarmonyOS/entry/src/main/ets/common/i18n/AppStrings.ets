@@ -174,6 +174,10 @@ export type AppStringKey =
   'feature_runtime_custom_model_select_model' |
   'feature_runtime_custom_model_select_photo' |
   'feature_runtime_custom_model_take_photo' |
+  'feature_runtime_custom_model_execute' |
+  'feature_runtime_custom_model_running_output' |
+  'feature_runtime_custom_model_already_running' |
+  'feature_runtime_custom_model_failure_output' |
   'feature_runtime_object_select_model' |
   'feature_runtime_custom_model_output_title' |
   'feature_runtime_custom_model_output_placeholder' |
@@ -487,6 +491,10 @@ const APP_STRING_KEYS: AppStringKey[] = [
   'feature_runtime_custom_model_select_model',
   'feature_runtime_custom_model_select_photo',
   'feature_runtime_custom_model_take_photo',
+  'feature_runtime_custom_model_execute',
+  'feature_runtime_custom_model_running_output',
+  'feature_runtime_custom_model_already_running',
+  'feature_runtime_custom_model_failure_output',
   'feature_runtime_object_select_model',
   'feature_runtime_custom_model_output_title',
   'feature_runtime_custom_model_output_placeholder',
@@ -979,6 +987,14 @@ export function appString(key: AppStringKey): ResourceStr {
       return $r('app.string.feature_runtime_custom_model_select_photo');
     case 'feature_runtime_custom_model_take_photo':
       return $r('app.string.feature_runtime_custom_model_take_photo');
+    case 'feature_runtime_custom_model_execute':
+      return $r('app.string.feature_runtime_custom_model_execute');
+    case 'feature_runtime_custom_model_running_output':
+      return $r('app.string.feature_runtime_custom_model_running_output');
+    case 'feature_runtime_custom_model_already_running':
+      return $r('app.string.feature_runtime_custom_model_already_running');
+    case 'feature_runtime_custom_model_failure_output':
+      return $r('app.string.feature_runtime_custom_model_failure_output');
     case 'feature_runtime_object_select_model':
       return $r('app.string.feature_runtime_object_select_model');
     case 'feature_runtime_custom_model_output_title':
