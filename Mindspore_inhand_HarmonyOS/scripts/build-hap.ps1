@@ -14,6 +14,7 @@ $env:PATH = 'C:\Program Files\Huawei\DevEco Studio\jbr\bin;' + $env:PATH
 & (Join-Path $PSScriptRoot 'check-runtime-header-actions.ps1')
 & (Join-Path $PSScriptRoot 'check-model-label-guards.ps1')
 & (Join-Path $PSScriptRoot 'check-core-model-assets.ps1')
+& (Join-Path $PSScriptRoot 'test-core-model-assets-guard.ps1')
 & (Join-Path $PSScriptRoot 'check-bottom-tab-icons.ps1')
 & (Join-Path $PSScriptRoot 'check-me-row-icons.ps1')
 & (Join-Path $PSScriptRoot 'check-poetry-back-icon.ps1')

@@ -38,6 +38,22 @@ Assert-Rejects {
 $memberAst = ConvertTo-CoreGuardPowerShellAst $memberMarker 'real member call'
 Assert-CoreGuardExecutableMemberCall $memberAst $memberMarker 'real member call'
 
+$stableAliasMutation = @'
+$stableAlias = $modelPath
+Set-Content -LiteralPath $stableAlias -Value 'bad'
+'@
+$stableAliasMutationAst = ConvertTo-CoreGuardPowerShellAst $stableAliasMutation 'stable alias mutation'
+Assert-Rejects {
+  Assert-CoreGuardNoStableMutation $stableAliasMutationAst 'stable alias mutation'
+} 'stable path mutation through an alias'
+$approvedPublication = @'
+[System.IO.File]::Replace($tmpPath, $modelPath, $backupPath)
+[System.IO.File]::Move($tmpPath, $modelPath)
+[System.IO.File]::Move($backupPath, $modelPath)
+'@
+$approvedPublicationAst = ConvertTo-CoreGuardPowerShellAst $approvedPublication 'approved publication calls'
+Assert-CoreGuardNoStableMutation $approvedPublicationAst 'approved publication calls'
+
 $assignmentDecoy = @'
 $expectedModelSha256 = 'WRONG'
 $decoy = 'EXPECTED'

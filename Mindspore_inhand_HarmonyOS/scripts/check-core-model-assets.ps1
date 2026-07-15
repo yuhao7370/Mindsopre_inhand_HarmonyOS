@@ -1,11 +1,8 @@
 $ErrorActionPreference = 'Stop'
+Import-Module (Join-Path $PSScriptRoot 'CoreModelAssetGuard.psm1') -Force
 
-function Assert-Contains([string]$Text, [string]$Marker, [string]$Message) {
+function Assert-TextContains([string]$Text, [string]$Marker, [string]$Message) {
   if (-not $Text.Contains($Marker)) { throw "Core model asset guard failed: $Message" }
-}
-
-function Assert-Excludes([string]$Text, [string]$Marker, [string]$Message) {
-  if ($Text.Contains($Marker)) { throw "Core model asset guard failed: $Message" }
 }
 
 $projectRoot = Split-Path -Parent $PSScriptRoot
@@ -44,39 +41,57 @@ foreach ($contract in $contracts) {
   }
 }
 
-& git -C $projectRoot check-ignore --no-index -q -- "$modelRelativeRoot/probe.ms.download"
-if ($LASTEXITCODE -ne 0) {
-  throw 'Core model asset guard failed: request partials (*.ms.download*) must remain ignored.'
+foreach ($partialProbe in @('probe.ms.download', 'probe.ms.download.0123456789abcdef')) {
+  & git -C $projectRoot check-ignore --no-index -q -- "$modelRelativeRoot/$partialProbe"
+  if ($LASTEXITCODE -ne 0) {
+    throw "Core model asset guard failed: request partial must remain ignored: $partialProbe."
+  }
 }
 
-$attributesPath = Join-Path $projectRoot '.gitattributes'
-$attributes = Get-Content -Raw -LiteralPath $attributesPath
 foreach ($contract in $contracts) {
-  Assert-Contains $attributes "$modelRelativeRoot/$($contract.Name) -text -diff" "$($contract.Name) must be marked -text -diff in .gitattributes."
+  $relativePath = "$modelRelativeRoot/$($contract.Name)"
+  $attributes = @(& git -C $projectRoot check-attr text diff -- $relativePath)
+  if ($LASTEXITCODE -ne 0 -or $attributes -notcontains "$relativePath`: text: unset" -or
+      $attributes -notcontains "$relativePath`: diff: unset") {
+    throw "Core model asset guard failed: $($contract.Name) must resolve to -text -diff attributes."
+  }
 }
 
 $ensurePath = Join-Path $PSScriptRoot 'ensure-mindspore-models.ps1'
-$ensure = Get-Content -Raw -LiteralPath $ensurePath
-foreach ($verifier in @(
+$ensureAst = Read-CoreGuardPowerShellAst $ensurePath
+$requiredVerifiers = @(
   'verify-image-classification-model.ps1',
   'verify-image-classification-labels.ps1',
   'verify-object-detection-model.ps1',
   'verify-object-detection-labels.ps1',
   'verify-scene-detection-model.ps1',
   'verify-style-transfer-models.ps1'
-)) {
-  Assert-Contains $ensure $verifier "ensure-mindspore-models.ps1 must call $verifier."
+)
+foreach ($verifier in $requiredVerifiers) {
+  Assert-CoreGuardExecutableCommand $ensureAst "& (Join-Path `$PSScriptRoot '$verifier')" "ensure-mindspore-models.ps1 must execute $verifier."
 }
-Assert-Excludes $ensure 'download-' 'normal model ensure/build wiring must not invoke a downloader.'
+$ensureInvocations = @($ensureAst.FindAll({
+  param($node)
+  $node -is [Management.Automation.Language.CommandAst] -and
+    $node.InvocationOperator -eq [Management.Automation.Language.TokenKind]::Ampersand
+}, $true))
+if ($ensureInvocations.Count -ne $requiredVerifiers.Count) {
+  throw "Core model asset guard failed: ensure-mindspore-models.ps1 must execute only the six approved verifiers; found $($ensureInvocations.Count) invocations."
+}
 
 foreach ($contract in $contracts) {
-  $verifier = Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot $contract.Verifier)
-  Assert-Contains $verifier ([string]$contract.Bytes) "$($contract.Verifier) must pin $($contract.Name) byte length."
-  Assert-Contains $verifier $contract.Sha256 "$($contract.Verifier) must pin $($contract.Name) SHA-256."
+  $verifierAst = Read-CoreGuardPowerShellAst (Join-Path $PSScriptRoot $contract.Verifier)
+  $verifierContractVariable = if ($contract.Verifier -eq 'verify-style-transfer-models.ps1') { 'models' } else { 'expectedModelSize' }
+  $verifierHashVariable = if ($contract.Verifier -eq 'verify-style-transfer-models.ps1') { 'models' } else { 'expectedModelSha256' }
+  Assert-CoreGuardAssignmentLiteral $verifierAst $verifierContractVariable $contract.Bytes "$($contract.Verifier) must pin $($contract.Name) byte length."
+  Assert-CoreGuardAssignmentLiteral $verifierAst $verifierHashVariable $contract.Sha256 "$($contract.Verifier) must pin $($contract.Name) SHA-256."
+  Assert-CoreGuardExecutableCommand $verifierAst 'Get-FileHash -LiteralPath $modelPath -Algorithm SHA256' "$($contract.Verifier) must hash the executable model path."
 
-  $downloader = Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot $contract.Downloader)
-  Assert-Contains $downloader ([string]$contract.Bytes) "$($contract.Downloader) must pin $($contract.Name) byte length."
-  Assert-Contains $downloader $contract.Sha256 "$($contract.Downloader) must pin $($contract.Name) SHA-256."
+  $downloaderAst = Read-CoreGuardPowerShellAst (Join-Path $PSScriptRoot $contract.Downloader)
+  $downloaderContractVariable = if ($contract.Downloader -eq 'download-style-transfer-models.ps1') { 'models' } else { 'expectedModelSize' }
+  $downloaderHashVariable = if ($contract.Downloader -eq 'download-style-transfer-models.ps1') { 'models' } else { 'expectedModelSha256' }
+  Assert-CoreGuardAssignmentLiteral $downloaderAst $downloaderContractVariable $contract.Bytes "$($contract.Downloader) must pin $($contract.Name) byte length."
+  Assert-CoreGuardAssignmentLiteral $downloaderAst $downloaderHashVariable $contract.Sha256 "$($contract.Downloader) must pin $($contract.Name) SHA-256."
 }
 
 foreach ($downloaderName in @(
@@ -85,33 +100,14 @@ foreach ($downloaderName in @(
   'download-scene-detection-model.ps1',
   'download-style-transfer-models.ps1'
 )) {
-  $downloader = Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot $downloaderName)
-  foreach ($marker in @(
-    '[System.Guid]::NewGuid().ToString(''N'')',
-    'Join-Path $modelDir',
-    '[System.IO.File]::Replace($tmpPath, $modelPath, $backupPath)',
-    '[System.IO.File]::Move($tmpPath, $modelPath)',
-    'finally {'
-  )) {
-    Assert-Contains $downloader $marker "$downloaderName is missing failure-safe publication marker: $marker."
-  }
-  foreach ($forbidden in @(
-    'Remove-Item -LiteralPath $modelPath',
-    'Move-Item -LiteralPath $tmpPath -Destination $modelPath -Force',
-    'Copy-Item -LiteralPath $sourceModelPath -Destination $modelPath -Force',
-    'Invoke-WebRequest -Uri $modelUrl -OutFile $modelPath'
-  )) {
-    Assert-Excludes $downloader $forbidden "$downloaderName must never delete, truncate, or non-atomically overwrite the stable model ($forbidden)."
-  }
-  $backupCleanup = 'Remove-Item -LiteralPath $backupPath -Force -ErrorAction SilentlyContinue'
-  $backupCleanupIndex = $downloader.LastIndexOf($backupCleanup, [StringComparison]::Ordinal)
-  $backupCleanupPrefixStart = [Math]::Max(0, $backupCleanupIndex - 120)
-  $backupCleanupPrefix = if ($backupCleanupIndex -ge 0) {
-    $downloader.Substring($backupCleanupPrefixStart, $backupCleanupIndex - $backupCleanupPrefixStart)
-  } else {
-    ''
-  }
-  Assert-Contains $backupCleanupPrefix 'if (Test-Path -LiteralPath $modelPath) {' "$downloaderName may clean a recovery backup only after the stable path exists."
+  $downloaderAst = Read-CoreGuardPowerShellAst (Join-Path $PSScriptRoot $downloaderName)
+  $guidCount = if ($downloaderName -eq 'download-scene-detection-model.ps1') { 2 } else { 1 }
+  Assert-CoreGuardExecutableMemberCall $downloaderAst '[System.Guid]::NewGuid().ToString(''N'')' "$downloaderName must create request-private GUID names." $guidCount
+  Assert-CoreGuardExecutableCommand $downloaderAst 'Get-FileHash -LiteralPath $tmpPath -Algorithm SHA256' "$downloaderName must validate the staged same-directory temp."
+  Assert-CoreGuardExecutableMemberCall $downloaderAst '[System.IO.File]::Replace($tmpPath, $modelPath, $backupPath)' "$downloaderName must atomically replace an existing stable model."
+  Assert-CoreGuardExecutableMemberCall $downloaderAst '[System.IO.File]::Move($tmpPath, $modelPath)' "$downloaderName must atomically publish when the stable model is absent."
+  Assert-CoreGuardFinallyCleanup $downloaderAst $downloaderName
+  Assert-CoreGuardNoStableMutation $downloaderAst $downloaderName
 }
 
 $licensePath = Join-Path $modelRoot 'LICENSE-Apache-2.0.txt'
@@ -143,19 +139,30 @@ foreach ($marker in @(
   'https://download.mindspore.cn/model_zoo/official/lite/style_lite/style_transfer_quant.ms',
   'https://gitee.com/harmonyos_samples/MSLiteSceneRecognition'
 )) {
-  Assert-Contains $notice $marker "NOTICE.md is missing provenance marker: $marker."
+  Assert-TextContains $notice $marker "NOTICE.md is missing provenance marker: $marker."
 }
 foreach ($contract in $contracts) {
-  Assert-Contains $notice $contract.Name "NOTICE.md is missing $($contract.Name)."
-  Assert-Contains $notice ([string]$contract.Bytes) "NOTICE.md is missing $($contract.Name) byte length."
-  Assert-Contains $notice $contract.Sha256 "NOTICE.md is missing $($contract.Name) SHA-256."
+  Assert-TextContains $notice $contract.Name "NOTICE.md is missing $($contract.Name)."
+  Assert-TextContains $notice ([string]$contract.Bytes) "NOTICE.md is missing $($contract.Name) byte length."
+  Assert-TextContains $notice $contract.Sha256 "NOTICE.md is missing $($contract.Name) SHA-256."
 }
 
-$build = Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot 'build-hap.ps1')
-Assert-Contains $build "& (Join-Path `$PSScriptRoot 'check-core-model-assets.ps1')" 'build-hap.ps1 must execute the core model asset guard.'
+$buildAst = Read-CoreGuardPowerShellAst (Join-Path $PSScriptRoot 'build-hap.ps1')
+Assert-CoreGuardExecutableCommand $buildAst "& (Join-Path `$PSScriptRoot 'check-core-model-assets.ps1')" 'build-hap.ps1 must execute the core model asset guard.'
+Assert-CoreGuardExecutableCommand $buildAst "& (Join-Path `$PSScriptRoot 'test-core-model-assets-guard.ps1')" 'build-hap.ps1 must execute core model guard fixtures.'
+Assert-CoreGuardExecutableCommand $buildAst "& (Join-Path `$PSScriptRoot 'ensure-mindspore-models.ps1')" 'build-hap.ps1 must execute verifier-only model ensure wiring.'
+$buildDownloadCalls = @($buildAst.FindAll({
+  param($node)
+  $node -is [Management.Automation.Language.CommandAst] -and
+    $node.InvocationOperator -eq [Management.Automation.Language.TokenKind]::Ampersand -and
+    $node.Extent.Text -match 'download-.*model'
+}, $true))
+if ($buildDownloadCalls.Count -ne 0) {
+  throw 'Core model asset guard failed: normal build must not execute a model downloader.'
+}
 
-$hapVerifier = Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot 'verify-ai-runtime-haps.ps1')
-$hapFixture = Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot 'test-verify-ai-runtime-haps.ps1')
+$hapVerifierAst = Read-CoreGuardPowerShellAst (Join-Path $PSScriptRoot 'verify-ai-runtime-haps.ps1')
+$hapFixtureAst = Read-CoreGuardPowerShellAst (Join-Path $PSScriptRoot 'test-verify-ai-runtime-haps.ps1')
 foreach ($entry in @(
   'resources/rawfile/model/mobilenetv2.ms',
   'resources/rawfile/model/resnet18-place365.ms',
@@ -165,15 +172,18 @@ foreach ($entry in @(
   'resources/rawfile/model/LICENSE-Apache-2.0.txt',
   'resources/rawfile/model/NOTICE.md'
 )) {
-  Assert-Contains $hapVerifier "'$entry'" "main HAP verifier is missing $entry."
-  Assert-Contains $hapFixture "'$entry'" "HAP fixture is missing $entry."
+  Assert-CoreGuardAssignmentLiteral $hapVerifierAst 'resourceEntries' $entry "main HAP verifier is missing $entry."
+  Assert-CoreGuardAssignmentLiteral $hapFixtureAst 'mainEntries' $entry "HAP fixture is missing $entry."
 }
-Assert-Contains $hapVerifier 'Assert-HapPayloadHashes $MainHapPath $payloads' 'main HAP must reuse exact payload hash verification.'
-Assert-Contains $hapFixture "`$tamperedAppModelEntry = 'resources/rawfile/model/ssd.ms'" 'HAP fixture must reject a tampered core model.'
+Assert-CoreGuardExecutableCommand $hapVerifierAst 'Assert-HapPayloadHashes $MainHapPath $payloads' 'main HAP must reuse exact payload hash verification.'
+Assert-CoreGuardAssignmentLiteral $hapFixtureAst 'tamperedAppModelEntry' 'resources/rawfile/model/ssd.ms' 'HAP fixture must reject a tampered core model.'
 
 $entryBuildProfile = Get-Content -Raw -LiteralPath (Join-Path $projectRoot 'entry/build-profile.json5')
+$testHapExclusions = @(Get-CoreGuardJson5ArrayForNamedObject $entryBuildProfile 'ohosTest' 'ignoreResourcePattern')
 foreach ($testHapExclusion in @('*.ms', 'NOTICE.md', 'LICENSE-Apache-2.0.txt')) {
-  Assert-Contains $entryBuildProfile "`"$testHapExclusion`"" "ohosTest resource filtering must exclude $testHapExclusion."
+  if ($testHapExclusions -cnotcontains $testHapExclusion) {
+    throw "Core model asset guard failed: ohosTest ignoreResourcePattern must exclude $testHapExclusion."
+  }
 }
 
 Write-Host 'Core model asset guard passed.'
