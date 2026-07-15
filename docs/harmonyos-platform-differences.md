@@ -501,6 +501,9 @@ random output after a fake load.
 Current HarmonyOS behavior:
 
 - The Custom Model route and input flow are available from the Experience grid.
+- The route now uses Android's dedicated Back/Help/More toolbar, Model/Photo/
+  Camera action row, conditional 256vp image preview, Execute action, loading
+  indicator, and scrollable output panel instead of the generic runtime cards.
 - HarmonyOS keeps the user-selected `.ms` model override, caches it in the app
   cache, and runs it through MindSpore Lite with the Android 224x224 RGB unit
   input contract.
@@ -512,6 +515,14 @@ Current HarmonyOS behavior:
 - If the user has not selected a model file, HarmonyOS now matches Android and
   blocks execution with a "select a model first" status instead of running the
   bundled MobileNetV2 model as a default custom-model fallback.
+- A newly opened Custom Model page does not restore the cached model into the
+  session: the user explicitly picks a model, matching Android's Activity
+  lifecycle. The last valid cache remains intact when a new selection is
+  cancelled or rejected.
+- Execute performs image/model/running preflight before the shared runtime.
+  Its workflow permission list is empty because the HarmonyOS system model,
+  photo, and camera pickers own their capability UI; sibling runtime permission
+  paths are unchanged.
 - HarmonyOS uses Android Custom Model's dedicated visible copy for Select
   Model, Select Photo, Take Photo, Output Result, the initial output
   placeholder, and the "select an image first" missing-input status.
@@ -521,6 +532,15 @@ Current HarmonyOS behavior:
 - The Android local Help dialog is preserved as a localized HarmonyOS Help
   button. The content is updated to describe the required `.ms` model plus image
   selection before execution.
+- Unlike Android's UI-only executor and random values, HarmonyOS deliberately
+  retains real MindSpore Lite inference with the fixed one-input NHWC float32
+  `[1, 224, 224, 3]`, RGB `[0, 1]`, first non-empty float32 output contract.
+  General arbitrary-shape/dtype, multi-input, and multi-output model support is
+  deferred to a separate model-contract design.
+- Device checks for picker/camera presentation, image fit, loading animation,
+  Toast appearance, and compatible-model inference performance remain
+  deferred; this migration is validated by source guards, unit tests, and HAP
+  builds only.
 
 ## Style Transfer
 

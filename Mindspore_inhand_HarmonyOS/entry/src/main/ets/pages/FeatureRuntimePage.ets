@@ -19,7 +19,11 @@ import {
   runtimeInputKindsForWorkflow,
   shouldShowGestureStillFailureToast,
   specializedAndroidLiveLayoutForWorkflow,
+  customModelExecutePreflightToastKey,
+  customModelModelCacheToastKey,
+  customModelOutputFallbackKey,
   usesAndroidGestureStillLayout,
+  usesAndroidCustomModelLayout,
   usesAndroidPoseNetStillLayout,
   usesAndroidPortraitSegmentationLayout,
   usesAndroidTextRecognitionLayout,
@@ -34,6 +38,7 @@ import {
   cancelledPickStatusKeyForWorkflow,
   cancelledPickToastStatusKeyForWorkflow,
   shouldPreserveRuntimeResultAfterInputReady,
+  shouldRestoreCachedModelFileInputs,
   shouldPreserveRuntimeVisualResultOnAiResult,
   runtimeSegmentationBackgroundImageUri,
   shouldStartWorkflowRun,
@@ -515,10 +520,14 @@ struct FeatureRuntimePage {
   }
 
   private applyModelFileCacheResult(result: ModelFileCacheResult, inputKind: FeatureInputKind): void {
+    const workflow = workflowForRoute(this.routeName);
     if (!result.ok) {
-      this.clearRuntimeResultState();
+      if (!shouldPreserveRuntimeResultAfterInputReady(workflow, inputKind)) {
+        this.clearRuntimeResultState();
+      }
       this.statusKey = result.messageKey;
       this.applyPickedInputState(runtimePickedInputStateAfterModelCacheFailure(inputKind, this.pickedInputState()));
+      this.showCustomModelCacheToastIfNeeded(result.messageKey);
       return;
     }
     this.runtimeAiServiceSession.invalidate();
@@ -526,6 +535,14 @@ struct FeatureRuntimePage {
       ok: true,
       uri: result.uri
     }, result.messageKey, inputKind);
+    this.showCustomModelCacheToastIfNeeded(result.messageKey);
+  }
+
+  private showCustomModelCacheToastIfNeeded(messageKey: AppStringKey): void {
+    const toastKey = customModelModelCacheToastKey(workflowForRoute(this.routeName), messageKey);
+    if (toastKey !== undefined) {
+      this.showRuntimeToast(toastKey);
+    }
   }
 
   private isLiveCameraInput(inputKind: FeatureInputKind): boolean {
@@ -849,6 +866,9 @@ struct FeatureRuntimePage {
   }
 
   private restoreCachedModelFileInputsIfNeeded(): void {
+    if (!shouldRestoreCachedModelFileInputs(workflowForRoute(this.routeName))) {
+      return;
+    }
     const context = this.uiAbilityContext();
     if (context === undefined) {
       return;
@@ -873,6 +893,43 @@ struct FeatureRuntimePage {
     if (this.styleTransferModelInputUri.length === 0) {
       this.styleTransferModelInputUri = state.styleTransferModelInputUri;
     }
+  }
+
+  private customModelOutputText(): ResourceStr {
+    const fallbackKey = customModelOutputFallbackKey(
+      workflowForRoute(this.routeName),
+      this.workflowRunning,
+      this.statusKey === 'feature_runtime_permission_denied',
+      this.resultText
+    );
+    return fallbackKey === undefined ? this.resultText : appString(fallbackKey);
+  }
+
+  private customModelTerminalFailureText(): string {
+    const context = this.uiAbilityContext();
+    if (context !== undefined) {
+      try {
+        return context.resourceManager.getStringSync(
+          $r('app.string.feature_runtime_custom_model_failure_output').id
+        );
+      } catch (_) {
+      }
+    }
+    return 'Model execution failed!\n\nError: Failed to get inference result';
+  }
+
+  private runCustomModelAndroidAction(): void {
+    const toastKey = customModelExecutePreflightToastKey(
+      workflowForRoute(this.routeName),
+      this.imageInputUri.length > 0,
+      this.modelInputUri.length > 0,
+      this.workflowRunning
+    );
+    if (toastKey !== undefined) {
+      this.showRuntimeToast(toastKey);
+      return;
+    }
+    this.runWorkflow();
   }
 
   private runWorkflow(): void {
@@ -943,6 +1000,9 @@ struct FeatureRuntimePage {
     const context = this.uiAbilityContext();
     if (!context) {
       this.statusKey = 'feature_runtime_permission_denied';
+      if (usesAndroidCustomModelLayout(workflow)) {
+        this.resultText = '';
+      }
       return;
     }
     this.statusKey = 'feature_runtime_status_preparing';
@@ -958,7 +1018,8 @@ struct FeatureRuntimePage {
       }
       if (!permission.ok) {
         this.statusKey = 'feature_runtime_permission_denied';
-        this.resultText = permission.requested.join(', ');
+        this.resultText = usesAndroidCustomModelLayout(workflow) ?
+          '' : permission.requested.join(', ');
         this.resultRows = [];
         this.clearVisualResults();
         return;
@@ -989,8 +1050,9 @@ struct FeatureRuntimePage {
   }
 
   private applyRuntimeFailure(): void {
+    const workflow = workflowForRoute(this.routeName);
     this.statusKey = 'feature_runtime_run_failed';
-    this.resultText = '';
+    this.resultText = usesAndroidCustomModelLayout(workflow) ? this.customModelTerminalFailureText() : '';
     this.resultRows = [];
     this.clearVisualResults();
     this.showGestureStillFailureToastIfNeeded(false, this.statusKey);
@@ -1040,8 +1102,11 @@ struct FeatureRuntimePage {
   }
 
   private applyAiResult(result: AiRunResult, runtimeRequestId: number): void {
+    const workflow = workflowForRoute(this.routeName);
     this.statusKey = result.messageKey;
-    this.resultText = result.detailText;
+    this.resultText = usesAndroidCustomModelLayout(workflow) ?
+      (result.ok ? result.detailText : this.customModelTerminalFailureText()) :
+      result.detailText;
     this.resultRows = aiRunResultRows(result);
     if (!this.shouldPreserveVisualResultsOnAiResult(result)) {
       this.clearVisualResults();
@@ -2990,6 +3055,115 @@ struct FeatureRuntimePage {
   }
 
   @Builder
+  customModelAndroidLayout() {
+    Stack({ alignContent: Alignment.TopStart }) {
+      Column() {
+        this.runtimeActionToolbar(true)
+        Row() {
+        }
+        .width('100%')
+        .height(1)
+        .backgroundColor('#E4E4E4')
+        Row() {
+          Button(appString(workflowInputLabelKey(workflowForRoute(this.routeName), 'modelFile')), { type: ButtonType.Normal })
+            .layoutWeight(1)
+            .height(37)
+            .margin({ left: 20, right: 5 })
+            .fontSize(14)
+            .fontWeight(FontWeight.Normal)
+            .fontColor('#666666')
+            .backgroundColor('#F4F3F8')
+            .borderRadius(5)
+            .enabled(!this.workflowRunning)
+            .onClick(() => this.prepareInput('modelFile'))
+          Button(appString(workflowInputLabelKey(workflowForRoute(this.routeName), 'photo')), { type: ButtonType.Normal })
+            .layoutWeight(1)
+            .height(37)
+            .margin({ left: 5, right: 5 })
+            .fontSize(14)
+            .fontWeight(FontWeight.Normal)
+            .fontColor('#666666')
+            .backgroundColor('#F4F3F8')
+            .borderRadius(5)
+            .enabled(!this.workflowRunning)
+            .onClick(() => this.prepareInput('photo'))
+          Button(appString(workflowInputLabelKey(workflowForRoute(this.routeName), 'camera')), { type: ButtonType.Normal })
+            .layoutWeight(1)
+            .height(37)
+            .margin({ left: 5, right: 20 })
+            .fontSize(14)
+            .fontWeight(FontWeight.Normal)
+            .fontColor('#666666')
+            .backgroundColor('#F4F3F8')
+            .borderRadius(5)
+            .enabled(!this.workflowRunning)
+            .onClick(() => this.prepareInput('camera'))
+        }
+        .width('100%')
+        .margin({ top: 14 })
+        .alignItems(VerticalAlign.Center)
+        if (this.imageInputUri.length > 0) {
+          Stack({ alignContent: Alignment.Center }) {
+            Image(this.imageInputUri)
+              .width(256)
+              .height(256)
+              .objectFit(ImageFit.Fill)
+            if (this.workflowRunning) {
+              LoadingProgress()
+                .width(80)
+                .height(80)
+            }
+          }
+          .width('100%')
+          .height(265)
+          .margin({ top: 14 })
+          .backgroundColor('#E6E6E6')
+        }
+        Button(appString('feature_runtime_custom_model_execute'), { type: ButtonType.Normal })
+          .width('100%')
+          .height(40)
+          .margin({ left: 20, right: 20, top: 14 })
+          .fontSize(16)
+          .fontWeight(FontWeight.Normal)
+          .fontColor(Color.Black)
+          .backgroundColor(Color.White)
+          .border({ width: 2, color: Color.White, radius: 30 })
+          .onClick(() => this.runCustomModelAndroidAction())
+        Column() {
+          Text(appString('feature_runtime_custom_model_output_title'))
+            .fontSize(16)
+            .fontWeight(FontWeight.Bold)
+            .fontColor(Color.Black)
+            .width('100%')
+          Scroll() {
+            Text(this.customModelOutputText())
+              .width('100%')
+              .padding(12)
+              .fontSize(14)
+              .fontColor('#666666')
+              .backgroundColor('#E6E6E6')
+          }
+          .width('100%')
+          .layoutWeight(1)
+          .margin({ top: 8 })
+        }
+        .width('100%')
+        .layoutWeight(1)
+        .margin({ left: 20, right: 20, top: 14, bottom: 20 })
+        .padding(16)
+        .backgroundColor(Color.White)
+      }
+      .width('100%')
+      .height('100%')
+      .backgroundColor(Color.White)
+      this.runtimePermissionRecoveryOverlay()
+    }
+    .width('100%')
+    .height('100%')
+    .backgroundColor(Color.White)
+  }
+
+  @Builder
   poseNetStillPoseLine(line: PoseLine) {
     Column() {
     }
@@ -3436,6 +3610,8 @@ struct FeatureRuntimePage {
       this.poseNetStillAndroidLayout()
     } else if (usesAndroidGestureStillLayout(workflowForRoute(this.routeName))) {
       this.gestureStillAndroidLayout()
+    } else if (usesAndroidCustomModelLayout(workflowForRoute(this.routeName))) {
+      this.customModelAndroidLayout()
     } else if (usesAndroidPortraitSegmentationLayout(workflowForRoute(this.routeName))) {
       this.portraitSegmentationAndroidLayout()
     } else if (specializedAndroidLiveLayoutForWorkflow(workflowForRoute(this.routeName)) === 'imageClassification') {
