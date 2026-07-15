@@ -36,6 +36,12 @@ import {
   TranslationTensorSession,
   resetTranslationModelCacheForTests
 } from '../main/ets/services/ai/MindSporeLiteTranslationRunner';
+import {
+  isTranslatableTranslationText,
+  normalizeOcrLetterSpacing,
+  prepareTranslationInput,
+  TranslationInputSegment
+} from '../main/ets/services/ai/TranslationInputPolicy';
 
 function assertStringArrayEqual(actual: Array<string>, expected: Array<string>): void {
   expect(actual.length).assertEqual(expected.length);
@@ -49,6 +55,14 @@ function assertNumberArrayEqual(actual: Array<number>, expected: Array<number>):
   for (let index = 0; index < expected.length; index++) {
     expect(actual[index]).assertEqual(expected[index]);
   }
+}
+
+function serializedTranslationSegments(segments: Array<TranslationInputSegment>): string {
+  const values: Array<string> = [];
+  for (let index = 0; index < segments.length; index++) {
+    values.push(`${segments[index].kind}:${segments[index].text}`);
+  }
+  return values.join('|');
 }
 
 function findGolden(name: string): TranslationTokenizerGoldenCase {
@@ -547,6 +561,51 @@ function runnerFor(session: TranslationTensorSession): MindSporeLiteTranslationR
 
 export default function translationModelUnitTest(): void {
   describe('TranslationModelUnit', () => {
+    it('normalizesOnlyLongOcrSpacedAsciiLetterRuns', 0, () => {
+      expect(normalizeOcrLetterSpacing('P L E A S E   K E E P   C L E A R'))
+        .assertEqual('PLEASE KEEP CLEAR');
+      expect(normalizeOcrLetterSpacing('A B test')).assertEqual('A B test');
+      expect(normalizeOcrLetterSpacing('中文 A B C')).assertEqual('中文 ABC');
+      expect(normalizeOcrLetterSpacing('I N V O I C E\r\nN O.  B-3017'))
+        .assertEqual('INVOICE\r\nN O.  B-3017');
+    });
+
+    it('protectsOnlyExactRuntimeDataSpans', 0, () => {
+      const segments = prepareTranslationInput(
+        'Open https://example.com/help, mail a.b+1@example.org, then use report_v5 or B-3017.'
+      );
+      expect(serializedTranslationSegments(segments)).assertEqual(
+        'model:Open |protected:https://example.com/help|model:, mail |' +
+        'protected:a.b+1@example.org|model:, then use |protected:report_v5|' +
+        'model: or |protected:B-3017|model:.'
+      );
+    });
+
+    it('keepsDatesNamesAndOrdinaryHyphenatedWordsInModelContext', 0, () => {
+      const text = 'OpenAI met Alice on 2025-12-09 for state-of-the-art work.';
+      expect(serializedTranslationSegments(prepareTranslationInput(text)))
+        .assertEqual(`model:${text}`);
+      expect(serializedTranslationSegments(prepareTranslationInput('Open http:// now')))
+        .assertEqual('model:Open http:// now');
+    });
+
+    it('normalizesBeforeSegmentationAndPreservesNewlineOrder', 0, () => {
+      expect(serializedTranslationSegments(prepareTranslationInput('O P E N   report_v5')))
+        .assertEqual('model:OPEN |protected:report_v5');
+      expect(serializedTranslationSegments(
+        prepareTranslationInput('Open report_v5\r\nhttps://example.com/help')
+      )).assertEqual(
+        'model:Open |protected:report_v5|model:\r\n|protected:https://example.com/help'
+      );
+    });
+
+    it('doesNotSendPunctuationOnlySeparatorsToTheModel', 0, () => {
+      expect(isTranslatableTranslationText('.')).assertFalse();
+      expect(isTranslatableTranslationText('\r\n')).assertFalse();
+      expect(isTranslatableTranslationText('The guide is at ')).assertTrue();
+      expect(isTranslatableTranslationText('指南位于')).assertTrue();
+    });
+
     it('acceptsOnlyTheFinalPackageRuntimeManifestContract', 0, () => {
       const parsed = parseTranslationModelManifest(validTranslationManifestText());
       expect(parsed.graphs.length).assertEqual(3);
@@ -778,6 +837,46 @@ export default function translationModelUnitTest(): void {
       expect(session.stepCalls).assertEqual(chunks.length);
     });
 
+    it('returnsProtectedOnlyTextWithoutRunningInference', 0, async () => {
+      resetTranslationModelCacheForTests();
+      configureTranslationTokenizerForTests(TOKENIZER_RUNTIME_FIXTURE);
+      const source = 'https://example.com/help';
+      const session = new FakeTranslationSession([12249, 0]);
+      const result = await runnerFor(session).translate(source, 'zh');
+      expect(result.ok).assertTrue();
+      expect(result.sourceText).assertEqual(source);
+      expect(result.translatedText).assertEqual(source);
+      expect(session.encoderCalls).assertEqual(0);
+      expect(session.prefillCalls).assertEqual(0);
+      expect(session.stepCalls).assertEqual(0);
+    });
+
+    it('infersOnlyModelSpansAndPreservesProtectedOrderAndNewlines', 0, async () => {
+      resetTranslationModelCacheForTests();
+      configureTranslationTokenizerForTests(TOKENIZER_RUNTIME_FIXTURE);
+      const source = '你好\r\nB-3017\r\n谢谢';
+      const session = new FakeTranslationSession([12249, 0]);
+      const result = await runnerFor(session).translate(source, 'en');
+      expect(result.ok).assertTrue();
+      expect(result.sourceText).assertEqual(source);
+      expect(result.translatedText).assertEqual('Hello\r\nB-3017\r\nHello');
+      expect(session.encoderCalls).assertEqual(2);
+      expect(session.prefillCalls).assertEqual(2);
+      expect(session.stepCalls).assertEqual(2);
+    });
+
+    it('failsTheWholeRequestWhenAModelSpanIsEmptyAndKeepsOriginalSource', 0, async () => {
+      resetTranslationModelCacheForTests();
+      configureTranslationTokenizerForTests(TOKENIZER_RUNTIME_FIXTURE);
+      const source = 'H E L L O   report_v5';
+      const session = new FakeTranslationSession([0]);
+      const result = await runnerFor(session).translate(source, 'zh');
+      expect(result.ok).assertFalse();
+      expect(result.sourceText).assertEqual(source);
+      expect(result.translatedText).assertEqual('');
+      expect(session.encoderCalls).assertEqual(1);
+    });
+
     it('stopsAtExactly128GeneratedTokensWithoutWritingPastSlot127', 0, async () => {
       resetTranslationModelCacheForTests();
       configureTranslationTokenizerForTests(TOKENIZER_RUNTIME_FIXTURE);
@@ -820,6 +919,9 @@ export default function translationModelUnitTest(): void {
       expect(loadCalls).assertEqual(0);
       const empty = await runner.translate('hello', 'zh');
       expect(empty.ok).assertFalse();
+      expect(loadCalls).assertEqual(1);
+      const whitespace = await runner.translate(' \r\n ', 'zh');
+      expect(whitespace.ok).assertFalse();
       expect(loadCalls).assertEqual(1);
     });
 

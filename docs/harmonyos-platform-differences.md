@@ -244,6 +244,16 @@ Current HarmonyOS behavior:
   typed text and OCR output. Both inputs share the same cached model bundle and
   keep Android's default target-language rule (`zh` text translates to `en`,
   other text translates to `zh`).
+- Before tokenization, a deterministic ArkTS input policy collapses OCR-spaced
+  runs of at least three single ASCII letters and separates URLs, email
+  addresses, and code-like identifiers from model input. Those protected spans
+  are copied exactly and in order; plain numbers, dates, names, and ordinary
+  hyphenated words remain in model context. Punctuation- and newline-only
+  separators are also copied instead of being sent to the model.
+- Protected-only input performs no tensor inference. Mixed input translates
+  only its model spans inside the existing serialized request queue, fails the
+  complete request if any required model span is empty, and retains the
+  original unnormalized text in `sourceText`.
 - `LocalTextTranslationRunner` remains available only through explicit
   legacy/demo test injection. It is no longer an implicit `DefaultAiService` or
   runtime-factory fallback, so production does not substitute a finite
@@ -253,6 +263,17 @@ Current HarmonyOS behavior:
   SentencePiece/tokenizer runtime files, vocabulary, manifest, hashes, and
   license evidence. A narrow native XZ/TAR extractor validates and caches those
   three graphs in app-private storage before MindSpore Lite opens them.
+- The retained V5 checkpoint and tokenizer remain byte-identical
+  (`3b8b9a61910ae1b147947eef0168d6b0c5b8033d0a9059e82ef79cc468ce705f`
+  and `e5528a5c3685d08f8868902d31febeb763eea8519f9997f43b05964b02554640`).
+  Package verification still reports archive SHA-256
+  `aecc2672dbf648f766456e86559da8858f2c1444a4e693398300dd4982a4a417`;
+  no graph or tokenizer asset was rebuilt for this policy.
+- The pinned 100-row host A/B gate reduced automatic preservation-corruption
+  flags from 14 to 9: Chinese-to-English changed from 6 to 4 and
+  English-to-Chinese from 8 to 5, with no direction regressing. Exact input,
+  code, result, and artifact hashes are recorded in
+  [`runtime-input-policy-v1.md`](../tools/translation/reports/runtime-input-policy-v1.md).
 - ArkTS performs tokenization and encoder -> prefill -> step inference, chooses
   tokens with deterministic greedy decoding, and carries the decoder self/cross
   KV cache between steps. The native archive utility does not perform ML
