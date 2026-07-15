@@ -108,6 +108,32 @@ function Assert-PageSectionMutationFails(
   Assert-GuardFails $root $Description
 }
 
+function Assert-PageSectionDesiredMutationFails(
+  [string]$Name,
+  [string]$StartMarker,
+  [string]$EndMarker,
+  [string]$Desired,
+  [string]$CurrentMarker,
+  [string]$Replacement,
+  [string]$Description
+) {
+  $root = New-MutationRoot $Name
+  $path = Join-Path $root 'entry\src\main\ets\pages\FeatureRuntimePage.ets'
+  $text = [IO.File]::ReadAllText($path)
+  $start = $text.IndexOf($StartMarker, [StringComparison]::Ordinal)
+  $end = if ($start -ge 0) { $text.IndexOf($EndMarker, $start + $StartMarker.Length, [StringComparison]::Ordinal) } else { -1 }
+  if ($start -lt 0 -or $end -le $start) {
+    throw "Style Transfer guard fixture could not bound desired mutation section: $StartMarker"
+  }
+  $section = $text.Substring($start, $end - $start)
+  if ($section.Contains($Desired)) {
+    Replace-OnceInSection $path $StartMarker $EndMarker $Desired $Replacement
+  } elseif (-not $section.Contains($CurrentMarker)) {
+    throw "Style Transfer guard fixture found neither desired nor current marker: $Description"
+  }
+  Assert-GuardFails $root $Description
+}
+
 try {
   $validRoot = Join-Path $tempRoot 'valid'
   Copy-GuardedSources $validRoot
@@ -172,6 +198,40 @@ try {
     '  styleTransferAndroidLayout() {' '  customModelAndroidLayout() {' `
     '.height(265)' "const previewDecoy = '.height(265)';" `
     'fixed Android preview height exists only as a literal decoy'
+
+  Assert-PageSectionDesiredMutationFails 'empty-preview-wrong-icon' `
+    '  styleTransferAndroidLayout() {' '  customModelAndroidLayout() {' `
+    "Image(`$r('app.media.icon_style'))" "Image(`$r('app.media.icon_default'))" `
+    "Image(`$r('app.media.icon_default'))" `
+    'empty preview does not use Android icon_style'
+  Assert-PageSectionDesiredMutationFails 'empty-preview-wrong-font-size' `
+    '  styleTransferAndroidLayout() {' '  customModelAndroidLayout() {' `
+    "Text(appString('feature_runtime_style_choose_image'))`n                .fontSize(16)" `
+    "Text(appString('feature_runtime_style_choose_image'))`n                .fontSize(14)" `
+    "Text(appString('feature_runtime_style_choose_image'))`n                .fontSize(15)" `
+    'empty preview prompt does not use Android 16sp text'
+
+  Assert-PageSectionDesiredMutationFails 'style-title-wrong-font-size' `
+    '  styleTransferStyleGrid() {' '  styleTransferStyleItem(' `
+    "Text(appString('feature_runtime_style_presets_title'))`n        .fontSize(17)" `
+    "Text(appString('feature_runtime_style_presets_title'))`n        .fontSize(14)" `
+    "Text(appString('feature_runtime_style_presets_title'))`n        .fontSize(16)" `
+    'Choose Style title does not use Android 17sp text'
+  Assert-PageSectionDesiredMutationFails 'style-container-wrong-margin' `
+    '  styleTransferStyleGrid() {' '  styleTransferStyleItem(' `
+    '.margin({ left: 20, right: 20, top: 30 })' '.margin({ left: 20, right: 20, top: 10 })' `
+    '.margin({ left: 20, right: 20, top: 29 })' `
+    'style container does not use Android 20/20/30 margins'
+  Assert-PageSectionDesiredMutationFails 'style-grid-wrong-top-margin' `
+    '  styleTransferStyleGrid() {' '  styleTransferStyleItem(' `
+    '.margin({ top: 20, bottom: 20 })' '.margin({ top: AppSpacing.sm })' `
+    '.margin({ top: 19, bottom: 20 })' `
+    'style RecyclerView does not keep Android 20vp top margin'
+  Assert-PageSectionDesiredMutationFails 'style-grid-wrong-bottom-margin' `
+    '  styleTransferStyleGrid() {' '  styleTransferStyleItem(' `
+    '.margin({ top: 20, bottom: 20 })' '.margin({ top: AppSpacing.sm })' `
+    '.margin({ top: 20, bottom: 19 })' `
+    'style RecyclerView does not keep Android 20vp bottom margin'
 
   $previewWidthRoot = New-MutationRoot 'second-preview-width-not-256'
   Replace-NthInSection `
@@ -314,6 +374,28 @@ try {
     'this.styledImagePixelMapOwner.invalidatePendingReplacement();' `
     "const builtInOwnerDecoy = 'this.styledImagePixelMapOwner.invalidatePendingReplacement();';" `
     'built-in style selection omits pending-owner invalidation'
+  Assert-PageSectionDesiredMutationFails 'custom-style-missing-original-toast' `
+    '  private applyPickResult(' '  private aiRunInputs' `
+    'this.showStyleTransferStyleSelectionToastIfNeeded(inputKind);' `
+    'this.statusKey = workflow ?' '' `
+    'custom style selection omits the no-content Toast helper call'
+  Assert-PageSectionDesiredMutationFails 'custom-style-quoted-original-toast' `
+    '  private applyPickResult(' '  private aiRunInputs' `
+    'this.showStyleTransferStyleSelectionToastIfNeeded(inputKind);' `
+    'this.statusKey = workflow ?' `
+    "const customStyleToastDecoy = 'this.showStyleTransferStyleSelectionToastIfNeeded(inputKind);';" `
+    'custom style selection Toast helper exists only in a quoted decoy'
+  Assert-PageSectionDesiredMutationFails 'built-in-style-missing-original-toast' `
+    '  private selectBuiltInStyle(' '  private shouldRunStyleTransferAfterStyleReady' `
+    "this.showStyleTransferStyleSelectionToastIfNeeded('styleImage');" `
+    'this.statusKey = workflow ?' '' `
+    'built-in style selection omits the no-content Toast helper call'
+  Assert-PageSectionDesiredMutationFails 'built-in-style-quoted-original-toast' `
+    '  private selectBuiltInStyle(' '  private shouldRunStyleTransferAfterStyleReady' `
+    "this.showStyleTransferStyleSelectionToastIfNeeded('styleImage');" `
+    'this.statusKey = workflow ?' `
+    'const builtInStyleToastDecoy = "this.showStyleTransferStyleSelectionToastIfNeeded(''styleImage'');";' `
+    'built-in style selection Toast helper exists only in a quoted decoy'
   Assert-PageSectionMutationFails 'success-clears-old-owner' `
     '  private async updateStyledImagePreview(' '  private openHelpPage' `
     'const requestId = this.styledImagePixelMapOwner.beginReplacement();' `

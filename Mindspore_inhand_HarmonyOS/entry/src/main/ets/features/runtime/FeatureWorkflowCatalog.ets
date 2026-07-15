@@ -338,6 +338,15 @@ export function styleTransferResultToastKey(
     'feature_runtime_style_transfer_failed' : undefined;
 }
 
+export function styleTransferStyleSelectionToastKey(
+  workflow: FeatureWorkflow | undefined,
+  inputKind: FeatureInputKind,
+  contentInputReady: boolean
+): AppStringKey | undefined {
+  return usesAndroidStyleTransferLayout(workflow) && inputKind === 'styleImage' && !contentInputReady ?
+    'feature_runtime_style_original_required' : undefined;
+}
+
 function isStyleTransferModelInput(inputKind: FeatureInputKind): boolean {
   return inputKind === 'stylePredictModelFile' || inputKind === 'styleTransferModelFile';
 }

@@ -386,6 +386,7 @@ import {
   shouldShowStyleOriginalAfterInputReady,
   styleTransferModelCacheToastKey,
   styleTransferResultToastKey,
+  styleTransferStyleSelectionToastKey,
   runtimeSegmentationBackgroundImageUri,
   shouldHideTextInputWhenPreparingInput,
   textInputVisibleAfterCancelledPick,
@@ -9291,6 +9292,19 @@ export default function localUnitTest() {
       expect(styleTransferResultToastKey(styleTransfer, true)).assertUndefined();
       expect(styleTransferResultToastKey(objectPhoto, false)).assertUndefined();
       expect(styleTransferResultToastKey(undefined, false)).assertUndefined();
+    });
+
+    it('mapsStyleSelectionOriginalRequiredToastOnlyForStyleTransferWithoutContent', 0, () => {
+      const styleTransfer = workflowForRoute(AppRoute.STYLE_TRANSFER.name);
+      const objectPhoto = workflowForRoute(AppRoute.OBJECT_PHOTO.name);
+
+      expect(styleTransferStyleSelectionToastKey(styleTransfer, 'styleImage', false))
+        .assertEqual('feature_runtime_style_original_required');
+      expect(styleTransferStyleSelectionToastKey(styleTransfer, 'styleImage', true)).assertUndefined();
+      expect(styleTransferStyleSelectionToastKey(objectPhoto, 'styleImage', false)).assertUndefined();
+      expect(styleTransferStyleSelectionToastKey(styleTransfer, 'contentImage', false)).assertUndefined();
+      expect(styleTransferStyleSelectionToastKey(styleTransfer, 'camera', false)).assertUndefined();
+      expect(styleTransferStyleSelectionToastKey(undefined, 'styleImage', false)).assertUndefined();
     });
 
     it('mapsStyleTransferModelCacheToastOnlyForExactModelSlots', 0, () => {

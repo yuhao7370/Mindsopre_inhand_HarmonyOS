@@ -76,6 +76,7 @@ import {
   styleTransferRecoveryStatusKey,
   styleTransferModelCacheToastKey,
   styleTransferResultToastKey,
+  styleTransferStyleSelectionToastKey,
   styleTransferStyleReadyStatusKey,
   textInputPlaceholderKeyForWorkflow,
   workflowInitialStatusKey,
@@ -875,6 +876,7 @@ struct FeatureRuntimePage {
     if (shouldShowStyleOriginalAfterInputReady(workflow, inputKind)) {
       this.styleOriginalPreviewRecovered = true;
     }
+    this.showStyleTransferStyleSelectionToastIfNeeded(inputKind);
     if (workflow && shouldRunReadyWorkflow) {
       const inputReadyAction = workflowInputReadyAction(workflow, inputKind, this.userText);
       this.userText = inputReadyAction.userText;
@@ -1197,6 +1199,17 @@ struct FeatureRuntimePage {
 
   private showStyleTransferFailureToastIfNeeded(resultOk: boolean): void {
     const toastKey = styleTransferResultToastKey(workflowForRoute(this.routeName), resultOk);
+    if (toastKey !== undefined) {
+      this.showRuntimeToast(toastKey);
+    }
+  }
+
+  private showStyleTransferStyleSelectionToastIfNeeded(inputKind: FeatureInputKind): void {
+    const toastKey = styleTransferStyleSelectionToastKey(
+      workflowForRoute(this.routeName),
+      inputKind,
+      this.styleTransferContentInputReady()
+    );
     if (toastKey !== undefined) {
       this.showRuntimeToast(toastKey);
     }
@@ -1690,6 +1703,7 @@ struct FeatureRuntimePage {
       styleTransferStyleReadyStatusKey(workflow, 'styleImage', this.styleTransferContentInputReady(),
         'feature_runtime_image_ready') :
       'feature_runtime_image_ready';
+    this.showStyleTransferStyleSelectionToastIfNeeded('styleImage');
     if (workflow && this.shouldRunStyleTransferAfterStyleReady(workflow, 'styleImage')) {
       this.runWorkflow();
     }
@@ -1849,7 +1863,7 @@ struct FeatureRuntimePage {
   styleTransferStyleGrid() {
     Column() {
       Text(appString('feature_runtime_style_presets_title'))
-        .fontSize(14)
+        .fontSize(17)
         .fontWeight(FontWeight.Medium)
         .fontColor(AppColor.textPrimary)
         .width('100%')
@@ -1869,11 +1883,11 @@ struct FeatureRuntimePage {
       .width('100%')
       .layoutWeight(1)
       .scrollBar(BarState.Auto)
-      .margin({ top: AppSpacing.sm })
+      .margin({ top: 20, bottom: 20 })
     }
     .width('100%')
     .layoutWeight(1)
-    .margin({ left: 20, right: 20, top: 10 })
+    .margin({ left: 20, right: 20, top: 30 })
   }
 
   @Builder
@@ -3243,12 +3257,12 @@ struct FeatureRuntimePage {
               .objectFit(ImageFit.Contain)
           } else {
             Column() {
-              Image($r('app.media.icon_default'))
+              Image($r('app.media.icon_style'))
                 .width(64)
                 .height(64)
                 .objectFit(ImageFit.Contain)
               Text(appString('feature_runtime_style_choose_image'))
-                .fontSize(14)
+                .fontSize(16)
                 .fontColor('#666666')
                 .margin({ top: 8 })
             }

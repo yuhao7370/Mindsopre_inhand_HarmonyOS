@@ -55,6 +55,10 @@ Add these pure catalog policies:
 - `styleTransferResultToastKey(workflow, resultOk)` returns the existing
   `feature_runtime_style_transfer_failed` key only for failed Style Transfer
   runs.
+- `styleTransferStyleSelectionToastKey(workflow, inputKind,
+  contentInputReady)` returns the existing
+  `feature_runtime_style_original_required` key only when Style Transfer
+  receives a style-image selection before an original image exists.
 - `styleTransferModelCacheToastKey(workflow, inputKind, messageKey)` returns
   the supplied model-cache message only for Style Transfer predict/transfer
   model inputs.
@@ -88,7 +92,7 @@ not lose its recovery path when the generic Permissions card is absent:
    Help, and More, followed by a 1vp divider.
 2. Render a 265vp gray preview. The centered visible image is the styled
    `PixelMap` after success, the original content image before inference or
-   after Recovery, or the existing style icon plus choose-image prompt when no
+   after Recovery, or `icon_style` plus the 16sp choose-image prompt when no
    content is ready. Show the existing 80vp `LoadingProgress` over the preview
    while inference is running.
 3. Render Android's first 37vp action row in this exact order: Album, Camera,
@@ -96,8 +100,9 @@ not lose its recovery path when the generic Permissions card is absent:
    existing original-preview state. Save remains an always-visible HarmonyOS
    secure `SaveButton` in the Android position.
 4. Render a second 37vp row for Select Predict Model and Select Transfer Model.
-5. Render the existing localized Choose a Style title and existing 19+1 grid
-   in four columns with Android-equivalent 20vp outer margins and 10vp gaps.
+5. Render the existing localized Choose a Style title at 17sp with 30vp top
+   margin. Render the existing 19+1 grid in four columns with 20vp left/right
+   container margins, 20vp Grid top/bottom margins, and 10vp row/column gaps.
    The grid consumes the remaining height and scrolls vertically, so all five
    rows remain reachable on short screens.
 
@@ -118,8 +123,11 @@ styled-result, or generic Run cards.
   replacement without releasing the current owner value, so an older async
   conversion cannot overwrite the newly selected page state.
 - Built-in or custom style selection retains the existing content-required
-  guard and automatically starts the existing Style Transfer pipeline. The
-  visible preview remains stable while that asynchronous run is pending.
+  guard and automatically starts the existing Style Transfer pipeline when an
+  original exists. Without an original, both paths immediately show the
+  existing original-required Toast because the dedicated page has no status
+  card. The visible preview remains stable while an asynchronous run is
+  pending.
 - Successful inference displays the styled `PixelMap`; Recovery displays the
   original again without destroying the last styled `PixelMap`, so Save still
   saves the last generated result like Android's separate `originBitmap` and

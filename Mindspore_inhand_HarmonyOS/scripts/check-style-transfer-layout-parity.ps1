@@ -154,7 +154,7 @@ foreach ($line in @(
   'Image(this.styledImagePixelMap)',
   '} else if (this.styleTransferContentInputReady()) {',
   "Image(this.contentImageUri.length > 0 ? this.contentImageUri : this.imageInputUri)",
-  "Image(`$r('app.media.icon_default'))",
+  "Image(`$r('app.media.icon_style'))",
   "Text(appString('feature_runtime_style_choose_image'))",
   'if (this.workflowRunning) {',
   'LoadingProgress()',
@@ -186,6 +186,14 @@ Assert-CodeLineCount $builder '.width(256)' 2 `
   'styled and original previews must each be exactly 256vp wide.'
 Assert-CodeLineCount $builder '.height(256)' 2 `
   'styled and original previews must each be exactly 256vp high.'
+$emptyPreview = Get-TextSection $builder "Image(`$r('app.media.icon_style'))" `
+  'if (this.workflowRunning) {' 'empty Style Transfer preview'
+Assert-CodeLine $emptyPreview "Image(`$r('app.media.icon_style'))" `
+  'empty preview must use Android icon_style.'
+Assert-CodeLine $emptyPreview "Text(appString('feature_runtime_style_choose_image'))" `
+  'empty preview must retain the choose-image prompt.'
+Assert-CodeLineCount $emptyPreview '.fontSize(16)' 1 `
+  'empty preview prompt must use Android 16sp text.'
 
 foreach ($line in @(
   ".columnsTemplate('1fr 1fr 1fr 1fr')",
@@ -193,8 +201,13 @@ foreach ($line in @(
   '.rowsGap(10)',
   '.layoutWeight(1)',
   '.scrollBar(BarState.Auto)',
-  ".margin({ left: 20, right: 20, top: 10 })"
+  '.margin({ top: 20, bottom: 20 })',
+  ".margin({ left: 20, right: 20, top: 30 })"
 )) { Assert-CodeLine $grid $line "style grid is missing executable line: $line." }
+$styleTitle = Get-TextSection $grid "Text(appString('feature_runtime_style_presets_title'))" `
+  'Grid() {' 'Choose Style title'
+Assert-CodeLineCount $styleTitle '.fontSize(17)' 1 `
+  'Choose Style title must use Android 17sp text.'
 
 $toolbarIndex = Get-CodeLineIndex $builder 'this.runtimeActionToolbar(true)'
 $previewIndex = Get-CodeLineIndex $builder 'Stack({ alignContent: Alignment.Center }) {' ($toolbarIndex + 1)
@@ -255,11 +268,22 @@ Assert-CodeLineCount $pick 'this.contentImageUri = result.uri;' 2 `
   'Album and Camera must each replace the effective Style Transfer content image.'
 Assert-CodeLineCount $pick "this.imageInputUri = '';" 2 `
   'Album and Camera must clear the alternate primary-image slot.'
+Assert-CodeLineCount $pick 'this.showStyleTransferStyleSelectionToastIfNeeded(inputKind);' 1 `
+  'custom style selection must invoke the route-scoped no-content Toast helper.'
 
 $builtIn = Get-TextSection $page '  private selectBuiltInStyle(' `
   "`n`n  private shouldRunStyleTransferAfterStyleReady" 'built-in style selection'
 Assert-CodeLine $builtIn 'this.styledImagePixelMapOwner.invalidatePendingReplacement();' `
   'built-in style selection must invalidate pending styled replacement.'
+Assert-CodeLineCount $builtIn "this.showStyleTransferStyleSelectionToastIfNeeded('styleImage');" 1 `
+  'built-in style selection must invoke the route-scoped no-content Toast helper.'
+
+$styleSelectionToast = Get-TextSection $page '  private showStyleTransferStyleSelectionToastIfNeeded(' `
+  "`n`n  private showGestureStillFailureToastIfNeeded" 'style selection Toast helper'
+Assert-CodeLine $styleSelectionToast 'const toastKey = styleTransferStyleSelectionToastKey(' `
+  'style selection Toast helper must use the pure route/input/content policy.'
+Assert-CodeLine $styleSelectionToast 'this.showRuntimeToast(toastKey);' `
+  'style selection Toast helper must display the mapped Toast.'
 
 $cacheCaller = Get-TextSection $page '  private async cacheAndApplyPickedModelFile(' `
   "`n`n  private applyModelFileCacheResult" 'model-cache caller'
