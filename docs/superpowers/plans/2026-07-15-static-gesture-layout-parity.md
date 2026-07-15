@@ -133,7 +133,7 @@ Assert-Contains $selector 'shouldShowGestureStillFailureToast' 'failure Toast po
 $page = Get-NormalizedText (Join-Path $root 'entry\src\main\ets\pages\FeatureRuntimePage.ets')
 $builder = Get-TextSection `
   $page `
-  '  gestureStillAndroidLayout() {' `
+  '  gestureStillAndroidPreview() {' `
   "`n`n  @Builder`n  textRecognitionAndroidLayout()" `
   'dedicated static gesture builder'
 

@@ -6,6 +6,7 @@ $env:PATH = 'C:\Program Files\Huawei\DevEco Studio\jbr\bin;' + $env:PATH
 & (Join-Path $PSScriptRoot 'check-text-translation-input-mode.ps1')
 & (Join-Path $PSScriptRoot 'test-text-translation-layout-guard.ps1')
 & (Join-Path $PSScriptRoot 'check-text-translation-input-parity.ps1')
+& (Join-Path $PSScriptRoot 'check-static-gesture-layout-parity.ps1')
 & (Join-Path $PSScriptRoot 'test-feature-runtime-view-ids.ps1')
 & (Join-Path $PSScriptRoot 'check-feature-runtime-view-ids.ps1')
 & (Join-Path $PSScriptRoot 'check-runtime-header-actions.ps1')

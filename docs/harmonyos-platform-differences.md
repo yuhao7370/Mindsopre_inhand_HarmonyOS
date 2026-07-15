@@ -142,6 +142,12 @@ Current HarmonyOS behavior:
   flow refreshes detections and bounding boxes on the camera preview.
 - The still gesture route exposes the Android-style Real-time action and
   auto-runs gesture analysis after album or camera image input is ready.
+- The static Gesture route now uses the Android production screen structure:
+  the Back/title toolbar, double divider, weighted gray image/overlay surface,
+  original empty-state icon and prompt, and Photo/Camera/Real-time action row.
+  It no longer exposes the shared Inputs, Permissions, URI, runtime metadata,
+  or duplicate result cards. Failed current requests retain Android-style
+  visible Toast feedback while continuing to use the HMS MNN detector.
 - HMS still-image workflows that used Android's `btn_photo`/`btn_camera` now
   keep dedicated Photo and Camera button labels in HarmonyOS instead of falling
   back to the generic image/camera input labels.
