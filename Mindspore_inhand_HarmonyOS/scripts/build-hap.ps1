@@ -1,6 +1,8 @@
 $ErrorActionPreference = 'Stop'
 $env:DEVECO_SDK_HOME = 'C:\Program Files\Huawei\DevEco Studio\sdk'
 $env:PATH = 'C:\Program Files\Huawei\DevEco Studio\jbr\bin;' + $env:PATH
+& (Join-Path $PSScriptRoot 'test-runtime-layout-closure-guard.ps1')
+& (Join-Path $PSScriptRoot 'check-runtime-layout-closure.ps1')
 & (Join-Path $PSScriptRoot 'check-i18n-strings.ps1')
 & (Join-Path $PSScriptRoot 'check-runtime-debug-ui.ps1')
 & (Join-Path $PSScriptRoot 'check-text-translation-input-mode.ps1')
