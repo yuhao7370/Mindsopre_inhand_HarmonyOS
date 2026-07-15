@@ -8,7 +8,10 @@ function Get-NormalizedText([string]$Path) {
   return (Get-Content -Raw -Encoding UTF8 -LiteralPath $Path).Replace("`r`n", "`n").Replace("`r", "`n")
 }
 
-function Remove-ArkTsCommentsAndTemplateRaw([string]$Text) {
+function Remove-ArkTsCommentsAndTemplateRaw(
+  [string]$Text,
+  [bool]$PreserveQuotedLiterals = $false
+) {
   $result = [Text.StringBuilder]::new($Text.Length)
   $state = 'code'
   $terminator = [char]0
@@ -39,13 +42,19 @@ function Remove-ArkTsCommentsAndTemplateRaw([string]$Text) {
       continue
     }
     if ($state -eq 'quotedLiteral') {
-      [void]$result.Append($current)
-      if ($escaped) {
+      if ($current -eq [char]0x0A) {
+        [void]$result.Append($current)
+      } elseif ($escaped) {
+        [void]$result.Append($(if ($PreserveQuotedLiterals) { $current } else { ' ' }))
         $escaped = $false
       } elseif ($current -eq [char]0x5C) {
+        [void]$result.Append($(if ($PreserveQuotedLiterals) { $current } else { ' ' }))
         $escaped = $true
       } elseif ($current -eq $terminator) {
+        [void]$result.Append($current)
         $state = 'code'
+      } else {
+        [void]$result.Append($(if ($PreserveQuotedLiterals) { $current } else { ' ' }))
       }
       continue
     }
@@ -122,11 +131,28 @@ function Get-TextSection(
 }
 
 function Test-CodeLine([string]$Text, [string]$Line) {
-  return [regex]::IsMatch($Text, "(?m)^[\t ]*$([regex]::Escape($Line))[\t ]*$")
+  $normalizedLine = (Remove-ArkTsCommentsAndTemplateRaw $Line).Trim()
+  return [regex]::IsMatch($Text, "(?m)^[\t ]*$([regex]::Escape($normalizedLine))[\t ]*$")
 }
 
 function Assert-CodeLine([string]$Text, [string]$Line, [string]$Message) {
   if (-not (Test-CodeLine $Text $Line)) {
+    throw "Object Photo parity guard failed: $Message"
+  }
+}
+
+function Get-CodeLineIndex([string]$Text, [string]$Line, [int]$StartAt = 0) {
+  $normalizedLine = (Remove-ArkTsCommentsAndTemplateRaw $Line).Trim()
+  $pattern = "^[\t ]*$([regex]::Escape($normalizedLine))[\t ]*$"
+  $match = [regex]::new($pattern, [Text.RegularExpressions.RegexOptions]::Multiline).Match($Text, $StartAt)
+  if ($match.Success) {
+    return $match.Index
+  }
+  return -1
+}
+
+function Assert-LiteralCodeLine([string]$Text, [string]$Line, [string]$Message) {
+  if (-not [regex]::IsMatch($Text, "(?m)^[\t ]*$([regex]::Escape($Line))[\t ]*$")) {
     throw "Object Photo parity guard failed: $Message"
   }
 }
@@ -184,12 +210,19 @@ $selector = Get-TextSection `
 Assert-CodeLine $selector 'return workflow?.routeName === AppRoute.OBJECT_PHOTO.name;' 'selector must target only Object Photo.'
 Assert-Count $selector 'AppRoute.' 1 'selector must contain exactly one route target.'
 
-$page = Remove-ArkTsCommentsAndTemplateRaw (Get-NormalizedText $pagePath)
+$pageSource = Get-NormalizedText $pagePath
+$page = Remove-ArkTsCommentsAndTemplateRaw $pageSource
+$pageWithLiterals = Remove-ArkTsCommentsAndTemplateRaw $pageSource $true
 $builder = Get-TextSection `
   $page `
   '  objectPhotoAndroidLayout() {' `
   "`n`n  @Builder`n  customModelAndroidLayout()" `
   'dedicated Object Photo builder'
+$builderWithLiterals = Get-TextSection `
+  $pageWithLiterals `
+  '  objectPhotoAndroidLayout() {' `
+  "`n`n  @Builder`n  customModelAndroidLayout()" `
+  'dedicated Object Photo builder with literal values'
 
 foreach ($line in @(
   'this.runtimeActionToolbar(true)',
@@ -215,10 +248,20 @@ foreach ($line in @(
 )) {
   Assert-CodeLine $builder $line "dedicated builder is missing executable line: $line."
 }
+foreach ($line in @(
+  "Button(appString(workflowInputLabelKey(workflowForRoute(this.routeName), 'modelFile')), { type: ButtonType.Normal })",
+  ".backgroundColor('#33B5E5')",
+  ".onClick(() => this.prepareInput('modelFile'))"
+)) {
+  Assert-LiteralCodeLine $builderWithLiterals $line "dedicated builder has the wrong literal value: $line."
+}
 
-$toolbarIndex = $builder.IndexOf('this.runtimeActionToolbar(true)', [StringComparison]::Ordinal)
-$previewIndex = $builder.IndexOf('Image(this.objectDetectionImageUri)', [StringComparison]::Ordinal)
-$buttonIndex = $builder.IndexOf("Button(appString(workflowInputLabelKey(workflowForRoute(this.routeName), 'modelFile'))", [StringComparison]::Ordinal)
+$toolbarIndex = Get-CodeLineIndex $builder 'this.runtimeActionToolbar(true)'
+$previewIndex = Get-CodeLineIndex $builder 'Image(this.objectDetectionImageUri)' ($toolbarIndex + 1)
+$buttonIndex = Get-CodeLineIndex `
+  $builder `
+  "Button(appString(workflowInputLabelKey(workflowForRoute(this.routeName), 'modelFile')), { type: ButtonType.Normal })" `
+  ($previewIndex + 1)
 if ($toolbarIndex -lt 0 -or $previewIndex -le $toolbarIndex -or $buttonIndex -le $previewIndex) {
   throw 'Object Photo parity guard failed: content order must be toolbar, centered preview, Select Model.'
 }
@@ -240,8 +283,8 @@ foreach ($marker in @(
   Assert-Excludes $builder $marker 'dedicated builder contains generic card/result/debug/save/Run UI'
 }
 Assert-Count $builder 'this.runtimeActionToolbar(true)' 1 'dedicated builder must contain one Android toolbar.'
-Assert-Count $builder ".onClick(() => this.prepareInput('modelFile'))" 1 'dedicated builder must contain one Select Model action.'
-Assert-Contains $builder ".width('100%')`n    .height('100%')`n    .backgroundColor(Color.White)" 'dedicated page must fill the screen with a white surface.'
+Assert-Count $builderWithLiterals ".onClick(() => this.prepareInput('modelFile'))" 1 'dedicated builder must contain one Select Model action.'
+Assert-Contains $builderWithLiterals ".width('100%')`n    .height('100%')`n    .backgroundColor(Color.White)" 'dedicated page must fill the screen with a white surface.'
 
 $aiResult = Get-TextSection `
   $page `
@@ -255,7 +298,9 @@ $toastHelper = Get-TextSection `
   '  private showObjectPhotoFailureToastIfNeeded' `
   "`n`n  private showGestureStillFailureToastIfNeeded" `
   'Object Photo failure Toast helper'
-Assert-Contains $toastHelper 'objectPhotoResultToastKey(workflowForRoute(this.routeName), resultOk)' 'Toast helper must use the route-scoped policy.'
+Assert-CodeLine $toastHelper `
+  'const toastKey = objectPhotoResultToastKey(workflowForRoute(this.routeName), resultOk);' `
+  'Toast helper must use the route-scoped policy.'
 Assert-CodeLine $toastHelper 'this.showRuntimeToast(toastKey);' 'mapped Object Photo failure must use the existing Toast path.'
 
 $cacheCaller = Get-TextSection `
@@ -263,9 +308,9 @@ $cacheCaller = Get-TextSection `
   '  private async cacheAndApplyPickedModelFile(' `
   "`n`n  private applyModelFileCacheResult" `
   'model cache caller'
-$currentIndex = $cacheCaller.IndexOf('if (!isInputPreparationRequestCurrent(requestId, this.inputPreparationRequestId))', [StringComparison]::Ordinal)
-$staleIndex = $cacheCaller.IndexOf('if (cacheResult === undefined) {', $currentIndex, [StringComparison]::Ordinal)
-$applyIndex = $cacheCaller.IndexOf('this.applyModelFileCacheResult(cacheResult, inputKind);', $staleIndex, [StringComparison]::Ordinal)
+$currentIndex = Get-CodeLineIndex $cacheCaller 'if (!isInputPreparationRequestCurrent(requestId, this.inputPreparationRequestId)) {'
+$staleIndex = Get-CodeLineIndex $cacheCaller 'if (cacheResult === undefined) {' ($currentIndex + 1)
+$applyIndex = Get-CodeLineIndex $cacheCaller 'this.applyModelFileCacheResult(cacheResult, inputKind);' ($staleIndex + 1)
 if ($currentIndex -lt 0 -or $staleIndex -le $currentIndex -or $applyIndex -le $staleIndex) {
   throw 'Object Photo parity guard failed: stale model-cache work must be rejected before applying success.'
 }
@@ -275,22 +320,26 @@ $cacheResult = Get-TextSection `
   '  private applyModelFileCacheResult(' `
   "`n`n  private showCustomModelCacheToastIfNeeded" `
   'model cache success handler'
-$failureReturnIndex = $cacheResult.IndexOf("      return;`n    }", [StringComparison]::Ordinal)
-$applyPickIndex = $cacheResult.IndexOf('this.applyPickResult({', $failureReturnIndex, [StringComparison]::Ordinal)
-$followupIndex = $cacheResult.IndexOf('objectPhotoFollowupInputKindAfterModelCacheSuccess(workflow, inputKind)', $applyPickIndex, [StringComparison]::Ordinal)
-$initialPickIndex = $cacheResult.IndexOf('this.prepareInput(followupInputKind, true);', $followupIndex, [StringComparison]::Ordinal)
+$failureReturnIndex = Get-CodeLineIndex $cacheResult 'return;'
+$applyPickIndex = Get-CodeLineIndex $cacheResult 'this.applyPickResult({' ($failureReturnIndex + 1)
+$followupIndex = Get-CodeLineIndex `
+  $cacheResult `
+  'const followupInputKind = objectPhotoFollowupInputKindAfterModelCacheSuccess(workflow, inputKind);' `
+  ($applyPickIndex + 1)
+$initialPickIndex = Get-CodeLineIndex $cacheResult 'this.prepareInput(followupInputKind, true);' ($followupIndex + 1)
 if ($failureReturnIndex -lt 0 -or $applyPickIndex -le $failureReturnIndex -or
   $followupIndex -le $applyPickIndex -or $initialPickIndex -le $followupIndex) {
   throw 'Object Photo parity guard failed: only successful cached models may open the follow-up initial photo picker.'
 }
 
 $build = $page.Substring($page.IndexOf("`n  build() {", [StringComparison]::Ordinal))
-$selectorIndex = $build.IndexOf('usesAndroidObjectPhotoLayout(workflowForRoute(this.routeName))', [StringComparison]::Ordinal)
-$genericIndex = $build.IndexOf("    } else {`n      Scroll() {", [StringComparison]::Ordinal)
+$selectorLine = '} else if (usesAndroidObjectPhotoLayout(workflowForRoute(this.routeName))) {'
+$selectorIndex = Get-CodeLineIndex $build $selectorLine
+$genericIndex = Get-CodeLineIndex $build '} else {' ($selectorIndex + 1)
 if ($selectorIndex -lt 0 -or $genericIndex -lt 0 -or $selectorIndex -ge $genericIndex) {
   throw 'Object Photo parity guard failed: dedicated selector must precede the generic fallback.'
 }
-Assert-Count $build 'usesAndroidObjectPhotoLayout(workflowForRoute(this.routeName))' 1 'build must select Object Photo exactly once.'
+Assert-CodeLine $build $selectorLine 'build must select Object Photo in an executable branch.'
 
 $buildScript = Get-NormalizedText $buildScriptPath
 $guardCall = "& (Join-Path `$PSScriptRoot 'check-object-photo-layout-parity.ps1')"
