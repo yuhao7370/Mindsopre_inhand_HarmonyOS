@@ -476,6 +476,24 @@ Current HarmonyOS behavior:
   loop, so the local scene proxy or injected runner refreshes continuously at
   the 500ms fast-live cadence used for lightweight classification-style demos.
 
+## Core MindSpore Lite Assets
+
+- The five core `.ms` files used by Image Classification, Scene Detection,
+  Object Detection, and Style Transfer are tracked as binary repository assets
+  with exact byte-length and SHA-256 contracts.
+- Clean normal builds run verifier-only model wiring and do not download these
+  assets. The four downloader scripts are explicit manual recovery tools only;
+  they publish a fully verified request-private same-directory partial without
+  deleting or truncating the previous stable model on failure.
+- The main-HAP payload guard binds all five models plus their Apache-2.0 license
+  and provenance NOTICE to the exact tracked source bytes. The `ohosTest` HAP
+  continues to reject copied application models.
+- MindSpore Model Zoo trained models remain limited to non-commercial research
+  and educational use. This private local-learning repository stays within
+  that scope; no model-quality, commercial-use, or device-runtime claim is
+  made. Exact sources and contracts are recorded in
+  `docs/model-provenance/mindspore-lite-core-models.md`.
+
 ## Build, Signing, And Device Verification Boundary
 
 - Hypium host tests are runnable on the workstation.
