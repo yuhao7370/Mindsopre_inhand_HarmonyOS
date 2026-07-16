@@ -1,3 +1,0 @@
-The weather is pleasant today.
-Please copy the result here.
-This number is 128.

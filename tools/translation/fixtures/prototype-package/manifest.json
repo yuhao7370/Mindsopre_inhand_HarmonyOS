@@ -1,6 +1,0 @@
-{
-  "schemaVersion": 1,
-  "contract": "translation-v1",
-  "profile": "prototype",
-  "notice": "Converter and package evidence only; this is not the final bilingual model."
-}

@@ -1,8 +1,0 @@
-# Direct T1 export dependencies for Windows x86_64 CPython 3.13.14 only.
-huggingface-hub==1.23.0
-numpy==2.5.1
-onnx==1.22.0
-onnxruntime==1.27.0
-safetensors==0.8.0
-torch==2.13.0
-transformers==5.13.1
