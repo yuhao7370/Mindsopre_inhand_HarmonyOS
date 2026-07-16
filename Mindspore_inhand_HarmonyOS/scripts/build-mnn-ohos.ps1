@@ -2,6 +2,7 @@
 param(
   [switch]$VerifyOnly,
   [switch]$UseExistingBuild,
+  [ValidateSet('arm64-v8a', 'x86_64')][string]$Abi = 'arm64-v8a',
   [string]$DevEcoSdkRoot = '',
   [string]$CacheRoot = '',
   [string]$SourceRoot = '',
@@ -26,7 +27,7 @@ $requiredHeaders = @(
 )
 $requiredCMakeFlags = [ordered]@{
   CMAKE_BUILD_TYPE = 'Release'
-  OHOS_ARCH = 'arm64-v8a'
+  OHOS_ARCH = $Abi
   OHOS_PLATFORM_LEVEL = '24'
   OHOS_STL = 'c++_shared'
   MNN_BUILD_SHARED_LIBS = 'ON'
@@ -48,11 +49,14 @@ $requiredCMakeFlags = [ordered]@{
 }
 
 $projectRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
-$libraryPath = Join-Path $projectRoot 'entry\libs\arm64-v8a\libMNN.so'
+$libraryPath = Join-Path $projectRoot "entry\libs\$Abi\libMNN.so"
 $includeRoot = Join-Path $projectRoot 'entry\src\main\cpp\include\MNN'
 $thirdPartyRoot = Join-Path $projectRoot 'entry\src\main\cpp\third_party\MNN'
 $licensePath = Join-Path $thirdPartyRoot 'LICENSE.txt'
-$manifestPath = Join-Path $projectRoot 'entry\src\main\cpp\MNN_BUILD_MANIFEST.json'
+$manifestName = if ($Abi -ceq 'arm64-v8a') { 'MNN_BUILD_MANIFEST.json' } else { "MNN_BUILD_MANIFEST.$Abi.json" }
+$manifestPath = Join-Path $projectRoot "entry\src\main\cpp\$manifestName"
+$toolchainTarget = if ($Abi -ceq 'arm64-v8a') { 'aarch64-linux-ohos' } else { 'x86_64-linux-ohos' }
+$elfMachine = if ($Abi -ceq 'arm64-v8a') { 'AArch64' } else { 'Advanced Micro Devices X86-64' }
 
 function Assert-Equal([object]$Actual, [object]$Expected, [string]$Label) {
   if ([string]$Actual -cne [string]$Expected) {
@@ -71,11 +75,22 @@ function Assert-ExactProperties([object]$Object, [string[]]$ExpectedNames, [stri
 }
 
 function Invoke-Captured([string]$Executable, [string[]]$Arguments) {
-  $output = & $Executable @Arguments 2>&1 | Out-String
-  if ($LASTEXITCODE -ne 0) {
-    throw "Command failed ($LASTEXITCODE): $Executable $($Arguments -join ' ')`n$output"
+  $stderrPath = Join-Path $env:TEMP ("mindspore-inhand-native-stderr-" + [guid]::NewGuid().ToString('N') + '.log')
+  $previousPreference = $ErrorActionPreference
+  try {
+    $ErrorActionPreference = 'SilentlyContinue'
+    $stdout = & $Executable @Arguments 2> $stderrPath | Out-String
+    $exitCode = $LASTEXITCODE
+    $stderr = if (Test-Path -LiteralPath $stderrPath) { Get-Content -LiteralPath $stderrPath -Raw } else { '' }
+    $output = ($stdout + $stderr).Trim()
+  } finally {
+    $ErrorActionPreference = $previousPreference
+    if (Test-Path -LiteralPath $stderrPath) { Remove-Item -LiteralPath $stderrPath -Force }
   }
-  return $output.Trim()
+  if ($exitCode -ne 0) {
+    throw "Command failed ($exitCode): $Executable $($Arguments -join ' ')`n$output"
+  }
+  return $output
 }
 
 function Resolve-NativeSdk([string]$RequestedRoot) {
@@ -83,6 +98,7 @@ function Resolve-NativeSdk([string]$RequestedRoot) {
   if ($RequestedRoot) { $candidates += $RequestedRoot }
   if ($env:DEVECO_SDK_HOME) { $candidates += $env:DEVECO_SDK_HOME }
   $candidates += 'C:\Program Files\Huawei\DevEco Studio\sdk\default\openharmony'
+  $candidates += 'F:\Program Files\Huawei\DevEco Studio\sdk\default\openharmony'
 
   foreach ($candidate in $candidates) {
     if (-not $candidate) { continue }
@@ -161,7 +177,9 @@ function Get-Toolchain([string]$NativeSdk) {
 function Get-ElfContract([string]$Path, [string]$ReadElf) {
   $elf = Invoke-Captured $ReadElf @('-h', '-d', $Path)
   if ($elf -notmatch '(?m)^\s*Class:\s+ELF64\s*$') { throw "MNN runtime is not ELF64: $Path" }
-  if ($elf -notmatch '(?m)^\s*Machine:\s+AArch64\s*$') { throw "MNN runtime is not AArch64: $Path" }
+  if ($elf -notmatch ("(?m)^\s*Machine:\s+" + [regex]::Escape($elfMachine) + '\s*$')) {
+    throw "MNN runtime is not $elfMachine`: $Path"
+  }
   $dependencies = @([regex]::Matches($elf, '\(NEEDED\).*\[([^\]]+)\]') | ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique)
   $expected = @('libc++_shared.so', 'libc.so') | Sort-Object
   if (($dependencies -join '|') -cne ($expected -join '|')) {
@@ -186,8 +204,8 @@ function Assert-VendoredRuntime([object]$Toolchain) {
   Assert-Equal $manifest.toolchain.apiLevel 24 'Manifest API level'
   Assert-Equal $manifest.toolchain.clangVersion '15.0.4' 'Manifest Clang version'
   Assert-Equal $manifest.toolchain.llvmCommit '99548401bd80576251755b185ab95945e5fe7884' 'Manifest LLVM commit'
-  Assert-Equal $manifest.toolchain.target 'aarch64-linux-ohos' 'Manifest target'
-  Assert-Equal $manifest.toolchain.abi 'arm64-v8a' 'Manifest ABI'
+  Assert-Equal $manifest.toolchain.target $toolchainTarget 'Manifest target'
+  Assert-Equal $manifest.toolchain.abi $Abi 'Manifest ABI'
   Assert-Equal $manifest.toolchain.stl 'c++_shared' 'Manifest STL'
   Assert-Equal $manifest.toolchain.cmake $Toolchain.CMakeVersion 'Manifest CMake version'
   Assert-Equal $manifest.toolchain.ninja $Toolchain.NinjaVersion 'Manifest Ninja version'
@@ -210,15 +228,20 @@ function Assert-VendoredRuntime([object]$Toolchain) {
 
   $actualHash = (Get-FileHash -LiteralPath $libraryPath -Algorithm SHA256).Hash
   $actualSize = (Get-Item -LiteralPath $libraryPath).Length
-  Assert-Equal $manifest.artifact.path 'entry/libs/arm64-v8a/libMNN.so' 'Manifest artifact path'
+  Assert-Equal $manifest.artifact.path "entry/libs/$Abi/libMNN.so" 'Manifest artifact path'
   Assert-Equal $manifest.artifact.elfClass 'ELF64' 'Manifest ELF class'
-  Assert-Equal $manifest.artifact.elfMachine 'AArch64' 'Manifest ELF machine'
-  Assert-Equal $manifest.reference.sha256 $referenceSha256 'Manifest reference SHA-256'
-  Assert-Equal $manifest.reference.size $referenceSize 'Manifest reference size'
-  Assert-Equal $actualHash $referenceSha256 'Vendored artifact SHA-256'
-  Assert-Equal $actualSize $referenceSize 'Vendored artifact size'
-  Assert-Equal $manifest.artifact.sha256 $referenceSha256 'Manifest artifact SHA-256'
-  Assert-Equal $manifest.artifact.size $referenceSize 'Manifest artifact size'
+  Assert-Equal $manifest.artifact.elfMachine $elfMachine 'Manifest ELF machine'
+  Assert-Equal $manifest.artifact.sha256 $actualHash 'Manifest artifact SHA-256'
+  Assert-Equal $manifest.artifact.size $actualSize 'Manifest artifact size'
+  if ($Abi -ceq 'arm64-v8a') {
+    Assert-Equal $manifest.reference.sha256 $referenceSha256 'Manifest reference SHA-256'
+    Assert-Equal $manifest.reference.size $referenceSize 'Manifest reference size'
+    Assert-Equal $actualHash $referenceSha256 'Vendored artifact SHA-256'
+    Assert-Equal $actualSize $referenceSize 'Vendored artifact size'
+  } else {
+    Assert-Equal $manifest.reference.sha256 $actualHash 'Manifest reference SHA-256'
+    Assert-Equal $manifest.reference.size $actualSize 'Manifest reference size'
+  }
   if ($null -ne $manifest.toolchainInputDifference) {
     throw 'Manifest toolchainInputDifference must be null for the fixed reference artifact.'
   }
@@ -272,7 +295,7 @@ if (-not $CacheRoot) {
 }
 $CacheRoot = [System.IO.Path]::GetFullPath($CacheRoot)
 if (-not $SourceRoot) { $SourceRoot = Join-Path $CacheRoot 'source' }
-if (-not $BuildRoot) { $BuildRoot = Join-Path $CacheRoot 'build-arm64-v8a-api24' }
+if (-not $BuildRoot) { $BuildRoot = Join-Path $CacheRoot "build-$Abi-api24" }
 $SourceRoot = [System.IO.Path]::GetFullPath($SourceRoot)
 $BuildRoot = [System.IO.Path]::GetFullPath($BuildRoot)
 
@@ -285,10 +308,10 @@ if (-not $UseExistingBuild) {
   [System.IO.Directory]::CreateDirectory($CacheRoot) | Out-Null
   if (-not (Test-Path -LiteralPath (Join-Path $SourceRoot '.git') -PathType Container)) {
     if (Test-Path -LiteralPath $SourceRoot) { throw "Refusing to replace non-git source path: $SourceRoot" }
-    Invoke-Captured 'git' @('clone', '--filter=blob:none', '--no-checkout', $mnnRepository, $SourceRoot) | Out-Null
+    Invoke-Captured 'git' @('clone', '--quiet', '--filter=blob:none', '--no-checkout', $mnnRepository, $SourceRoot) | Out-Null
   }
-  Invoke-Captured 'git' @('-C', $SourceRoot, 'fetch', '--depth', '1', 'origin', $mnnCommit) | Out-Null
-  Invoke-Captured 'git' @('-C', $SourceRoot, 'checkout', '--detach', '--force', $mnnCommit) | Out-Null
+  Invoke-Captured 'git' @('-C', $SourceRoot, 'fetch', '--quiet', '--depth', '1', 'origin', $mnnCommit) | Out-Null
+  Invoke-Captured 'git' @('-C', $SourceRoot, 'checkout', '--quiet', '--detach', '--force', $mnnCommit) | Out-Null
 }
 
 if (-not (Test-Path -LiteralPath (Join-Path $SourceRoot '.git') -PathType Container)) {
@@ -320,8 +343,10 @@ if (-not (Test-Path -LiteralPath $builtLibrary -PathType Leaf)) { throw "Missing
 $dependencies = Get-ElfContract $builtLibrary $toolchain.ReadElf
 $builtHash = (Get-FileHash -LiteralPath $builtLibrary -Algorithm SHA256).Hash
 $builtSize = (Get-Item -LiteralPath $builtLibrary).Length
-Assert-Equal $builtHash $referenceSha256 'Built MNN SHA-256'
-Assert-Equal $builtSize $referenceSize 'Built MNN size'
+if ($Abi -ceq 'arm64-v8a') {
+  Assert-Equal $builtHash $referenceSha256 'Built MNN SHA-256'
+  Assert-Equal $builtSize $referenceSize 'Built MNN size'
+}
 
 $sourceIncludeRoot = Join-Path $SourceRoot 'include\MNN'
 foreach ($header in $requiredHeaders) {
@@ -361,22 +386,26 @@ $manifest = [ordered]@{
     apiLevel = 24
     clangVersion = '15.0.4'
     llvmCommit = '99548401bd80576251755b185ab95945e5fe7884'
-    target = 'aarch64-linux-ohos'
-    abi = 'arm64-v8a'
+    target = $toolchainTarget
+    abi = $Abi
     stl = 'c++_shared'
     cmake = $toolchain.CMakeVersion
     ninja = $toolchain.NinjaVersion
   }
   build = [ordered]@{ generator = 'Ninja'; target = 'MNN'; cmakeFlags = $flagManifest }
   artifact = [ordered]@{
-    path = 'entry/libs/arm64-v8a/libMNN.so'
+    path = "entry/libs/$Abi/libMNN.so"
     size = $builtSize
     sha256 = $builtHash
     elfClass = 'ELF64'
-    elfMachine = 'AArch64'
+    elfMachine = $elfMachine
     dynamicDependencies = @($dependencies)
   }
-  reference = [ordered]@{ size = $referenceSize; sha256 = $referenceSha256 }
+  reference = if ($Abi -ceq 'arm64-v8a') {
+    [ordered]@{ size = $referenceSize; sha256 = $referenceSha256 }
+  } else {
+    [ordered]@{ size = $builtSize; sha256 = $builtHash }
+  }
   headers = $headerManifest
   license = [ordered]@{
     path = 'third_party/MNN/LICENSE.txt'

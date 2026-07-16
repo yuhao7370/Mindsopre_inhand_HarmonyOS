@@ -19,10 +19,22 @@ function Resolve-NativeSdk([string]$RequestedRoot) {
     if (-not $candidate) { continue }
     $root = [System.IO.Path]::GetFullPath($candidate)
     if (Test-Path -LiteralPath (Join-Path $root 'native\llvm\bin\llvm-readelf.exe') -PathType Leaf) { return $root }
+    $defaultOpenHarmony = Join-Path $root 'default\openharmony'
+    if (Test-Path -LiteralPath (Join-Path $defaultOpenHarmony 'native\llvm\bin\llvm-readelf.exe') -PathType Leaf) { return $defaultOpenHarmony }
     $openharmony = Join-Path $root 'openharmony'
     if (Test-Path -LiteralPath (Join-Path $openharmony 'native\llvm\bin\llvm-readelf.exe') -PathType Leaf) { return $openharmony }
   }
   throw 'HarmonyOS native SDK not found.'
+}
+
+function Get-ExpectedMachine([string]$ReadelfOutput) {
+  if ($ReadelfOutput -match '(?m)^\s*Machine:\s*(.+?)\s*$') {
+    $machine = $matches[1]
+    if ($machine -eq 'AArch64') { return 'AArch64' }
+    if ($machine -eq 'Advanced Micro Devices X86-64') { return 'Advanced Micro Devices X86-64' }
+    return $machine
+  }
+  throw 'Unable to determine ELF machine from llvm-readelf output.'
 }
 
 function Assert-Contains([string]$Path, [string]$Pattern, [string]$Label) {
@@ -87,7 +99,10 @@ $nativeSdk = Resolve-NativeSdk $DevEcoSdkRoot
 $readelf = Join-Path $nativeSdk 'native\llvm\bin\llvm-readelf.exe'
 $dynamic = & $readelf -h -d $LibraryPath 2>&1 | Out-String
 if ($LASTEXITCODE -ne 0) { throw "llvm-readelf failed:`n$dynamic" }
-if ($dynamic -notmatch '(?m)^\s*Machine:\s+AArch64\s*$') { throw 'Gesture NAPI library is not AArch64.' }
+$machine = Get-ExpectedMachine $dynamic
+if (@('AArch64', 'Advanced Micro Devices X86-64') -notcontains $machine) {
+  throw "Gesture NAPI machine not supported for runtime: $machine"
+}
 $dependencies = @([regex]::Matches($dynamic, '\(NEEDED\).*\[([^\]]+)\]') | ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique)
 $expected = @('libMNN.so', 'libace_napi.z.so', 'libc++_shared.so', 'libc.so') | Sort-Object
 if (($dependencies -join '|') -cne ($expected -join '|')) {

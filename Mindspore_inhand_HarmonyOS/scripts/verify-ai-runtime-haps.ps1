@@ -2,17 +2,33 @@ param(
   [Parameter(Mandatory = $true)][string]$MainHapPath,
   [string]$OhosTestHapPath = '',
   [string]$ExpectedRawfileRoot = '',
-  [string]$ExpectedNativeLibRoot = ''
+  [string]$ExpectedNativeLibRoot = '',
+  [string]$ExpectedNativeLibRootX86 = ''
 )
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.IO.Compression
 Add-Type -AssemblyName System.IO.Compression.FileSystem
+$projectRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
+$buildProfile = Get-Content -LiteralPath (Join-Path $projectRoot 'entry\build-profile.json5') -Raw
+
+$abiSectionMatch = [regex]::Match($buildProfile, '"abiFilters"\s*:\s*\[(?<abis>.*?)\]', [System.Text.RegularExpressions.RegexOptions]::Singleline)
+if (-not $abiSectionMatch.Success) {
+  throw 'Unable to read abiFilters from build-profile.json5'
+}
+$targetAbis = [regex]::Matches($abiSectionMatch.Groups['abis'].Value, '"([^"]+)"') | ForEach-Object { $_.Groups[1].Value }
+if (-not $targetAbis) {
+  $targetAbis = @('arm64-v8a')
+}
 
 if (-not $ExpectedRawfileRoot) {
   $ExpectedRawfileRoot = Join-Path $PSScriptRoot '..\entry\src\main\resources\rawfile'
 }
 if (-not $ExpectedNativeLibRoot) {
   $ExpectedNativeLibRoot = Join-Path $PSScriptRoot '..\entry\build\default\intermediates\stripped_native_libs\default\arm64-v8a'
+  $ExpectedNativeLibRootX86 = Join-Path $PSScriptRoot '..\entry\build\default\intermediates\stripped_native_libs\default\x86_64'
+}
+if (-not $ExpectedNativeLibRootX86) {
+  $ExpectedNativeLibRootX86 = $ExpectedNativeLibRoot
 }
 
 function Get-HapEntries([string]$Path) {
@@ -95,9 +111,11 @@ $resourceEntries = @(
   'resources/rawfile/models/translation/LICENSES.md'
 )
 $nativeEntries = @(
-  'libs/arm64-v8a/libgesture_mnn.so',
-  'libs/arm64-v8a/libMNN.so',
-  'libs/arm64-v8a/libtranslation_archive.so'
+  foreach ($abi in $targetAbis) {
+    "libs/$abi/libgesture_mnn.so"
+    "libs/$abi/libMNN.so"
+    "libs/$abi/libtranslation_archive.so"
+  }
 )
 $mainEntries = @('module.json') + $resourceEntries + $nativeEntries
 $mainHapEntries = @(Get-HapEntries $MainHapPath)
@@ -112,9 +130,13 @@ $payloads = @(
     }
   }
   foreach ($entry in $nativeEntries) {
+    $split = $entry -split '/'
+    $abi = $split[1]
+    $filename = $split[2]
+    $nativeRoot = if ($abi -eq 'x86_64') { $ExpectedNativeLibRootX86 } else { $ExpectedNativeLibRoot }
     [pscustomobject]@{
       Entry = $entry
-      ExpectedPath = Join-Path $ExpectedNativeLibRoot $entry.Substring('libs/arm64-v8a/'.Length)
+      ExpectedPath = Join-Path $nativeRoot $filename
     }
   }
 )

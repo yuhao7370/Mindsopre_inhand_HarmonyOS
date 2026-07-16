@@ -7,7 +7,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(XZ_IMPORTED_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/third_party/xz" CACHE PATH "Pinned XZ import root")
 add_library(liblzma STATIC IMPORTED GLOBAL)
 set_target_properties(liblzma PROPERTIES
-  IMPORTED_LOCATION "${XZ_IMPORTED_ROOT}/lib/arm64-v8a/liblzma.a"
+  IMPORTED_LOCATION "${XZ_IMPORTED_ROOT}/lib/${OHOS_ARCH}/liblzma.a"
   INTERFACE_INCLUDE_DIRECTORIES "${XZ_IMPORTED_ROOT}/include"
 )
 

@@ -4,7 +4,7 @@ param(
   [string]$PackageManifestPath = '',
   [string]$NativeDecompressorPath = '',
   [string]$ReleaseEvidencePath = '',
-  [string]$Python = 'python'
+  [string]$Python = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -106,6 +106,32 @@ function Invoke-Checked([string]$Executable, [string[]]$Arguments, [string]$Labe
   if ($exitCode -ne 0) { throw "$Label failed ($exitCode):`n$($output.Trim())" }
   return $output.Trim()
 }
+
+function Resolve-Python([string]$Requested) {
+  $candidates = @($Requested, $env:PYTHON)
+  $command = Get-Command python -ErrorAction SilentlyContinue | Select-Object -First 1
+  if ($command) { $candidates += $command.Source }
+  $programs = Join-Path $env:LOCALAPPDATA 'Programs\Python'
+  if (Test-Path -LiteralPath $programs) {
+    $candidates += @(Get-ChildItem -LiteralPath $programs -Recurse -Filter python.exe -File -ErrorAction SilentlyContinue | ForEach-Object FullName)
+  }
+  $candidates += 'C:\Program Files\LibreOffice\program\python.exe'
+
+  foreach ($candidate in @($candidates | Where-Object { $_ } | Select-Object -Unique)) {
+    $previous = $ErrorActionPreference
+    try {
+      $ErrorActionPreference = 'SilentlyContinue'
+      & $candidate -c 'import hashlib, json, lzma, struct, tarfile' 2>$null
+      $exitCode = $LASTEXITCODE
+    } finally {
+      $ErrorActionPreference = $previous
+    }
+    if ($exitCode -eq 0) { return $candidate }
+  }
+  throw 'A Python 3 interpreter with the standard library is required. Pass -Python or set PYTHON.'
+}
+
+$Python = Resolve-Python $Python
 
 if (-not (Test-Path -LiteralPath $StageRoot -PathType Container)) {
   throw "Missing translation asset directory: $StageRoot"

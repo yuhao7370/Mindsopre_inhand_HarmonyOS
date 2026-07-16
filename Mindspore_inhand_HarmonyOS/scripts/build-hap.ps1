@@ -1,6 +1,38 @@
 $ErrorActionPreference = 'Stop'
-$env:DEVECO_SDK_HOME = 'C:\Program Files\Huawei\DevEco Studio\sdk'
-$env:PATH = 'C:\Program Files\Huawei\DevEco Studio\jbr\bin;' + $env:PATH
+$devEcoRoot = @(
+  $env:DEVECO_STUDIO_HOME,
+  'C:\Program Files\Huawei\DevEco Studio',
+  'F:\Program Files\Huawei\DevEco Studio'
+) | Where-Object { $_ -and (Test-Path -LiteralPath (Join-Path $_ 'tools\hvigor\bin\hvigorw.bat') -PathType Leaf) } | Select-Object -First 1
+if (-not $devEcoRoot) { throw 'DevEco Studio not found. Set DEVECO_STUDIO_HOME.' }
+$env:DEVECO_SDK_HOME = Join-Path $devEcoRoot 'sdk'
+$nodeHome = @(
+  $env:DEVECO_NODE_HOME,
+  $env:NODE_HOME,
+  (Join-Path $devEcoRoot 'tools\node'),
+  'C:\Program Files\Nodejs'
+) | Where-Object {
+    $_ -and (Test-Path -LiteralPath $_) -and (Test-Path -LiteralPath (Join-Path $_ 'bin\node.exe'))
+} | Select-Object -First 1
+if (-not $nodeHome) {
+  $nodeHome = @(
+    (Join-Path $devEcoRoot 'tools\node'),
+    'C:\Program Files\Nodejs'
+  ) | Where-Object {
+    $_ -and (Test-Path -LiteralPath $_) -and (Test-Path -LiteralPath (Join-Path $_ 'node.exe'))
+  } | Select-Object -First 1
+}
+if (-not $nodeHome) {
+  throw 'Node.js not found. Set DEVECO_NODE_HOME or install Node in the default paths.'
+}
+$nodeDir = if (Test-Path -LiteralPath (Join-Path $nodeHome 'bin\node.exe')) {
+  Join-Path $nodeHome 'bin'
+} else {
+  $nodeHome
+}
+$env:NODE_HOME = $nodeHome
+$env:PATH = $nodeDir + ';' + $env:PATH
+$env:PATH = (Join-Path $devEcoRoot 'jbr\bin') + ';' + $env:PATH
 & (Join-Path $PSScriptRoot 'test-runtime-layout-closure-guard.ps1')
 & (Join-Path $PSScriptRoot 'check-runtime-layout-closure.ps1')
 & (Join-Path $PSScriptRoot 'check-i18n-strings.ps1')
@@ -25,6 +57,7 @@ $env:PATH = 'C:\Program Files\Huawei\DevEco Studio\jbr\bin;' + $env:PATH
 & (Join-Path $PSScriptRoot 'check-model-label-guards.ps1')
 & (Join-Path $PSScriptRoot 'check-core-model-assets.ps1')
 & (Join-Path $PSScriptRoot 'test-core-model-assets-guard.ps1')
+& (Join-Path $PSScriptRoot 'test-native-abi-matrix.ps1')
 & (Join-Path $PSScriptRoot 'check-bottom-tab-icons.ps1')
 & (Join-Path $PSScriptRoot 'check-me-row-icons.ps1')
 & (Join-Path $PSScriptRoot 'check-poetry-back-icon.ps1')
@@ -39,7 +72,7 @@ $env:PATH = 'C:\Program Files\Huawei\DevEco Studio\jbr\bin;' + $env:PATH
 & (Join-Path $PSScriptRoot 'check-dance-thumbnail.ps1')
 & (Join-Path $PSScriptRoot 'ensure-mindspore-models.ps1')
 & (Join-Path $PSScriptRoot 'verify-translation-model.ps1') -ReleaseEvidencePath (Join-Path $PSScriptRoot '..\..\tools\translation\manifests\local-learning-authorization-v1.json')
-$hvigor = 'C:\Program Files\Huawei\DevEco Studio\tools\hvigor\bin\hvigorw.bat'
+$hvigor = Join-Path $devEcoRoot 'tools\hvigor\bin\hvigorw.bat'
 & cmd.exe /d /c "`"$hvigor`" assembleHap --no-daemon 2>&1"
 if ($LASTEXITCODE -ne 0) {
   throw "hvigor assembleHap failed with exit code $LASTEXITCODE"

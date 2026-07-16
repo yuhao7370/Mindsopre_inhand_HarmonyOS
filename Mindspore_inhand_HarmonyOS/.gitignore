@@ -16,9 +16,12 @@
 
 # Manual MindSpore model recovery partials
 /entry/src/main/resources/rawfile/model/*.ms.download*
+/entry/libs/x86_64/
+/entry/src/main/cpp/translation_xz/third_party/xz/lib/x86_64/
 
 # Local native tooling cache
 /.clangd
+/.clang-tidy
 
 # Logs
 *.log

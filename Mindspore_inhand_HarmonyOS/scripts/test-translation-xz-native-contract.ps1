@@ -23,10 +23,22 @@ function Resolve-NativeSdk([string]$Requested) {
     if (-not $candidate) { continue }
     $root = [IO.Path]::GetFullPath($candidate)
     if (Test-Path -LiteralPath (Join-Path $root 'native\llvm\bin\llvm-readelf.exe') -PathType Leaf) { return $root }
+    $defaultOpenHarmony = Join-Path $root 'default\openharmony'
+    if (Test-Path -LiteralPath (Join-Path $defaultOpenHarmony 'native\llvm\bin\llvm-readelf.exe') -PathType Leaf) { return $defaultOpenHarmony }
     $nested = Join-Path $root 'openharmony'
     if (Test-Path -LiteralPath (Join-Path $nested 'native\llvm\bin\llvm-readelf.exe') -PathType Leaf) { return $nested }
   }
   throw 'HarmonyOS native SDK not found.'
+}
+
+function Get-ExpectedMachine([string]$ReadelfOutput) {
+  if ($ReadelfOutput -match '(?m)^\s*Machine:\s*(.+?)\s*$') {
+    $machine = $matches[1]
+    if ($machine -eq 'AArch64') { return 'AArch64' }
+    if ($machine -eq 'Advanced Micro Devices X86-64') { return 'Advanced Micro Devices X86-64' }
+    return $machine
+  }
+  throw 'Unable to determine ELF machine from llvm-readelf output.'
 }
 
 $required = @(
@@ -84,7 +96,10 @@ $sdk = Resolve-NativeSdk $DevEcoSdkRoot
 $readelf = Join-Path $sdk 'native\llvm\bin\llvm-readelf.exe'
 $elf = & $readelf -h -d $LibraryPath 2>&1 | Out-String
 if ($LASTEXITCODE -ne 0) { throw "llvm-readelf failed:`n$elf" }
-if ($elf -notmatch '(?m)^\s*Machine:\s+AArch64\s*$') { throw 'Translation archive NAPI library is not AArch64.' }
+$machine = Get-ExpectedMachine $elf
+if (@('AArch64', 'Advanced Micro Devices X86-64') -notcontains $machine) {
+  throw "Translation archive machine not supported for runtime: $machine"
+}
 $dependencies = @([regex]::Matches($elf, '\(NEEDED\).*\[([^\]]+)\]') | ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique)
 $expected = @('libace_napi.z.so', 'libohcrypto.so', 'libc++_shared.so', 'libc.so') | Sort-Object
 if (($dependencies -join '|') -cne ($expected -join '|')) {
