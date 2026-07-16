@@ -15,8 +15,6 @@ from pathlib import Path
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from sentencepiece import sentencepiece_model_pb2
-
 from tools.translation.build_translation_archive import verify_archive
 from tools.translation.export_marian_smoke import (
     _validate_local_learning_approval_record,
@@ -359,6 +357,8 @@ def _normalization_rules(precompiled):
 
 
 def _tokenizer_assets(model_path):
+    from sentencepiece import sentencepiece_model_pb2
+
     model_path = Path(model_path)
     payload = model_path.read_bytes()
     if len(payload) != MODEL_SIZE or hashlib.sha256(payload).hexdigest() != MODEL_SHA256:

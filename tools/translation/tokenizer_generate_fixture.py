@@ -1,15 +1,13 @@
 """Generate small, immutable ArkTS tokenizer goldens from the pinned BiST model."""
 
+from __future__ import annotations
+
 import argparse
 import hashlib
 import json
 import struct
 from pathlib import Path
 from typing import Dict, Iterable, List, Set, Tuple
-
-import sentencepiece as sentencepiece
-from sentencepiece import sentencepiece_model_pb2
-
 
 MODEL_SHA256 = "e5528a5c3685d08f8868902d31febeb763eea8519f9997f43b05964b02554640"
 MODEL_SIZE = 755175
@@ -299,6 +297,9 @@ def _render_runtime_table(runtime: dict) -> str:
 
 
 def build_fixture(model_path: Path) -> dict:
+    import sentencepiece as sentencepiece
+    from sentencepiece import sentencepiece_model_pb2
+
     model_bytes = model_path.read_bytes()
     if len(model_bytes) != MODEL_SIZE or hashlib.sha256(model_bytes).hexdigest() != MODEL_SHA256:
         raise ValueError("model is not the pinned source.spm")

@@ -1,6 +1,7 @@
 [CmdletBinding()]
 param(
   [switch]$VerifyOnly,
+  [ValidateSet('arm64-v8a', 'x86_64')][string]$Abi = 'arm64-v8a',
   [string]$DevEcoSdkRoot = '',
   [string]$CacheRoot = '',
   [string]$SourceArchive = '',
@@ -19,7 +20,7 @@ $requiredFlags = [ordered]@{
   BUILD_TESTING = 'OFF'
   CMAKE_BUILD_TYPE = 'Release'
   CMAKE_POSITION_INDEPENDENT_CODE = 'ON'
-  OHOS_ARCH = 'arm64-v8a'
+  OHOS_ARCH = $Abi
   OHOS_PLATFORM_LEVEL = '24'
   XZ_ARM64_CRC32 = 'OFF'
   # XZ streams use LZMA2, whose implementation reuses the LZMA1 range decoder.
@@ -43,27 +44,37 @@ $repositoryRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
 $projectRoot = Join-Path $repositoryRoot 'Mindspore_inhand_HarmonyOS'
 $nativeRoot = Join-Path $projectRoot 'entry\src\main\cpp\translation_xz'
 $importRoot = Join-Path $nativeRoot 'third_party\xz'
-$libraryImport = Join-Path $importRoot 'lib\arm64-v8a\liblzma.a'
+$libraryImport = Join-Path $importRoot "lib\$Abi\liblzma.a"
 $includeImport = Join-Path $importRoot 'include'
 $licenseImport = Join-Path $importRoot 'COPYING'
-$sharedImport = Join-Path $projectRoot 'entry\libs\arm64-v8a\libtranslation_archive.so'
-$manifestPath = Join-Path $nativeRoot 'XZ_BUILD_MANIFEST.json'
+$sharedImport = Join-Path $projectRoot "entry\libs\$Abi\libtranslation_archive.so"
+$manifestName = if ($Abi -ceq 'arm64-v8a') { 'XZ_BUILD_MANIFEST.json' } else { "XZ_BUILD_MANIFEST.$Abi.json" }
+$manifestPath = Join-Path $nativeRoot $manifestName
 
 function Invoke-Captured([string]$Executable, [string[]]$Arguments) {
-  $previous = $ErrorActionPreference
+  $stderrPath = Join-Path $env:TEMP ("mindspore-inhand-native-stderr-" + [guid]::NewGuid().ToString('N') + '.log')
+  $previousPreference = $ErrorActionPreference
   try {
-    $ErrorActionPreference = 'Continue'
-    $output = & $Executable @Arguments 2>&1 | Out-String
+    $ErrorActionPreference = 'SilentlyContinue'
+    $stdout = & $Executable @Arguments 2> $stderrPath | Out-String
     $exitCode = $LASTEXITCODE
+    $stderr = if (Test-Path -LiteralPath $stderrPath) { Get-Content -LiteralPath $stderrPath -Raw } else { '' }
+    $output = ($stdout + $stderr).Trim()
   } finally {
-    $ErrorActionPreference = $previous
+    $ErrorActionPreference = $previousPreference
+    if (Test-Path -LiteralPath $stderrPath) { Remove-Item -LiteralPath $stderrPath -Force }
   }
   if ($exitCode -ne 0) { throw "Command failed ($exitCode): $Executable $($Arguments -join ' ')`n$output" }
-  return $output.Trim()
+  return $output
 }
 
 function Resolve-NativeSdk([string]$Requested) {
-  foreach ($candidate in @($Requested, $env:DEVECO_SDK_HOME, 'C:\Program Files\Huawei\DevEco Studio\sdk\default\openharmony')) {
+  foreach ($candidate in @(
+    $Requested,
+    $env:DEVECO_SDK_HOME,
+    'C:\Program Files\Huawei\DevEco Studio\sdk\default\openharmony',
+    'F:\Program Files\Huawei\DevEco Studio\sdk\default\openharmony'
+  )) {
     if (-not $candidate) { continue }
     $root = [IO.Path]::GetFullPath($candidate)
     if (Test-Path -LiteralPath (Join-Path $root 'native\llvm\bin\llvm-readelf.exe') -PathType Leaf) { return $root }
@@ -107,8 +118,9 @@ function Assert-BuildCache([string]$Path) {
 
 function Get-Dependencies([string]$Path, [string]$ReadElf) {
   $elf = Invoke-Captured $ReadElf @('-h', '-d', $Path)
-  if ($elf -notmatch '(?m)^\s*Class:\s+ELF64\s*$' -or $elf -notmatch '(?m)^\s*Machine:\s+AArch64\s*$') {
-    throw 'Translation archive library must be an AArch64 ELF64 artifact.'
+  $machine = if ($Abi -ceq 'arm64-v8a') { 'AArch64' } else { 'Advanced Micro Devices X86-64' }
+  if ($elf -notmatch '(?m)^\s*Class:\s+ELF64\s*$' -or $elf -notmatch ("(?m)^\s*Machine:\s+" + [regex]::Escape($machine) + '\s*$')) {
+    throw "Translation archive library must be an $machine ELF64 artifact."
   }
   return @([regex]::Matches($elf, '\(NEEDED\).*\[([^\]]+)\]') | ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique)
 }
@@ -132,6 +144,7 @@ function Assert-Imported([object]$Tools) {
       $manifest.upstream.tagCommit -cne $xzTagCommit -or $manifest.upstream.sourceSha256 -cne $xzSourceSha256) {
     throw 'XZ build manifest upstream identity mismatch.'
   }
+  if ($manifest.toolchain.abi -cne $Abi) { throw "XZ build manifest ABI mismatch: $($manifest.toolchain.abi)" }
   foreach ($entry in $requiredFlags.GetEnumerator()) {
     if ([string]$manifest.build.cmakeFlags.($entry.Key) -cne [string]$entry.Value) {
       throw "XZ manifest flag $($entry.Key) mismatch."
@@ -184,8 +197,8 @@ if ((Get-FileHash -LiteralPath $SourceArchive -Algorithm SHA256).Hash -cne $xzSo
 
 $runRoot = Join-Path $CacheRoot ('run.' + [guid]::NewGuid().ToString('N'))
 $sourceRoot = Join-Path $runRoot 'source'
-$buildRoot = Join-Path $runRoot 'build-arm64-v8a-api24'
-$wrapperBuild = Join-Path $runRoot 'wrapper-arm64-v8a-api24'
+$buildRoot = Join-Path $runRoot "build-$Abi-api24"
+$wrapperBuild = Join-Path $runRoot "wrapper-$Abi-api24"
 $cachePrefix = $CacheRoot.TrimEnd('\') + '\'
 foreach ($path in @($runRoot, $sourceRoot, $buildRoot, $wrapperBuild)) {
   if (-not ([IO.Path]::GetFullPath($path)).StartsWith($cachePrefix, [StringComparison]::OrdinalIgnoreCase)) {
@@ -232,7 +245,7 @@ $licenseText = [IO.File]::ReadAllText((Join-Path $sourceRoot 'COPYING')).TrimEnd
 Invoke-Captured $tools.CMake @(
   '-S', $nativeRoot, '-B', $wrapperBuild, '-G', 'Ninja',
   "-DCMAKE_MAKE_PROGRAM=$($tools.Ninja)", "-DCMAKE_TOOLCHAIN_FILE=$($tools.Toolchain)",
-  '-DCMAKE_BUILD_TYPE=Release', '-DOHOS_ARCH=arm64-v8a', '-DOHOS_PLATFORM_LEVEL=24',
+  '-DCMAKE_BUILD_TYPE=Release', "-DOHOS_ARCH=$Abi", '-DOHOS_PLATFORM_LEVEL=24',
   "-DXZ_IMPORTED_ROOT=$importRoot"
 ) | Out-Null
 Invoke-Captured $tools.CMake @('--build', $wrapperBuild, '--target', 'translation_archive', '--parallel', [string]$Jobs) | Out-Null
@@ -252,11 +265,11 @@ $manifest = [ordered]@{
     sourceSha256 = $xzSourceSha256
     licenseFile = 'COPYING'
   }
-  toolchain = [ordered]@{ sdk = '6.1.1'; apiLevel = 24; abi = 'arm64-v8a'; jobs = $Jobs }
+  toolchain = [ordered]@{ sdk = '6.1.1'; apiLevel = 24; abi = $Abi; jobs = $Jobs }
   build = [ordered]@{ cmakeFlags = $flagManifest; target = 'liblzma'; wrapperTarget = 'translation_archive' }
   artifacts = [ordered]@{
-    liblzma = [ordered]@{ path = 'third_party/xz/lib/arm64-v8a/liblzma.a'; size = (Get-Item $libraryImport).Length; sha256 = (Get-FileHash $libraryImport -Algorithm SHA256).Hash }
-    napi = [ordered]@{ path = 'entry/libs/arm64-v8a/libtranslation_archive.so'; size = (Get-Item $sharedImport).Length; sha256 = (Get-FileHash $sharedImport -Algorithm SHA256).Hash }
+    liblzma = [ordered]@{ path = "third_party/xz/lib/$Abi/liblzma.a"; size = (Get-Item $libraryImport).Length; sha256 = (Get-FileHash $libraryImport -Algorithm SHA256).Hash }
+    napi = [ordered]@{ path = "entry/libs/$Abi/libtranslation_archive.so"; size = (Get-Item $sharedImport).Length; sha256 = (Get-FileHash $sharedImport -Algorithm SHA256).Hash }
   }
 }
 [IO.File]::WriteAllText($manifestPath, (($manifest | ConvertTo-Json -Depth 8) + "`n"), [Text.UTF8Encoding]::new($false))
