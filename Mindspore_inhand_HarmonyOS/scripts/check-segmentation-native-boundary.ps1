@@ -6,6 +6,9 @@ foreach ($marker in @(
   'type != napi_float32_array',
   'length == kInputElementCount',
   'length == kInputByteCount',
+  'napi_get_named_property(env, argument, "length"',
+  'napi_get_value_uint32(env, logicalLengthValue, &logicalLength)',
+  'logicalLength == kInputElementCount',
   'napi_get_arraybuffer_info',
   'byteOffset <= backingByteLength',
   'backingByteLength - byteOffset >= kInputByteCount',
@@ -18,4 +21,4 @@ foreach ($marker in @(
   }
 }
 
-Write-Host 'Segmentation native boundary accepts standard/API24 lengths, verifies backing bytes, and settles queue failures.'
+Write-Host 'Segmentation native boundary requires exact JS-visible length, validates backing bytes, and settles queue failures.'

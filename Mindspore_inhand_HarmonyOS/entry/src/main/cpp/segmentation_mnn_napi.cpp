@@ -196,19 +196,28 @@ napi_value PredictImpl(napi_env env, napi_callback_info callbackInfo)
         napi_is_typedarray(env, argument, &isTypedArray) : napi_invalid_arg;
     const napi_status infoStatus = typedArrayStatus == napi_ok && isTypedArray ?
         napi_get_typedarray_info(env, argument, &type, &length, &data, &arrayBuffer, &byteOffset) : napi_invalid_arg;
+    napi_value logicalLengthValue = nullptr;
+    uint32_t logicalLength = 0;
+    const napi_status logicalLengthPropertyStatus = infoStatus == napi_ok ?
+        napi_get_named_property(env, argument, "length", &logicalLengthValue) : napi_invalid_arg;
+    const napi_status logicalLengthStatus = logicalLengthPropertyStatus == napi_ok ?
+        napi_get_value_uint32(env, logicalLengthValue, &logicalLength) : napi_invalid_arg;
     void* backingData = nullptr;
     size_t backingByteLength = 0;
     const napi_status backingStatus = infoStatus == napi_ok ?
         napi_get_arraybuffer_info(env, arrayBuffer, &backingData, &backingByteLength) : napi_invalid_arg;
-    // ponytail: API24 reports Float32Array length in bytes; standard N-API reports elements.
-    const bool supportedLength = length == kInputElementCount || length == kInputByteCount;
+    // ponytail: API24 reports typedarray_info length in bytes; JS-visible length is logical elements.
+    const bool supportedInfoLength = length == kInputElementCount || length == kInputByteCount;
+    const bool exactLogicalLength = logicalLengthStatus == napi_ok && logicalLength == kInputElementCount;
     const bool readableBacking = backingStatus == napi_ok && data != nullptr && backingData != nullptr &&
         byteOffset <= backingByteLength && backingByteLength - byteOffset >= kInputByteCount;
     if (argumentStatus != napi_ok || argc != 1 || typedArrayStatus != napi_ok || !isTypedArray ||
-        infoStatus != napi_ok || type != napi_float32_array || !supportedLength || !readableBacking) {
+        infoStatus != napi_ok || type != napi_float32_array || !exactLogicalLength || !supportedInfoLength ||
+        !readableBacking) {
         const std::string message = "predict expects exactly 196608 float32 values; argc=" +
             std::to_string(argc) + " typed=" + std::to_string(isTypedArray ? 1 : 0) + " type=" +
-            std::to_string(static_cast<int>(type)) + " length=" + std::to_string(length) + '.';
+            std::to_string(static_cast<int>(type)) + " logicalLength=" + std::to_string(logicalLength) +
+            " infoLength=" + std::to_string(length) + '.';
         Check(env, napi_reject_deferred(env, deferred,
               ErrorValue(env, message.c_str())), "reject invalid input");
         return promise;

@@ -103,21 +103,24 @@ export default function segmentationNativeTest() {
         const output = await segmentationMnn.predict(valid);
         expect(output.byteLength).assertEqual(256 * 256 * 4);
 
-        let shortRejected: boolean = false;
+        const aliasBacking = new ArrayBuffer(segmentationInputFloatCount * 4 + 8);
+        const api24LengthAlias = new Float32Array(aliasBacking, 4, segmentationInputFloatCount / 4);
+        let api24LengthAliasRejected: boolean = false;
         try {
-          await segmentationMnn.predict(new Float32Array(segmentationInputFloatCount - 1));
+          await segmentationMnn.predict(api24LengthAlias);
         } catch (_) {
-          shortRejected = true;
+          api24LengthAliasRejected = true;
         }
-        expect(shortRejected).assertTrue();
+        expect(api24LengthAliasRejected).assertTrue();
 
-        let longRejected: boolean = false;
+        const standardLengthAlias = new Float32Array(segmentationInputFloatCount * 4);
+        let standardLengthAliasRejected: boolean = false;
         try {
-          await segmentationMnn.predict(new Float32Array(segmentationInputFloatCount + 1));
+          await segmentationMnn.predict(standardLengthAlias);
         } catch (_) {
-          longRejected = true;
+          standardLengthAliasRejected = true;
         }
-        expect(longRejected).assertTrue();
+        expect(standardLengthAliasRejected).assertTrue();
 
         let wrongTypeRejected: boolean = false;
         try {
