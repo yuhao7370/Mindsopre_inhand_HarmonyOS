@@ -6,13 +6,13 @@
 
 **Toolchain:** ArkTS, HarmonyOS API 24 kits, Hvigor, PowerShell guards, HDC, DevEco emulator, existing MindSpore Lite and MNN integrations.
 
-## 1. Restore the baseline gate
+## Task 1: Restore the baseline gate
 
 - Install the missing `sentencepiece` package into the Python selected by `scripts/verify-translation-model.ps1`.
 - Run `scripts/build-hap.ps1`; record any next real failure without weakening a verifier.
 - Update the status header. No source commit unless the repository itself lacks a reproducible requirement.
 
-## 2. Image Classification
+## Task 2: Image Classification
 
 Files: `scripts/check-live-camera-device-profile.ps1`, `scripts/build-hap.ps1`, `entry/src/main/ets/services/camera/LiveCameraService.ets`, focused camera tests if needed, `docs/repair-status.md`.
 
@@ -22,7 +22,7 @@ Files: `scripts/check-live-camera-device-profile.ps1`, `scripts/build-hap.ps1`, 
 4. Run classification with two labeled frames. Reuse the bundled model if it really loads and passes; only then start a licensed API24 conversion spike.
 5. Update evidence and commit `fix(image-classification): enable verified camera and api24 model`.
 
-## 3. PoseNet
+## Task 3: PoseNet
 
 Files: `PoseService.ets`, `ImageClassificationRuntimeFactory.ets`, focused tests/assets, `docs/repair-status.md`.
 
@@ -31,7 +31,7 @@ Files: `PoseService.ets`, `ImageClassificationRuntimeFactory.ets`, focused tests
 3. Verify two poses and normalized keypoint tolerance on simulator; verify CoreVision/arm64 on device when required.
 4. Commit `fix(posenet): enable real pose inference`.
 
-## 4. Portrait Segmentation
+## Task 4: Portrait Segmentation
 
 Files: `SegmentationService.ets`, its factory wiring, `FeatureRuntimePage.ets`, save readiness helper/tests, fixtures, status.
 
@@ -40,7 +40,7 @@ Files: `SegmentationService.ets`, its factory wiring, `FeatureRuntimePage.ets`, 
 3. Verify still/live foreground and saved Gallery image.
 4. Commit `fix(portrait-segmentation): enable real segmentation and gated save`.
 
-## 5. Gesture Recognition
+## Task 5: Gesture Recognition
 
 Files: existing gesture service/native bridge and tests, labeled fixtures, status.
 
@@ -49,7 +49,7 @@ Files: existing gesture service/native bridge and tests, labeled fixtures, statu
 3. Verify still and continuous live results change with gestures.
 4. Commit `fix(gesture-recognition): verify still and live inference`.
 
-## 6. Text Extraction
+## Task 6: Text Extraction
 
 Files: `TextRecognitionService.ets`, factory wiring, OCR models/decoder only if required, fixtures, status.
 
@@ -58,7 +58,7 @@ Files: `TextRecognitionService.ets`, factory wiring, OCR models/decoder only if 
 3. Verify photo and camera text; never accept empty output as success.
 4. Commit `fix(text-extraction): enable real ocr`.
 
-## 7. Text Translation
+## Task 7: Text Translation
 
 Files: `MindSporeLiteTranslationRunner.ets`, runtime factory/page status handling, translation tests, status.
 
@@ -68,7 +68,7 @@ Files: `MindSporeLiteTranslationRunner.ets`, runtime factory/page status handlin
 4. Verify typed and OCR-sourced sentences while the UI remains responsive.
 5. Commit `fix(text-translation): move real translation off the ui path`.
 
-## 8. Object Detection (Photo)
+## Task 8: Object Detection (Photo)
 
 Files: model acquisition/conversion scripts, `ObjectDetectionService.ets`, cache contract tests, fixtures, status.
 
@@ -77,7 +77,7 @@ Files: model acquisition/conversion scripts, `ObjectDetectionService.ets`, cache
 3. Verify class, confidence, and box IoU; reject an incompatible override without replacing a valid cache.
 4. Commit `fix(object-detection-photo): enable api24 still detection`.
 
-## 9. Object Detection (Real-time)
+## Task 9: Object Detection (Real-time)
 
 Files: live loop/page overlay tests and status; reuse the verified photo detector.
 
@@ -86,7 +86,7 @@ Files: live loop/page overlay tests and status; reuse the verified photo detecto
 3. Verify changing frame hashes and matching overlays over a continuous run.
 4. Commit `fix(object-detection-realtime): enable verified live detection`.
 
-## 10. Style Transfer
+## Task 10: Style Transfer
 
 Files: model acquisition/conversion scripts, `StyleTransferService.ets`, result/save tests, fixtures, status.
 
@@ -95,7 +95,7 @@ Files: model acquisition/conversion scripts, `StyleTransferService.ets`, result/
 3. Verify two styles, result dimensions, recovery, and one Gallery asset per save action.
 4. Commit `fix(style-transfer): enable api24 models and gated save`.
 
-## 11. Custom Model
+## Task 11: Custom Model
 
 Files: `ModelFileCacheService.ets`, `CustomModelService.ets`, picker/cache tests, compatible/incompatible fixtures, status.
 
@@ -104,7 +104,7 @@ Files: `ModelFileCacheService.ets`, `CustomModelService.ets`, picker/cache tests
 3. Verify DocumentPicker with a controlled model and two different images.
 4. Commit `fix(custom-model): enforce model input and output contracts`.
 
-## 12. Final gate
+## Task 12: Final gate
 
 - Run `scripts/build-ai-runtime-acceptance.ps1` and `scripts/build-hap.ps1`.
 - Install the produced HAP, exercise all ten routes, inspect logs, saved assets, and live-frame evidence.
