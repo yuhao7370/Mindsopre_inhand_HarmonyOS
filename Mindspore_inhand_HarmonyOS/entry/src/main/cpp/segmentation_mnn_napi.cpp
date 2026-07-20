@@ -10,6 +10,7 @@
 
 namespace {
 constexpr size_t kInputElementCount = 1U * 256U * 256U * 3U;
+constexpr size_t kInputByteCount = kInputElementCount * sizeof(float);
 constexpr const char* kUnknownNativeError = "Unknown native segmentation error.";
 SegmentationMnnSession g_session;
 
@@ -125,6 +126,15 @@ napi_value ErrorValue(napi_env env, const char* message)
     return error;
 }
 
+bool RejectDeferredNoThrow(napi_env env, napi_deferred deferred, const char* message) noexcept
+{
+    napi_value text = nullptr;
+    napi_value error = nullptr;
+    return napi_create_string_utf8(env, message, NAPI_AUTO_LENGTH, &text) == napi_ok &&
+        napi_create_error(env, nullptr, text, &error) == napi_ok &&
+        napi_reject_deferred(env, deferred, error) == napi_ok;
+}
+
 void CompletePredict(napi_env env, napi_status status, void* raw) noexcept
 {
     std::unique_ptr<PredictWork> work(static_cast<PredictWork*>(raw));
@@ -153,8 +163,14 @@ void CompletePredict(napi_env env, napi_status status, void* raw) noexcept
             std::memcpy(destination, work->output.data(), byteLength);
             Check(env, napi_resolve_deferred(env, work->deferred, arrayBuffer), "resolve prediction");
         }
+    } catch (const std::exception& error) {
+        if (!RejectDeferredNoThrow(env, work->deferred, error.what())) {
+            Throw(env, kUnknownNativeError);
+        }
     } catch (...) {
-        Throw(env, kUnknownNativeError);
+        if (!RejectDeferredNoThrow(env, work->deferred, kUnknownNativeError)) {
+            Throw(env, kUnknownNativeError);
+        }
     }
     if (work->work != nullptr) {
         napi_delete_async_work(env, work->work);
@@ -173,13 +189,23 @@ napi_value PredictImpl(napi_env env, napi_callback_info callbackInfo)
     napi_typedarray_type type = napi_int8_array;
     size_t length = 0;
     void* data = nullptr;
+    napi_value arrayBuffer = nullptr;
+    size_t byteOffset = 0;
     const napi_status argumentStatus = napi_get_cb_info(env, callbackInfo, &argc, &argument, nullptr, nullptr);
     const napi_status typedArrayStatus = argumentStatus == napi_ok && argc == 1 ?
         napi_is_typedarray(env, argument, &isTypedArray) : napi_invalid_arg;
     const napi_status infoStatus = typedArrayStatus == napi_ok && isTypedArray ?
-        napi_get_typedarray_info(env, argument, &type, &length, &data, nullptr, nullptr) : napi_invalid_arg;
+        napi_get_typedarray_info(env, argument, &type, &length, &data, &arrayBuffer, &byteOffset) : napi_invalid_arg;
+    void* backingData = nullptr;
+    size_t backingByteLength = 0;
+    const napi_status backingStatus = infoStatus == napi_ok ?
+        napi_get_arraybuffer_info(env, arrayBuffer, &backingData, &backingByteLength) : napi_invalid_arg;
+    // ponytail: API24 reports Float32Array length in bytes; standard N-API reports elements.
+    const bool supportedLength = length == kInputElementCount || length == kInputByteCount;
+    const bool readableBacking = backingStatus == napi_ok && data != nullptr && backingData != nullptr &&
+        byteOffset <= backingByteLength && backingByteLength - byteOffset >= kInputByteCount;
     if (argumentStatus != napi_ok || argc != 1 || typedArrayStatus != napi_ok || !isTypedArray ||
-        infoStatus != napi_ok || type != napi_float32_array || length != kInputElementCount * sizeof(float)) {
+        infoStatus != napi_ok || type != napi_float32_array || !supportedLength || !readableBacking) {
         const std::string message = "predict expects exactly 196608 float32 values; argc=" +
             std::to_string(argc) + " typed=" + std::to_string(isTypedArray ? 1 : 0) + " type=" +
             std::to_string(static_cast<int>(type)) + " length=" + std::to_string(length) + '.';
@@ -192,9 +218,23 @@ napi_value PredictImpl(napi_env env, napi_callback_info callbackInfo)
     const float* values = static_cast<const float*>(data);
     work->input.assign(values, values + kInputElementCount);
     napi_value resourceName = String(env, "segmentation_mnn_predict");
-    Check(env, napi_create_async_work(env, nullptr, resourceName, ExecutePredict, CompletePredict, work.get(),
-                                      &work->work), "create prediction work");
-    Check(env, napi_queue_async_work(env, work->work), "queue prediction work");
+    const napi_status createStatus = napi_create_async_work(
+        env, nullptr, resourceName, ExecutePredict, CompletePredict, work.get(), &work->work);
+    if (createStatus != napi_ok) {
+        if (!RejectDeferredNoThrow(env, deferred, "Unable to create native segmentation work.")) {
+            Throw(env, kUnknownNativeError);
+        }
+        return promise;
+    }
+    const napi_status queueStatus = napi_queue_async_work(env, work->work);
+    if (queueStatus != napi_ok) {
+        napi_delete_async_work(env, work->work);
+        work->work = nullptr;
+        if (!RejectDeferredNoThrow(env, deferred, "Unable to queue native segmentation work.")) {
+            Throw(env, kUnknownNativeError);
+        }
+        return promise;
+    }
     work.release();
     return promise;
 }

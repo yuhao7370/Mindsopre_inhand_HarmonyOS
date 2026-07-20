@@ -10,12 +10,14 @@ import {
   HarmonyRawfileContentReader
 } from '../../../main/ets/services/ai/ImageClassificationRuntimeFactory';
 import { SegmentationResult } from '../../../main/ets/services/ai/SegmentationService';
+import segmentationMnn from 'libsegmentation_mnn.so';
 
 const personFixturePath: string = 'posenet/skeleton_image.JPG';
 const noPersonFixturePath: string = 'portrait/portrait1.jpg';
 const foregroundChannelThreshold: number = 245;
 const foregroundAlphaThreshold: number = 127;
 const minimumForegroundIou: number = 0.72;
+const segmentationInputFloatCount: number = 196608;
 
 async function cacheFixture(
   manager: resourceManager.ResourceManager,
@@ -88,6 +90,47 @@ function foregroundIou(expectedRgba: Uint8Array, actualForegroundRgba: Uint8Arra
 
 export default function segmentationNativeTest() {
   describe('SegmentationNativeTest', () => {
+    it('acceptsProductionFloatInputAndRejectsMalformedTypedArrays', 0, async () => {
+      const applicationContext = abilityDelegatorRegistry.getAbilityDelegator()
+        .getAppContext()
+        .getApplicationContext();
+      const mainManager = applicationContext.createModuleContext('entry').resourceManager;
+      const modelBytes = await mainManager.getRawFileContent('model/selfie_segmentation.mnn');
+      segmentationMnn.loadModel(modelBytes);
+      try {
+        const backing = new ArrayBuffer(segmentationInputFloatCount * 4 + 8);
+        const valid = new Float32Array(backing, 4, segmentationInputFloatCount);
+        const output = await segmentationMnn.predict(valid);
+        expect(output.byteLength).assertEqual(256 * 256 * 4);
+
+        let shortRejected: boolean = false;
+        try {
+          await segmentationMnn.predict(new Float32Array(segmentationInputFloatCount - 1));
+        } catch (_) {
+          shortRejected = true;
+        }
+        expect(shortRejected).assertTrue();
+
+        let longRejected: boolean = false;
+        try {
+          await segmentationMnn.predict(new Float32Array(segmentationInputFloatCount + 1));
+        } catch (_) {
+          longRejected = true;
+        }
+        expect(longRejected).assertTrue();
+
+        let wrongTypeRejected: boolean = false;
+        try {
+          await segmentationMnn.predict(new Uint8Array(segmentationInputFloatCount * 4) as ESObject);
+        } catch (_) {
+          wrongTypeRejected = true;
+        }
+        expect(wrongTypeRejected).assertTrue();
+      } finally {
+        segmentationMnn.release();
+      }
+    });
+
     it('producesARealForegroundAtDocumentedIouForTheLabeledPortrait', 0, async () => {
       const applicationContext = abilityDelegatorRegistry.getAbilityDelegator()
         .getAppContext()

@@ -60,6 +60,7 @@ import {
   shouldMirrorLiveGestureCameraOverlay,
   shouldShowCopyTextAction,
   shouldShowCompositeSegmentationSaveAction,
+  compositeSegmentationSaveReady,
   shouldShowLiveClassificationCameraOverlay,
   liveClassificationEmptyPromptKey,
   shouldShowLiveGestureCameraOverlay,
@@ -1905,7 +1906,8 @@ struct FeatureRuntimePage {
   }
 
   private async saveResultComponentImageAsync(componentId: string): Promise<void> {
-    if (this.resultImageSaveInFlight || this.segmentationForegroundPixelMap === undefined) {
+    if (!compositeSegmentationSaveReady(this.workflowRunning,
+      this.segmentationForegroundPixelMap !== undefined, this.resultImageSaveInFlight)) {
       return;
     }
     this.resultImageSaveInFlight = true;
@@ -2918,7 +2920,8 @@ struct FeatureRuntimePage {
         buttonType: ButtonType.Capsule
       })
         .height(36)
-        .enabled(this.segmentationForegroundPixelMap !== undefined && !this.resultImageSaveInFlight)
+        .enabled(compositeSegmentationSaveReady(this.workflowRunning,
+          this.segmentationForegroundPixelMap !== undefined, this.resultImageSaveInFlight))
         .onClick((_event: ClickEvent, result: SaveButtonOnClickResult) => {
           if (result === SaveButtonOnClickResult.SUCCESS) {
             this.saveResultComponentImage(componentId);
@@ -3097,6 +3100,8 @@ struct FeatureRuntimePage {
       })
         .width(40)
         .height(40)
+        .enabled(compositeSegmentationSaveReady(this.workflowRunning,
+          this.segmentationForegroundPixelMap !== undefined, this.resultImageSaveInFlight))
         .onClick((_event: ClickEvent, result: SaveButtonOnClickResult) => {
           if (result === SaveButtonOnClickResult.SUCCESS) {
             this.saveResultComponentImage(segmentationBackgroundReplacementComponentId);

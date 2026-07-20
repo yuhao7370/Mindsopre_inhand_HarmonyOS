@@ -707,6 +707,14 @@ export function shouldShowCompositeSegmentationSaveAction(
   return workflow?.routeName === AppRoute.PORTRAIT_SEGMENTATION.name;
 }
 
+export function compositeSegmentationSaveReady(
+  workflowRunning: boolean,
+  foregroundReady: boolean,
+  saveInFlight: boolean
+): boolean {
+  return !workflowRunning && foregroundReady && !saveInFlight;
+}
+
 export function shouldShowLiveGestureCameraOverlay(workflow: FeatureWorkflow | undefined): boolean {
   return workflow?.aiMethod === 'detectGesture' && workflow.liveMode;
 }

@@ -27,4 +27,6 @@ Assert-SourcePattern $page `
   'finally\s*\{\s*this\.resultImageSaveInFlight\s*=\s*false;?\s*\}' `
   'Result-image save must clear single-flight state in finally.'
 
-Write-Output 'Segmentation save requires a current ready PixelMap and is single-flight.'
+& (Join-Path $PSScriptRoot 'check-portrait-composite-save-readiness.ps1')
+
+Write-Output 'Segmentation saves require current ready PixelMaps and are single-flight.'

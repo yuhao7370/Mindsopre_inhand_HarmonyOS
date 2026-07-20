@@ -402,6 +402,7 @@ import {
   shouldMirrorLiveGestureCameraOverlay,
   shouldShowCopyTextAction,
   shouldShowCompositeSegmentationSaveAction,
+  compositeSegmentationSaveReady,
   shouldShowResultSaveAction,
   shouldShowStandaloneSegmentationForegroundPreview,
   shouldShowStandaloneSegmentationOverlayPreview,
@@ -5205,6 +5206,23 @@ export default function localUnitTest() {
 
       expect(marker.x.toFixed(1)).assertEqual('12.5');
       expect(marker.y.toFixed(1)).assertEqual('87.5');
+    });
+
+    it('gatesPortraitCompositeSaveForCurrentReadyIdleResult', 0, () => {
+      expect(compositeSegmentationSaveReady(false, true, false)).assertTrue();
+      expect(compositeSegmentationSaveReady(true, true, false)).assertFalse();
+      expect(compositeSegmentationSaveReady(false, false, false)).assertFalse();
+      expect(compositeSegmentationSaveReady(false, true, true)).assertFalse();
+    });
+
+    it('rejectsPortraitCompositeDoubleClickAfterFirstSaveOwnsTheGate', 0, () => {
+      let saveInFlight: boolean = false;
+      const firstClickAccepted = compositeSegmentationSaveReady(false, true, saveInFlight);
+      if (firstClickAccepted) {
+        saveInFlight = true;
+      }
+      expect(firstClickAccepted).assertTrue();
+      expect(compositeSegmentationSaveReady(false, true, saveInFlight)).assertFalse();
     });
 
     it('filtersInvalidPoseOverlayPoints', 0, () => {
