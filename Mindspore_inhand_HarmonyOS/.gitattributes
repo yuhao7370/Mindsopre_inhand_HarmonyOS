@@ -12,3 +12,4 @@ entry/src/main/resources/rawfile/model/resnet18-place365.ms -text -diff
 entry/src/main/resources/rawfile/model/ssd.ms -text -diff
 entry/src/main/resources/rawfile/model/style_predict_quant.ms -text -diff
 entry/src/main/resources/rawfile/model/style_transfer_quant.ms -text -diff
+entry/src/main/resources/rawfile/model/selfie_segmentation.mnn -text -diff

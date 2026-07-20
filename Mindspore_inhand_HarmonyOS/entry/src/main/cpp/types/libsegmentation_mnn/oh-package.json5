@@ -1,0 +1,6 @@
+{
+  "name": "libsegmentation_mnn.so",
+  "version": "1.0.0",
+  "description": "Typed boundary for the dedicated local portrait segmentation MNN runtime.",
+  "types": "./index.d.ts"
+}

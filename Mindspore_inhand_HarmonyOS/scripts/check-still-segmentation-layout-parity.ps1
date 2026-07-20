@@ -153,7 +153,9 @@ foreach ($line in @(
 )) { Assert-CodeLine $builder $line "dedicated builder is missing executable line: $line." }
 Assert-CodeLineCount $builder '.layoutWeight(4)' 2 'source and foreground previews must have equal Android weight.'
 Assert-CodeLineCount $builder "Image(`$r('app.media.icon_default'))" 2 'both empty previews must use icon_default.'
-Assert-CodeLineCount $builder '.enabled(!this.workflowRunning)' 4 'all four bottom actions must be disabled while running.'
+Assert-CodeLineCount $builder '.enabled(!this.workflowRunning)' 3 'the three non-save bottom actions must be disabled while running.'
+Assert-Contains $builder ".enabled(!this.workflowRunning && this.segmentationForegroundPixelMap !== undefined &&`n                  !this.resultImageSaveInFlight)" `
+  'save must be disabled while running, before a foreground PixelMap is ready, and during another save.'
 
 $photo = Get-CodeLineIndex $builder ".onClick(() => this.prepareInput('photo'))"
 $camera = Get-CodeLineIndex $builder ".onClick(() => this.prepareInput('camera'))" ($photo + 1)
@@ -219,8 +221,10 @@ Assert-Contains $segmentation 'this.showStillSegmentationFailureToastIfNeeded(fa
 
 $saveWrapper = Get-TextSection $page '  private saveStillSegmentationResultImage(): void {' `
   "`n`n  private async saveResultComponentImageAsync" 'still-segmentation save wrapper'
-Assert-CodeLineCount $saveWrapper 'if (this.workflowRunning) {' 2 `
-  'save entry and async wrapper must both reject running-state calls.'
+Assert-CodeLineCount $saveWrapper 'if (this.workflowRunning) {' 1 `
+  'save entry must reject running-state calls.'
+Assert-CodeLine $saveWrapper 'if (this.workflowRunning || this.segmentationForegroundPixelMap === undefined) {' `
+  'async save wrapper must reject running-state calls and missing current foreground output.'
 Assert-CodeLine $saveWrapper 'await this.saveResultPixelMapAsync(this.segmentationForegroundPixelMap);' `
   'save wrapper must save the currently owned foreground.'
 Assert-CodeLine $saveWrapper 'this.showRuntimeToast(this.statusKey);' `

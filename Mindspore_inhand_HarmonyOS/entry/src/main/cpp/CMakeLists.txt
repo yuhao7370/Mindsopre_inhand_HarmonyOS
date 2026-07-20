@@ -19,3 +19,14 @@ set_target_properties(gesture_mnn PROPERTIES
   BUILD_WITH_INSTALL_RPATH TRUE
   INSTALL_RPATH "\$ORIGIN"
 )
+
+add_library(segmentation_mnn SHARED
+  segmentation_mnn_napi.cpp
+  segmentation_mnn_session.cpp
+)
+target_include_directories(segmentation_mnn PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include")
+target_link_libraries(segmentation_mnn PRIVATE MNN libace_napi.z.so)
+set_target_properties(segmentation_mnn PROPERTIES
+  BUILD_WITH_INSTALL_RPATH TRUE
+  INSTALL_RPATH "\$ORIGIN"
+)

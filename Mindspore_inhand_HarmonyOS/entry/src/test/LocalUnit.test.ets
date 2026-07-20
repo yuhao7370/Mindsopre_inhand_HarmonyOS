@@ -3681,7 +3681,7 @@ export default function localUnitTest() {
 
       expect(shouldShowResultSaveAction(styleTransfer, false)).assertTrue();
       expect(shouldShowResultSaveAction(styleTransfer, true)).assertTrue();
-      expect(shouldShowResultSaveAction(segmentationStill, false)).assertTrue();
+      expect(shouldShowResultSaveAction(segmentationStill, false)).assertFalse();
       expect(shouldShowResultSaveAction(segmentationStill, true)).assertTrue();
       expect(shouldShowResultSaveAction(portraitSegmentation, false)).assertFalse();
       expect(shouldShowResultSaveAction(portraitSegmentation, true)).assertFalse();

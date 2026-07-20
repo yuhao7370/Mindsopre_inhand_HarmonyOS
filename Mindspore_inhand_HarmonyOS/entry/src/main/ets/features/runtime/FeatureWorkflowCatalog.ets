@@ -683,10 +683,10 @@ export function shouldShowCopyTextAction(aiMethod: string): boolean {
 
 export function shouldShowResultSaveAction(
   workflow: FeatureWorkflow | undefined,
-  _resultImageReady: boolean
+  resultImageReady: boolean
 ): boolean {
   return workflow?.routeName === AppRoute.STYLE_TRANSFER.name ||
-    workflow?.routeName === AppRoute.SEGMENTATION_STILL.name;
+    (workflow?.routeName === AppRoute.SEGMENTATION_STILL.name && resultImageReady);
 }
 
 export function shouldShowStandaloneSegmentationForegroundPreview(

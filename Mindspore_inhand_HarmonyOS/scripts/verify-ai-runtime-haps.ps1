@@ -97,6 +97,8 @@ $resourceEntries = @(
   'resources/rawfile/model/ssd.ms',
   'resources/rawfile/model/style_predict_quant.ms',
   'resources/rawfile/model/style_transfer_quant.ms',
+  'resources/rawfile/model/selfie_segmentation.mnn',
+  'resources/rawfile/model/selfie_segmentation.NOTICE.md',
   'resources/rawfile/model/LICENSE-Apache-2.0.txt',
   'resources/rawfile/model/NOTICE.md',
   'resources/rawfile/models/gesture/GestureDetector.ms',
@@ -115,6 +117,7 @@ $nativeEntries = @(
     "libs/$abi/libgesture_mnn.so"
     "libs/$abi/libMNN.so"
     "libs/$abi/libtranslation_archive.so"
+    "libs/$abi/libsegmentation_mnn.so"
   }
 )
 $mainEntries = @('module.json') + $resourceEntries + $nativeEntries
@@ -158,7 +161,7 @@ if ($OhosTestHapPath) {
   if ($copiedModels.Count -ne 0) {
     throw "ohosTest HAP contains copied models: $($copiedModels -join ', ')"
   }
-  $aiLibraries = @('libgesture_mnn.so', 'libMNN.so', 'libtranslation_archive.so')
+  $aiLibraries = @('libgesture_mnn.so', 'libMNN.so', 'libtranslation_archive.so', 'libsegmentation_mnn.so')
   $copiedLibraries = @($testHapEntries | Where-Object { $aiLibraries -contains ($_ -split '/')[-1] })
   if ($copiedLibraries.Count -ne 0) {
     throw "ohosTest HAP contains copied AI libraries: $($copiedLibraries -join ', ')"

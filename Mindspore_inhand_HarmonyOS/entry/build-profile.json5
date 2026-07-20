@@ -41,9 +41,11 @@
           "resOptions": {
             "ignoreResourcePattern": [
               "*.ms",
+              "*.mnn",
               "GestureDetector.ms",
               "manifest.json",
               "NOTICE.md",
+              "*.NOTICE.md",
               "LICENSE-Apache-2.0.txt",
               "translation-models.tar.xz",
               "tokenizer.model",
@@ -58,7 +60,8 @@
               "excludes": [
                 "**/libgesture_mnn.so",
                 "**/libMNN.so",
-                "**/libtranslation_archive.so"
+                "**/libtranslation_archive.so",
+                "**/libsegmentation_mnn.so"
               ]
             }
           }

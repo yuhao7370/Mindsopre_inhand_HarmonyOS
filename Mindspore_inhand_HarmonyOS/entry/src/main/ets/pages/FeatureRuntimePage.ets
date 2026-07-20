@@ -286,6 +286,7 @@ struct FeatureRuntimePage {
   @State statusKey: AppStringKey = 'feature_runtime_status_idle';
   @State runActionKey: AppStringKey = 'feature_runtime_run';
   @State workflowRunning: boolean = false;
+  @State resultImageSaveInFlight: boolean = false;
   @State longTextInput: boolean = false;
   @State routeName: string = '';
   @State aiMethod: string = '';
@@ -1896,7 +1897,7 @@ struct FeatureRuntimePage {
   }
 
   private async saveStillSegmentationResultImageAsync(): Promise<void> {
-    if (this.workflowRunning) {
+    if (this.workflowRunning || this.segmentationForegroundPixelMap === undefined) {
       return;
     }
     await this.saveResultPixelMapAsync(this.segmentationForegroundPixelMap);
@@ -1904,13 +1905,33 @@ struct FeatureRuntimePage {
   }
 
   private async saveResultComponentImageAsync(componentId: string): Promise<void> {
-    const pixelMap = await componentSnapshot.get(componentId, { waitUntilRenderFinished: true });
-    await withCallerOwnedPixelMap(pixelMap, async (snapshot: image.PixelMap | undefined): Promise<void> => {
-      await this.saveResultPixelMapAsync(snapshot);
-    });
+    if (this.resultImageSaveInFlight || this.segmentationForegroundPixelMap === undefined) {
+      return;
+    }
+    this.resultImageSaveInFlight = true;
+    try {
+      const pixelMap = await componentSnapshot.get(componentId, { waitUntilRenderFinished: true });
+      await withCallerOwnedPixelMap(pixelMap, async (snapshot: image.PixelMap | undefined): Promise<void> => {
+        await this.performResultPixelMapSave(snapshot);
+      });
+    } finally {
+      this.resultImageSaveInFlight = false;
+    }
   }
 
   private async saveResultPixelMapAsync(pixelMap: image.PixelMap | undefined): Promise<void> {
+    if (this.resultImageSaveInFlight) {
+      return;
+    }
+    this.resultImageSaveInFlight = true;
+    try {
+      await this.performResultPixelMapSave(pixelMap);
+    } finally {
+      this.resultImageSaveInFlight = false;
+    }
+  }
+
+  private async performResultPixelMapSave(pixelMap: image.PixelMap | undefined): Promise<void> {
     const context = this.uiAbilityContext();
     if (!context) {
       this.statusKey = 'feature_runtime_save_image_failed';
@@ -2862,6 +2883,7 @@ struct FeatureRuntimePage {
         buttonType: ButtonType.Capsule
       })
         .height(36)
+        .enabled(pixelMap !== undefined && !this.resultImageSaveInFlight)
         .onClick((_event: ClickEvent, result: SaveButtonOnClickResult) => {
           if (result === SaveButtonOnClickResult.SUCCESS) {
             this.saveResultImage(pixelMap);
@@ -2896,6 +2918,7 @@ struct FeatureRuntimePage {
         buttonType: ButtonType.Capsule
       })
         .height(36)
+        .enabled(this.segmentationForegroundPixelMap !== undefined && !this.resultImageSaveInFlight)
         .onClick((_event: ClickEvent, result: SaveButtonOnClickResult) => {
           if (result === SaveButtonOnClickResult.SUCCESS) {
             this.saveResultComponentImage(componentId);
@@ -3663,7 +3686,8 @@ struct FeatureRuntimePage {
                 .fontSize(14)
                 .fontColor('#666666')
                 .backgroundColor('#F4F3F8')
-                .enabled(!this.workflowRunning)
+                .enabled(!this.workflowRunning && this.segmentationForegroundPixelMap !== undefined &&
+                  !this.resultImageSaveInFlight)
                 .onClick((_event: ClickEvent, result: SaveButtonOnClickResult) => {
                   if (this.workflowRunning) {
                     return;

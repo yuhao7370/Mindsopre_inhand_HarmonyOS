@@ -56,6 +56,8 @@ $env:PATH = (Join-Path $devEcoRoot 'jbr\bin') + ';' + $env:PATH
 & (Join-Path $PSScriptRoot 'check-runtime-header-actions.ps1')
 & (Join-Path $PSScriptRoot 'check-model-label-guards.ps1')
 & (Join-Path $PSScriptRoot 'check-core-model-assets.ps1')
+& (Join-Path $PSScriptRoot 'verify-segmentation-model.ps1')
+& (Join-Path $PSScriptRoot 'check-segmentation-save-readiness.ps1')
 & (Join-Path $PSScriptRoot 'test-core-model-assets-guard.ps1')
 & (Join-Path $PSScriptRoot 'test-native-abi-matrix.ps1')
 & (Join-Path $PSScriptRoot 'check-bottom-tab-icons.ps1')

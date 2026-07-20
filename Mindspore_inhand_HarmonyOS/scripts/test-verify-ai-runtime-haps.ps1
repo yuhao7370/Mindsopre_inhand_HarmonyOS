@@ -108,6 +108,8 @@ $mainEntries = @(
   'resources/rawfile/model/ssd.ms',
   'resources/rawfile/model/style_predict_quant.ms',
   'resources/rawfile/model/style_transfer_quant.ms',
+  'resources/rawfile/model/selfie_segmentation.mnn',
+  'resources/rawfile/model/selfie_segmentation.NOTICE.md',
   'resources/rawfile/model/LICENSE-Apache-2.0.txt',
   'resources/rawfile/model/NOTICE.md',
   'resources/rawfile/models/gesture/GestureDetector.ms',
@@ -122,7 +124,8 @@ $mainEntries = @(
   'resources/rawfile/models/translation/LICENSES.md',
   'libs/arm64-v8a/libgesture_mnn.so',
   'libs/arm64-v8a/libMNN.so',
-  'libs/arm64-v8a/libtranslation_archive.so'
+  'libs/arm64-v8a/libtranslation_archive.so',
+  'libs/arm64-v8a/libsegmentation_mnn.so'
 )
 $mainModule = @{
   app = @{ bundleName = 'com.yuhaofeng.mih' }

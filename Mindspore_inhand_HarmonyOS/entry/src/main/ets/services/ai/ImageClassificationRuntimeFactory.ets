@@ -60,7 +60,9 @@ import {
   TranslationRawFileDescriptor
 } from './MindSporeLiteTranslationRunner';
 import {
+  CoreVisionFallbackSegmentationRunner,
   HarmonySubjectSegmentationRunner,
+  LocalMnnSegmentationRunner,
   SegmentationAndroidScene,
   SegmentationRunner,
   SegmentationService
@@ -480,10 +482,15 @@ export function createHarmonySegmentationService(
   options: HarmonyImageClassificationRuntimeOptions,
   workflow?: FeatureWorkflow
 ): SegmentationService {
+  const androidScene = workflow === undefined ? 'all' : segmentationAndroidSceneForWorkflow(workflow);
   return new SegmentationService({
-    runner: options.segmentationRunner ?? new HarmonySubjectSegmentationRunner({
-      androidScene: workflow === undefined ? 'all' : segmentationAndroidSceneForWorkflow(workflow)
-    })
+    runner: options.segmentationRunner ?? new CoreVisionFallbackSegmentationRunner(
+      new HarmonySubjectSegmentationRunner({ androidScene: androidScene }),
+      new LocalMnnSegmentationRunner({
+        resourceManager: options.resourceManager,
+        androidScene: androidScene
+      })
+    )
   });
 }
 
