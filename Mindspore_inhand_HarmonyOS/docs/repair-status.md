@@ -1,12 +1,12 @@
 # Runtime Feature Repair Status
 
-Updated: 2026-07-20
+Updated: 2026-07-21
 
 `pending -> coding -> auto_pass -> emulator_pass -> device_pass -> done`; failures use `blocked` with evidence. `done` requires real-input effect verification and a feature commit.
 
 | Feature | Phase | Commit | Depends on | Model source / license / SHA-256 | API24 + tensor contract | Automatic evidence | Emulator evidence | Device evidence | Last error / blocker |
 |---|---|---|---|---|---|---|---|---|---|
-| Image Classification | done | this commit | Camera | Official MindSpore quick-start `mobilenetv2.ms` MSL2; private local learning, non-commercial research/education; `5A7CCD53BF92D8B294A703A1302D4230A311B2D19A8D212EEDD65FF6838CFA84` | float32 NHWC `[1,224,224,3]`; float32 `[1,1001]`, discard background index 0 and map `scores[i+1]` to label `i` | camera device/profile guard + asset/hash/HAP guards pass | x86_64 emulator: front `lcam002` and back `lcam001` continuously delivered frames | x86_64 emulator production runner: Grace Hopper `military_uniform` rank 4; Yellow Labrador `Labrador_retriever` rank 1 | resolved: legacy MSL1 model rejected by API24 `GetInputs`; pinned MSL2 contract now verified |
+| Image Classification | emulator_pass | `3f7f905` + follow-up | Camera | Official MindSpore quick-start `mobilenetv2.ms` MSL2; private local learning, non-commercial research/education; `5A7CCD53BF92D8B294A703A1302D4230A311B2D19A8D212EEDD65FF6838CFA84` | float32 NHWC `[1,224,224,3]`; float32 `[1,1001]`, discard background index 0 and map `scores[i+1]` to label `i` | camera device/profile guard + asset/hash/HAP guards pass | API24 x86_64 emulator: installed HAP, live Image Classification route showed a current preview and non-empty result (`百叶窗`); CameraService logged `lcam001`/`OnFrame`/`ReceiveBuffer status:0`; fixtures: `military_uniform` rank 4 and `Labrador_retriever` rank 1 | Not run: no arm64 physical-device evidence is claimed or required for emulator acceptance | resolved for emulator: legacy MSL1 model rejected by API24 `GetInputs`; pinned MSL2 contract now verified |
 | PoseNet | pending | — | Camera | CoreVision or licensed local model | pending | baseline static checks pass | CoreVision module missing | pending | `@hms:ai.vision.skeletonDetection` unavailable |
 | Portrait Segmentation | pending | — | Camera | CoreVision or licensed local model | pending | baseline static checks pass | not proven | pending | CoreVision availability unproven |
 | Gesture Recognition | pending | — | Camera | Existing bundled MNN model | manifest present; runtime recheck pending | native contract exists | still result inconclusive | pending | labeled positive fixture needed |
