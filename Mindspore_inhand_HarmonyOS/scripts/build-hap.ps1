@@ -64,6 +64,7 @@ $env:PATH = (Join-Path $devEcoRoot 'jbr\bin') + ';' + $env:PATH
 & (Join-Path $PSScriptRoot 'check-college-chevron-icon.ps1')
 & (Join-Path $PSScriptRoot 'check-live-camera-fixed-routes.ps1')
 & (Join-Path $PSScriptRoot 'check-live-camera-switch-icon.ps1')
+& (Join-Path $PSScriptRoot 'check-live-camera-device-profile.ps1')
 & (Join-Path $PSScriptRoot 'check-optional-skeleton-module.ps1')
 & (Join-Path $PSScriptRoot 'check-toolbar-back-icon.ps1')
 & (Join-Path $PSScriptRoot 'check-dance-back-icon.ps1')

@@ -333,12 +333,22 @@ export class HarmonyLiveCameraPreviewDriver implements LiveCameraPreviewDriver {
     await this.stop();
     try {
       const manager = camera.getCameraManager(this.context);
-      this.cameraInput = manager.createCameraInput(
-        position === 'front' ? camera.CameraPosition.CAMERA_POSITION_FRONT : camera.CameraPosition.CAMERA_POSITION_BACK,
-        camera.CameraType.CAMERA_TYPE_DEFAULT
+      const requestedPosition = position === 'front' ?
+        camera.CameraPosition.CAMERA_POSITION_FRONT : camera.CameraPosition.CAMERA_POSITION_BACK;
+      const device = manager.getSupportedCameras().find((candidate: camera.CameraDevice) =>
+        candidate.cameraPosition === requestedPosition
       );
+      if (device === undefined) {
+        throw new Error('requested live camera is unavailable');
+      }
+      const outputCapability = manager.getSupportedOutputCapability(device, camera.SceneMode.NORMAL_PHOTO);
+      const previewProfile = outputCapability.previewProfiles[0];
+      if (previewProfile === undefined) {
+        throw new Error('requested live camera has no preview profile');
+      }
+      this.cameraInput = manager.createCameraInput(device);
       await this.cameraInput.open();
-      this.previewOutput = manager.createPreviewOutput(surfaceId);
+      this.previewOutput = manager.createPreviewOutput(previewProfile, surfaceId);
       this.session = manager.createSession<camera.Session>(camera.SceneMode.NORMAL_PHOTO);
       this.session.beginConfig();
       this.session.addInput(this.cameraInput);

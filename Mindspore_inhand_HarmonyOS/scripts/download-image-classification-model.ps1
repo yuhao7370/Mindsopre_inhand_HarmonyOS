@@ -5,11 +5,11 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
-$modelUrl = 'https://download.mindspore.cn/model_zoo/official/lite/mobilenetv2_imagenet/mobilenetv2.ms'
+$modelUrl = 'https://download.mindspore.cn/model_zoo/official/lite/quick_start/mobilenetv2.ms'
 $modelPath = Join-Path $repoRoot 'entry/src/main/resources/rawfile/model/mobilenetv2.ms'
 $modelDir = Split-Path -Parent $modelPath
-$expectedModelSize = 14014408
-$expectedModelSha256 = 'F88C8C410D1148F5614994038680C245E1788C80E578D093E536572D08ECC514'
+$expectedModelSize = 13988384
+$expectedModelSha256 = '5A7CCD53BF92D8B294A703A1302D4230A311B2D19A8D212EEDD65FF6838CFA84'
 $tmpPath = Join-Path $modelDir "mobilenetv2.ms.download.$([System.Guid]::NewGuid().ToString('N'))"
 $backupPath = "$tmpPath.backup"
 

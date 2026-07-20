@@ -9,7 +9,7 @@ $projectRoot = Split-Path -Parent $PSScriptRoot
 $modelRelativeRoot = 'entry/src/main/resources/rawfile/model'
 $modelRoot = Join-Path $projectRoot $modelRelativeRoot
 $contracts = @(
-  [pscustomobject]@{ Name = 'mobilenetv2.ms'; Bytes = 14014408; Sha256 = 'F88C8C410D1148F5614994038680C245E1788C80E578D093E536572D08ECC514'; Verifier = 'verify-image-classification-model.ps1'; Downloader = 'download-image-classification-model.ps1' },
+  [pscustomobject]@{ Name = 'mobilenetv2.ms'; Bytes = 13988384; Sha256 = '5A7CCD53BF92D8B294A703A1302D4230A311B2D19A8D212EEDD65FF6838CFA84'; Verifier = 'verify-image-classification-model.ps1'; Downloader = 'download-image-classification-model.ps1' },
   [pscustomobject]@{ Name = 'resnet18-place365.ms'; Bytes = 45448504; Sha256 = '286F2C85249FD51F6C437986E1C2C1F4EC10358A9B0EB97C886F2DC1AC63ECD9'; Verifier = 'verify-scene-detection-model.ps1'; Downloader = 'download-scene-detection-model.ps1' },
   [pscustomobject]@{ Name = 'ssd.ms'; Bytes = 17515528; Sha256 = '0AAB891E297109836120F4F0A43C1547F813D4B530948F2926DE171FFF91B553'; Verifier = 'verify-object-detection-model.ps1'; Downloader = 'download-object-detection-model.ps1' },
   [pscustomobject]@{ Name = 'style_predict_quant.ms'; Bytes = 3022576; Sha256 = '6737696ACC9B2F3ACF7460FEE986614B0107DF347EC9947D9D346D085AFCFBCC'; Verifier = 'verify-style-transfer-models.ps1'; Downloader = 'download-style-transfer-models.ps1' },
@@ -139,7 +139,7 @@ foreach ($marker in @(
   'af40795ebb2a295d87cd6dcd1383782a78776cda',
   'Copyright 2025 Huawei Device Co., Ltd.',
   'no additional NOTICE',
-  'https://download.mindspore.cn/model_zoo/official/lite/mobilenetv2_imagenet/mobilenetv2.ms',
+  'https://download.mindspore.cn/model_zoo/official/lite/quick_start/mobilenetv2.ms',
   'https://download.mindspore.cn/model_zoo/official/lite/ssd_mobilenetv2_lite/ssd.ms',
   'https://download.mindspore.cn/model_zoo/official/lite/style_lite/style_predict_quant.ms',
   'https://download.mindspore.cn/model_zoo/official/lite/style_lite/style_transfer_quant.ms',

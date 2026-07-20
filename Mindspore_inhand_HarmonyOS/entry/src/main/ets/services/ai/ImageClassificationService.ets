@@ -2,7 +2,7 @@ export const imageCategoryLabelRawfilePath: string = 'labels/image_category_old.
 export const imageCategoryLabelCount: number = 1000;
 export const imageClassificationModelRawfilePath: string = 'model/mobilenetv2.ms';
 export const imageClassificationModelDownloadUrl: string =
-  'https://download.mindspore.cn/model_zoo/official/lite/mobilenetv2_imagenet/mobilenetv2.ms';
+  'https://download.mindspore.cn/model_zoo/official/lite/quick_start/mobilenetv2.ms';
 
 export interface ImageClassificationResult {
   readonly ok: boolean;

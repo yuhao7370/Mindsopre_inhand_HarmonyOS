@@ -2,8 +2,8 @@ $ErrorActionPreference = 'Stop'
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $modelPath = Join-Path $repoRoot 'entry/src/main/resources/rawfile/model/mobilenetv2.ms'
-$expectedModelSize = 14014408
-$expectedModelSha256 = 'F88C8C410D1148F5614994038680C245E1788C80E578D093E536572D08ECC514'
+$expectedModelSize = 13988384
+$expectedModelSha256 = '5A7CCD53BF92D8B294A703A1302D4230A311B2D19A8D212EEDD65FF6838CFA84'
 
 if (-not (Test-Path -LiteralPath $modelPath)) {
   throw "Missing image classification model rawfile: $modelPath. Run scripts/download-image-classification-model.ps1 first."

@@ -6692,7 +6692,7 @@ export default function localUnitTest() {
 
     it('usesAndroidMobilenetV2ModelAssetContract', 0, () => {
       expect(imageClassificationModelRawfilePath).assertEqual('model/mobilenetv2.ms');
-      expect(imageClassificationModelDownloadUrl).assertEqual('https://download.mindspore.cn/model_zoo/official/lite/mobilenetv2_imagenet/mobilenetv2.ms');
+      expect(imageClassificationModelDownloadUrl).assertEqual('https://download.mindspore.cn/model_zoo/official/lite/quick_start/mobilenetv2.ms');
     });
 
     it('usesAndroidMindSporeCpuThreadContract', 0, () => {

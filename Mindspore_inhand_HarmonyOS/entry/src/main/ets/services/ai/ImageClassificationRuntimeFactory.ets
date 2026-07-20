@@ -46,7 +46,11 @@ import {
   ObjectDetectionTensorRunner,
   parseObjectCategoryLabels
 } from './ObjectDetectionService';
-import { MindSporeLiteModelRunner, RawfileContentReader } from './MindSporeLiteModelRunner';
+import {
+  imageClassificationScoresFromOutputTensor,
+  MindSporeLiteModelRunner,
+  RawfileContentReader
+} from './MindSporeLiteModelRunner';
 import {
   MindSporeLiteTranslationRunner,
   productionTranslationModelBundleFactory,
@@ -371,7 +375,8 @@ export async function createHarmonyImageClassificationService(
   const labels = await loadImageClassificationLabels(options.resourceManager, labelLocaleForOptions(options));
   const tensorRunner = options.tensorRunner ?? new MindSporeLiteModelRunner({
     resourceManager: options.resourceManager,
-    modelRawfilePath: imageClassificationModelRawfilePath
+    modelRawfilePath: imageClassificationModelRawfilePath,
+    outputTensorDecoder: imageClassificationScoresFromOutputTensor
   });
   const preprocessor = options.inputPreprocessor ?? new HarmonyImageClassificationInputPreprocessor();
   const scoreRunner = new ImageClassificationMindSporeScoreRunner({
@@ -528,7 +533,8 @@ export async function createHarmonyLocalGestureService(
   const labels = await loadImageClassificationLabels(options.resourceManager, '');
   const tensorRunner = options.tensorRunner ?? new MindSporeLiteModelRunner({
     resourceManager: options.resourceManager,
-    modelRawfilePath: imageClassificationModelRawfilePath
+    modelRawfilePath: imageClassificationModelRawfilePath,
+    outputTensorDecoder: imageClassificationScoresFromOutputTensor
   });
   const preprocessor = options.inputPreprocessor ?? new HarmonyImageClassificationInputPreprocessor();
   const scoreRunner = new ImageClassificationMindSporeScoreRunner({

@@ -1,4 +1,5 @@
 import { mindSporeLite } from '@kit.MindSporeLiteKit';
+import { imageCategoryLabelCount } from './ImageClassificationService';
 
 export interface RawfileContentReader {
   getRawFileContent(path: string): Promise<Uint8Array>;
@@ -7,9 +8,11 @@ export interface RawfileContentReader {
 export interface MindSporeLiteModelRunnerOptions {
   readonly resourceManager: RawfileContentReader;
   readonly modelRawfilePath: string;
+  readonly outputTensorDecoder?: (output: mindSporeLite.MSTensor) => Array<number>;
 }
 
 export const mindSporeLiteCpuThreadNum: number = 2;
+export const imageClassificationOutputScoreCount: number = imageCategoryLabelCount + 1;
 
 export function mindSporeLiteCpuContext(threadNum: number = mindSporeLiteCpuThreadNum): mindSporeLite.Context {
   return {
@@ -23,11 +26,13 @@ export function mindSporeLiteCpuContext(threadNum: number = mindSporeLiteCpuThre
 export class MindSporeLiteModelRunner {
   private readonly resourceManager: RawfileContentReader;
   private readonly modelRawfilePath: string;
+  private readonly outputTensorDecoder?: (output: mindSporeLite.MSTensor) => Array<number>;
   private cachedModel?: mindSporeLite.Model;
 
   constructor(options: MindSporeLiteModelRunnerOptions) {
     this.resourceManager = options.resourceManager;
     this.modelRawfilePath = options.modelRawfilePath;
+    this.outputTensorDecoder = options.outputTensorDecoder;
   }
 
   async predictScoresFromInput(inputBuffer: ArrayBuffer): Promise<Array<number>> {
@@ -43,6 +48,9 @@ export class MindSporeLiteModelRunner {
       return [];
     }
 
+    if (this.outputTensorDecoder !== undefined) {
+      return this.outputTensorDecoder(outputs[0]);
+    }
     return floatScoresFromOutputBuffer(outputs[0].getData());
   }
 
@@ -73,4 +81,24 @@ export function floatScoresFromOutputBuffer(buffer: ArrayBuffer): Array<number> 
     scores.push(output[index]);
   }
   return scores;
+}
+
+export function imageClassificationScoresFromOutputTensor(output: mindSporeLite.MSTensor): Array<number> {
+  if (output.dtype !== mindSporeLite.DataType.NUMBER_TYPE_FLOAT32 ||
+    output.elementNum !== imageClassificationOutputScoreCount ||
+    output.dataSize !== imageClassificationOutputScoreCount * Float32Array.BYTES_PER_ELEMENT ||
+    output.shape.length !== 2 || output.shape[0] !== 1 || output.shape[1] !== imageClassificationOutputScoreCount) {
+    return [];
+  }
+
+  const rawScores = new Float32Array(output.getData());
+  if (rawScores.length !== imageClassificationOutputScoreCount) {
+    return [];
+  }
+
+  const decodedScores: Array<number> = [];
+  for (let index = 1; index < rawScores.length; index++) {
+    decodedScores.push(rawScores[index]);
+  }
+  return decodedScores;
 }
