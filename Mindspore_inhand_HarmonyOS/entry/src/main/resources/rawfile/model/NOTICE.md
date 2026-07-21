@@ -22,6 +22,48 @@ float32 NHWC input `[1,224,224,3]` and float32 output `[1,1001]`; output index
 `i`. This trained model remains limited to this private repository's
 non-commercial research, educational, and local learning use.
 
+## Project-authored Custom Model contract fixtures
+
+The Task 11 Custom Model fixtures are project-authored calculation graphs with
+no trained weights or third-party image data. The fixture author/project party
+provides these two graphs and their generated artifacts separately under
+Apache-2.0; the complete license text is included as
+`LICENSE-Apache-2.0.txt`. This notice does not claim that the repository as a
+whole is Apache-2.0.
+
+Both graphs accept exactly one float32 NHWC input named `image` with shape
+`[1,224,224,3]`. `custom_channel_mean.ms` returns the three RGB channel means
+as float32 `[1,3]`; `custom_channel_mean_inverted.ms` returns one minus those
+means. The inverted graph exists only to verify same-path replacement and does
+not add a second production contract. The non-finite graph preserves the same
+input/output metadata but multiplies the channel means by NaN; it is a negative
+fixture proving that a model which loads and predicts cannot publish non-finite
+output or replace the last-good cache.
+
+| Artifact | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `model_sources/custom_model/custom_channel_mean.tflite` | 948 | `99A725E615C3B6B64C015DCE2EFE5796DCA65DDA22DD6B5B1753F500447A9B7A` |
+| `custom_channel_mean.ms` | 600 | `DB1A0A273DA0658155473FB391E95D027D0D5606C72FB2FFB18BFAE0FDC85409` |
+| `model_sources/custom_model/custom_channel_mean_inverted.tflite` | 1180 | `AFC464560DFE364E68B7D83544FB45E141B5A471813166FA7FCEEC37166D47AD` |
+| `custom_channel_mean_inverted.ms` | 800 | `7EB540E46CE1437FB3004CAB1AF80BBAEBE2D83355923DA4432006482EA336D9` |
+| `model_sources/custom_model/custom_channel_mean_non_finite.tflite` | 1184 | `C722CA178EBBAB5AD6ECDF4327B46FFD72E009EE62FC46E858C4D41DA03DA52D` |
+| `custom_channel_mean_non_finite.ms` | 800 | `C8087D8D7C94CD3BB92F872BC0665CABC0BB343A6C0D16B276FC4659C4AE0957` |
+
+TensorFlow 2.15 generated the TFLite sources. The official MindSpore Lite
+2.6.0 device-side Linux x64 converter package at
+`https://ms-release.obs.cn-north-4.myhuaweicloud.com/2.6.0/MindSpore/lite/release/linux/x86_64/mindspore-lite-2.6.0-linux-x64.tar.gz`, SHA-256
+`DC70D965C440ECAB9692FD2DD7362E967D79E92CCB0FF632AC021D25D2AF9C9E`,
+converted each source twice with byte-identical output using:
+
+```text
+converter_lite --fmk=TFLITE --modelFile=<source.tflite> --outputFile=<output-without-.ms> --saveType=MINDIR_LITE --optimize=general --fp16=off
+```
+
+TensorFlow and MindSpore Lite are Apache-2.0 generation tools; neither tool is
+packaged as part of these fixture files. Acceptance covers only the documented
+single input and first consumed output contract, not arbitrary model semantics
+or quality.
+
 ## Magenta arbitrary image stylization assets
 
 The style-transfer network is Google/Magenta arbitrary-image-stylization-v1-256

@@ -13,6 +13,11 @@ export const customModelInputSize: number = 224;
 export const customModelInputChannels: number = 3;
 export const customModelInputFloatCount: number =
   customModelInputSize * customModelInputSize * customModelInputChannels;
+export const customModelInputByteCount: number =
+  customModelInputFloatCount * Float32Array.BYTES_PER_ELEMENT;
+export const customModelMaxOutputElementCount: number = 262144;
+export const customModelMaxOutputByteCount: number =
+  customModelMaxOutputElementCount * Float32Array.BYTES_PER_ELEMENT;
 export const customModelDefaultModelUri: string = 'rawfile://model/mobilenetv2.ms';
 
 export interface CustomModelRunResult {
@@ -31,6 +36,11 @@ export interface CustomModelTensorRunner {
 
 export interface CustomModelSelectedFileRunnerOptions {
   readonly modelContentReader?: FileUriContentReader;
+  readonly runtime?: CustomModelBufferRuntime;
+}
+
+export interface CustomModelBufferRuntime {
+  run(modelContent: Uint8Array, inputBuffer: ArrayBuffer): Promise<Array<number>>;
 }
 
 export interface CustomModelRawfileRunnerOptions {
@@ -73,59 +83,195 @@ export class CustomModelMindSporeRunner {
   async run(modelUri: string, imageUri: string): Promise<CustomModelRunResult> {
     const startedAt = Date.now();
     const inputBuffer = await this.preprocessor.createInputBuffer(imageUri);
+    if (inputBuffer.byteLength !== customModelInputByteCount) {
+      return {
+        ok: false,
+        output: [],
+        executionMs: Date.now() - startedAt
+      };
+    }
     const output = await this.tensorRunner.predictOutput(modelUri, inputBuffer);
+    const validOutput = customModelOutputValuesAreValid(output) ? output : [];
     return {
-      ok: output.length > 0,
-      output: output,
+      ok: validOutput.length > 0,
+      output: validOutput,
       executionMs: Date.now() - startedAt
     };
   }
 }
 
-export class CustomModelSelectedFileRunner implements CustomModelTensorRunner {
-  private readonly modelContentReader: FileUriContentReader;
-  private readonly cachedModels: Map<string, mindSporeLite.Model> = new Map<string, mindSporeLite.Model>();
-
-  constructor(options?: CustomModelSelectedFileRunnerOptions) {
-    this.modelContentReader = options?.modelContentReader ?? new FileUriContentReader();
-  }
-
-  async predictOutput(modelUri: string, inputBuffer: ArrayBuffer): Promise<Array<number>> {
-    const model = await this.loadModel(modelUri);
-    const inputs = model.getInputs();
-    if (inputs.length === 0) {
+class MindSporeLiteCustomModelBufferRuntime implements CustomModelBufferRuntime {
+  async run(modelContent: Uint8Array, inputBuffer: ArrayBuffer): Promise<Array<number>> {
+    if (inputBuffer.byteLength !== customModelInputByteCount) {
       return [];
     }
-
+    const model = await mindSporeLite.loadModelFromBuffer(
+      rawfileContentToArrayBuffer(modelContent),
+      mindSporeLiteCpuContext()
+    );
+    const inputs = model.getInputs();
+    if (!customModelInputTensorsCompatible(inputs)) {
+      return [];
+    }
     inputs[0].setData(inputBuffer);
     const outputs = await model.predict(inputs);
     if (outputs.length === 0) {
       return [];
     }
-
-    const outputData = outputs[0].getData();
-    if (!customModelOutputCanDecode(outputs[0].dtype, outputData)) {
-      return [];
-    }
-    return floatScoresFromOutputBuffer(outputData);
-  }
-
-  private async loadModel(modelUri: string): Promise<mindSporeLite.Model> {
-    const cachedModel = this.cachedModels.get(modelUri);
-    if (cachedModel !== undefined) {
-      return cachedModel;
-    }
-
-    const modelContent = await this.modelContentReader.readFileContent(modelUri);
-    const modelBuffer = rawfileContentToArrayBuffer(modelContent);
-    const model = await mindSporeLite.loadModelFromBuffer(modelBuffer, mindSporeLiteCpuContext());
-    this.cachedModels.set(modelUri, model);
-    return model;
+    return customModelOutputValues(outputs[0]);
   }
 }
 
-export function customModelOutputCanDecode(dtype: mindSporeLite.DataType, data: ArrayBuffer): boolean {
-  return dtype === mindSporeLite.DataType.NUMBER_TYPE_FLOAT32 && data.byteLength > 0;
+class CustomModelRuntimeState {
+  operationTail: Promise<void> = Promise.resolve();
+}
+
+const nativeCustomModelBufferRuntime: CustomModelBufferRuntime = new MindSporeLiteCustomModelBufferRuntime();
+const customModelRuntimeStates: Map<CustomModelBufferRuntime, CustomModelRuntimeState> = new Map();
+
+function customModelRuntimeState(runtime: CustomModelBufferRuntime): CustomModelRuntimeState {
+  const existing = customModelRuntimeStates.get(runtime);
+  if (existing !== undefined) {
+    return existing;
+  }
+  const state = new CustomModelRuntimeState();
+  customModelRuntimeStates.set(runtime, state);
+  return state;
+}
+
+export class CustomModelSelectedFileRunner implements CustomModelTensorRunner {
+  private readonly modelContentReader: FileUriContentReader;
+  private readonly runtime: CustomModelBufferRuntime;
+  private readonly runtimeState: CustomModelRuntimeState;
+
+  constructor(options?: CustomModelSelectedFileRunnerOptions) {
+    this.modelContentReader = options?.modelContentReader ?? new FileUriContentReader();
+    this.runtime = options?.runtime ?? nativeCustomModelBufferRuntime;
+    this.runtimeState = customModelRuntimeState(this.runtime);
+  }
+
+  predictOutput(modelUri: string, inputBuffer: ArrayBuffer): Promise<Array<number>> {
+    const result = this.runtimeState.operationTail.then(async (): Promise<Array<number>> => {
+      const modelContent = await this.modelContentReader.readFileContent(modelUri);
+      return await this.runtime.run(modelContent, inputBuffer);
+    });
+    this.runtimeState.operationTail = result.then((): void => {}, (): void => {});
+    return result;
+  }
+}
+
+export async function validateCustomModelContent(content: Uint8Array): Promise<boolean> {
+  const state = customModelRuntimeState(nativeCustomModelBufferRuntime);
+  const result = state.operationTail.then(async (): Promise<Array<number>> =>
+    await nativeCustomModelBufferRuntime.run(content, customModelProbeInputBuffer()));
+  state.operationTail = result.then((): void => {}, (): void => {});
+  try {
+    const output = await result;
+    return customModelOutputValuesAreValid(output);
+  } catch (_) {
+    return false;
+  }
+}
+
+export function customModelOutputCanDecode(
+  dtype: mindSporeLite.DataType,
+  data: ArrayBuffer,
+  elementNum: number = data.byteLength / Float32Array.BYTES_PER_ELEMENT,
+  dataSize: number = data.byteLength
+): boolean {
+  if (!customModelOutputBufferContractValid(dtype, data, elementNum, dataSize)) {
+    return false;
+  }
+  return customModelOutputValuesAreValid(floatScoresFromOutputBuffer(data));
+}
+
+function customModelOutputBufferContractValid(
+  dtype: mindSporeLite.DataType,
+  data: ArrayBuffer,
+  elementNum: number,
+  dataSize: number
+): boolean {
+  if (dtype !== mindSporeLite.DataType.NUMBER_TYPE_FLOAT32 ||
+    data.byteLength <= 0 || data.byteLength > customModelMaxOutputByteCount ||
+    data.byteLength % Float32Array.BYTES_PER_ELEMENT !== 0 ||
+    dataSize !== data.byteLength ||
+    elementNum <= 0 || elementNum > customModelMaxOutputElementCount ||
+    elementNum * Float32Array.BYTES_PER_ELEMENT !== dataSize) {
+    return false;
+  }
+  return true;
+}
+
+export function customModelOutputValuesAreValid(output: Array<number>): boolean {
+  if (output.length <= 0 || output.length > customModelMaxOutputElementCount) {
+    return false;
+  }
+  for (let index = 0; index < output.length; index++) {
+    if (!Number.isFinite(output[index])) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function customModelInputTensorsCompatible(inputs: Array<mindSporeLite.MSTensor>): boolean {
+  if (inputs.length !== 1) {
+    return false;
+  }
+  const input = inputs[0];
+  return input.shape.length === 4 &&
+    input.shape[0] === 1 &&
+    input.shape[1] === customModelInputSize &&
+    input.shape[2] === customModelInputSize &&
+    input.shape[3] === customModelInputChannels &&
+    input.dtype === mindSporeLite.DataType.NUMBER_TYPE_FLOAT32 &&
+    input.format === mindSporeLite.Format.NHWC &&
+    input.elementNum === customModelInputFloatCount &&
+    input.dataSize === customModelInputByteCount;
+}
+
+function customModelOutputValues(output: mindSporeLite.MSTensor): Array<number> {
+  if (!customModelOutputMetadataCanDecode(output)) {
+    return [];
+  }
+  const data = output.getData();
+  if (!customModelOutputBufferContractValid(output.dtype, data, output.elementNum, output.dataSize)) {
+    return [];
+  }
+  const values = floatScoresFromOutputBuffer(data);
+  return customModelOutputValuesAreValid(values) ? values : [];
+}
+
+function customModelOutputMetadataCanDecode(output: mindSporeLite.MSTensor): boolean {
+  return output.dtype === mindSporeLite.DataType.NUMBER_TYPE_FLOAT32 &&
+    output.elementNum > 0 && output.elementNum <= customModelMaxOutputElementCount &&
+    output.dataSize > 0 && output.dataSize <= customModelMaxOutputByteCount &&
+    output.dataSize % Float32Array.BYTES_PER_ELEMENT === 0 &&
+    output.dataSize === output.elementNum * Float32Array.BYTES_PER_ELEMENT &&
+    customModelOutputShapeIsCoherent(output.shape, output.elementNum);
+}
+
+function customModelOutputShapeIsCoherent(shape: Array<number>, elementNum: number): boolean {
+  if (shape.length === 0) {
+    return false;
+  }
+  let product = 1;
+  for (let index = 0; index < shape.length; index++) {
+    const dimension = shape[index];
+    if (dimension <= 0 || product > customModelMaxOutputElementCount / dimension) {
+      return false;
+    }
+    product *= dimension;
+  }
+  return product === elementNum;
+}
+
+function customModelProbeInputBuffer(): ArrayBuffer {
+  const probe = new Float32Array(customModelInputFloatCount);
+  for (let index = 0; index < probe.length; index++) {
+    probe[index] = ((index * 37) % 256) / 255;
+  }
+  return probe.buffer as ArrayBuffer;
 }
 
 export class CustomModelRawfileRunner implements CustomModelTensorRunner {

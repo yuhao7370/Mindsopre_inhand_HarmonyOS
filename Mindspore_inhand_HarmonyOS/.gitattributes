@@ -13,3 +13,7 @@ entry/src/main/resources/rawfile/model/nanodet_plus_m_320.mnn -text -diff
 entry/src/main/resources/rawfile/model/style_predict_fp16.mnn -text -diff
 entry/src/main/resources/rawfile/model/style_transform_fp16.mnn -text -diff
 entry/src/main/resources/rawfile/model/selfie_segmentation.mnn -text -diff
+entry/src/main/resources/rawfile/model/custom_channel_mean.ms -text -diff
+entry/src/main/resources/rawfile/model/custom_channel_mean_inverted.ms -text -diff
+entry/src/main/resources/rawfile/model/custom_channel_mean_non_finite.ms -text -diff
+model_sources/custom_model/*.tflite -text -diff

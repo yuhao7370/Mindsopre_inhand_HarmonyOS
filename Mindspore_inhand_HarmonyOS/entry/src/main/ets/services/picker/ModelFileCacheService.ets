@@ -4,6 +4,7 @@ import { AppRoute } from '../../app/AppRoutes';
 import { AppStringKey } from '../../common/i18n/AppStrings';
 import { FeatureInputKind } from '../../features/runtime/FeatureWorkflowCatalog';
 import { FileUriContentReader } from '../ai/FileUriContentReader';
+import { validateCustomModelContent } from '../ai/CustomModelService';
 import { validateObjectDetectionModelContent } from '../ai/ObjectDetectionService';
 import {
   stylePredictModelRawfilePath,
@@ -75,6 +76,16 @@ export interface ModelFileCompatibilityLoader {
 
 export interface ObjectDetectionModelContentValidator {
   validate(content: Uint8Array): Promise<boolean>;
+}
+
+export interface CustomModelContentValidator {
+  validate(content: Uint8Array): Promise<boolean>;
+}
+
+export class NativeCustomModelContentValidator implements CustomModelContentValidator {
+  async validate(content: Uint8Array): Promise<boolean> {
+    return await validateCustomModelContent(content);
+  }
 }
 
 export interface StyleTransferModelContentValidator {
@@ -186,17 +197,20 @@ export class BasicModelFileCompatibilityChecker implements ModelFileCompatibilit
   private readonly loader: ModelFileCompatibilityLoader;
   private readonly objectDetectionValidator: ObjectDetectionModelContentValidator;
   private readonly styleTransferValidator: StyleTransferModelContentValidator;
+  private readonly customModelValidator: CustomModelContentValidator;
 
   constructor(
     loader: ModelFileCompatibilityLoader = new MindSporeLiteModelCompatibilityLoader(),
     objectDetectionValidator: ObjectDetectionModelContentValidator =
       new NativeObjectDetectionModelContentValidator(),
     styleTransferValidator: StyleTransferModelContentValidator =
-      new NativeStyleTransferModelContentValidator()
+      new NativeStyleTransferModelContentValidator(),
+    customModelValidator: CustomModelContentValidator = new NativeCustomModelContentValidator()
   ) {
     this.loader = loader;
     this.objectDetectionValidator = objectDetectionValidator;
     this.styleTransferValidator = styleTransferValidator;
+    this.customModelValidator = customModelValidator;
   }
 
   async isCompatible(
@@ -216,10 +230,10 @@ export class BasicModelFileCompatibilityChecker implements ModelFileCompatibilit
       if (routeName === AppRoute.STYLE_TRANSFER.name && inputKind === 'styleTransferModelFile') {
         return await this.styleTransferValidator.validateTransfer(content);
       }
-      const inputs = await this.loader.loadModel(content);
       if (routeName === AppRoute.CUSTOM_MODEL.name && inputKind === 'modelFile') {
-        return customModelInputContractCompatible(inputs);
+        return await this.customModelValidator.validate(content);
       }
+      const inputs = await this.loader.loadModel(content);
       return true;
     } catch (_) {
       return false;

@@ -65,7 +65,8 @@ $requiredVerifiers = @(
   'verify-object-detection-model.ps1',
   'verify-object-detection-labels.ps1',
   'verify-scene-detection-model.ps1',
-  'verify-style-transfer-models.ps1'
+  'verify-style-transfer-models.ps1',
+  'verify-custom-model-fixtures.ps1'
 )
 foreach ($verifier in $requiredVerifiers) {
   Assert-CoreGuardExecutableCommand $ensureAst "& (Join-Path `$PSScriptRoot '$verifier')" "ensure-mindspore-models.ps1 must execute $verifier."
@@ -76,7 +77,7 @@ $ensureInvocations = @($ensureAst.FindAll({
     $node.InvocationOperator -eq [Management.Automation.Language.TokenKind]::Ampersand
 }, $true))
 if ($ensureInvocations.Count -ne $requiredVerifiers.Count) {
-  throw "Core model asset guard failed: ensure-mindspore-models.ps1 must execute only the six approved verifiers; found $($ensureInvocations.Count) invocations."
+  throw "Core model asset guard failed: ensure-mindspore-models.ps1 must execute only the approved verifiers; found $($ensureInvocations.Count) invocations."
 }
 
 foreach ($contract in $contracts) {
@@ -128,6 +129,40 @@ foreach ($downloaderName in @(
   Assert-CoreGuardNoStableMutation $downloaderAst $downloaderName
 }
 
+$customVerifierAst = Read-CoreGuardPowerShellAst (Join-Path $PSScriptRoot 'verify-custom-model-fixtures.ps1')
+foreach ($customContract in @(
+  [pscustomobject]@{ Name = 'custom_channel_mean.ms'; Bytes = 600; Sha256 = 'DB1A0A273DA0658155473FB391E95D027D0D5606C72FB2FFB18BFAE0FDC85409' },
+  [pscustomobject]@{ Name = 'custom_channel_mean_inverted.ms'; Bytes = 800; Sha256 = '7EB540E46CE1437FB3004CAB1AF80BBAEBE2D83355923DA4432006482EA336D9' },
+  [pscustomobject]@{ Name = 'custom_channel_mean_non_finite.ms'; Bytes = 800; Sha256 = 'C8087D8D7C94CD3BB92F872BC0665CABC0BB343A6C0D16B276FC4659C4AE0957' }
+)) {
+  Assert-CoreGuardObjectArrayContract $customVerifierAst 'models' $customContract.Name $customContract.Bytes $customContract.Sha256 `
+    'Custom Model fixture contract.'
+  $relativePath = "$modelRelativeRoot/$($customContract.Name)"
+  & git -C $projectRoot ls-files --error-unmatch -- $relativePath *> $null
+  if ($LASTEXITCODE -ne 0) {
+    throw "Core model asset guard failed: Custom Model fixture is not tracked: $relativePath."
+  }
+  $attributes = @(& git -C $projectRoot check-attr text diff -- $relativePath)
+  if ($attributes -notcontains "$relativePath`: text: unset" -or $attributes -notcontains "$relativePath`: diff: unset") {
+    throw "Core model asset guard failed: $($customContract.Name) must resolve to -text -diff attributes."
+  }
+}
+foreach ($sourceName in @(
+  'custom_channel_mean.tflite',
+  'custom_channel_mean_inverted.tflite',
+  'custom_channel_mean_non_finite.tflite'
+)) {
+  $relativePath = "model_sources/custom_model/$sourceName"
+  & git -C $projectRoot ls-files --error-unmatch -- $relativePath *> $null
+  if ($LASTEXITCODE -ne 0) {
+    throw "Core model asset guard failed: Custom Model source is not tracked: $relativePath."
+  }
+  $attributes = @(& git -C $projectRoot check-attr text diff -- $relativePath)
+  if ($attributes -notcontains "$relativePath`: text: unset" -or $attributes -notcontains "$relativePath`: diff: unset") {
+    throw "Core model asset guard failed: $sourceName must resolve to -text -diff attributes."
+  }
+}
+
 $licensePath = Join-Path $modelRoot 'LICENSE-Apache-2.0.txt'
 $referenceLicensePath = Join-Path $projectRoot 'entry/src/main/cpp/third_party/MNN/LICENSE.txt'
 if (-not (Test-Path -LiteralPath $licensePath -PathType Leaf)) {
@@ -157,7 +192,12 @@ foreach ($marker in @(
   'https://tfhub.dev/google/lite-model/magenta/arbitrary-image-stylization-v1-256/fp16/transfer/1?lite-format=tflite',
   'MNN 3.6.0',
   'mnn_uuid',
-  'https://gitee.com/harmonyos_samples/MSLiteSceneRecognition'
+  'https://gitee.com/harmonyos_samples/MSLiteSceneRecognition',
+  'Project-authored Custom Model contract fixtures',
+  '99A725E615C3B6B64C015DCE2EFE5796DCA65DDA22DD6B5B1753F500447A9B7A',
+  'AFC464560DFE364E68B7D83544FB45E141B5A471813166FA7FCEEC37166D47AD',
+  'C722CA178EBBAB5AD6ECDF4327B46FFD72E009EE62FC46E858C4D41DA03DA52D',
+  'DC70D965C440ECAB9692FD2DD7362E967D79E92CCB0FF632AC021D25D2AF9C9E'
 )) {
   Assert-TextContains $notice $marker "NOTICE.md is missing provenance marker: $marker."
 }
@@ -181,6 +221,9 @@ foreach ($entry in @(
   'resources/rawfile/model/nanodet_plus_m_320.mnn',
   'resources/rawfile/model/style_predict_fp16.mnn',
   'resources/rawfile/model/style_transform_fp16.mnn',
+  'resources/rawfile/model/custom_channel_mean.ms',
+  'resources/rawfile/model/custom_channel_mean_inverted.ms',
+  'resources/rawfile/model/custom_channel_mean_non_finite.ms',
   'resources/rawfile/model/LICENSE-Apache-2.0.txt',
   'resources/rawfile/model/NOTICE.md'
 )) {

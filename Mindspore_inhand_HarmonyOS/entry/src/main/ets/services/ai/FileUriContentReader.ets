@@ -1,5 +1,8 @@
 import { fileIo } from '@kit.CoreFileKit';
 
+export const fileUriContentMaxBytes: number = 64 * 1024 * 1024;
+const fileUriContentReadChunkBytes: number = 1024 * 1024;
+
 export class FileUriDescriptor {
   readonly fd: number;
 
@@ -13,7 +16,7 @@ export abstract class FileUriContentBackend {
 
   abstract size(file: FileUriDescriptor): Promise<number>;
 
-  abstract read(file: FileUriDescriptor, buffer: ArrayBuffer): Promise<number>;
+  abstract read(file: FileUriDescriptor, buffer: ArrayBuffer, offset: number): Promise<number>;
 
   abstract close(file: FileUriDescriptor): Promise<void>;
 }
@@ -29,8 +32,11 @@ export class CoreFileKitContentBackend extends FileUriContentBackend {
     return stat.size;
   }
 
-  async read(file: FileUriDescriptor, buffer: ArrayBuffer): Promise<number> {
-    return fileIo.read(file.fd, buffer);
+  async read(file: FileUriDescriptor, buffer: ArrayBuffer, offset: number): Promise<number> {
+    return fileIo.read(file.fd, buffer, {
+      offset: offset,
+      length: buffer.byteLength
+    });
   }
 
   async close(file: FileUriDescriptor): Promise<void> {
@@ -50,9 +56,26 @@ export class FileUriContentReader {
     try {
       file = await this.backend.open(uri);
       const size = await this.backend.size(file);
+      if (!Number.isInteger(size) || size < 0 || size > fileUriContentMaxBytes) {
+        throw new Error('Selected file size is outside the supported range.');
+      }
       const buffer = new ArrayBuffer(size);
-      const bytesRead = await this.backend.read(file, buffer);
-      return arrayBufferPrefixToUint8Array(buffer, bytesRead);
+      const destination = new Uint8Array(buffer);
+      let offset = 0;
+      while (offset < size) {
+        const chunkByteCount = Math.min(fileUriContentReadChunkBytes, size - offset);
+        const chunk = new ArrayBuffer(chunkByteCount);
+        const bytesRead = await this.backend.read(file, chunk, offset);
+        if (bytesRead <= 0 || bytesRead > size - offset) {
+          throw new Error('Selected file ended before its declared size.');
+        }
+        if (bytesRead > chunkByteCount) {
+          throw new Error('Selected file read exceeded the requested chunk.');
+        }
+        destination.set(new Uint8Array(chunk, 0, bytesRead), offset);
+        offset += bytesRead;
+      }
+      return arrayBufferPrefixToUint8Array(buffer, offset);
     } finally {
       if (file !== undefined) {
         await this.backend.close(file);

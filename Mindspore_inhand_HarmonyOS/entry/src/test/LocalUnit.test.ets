@@ -248,9 +248,11 @@ import {
 } from '../main/ets/services/ai/ImageClassificationPipeline';
 import { imageClassificationDecodeOptions } from '../main/ets/services/ai/HarmonyImageInputPreprocessor';
 import {
+  CustomModelBufferRuntime,
   CustomModelDefaultOrSelectedRunner,
   CustomModelInputPreprocessor,
   CustomModelMindSporeRunner,
+  CustomModelSelectedFileRunner,
   CustomModelService,
   CustomModelTensorRunner,
   customModelDecodeOptions,
@@ -526,6 +528,8 @@ import {
   ModelFileTensorMetadata,
   ModelFileCompatibilityChecker,
   ModelFileCompatibilityLoader,
+  CustomModelContentValidator,
+  customModelInputContractCompatible,
   ObjectDetectionModelContentValidator,
   StyleTransferModelContentValidator,
   StyleTransferModelPairCompatibilityChecker,
@@ -846,10 +850,10 @@ class FixedFileUriContentBackend extends FileUriContentBackend {
 
   async size(file: FileUriDescriptor): Promise<number> {
     this.events.push(`size:${file.fd}`);
-    return this.content.length + 2;
+    return this.content.length;
   }
 
-  async read(file: FileUriDescriptor, buffer: ArrayBuffer): Promise<number> {
+  async read(file: FileUriDescriptor, buffer: ArrayBuffer, _offset: number): Promise<number> {
     this.events.push(`read:${file.fd}`);
     new Uint8Array(buffer).set(this.content);
     return this.content.length;
@@ -861,7 +865,7 @@ class FixedFileUriContentBackend extends FileUriContentBackend {
 }
 
 class ThrowingFileUriContentBackend extends FixedFileUriContentBackend {
-  async read(file: FileUriDescriptor, _buffer: ArrayBuffer): Promise<number> {
+  async read(file: FileUriDescriptor, _buffer: ArrayBuffer, _offset: number): Promise<number> {
     this.events.push(`read:${file.fd}`);
     throw new Error('read failed');
   }
@@ -1050,6 +1054,56 @@ class RecordingModelFileCompatibilityLoader implements ModelFileCompatibilityLoa
   }
 }
 
+class ChunkedFileUriContentBackend extends FileUriContentBackend {
+  readonly events: Array<string> = [];
+  private readonly content: Uint8Array;
+  private readonly chunkSize: number;
+
+  constructor(content: Uint8Array, chunkSize: number) {
+    super();
+    this.content = content;
+    this.chunkSize = chunkSize;
+  }
+
+  async open(uri: string): Promise<FileUriDescriptor> {
+    this.events.push(`open:${uri}`);
+    return new FileUriDescriptor(44);
+  }
+
+  async size(file: FileUriDescriptor): Promise<number> {
+    this.events.push(`size:${file.fd}`);
+    return this.content.length;
+  }
+
+  async read(file: FileUriDescriptor, buffer: ArrayBuffer, fileOffset: number): Promise<number> {
+    this.events.push(`read:${file.fd}`);
+    const count = Math.min(this.chunkSize, this.content.length - fileOffset, buffer.byteLength);
+    if (count <= 0) {
+      return 0;
+    }
+    new Uint8Array(buffer).set(this.content.subarray(fileOffset, fileOffset + count));
+    return count;
+  }
+
+  async close(file: FileUriDescriptor): Promise<void> {
+    this.events.push(`close:${file.fd}`);
+  }
+}
+
+class RecordingCustomModelContentValidator implements CustomModelContentValidator {
+  readonly seenByteLengths: Array<number> = [];
+  private readonly compatible: boolean;
+
+  constructor(compatible: boolean) {
+    this.compatible = compatible;
+  }
+
+  async validate(content: Uint8Array): Promise<boolean> {
+    this.seenByteLengths.push(content.byteLength);
+    return this.compatible;
+  }
+}
+
 class MutableFileUriContentBackend extends FileUriContentBackend {
   private content: Uint8Array;
 
@@ -1070,7 +1124,7 @@ class MutableFileUriContentBackend extends FileUriContentBackend {
     return this.content.length;
   }
 
-  async read(_file: FileUriDescriptor, buffer: ArrayBuffer): Promise<number> {
+  async read(_file: FileUriDescriptor, buffer: ArrayBuffer, _offset: number): Promise<number> {
     new Uint8Array(buffer).set(this.content);
     return this.content.length;
   }
@@ -1164,6 +1218,30 @@ class FixedCustomModelTensorRunner implements CustomModelTensorRunner {
     this.seenModelUris.push(modelUri);
     this.seenInputBytes.push(inputBuffer.byteLength);
     return this.outputScores;
+  }
+}
+
+class RecordingCustomModelBufferRuntime implements CustomModelBufferRuntime {
+  readonly seenModelFirstBytes: Array<number> = [];
+  readonly seenInputBytes: Array<number> = [];
+
+  async run(modelContent: Uint8Array, inputBuffer: ArrayBuffer): Promise<Array<number>> {
+    this.seenModelFirstBytes.push(modelContent[0]);
+    this.seenInputBytes.push(inputBuffer.byteLength);
+    return [modelContent[0]];
+  }
+}
+
+class DelayedCustomModelBufferRuntime implements CustomModelBufferRuntime {
+  active: number = 0;
+  maxActive: number = 0;
+
+  async run(_modelContent: Uint8Array, _inputBuffer: ArrayBuffer): Promise<Array<number>> {
+    this.active++;
+    this.maxActive = Math.max(this.maxActive, this.active);
+    await new Promise<void>((resolve: () => void) => setTimeout(resolve, 5));
+    this.active--;
+    return [1];
   }
 }
 
@@ -6562,6 +6640,47 @@ export default function localUnitTest() {
         mindSporeLite.DataType.NUMBER_TYPE_FLOAT32,
         new ArrayBuffer(0)
       )).assertFalse();
+      expect(customModelOutputCanDecode(
+        mindSporeLite.DataType.NUMBER_TYPE_FLOAT32,
+        new ArrayBuffer(2)
+      )).assertFalse();
+      const nonFinite = new Float32Array(1);
+      nonFinite[0] = Number.NaN;
+      expect(customModelOutputCanDecode(
+        mindSporeLite.DataType.NUMBER_TYPE_FLOAT32,
+        nonFinite.buffer as ArrayBuffer
+      )).assertFalse();
+      expect(customModelOutputCanDecode(
+        mindSporeLite.DataType.NUMBER_TYPE_FLOAT32,
+        new ArrayBuffer(1024 * 1024 + 4)
+      )).assertFalse();
+    });
+
+    it('rejectsCustomModelInputThatDoesNotMatchTheExactTensorByteContract', 0, async () => {
+      const tensorRunner = new FixedCustomModelTensorRunner([0.1]);
+      const service = new CustomModelService({
+        preprocessor: new FixedCustomModelPreprocessor(new ArrayBuffer(12)),
+        tensorRunner: tensorRunner
+      });
+
+      const result = await service.run('file://selected/custom_model.ms', 'file://selected/input.png');
+
+      expect(result.ok).assertFalse();
+      expect(result.output.length).assertEqual(0);
+      expect(tensorRunner.seenModelUris.length).assertEqual(0);
+    });
+
+    it('rejectsNonFiniteCustomModelOutputBeforePublishingSuccess', 0, async () => {
+      const inputBuffer = new ArrayBuffer(customModelInputFloatCount * Float32Array.BYTES_PER_ELEMENT);
+      const service = new CustomModelService({
+        preprocessor: new FixedCustomModelPreprocessor(inputBuffer),
+        tensorRunner: new FixedCustomModelTensorRunner([0.1, Number.POSITIVE_INFINITY])
+      });
+
+      const result = await service.run('file://selected/custom_model.ms', 'file://selected/input.png');
+
+      expect(result.ok).assertFalse();
+      expect(result.output.length).assertEqual(0);
     });
 
     it('customModelServiceRunsSelectedModelWithAndroidInputContract', 0, async () => {
@@ -6583,7 +6702,8 @@ export default function localUnitTest() {
     });
 
     it('customModelMindSporeRunnerBridgesPreprocessorToSelectedModelRunner', 0, async () => {
-      const inputBuffer: ArrayBuffer = new ArrayBuffer(12);
+      const inputBuffer: ArrayBuffer =
+        new ArrayBuffer(customModelInputFloatCount * Float32Array.BYTES_PER_ELEMENT);
       const preprocessor: FixedCustomModelPreprocessor = new FixedCustomModelPreprocessor(inputBuffer);
       const tensorRunner: FixedCustomModelTensorRunner = new FixedCustomModelTensorRunner([0.4, 0.6]);
       const runner = new CustomModelMindSporeRunner({
@@ -6603,7 +6723,9 @@ export default function localUnitTest() {
       const workflow = workflowForRoute(AppRoute.CUSTOM_MODEL.name);
       expect(workflow !== undefined).assertTrue();
       const customModelService = new CustomModelService({
-        preprocessor: new FixedCustomModelPreprocessor(new ArrayBuffer(12)),
+        preprocessor: new FixedCustomModelPreprocessor(
+          new ArrayBuffer(customModelInputFloatCount * Float32Array.BYTES_PER_ELEMENT)
+        ),
         tensorRunner: new FixedCustomModelTensorRunner([0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1])
       });
 
@@ -6623,7 +6745,9 @@ export default function localUnitTest() {
       const workflow = workflowForRoute(AppRoute.CUSTOM_MODEL.name);
       expect(workflow !== undefined).assertTrue();
       const customModelService = new CustomModelService({
-        preprocessor: new FixedCustomModelPreprocessor(new ArrayBuffer(12)),
+        preprocessor: new FixedCustomModelPreprocessor(
+          new ArrayBuffer(customModelInputFloatCount * Float32Array.BYTES_PER_ELEMENT)
+        ),
         tensorRunner: new FixedCustomModelTensorRunner([0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1])
       });
 
@@ -6682,11 +6806,49 @@ export default function localUnitTest() {
       expect(selectedRunner.seenModelUris[1]).assertEqual('');
     });
 
+    it('reloadsSelectedCustomModelBytesAfterSameUriReplacement', 0, async () => {
+      const backend = new MutableFileUriContentBackend(new Uint8Array([1]));
+      const runtime = new RecordingCustomModelBufferRuntime();
+      const runner = new CustomModelSelectedFileRunner({
+        modelContentReader: new FileUriContentReader(backend),
+        runtime: runtime
+      });
+      const inputBuffer = new ArrayBuffer(customModelInputFloatCount * Float32Array.BYTES_PER_ELEMENT);
+
+      const first = await runner.predictOutput('/cache/custom_model.ms', inputBuffer);
+      backend.setContent(new Uint8Array([2]));
+      const second = await runner.predictOutput('/cache/custom_model.ms', inputBuffer);
+
+      expect(first[0]).assertEqual(1);
+      expect(second[0]).assertEqual(2);
+      expect(runtime.seenModelFirstBytes.join(',')).assertEqual('1,2');
+    });
+
+    it('serializesSelectedCustomModelLoadsAndPredictionsAcrossOverlappingRuns', 0, async () => {
+      const runtime = new DelayedCustomModelBufferRuntime();
+      const runner = new CustomModelSelectedFileRunner({
+        modelContentReader: new FileUriContentReader(
+          new FixedFileUriContentBackend(new Uint8Array([1]))
+        ),
+        runtime: runtime
+      });
+      const inputBuffer = new ArrayBuffer(customModelInputFloatCount * Float32Array.BYTES_PER_ELEMENT);
+
+      await Promise.all([
+        runner.predictOutput('/cache/custom_model.ms', inputBuffer),
+        runner.predictOutput('/cache/custom_model.ms', inputBuffer)
+      ]);
+
+      expect(runtime.maxActive).assertEqual(1);
+    });
+
     it('aiServiceReportsCustomModelRunnerFailureWithI18nKey', 0, async () => {
       const workflow = workflowForRoute(AppRoute.CUSTOM_MODEL.name);
       expect(workflow !== undefined).assertTrue();
       const customModelService = new CustomModelService({
-        preprocessor: new FixedCustomModelPreprocessor(new ArrayBuffer(12)),
+        preprocessor: new FixedCustomModelPreprocessor(
+          new ArrayBuffer(customModelInputFloatCount * Float32Array.BYTES_PER_ELEMENT)
+        ),
         tensorRunner: new RejectingCustomModelTensorRunner()
       });
 
@@ -6704,7 +6866,9 @@ export default function localUnitTest() {
       const workflow = workflowForRoute(AppRoute.CUSTOM_MODEL.name);
       expect(workflow !== undefined).assertTrue();
       const customModelService = new CustomModelService({
-        preprocessor: new FixedCustomModelPreprocessor(new ArrayBuffer(12)),
+        preprocessor: new FixedCustomModelPreprocessor(
+          new ArrayBuffer(customModelInputFloatCount * Float32Array.BYTES_PER_ELEMENT)
+        ),
         tensorRunner: new FixedCustomModelTensorRunner([])
       });
 
@@ -7397,6 +7561,18 @@ export default function localUnitTest() {
       expect(content[0]).assertEqual(1);
       expect(content[2]).assertEqual(3);
       expect(backend.events.join('|')).assertEqual('open:file://selected/custom_model.ms|size:42|read:42|close:42');
+    });
+
+    it('continuesSelectedModelReadsUntilTheDeclaredFileSizeIsComplete', 0, async () => {
+      const backend = new ChunkedFileUriContentBackend(new Uint8Array([1, 2, 3, 4, 5]), 2);
+
+      const content = await new FileUriContentReader(backend).readFileContent('file://selected/large.ms');
+
+      expect(content.length).assertEqual(5);
+      expect(content.join(',')).assertEqual('1,2,3,4,5');
+      expect(backend.events.join('|')).assertEqual(
+        'open:file://selected/large.ms|size:44|read:44|read:44|read:44|close:44'
+      );
     });
 
     it('closesSelectedModelUriWhenReadFails', 0, async () => {
@@ -8359,7 +8535,9 @@ export default function localUnitTest() {
       expect(workflow !== undefined).assertTrue();
       const service = await createRuntimeAiServiceForWorkflow(workflow!, {
         resourceManager: new ThrowingRawfileContentReader(),
-        customModelPreprocessor: new FixedCustomModelPreprocessor(new ArrayBuffer(12)),
+        customModelPreprocessor: new FixedCustomModelPreprocessor(
+          new ArrayBuffer(customModelInputFloatCount * Float32Array.BYTES_PER_ELEMENT)
+        ),
         customModelTensorRunner: new FixedCustomModelTensorRunner([0.2])
       });
 
@@ -10980,7 +11158,7 @@ export default function localUnitTest() {
       expect(writer.writtenBytes.length).assertEqual(0);
     });
 
-    it('acceptsOnlyTheFixedCustomModelInputTensorContract', 0, async () => {
+    it('acceptsOnlyTheFixedCustomModelInputTensorContract', 0, () => {
       const compatibleInput: ModelFileTensorMetadata = {
         shape: [1, 224, 224, 3],
         dtype: mindSporeLite.DataType.NUMBER_TYPE_FLOAT32,
@@ -10988,16 +11166,7 @@ export default function localUnitTest() {
         elementNum: 150528,
         dataSize: 602112
       };
-      const compatibleChecker = new BasicModelFileCompatibilityChecker(
-        new RecordingModelFileCompatibilityLoader(false, [compatibleInput])
-      );
-
-      expect(await compatibleChecker.isCompatible(
-        AppRoute.CUSTOM_MODEL.name,
-        'modelFile',
-        '/cache/custom_model.ms',
-        new Uint8Array([1])
-      )).assertTrue();
+      expect(customModelInputContractCompatible([compatibleInput])).assertTrue();
 
       const incompatibleInputs: Array<Array<ModelFileTensorMetadata>> = [
         [],
@@ -11040,16 +11209,59 @@ export default function localUnitTest() {
       ];
 
       for (let index = 0; index < incompatibleInputs.length; index++) {
-        const checker = new BasicModelFileCompatibilityChecker(
-          new RecordingModelFileCompatibilityLoader(false, incompatibleInputs[index])
-        );
-        expect(await checker.isCompatible(
-          AppRoute.CUSTOM_MODEL.name,
-          'modelFile',
-          '/cache/custom_model.ms',
-          new Uint8Array([1])
-        )).assertFalse();
+        expect(customModelInputContractCompatible(incompatibleInputs[index])).assertFalse();
       }
+    });
+
+    it('preflightsCustomModelFirstOutputThroughTheCandidateRuntimeBeforePublication', 0, async () => {
+      const loader = new RecordingModelFileCompatibilityLoader(true);
+      const customValidator = new RecordingCustomModelContentValidator(true);
+      const checker = new BasicModelFileCompatibilityChecker(
+        loader,
+        new RecordingObjectDetectionModelContentValidator(true),
+        new RecordingStyleTransferModelContentValidator(true),
+        customValidator
+      );
+
+      const compatible = await checker.isCompatible(
+        AppRoute.CUSTOM_MODEL.name,
+        'modelFile',
+        '/cache/custom_model.ms',
+        new Uint8Array([3, 2, 1])
+      );
+
+      expect(compatible).assertTrue();
+      expect(customValidator.seenByteLengths.join(',')).assertEqual('3');
+      expect(loader.seenByteLengths.length).assertEqual(0);
+    });
+
+    it('rejectsInvalidCustomOutputProbeWithoutReplacingTheLastGoodCache', 0, async () => {
+      const stablePath = '/cache/custom_model.ms';
+      const backend = new MemoryModelFileCacheFileBackend();
+      backend.seed(stablePath, new Uint8Array([9]));
+      const checker = new BasicModelFileCompatibilityChecker(
+        new RecordingModelFileCompatibilityLoader(true),
+        new RecordingObjectDetectionModelContentValidator(true),
+        new RecordingStyleTransferModelContentValidator(true),
+        new RecordingCustomModelContentValidator(false)
+      );
+      const service = new RuntimeModelFileCacheService(
+        new FileUriContentReader(new FixedFileUriContentBackend(new Uint8Array([1, 2, 3]))),
+        new HarmonyModelFileCacheWriter(backend),
+        checker
+      );
+
+      const result = await service.cachePickedModelFile(
+        'file://selected/invalid-output.ms',
+        '/cache',
+        AppRoute.CUSTOM_MODEL.name,
+        'modelFile'
+      );
+
+      expect(result.ok).assertFalse();
+      expect(result.messageKey).assertEqual('feature_runtime_model_incompatible');
+      expect(backend.bytes(stablePath)[0]).assertEqual(9);
+      expect(backend.replacedStablePaths.length).assertEqual(0);
     });
 
     it('preflightsEachStyleTransferSlotSchemaAndFirstOutputBeforePublication', 0, async () => {
