@@ -28,7 +28,7 @@ The archive native SHA finalization was repaired to use the API-allocated digest
 
 The OCR device suite is OCR-runtime evidence only. The test HAP injects the legacy translation bundle factory because it cannot load the production Worker URI across the HAP boundary; it is not evidence of OCR flowing into the production Worker. Protected-media import limitations also mean no production picker OCR-to-Worker end-to-end claim is made.
 
-Leaving the runtime page awaits `DefaultAiService.stop()`, which stops the translation service and terminates its Worker. The client rejects pending work, clears request timers, detaches handlers, and uses a generation plus Worker-instance check so an old exit/error event cannot affect a replacement Worker. `TranslationWorkerClientTest` covers idempotent termination and an old-Worker exit after replacement. The Worker rejects malformed requests and a duplicate initialization request.
+Leaving the runtime page invalidates the runtime service session, which starts asynchronous `DefaultAiService.stop()` cleanup; it is not awaited by the page callback. That cleanup stops the translation service and terminates its Worker. The client rejects pending work, clears request timers, detaches handlers, and uses a generation plus Worker-instance check so an old exit/error event cannot affect a replacement Worker. `TranslationWorkerClientTest` covers idempotent termination, old-Worker exit after replacement, and both initialization and translation `postMessage` failures. The Worker rejects malformed requests and a duplicate initialization request.
 
 ## Remaining scope
 

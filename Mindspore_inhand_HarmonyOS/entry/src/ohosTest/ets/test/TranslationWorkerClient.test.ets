@@ -7,8 +7,8 @@ class WorkerMessage { readonly kind: string; readonly id: number; readonly ok: b
 class WorkerResult { readonly ok: boolean = true; readonly sourceText: string; readonly translatedText: string; readonly targetLanguage: string; constructor(sourceText: string, translatedText: string, targetLanguage: string) { this.sourceText = sourceText; this.translatedText = translatedText; this.targetLanguage = targetLanguage; } }
 class FakeWorker implements TranslationWorkerPort {
   onmessage?: (event: WorkerEvent) => void; onerror?: (event: Object) => void; onAllErrors?: (event: Object) => void; onexit?: (code: number) => void;
-  readonly messages: Array<Object> = []; terminateCount: number = 0;
-  postMessage(message: Object): void { this.messages.push(message); }
+  readonly messages: Array<Object> = []; terminateCount: number = 0; throwOnPost: number = 0;
+  postMessage(message: Object): void { this.messages.push(message); if (this.throwOnPost === this.messages.length) throw new Error('post failed'); }
   terminate(): void { this.terminateCount++; }
   reply(message: Object): void { this.onmessage?.(new WorkerEvent(message)); }
   exit(): void { this.onexit?.(9); }
@@ -39,6 +39,20 @@ export default function translationWorkerClientTest() {
       oldWorker.exit();
       replacement.reply(new WorkerMessage('result', (replacement.messages[1] as MessageId).id, true, new WorkerResult('second', '第二', 'zh')));
       expect((await second).translatedText).assertEqual('第二'); client.terminate();
+    });
+    it('settles initialization when initialize postMessage throws', 0, async () => {
+      const worker = new FakeWorker(); worker.throwOnPost = 1;
+      const result = await new TranslationWorkerClient(new FakeOptions(), new Dependencies([worker])).translate('init', 'zh');
+      expect(result.ok).assertFalse(); expect(worker.terminateCount).assertEqual(1);
+    });
+
+    it('settles translation when translate postMessage throws', 0, async () => {
+      const worker = new FakeWorker(); worker.throwOnPost = 2;
+      const client = new TranslationWorkerClient(new FakeOptions(), new Dependencies([worker]));
+      const pending = client.translate('translate', 'zh'); await turn();
+      worker.reply(new WorkerMessage('ready', (worker.messages[0] as MessageId).id, true));
+      const result = await pending;
+      expect(result.ok).assertFalse(); expect(worker.terminateCount).assertEqual(1);
     });
   });
 }

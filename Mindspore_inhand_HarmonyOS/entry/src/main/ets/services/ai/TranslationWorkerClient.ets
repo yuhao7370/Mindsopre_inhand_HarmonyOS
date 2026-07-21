@@ -173,7 +173,6 @@ export class TranslationWorkerClient implements TextTranslationRunner {
 
   private post(instance: TranslationWorkerPort, generation: number, id: number, message: Object): void {
     try { instance.postMessage(message); } catch (error) {
-      this.clearPending(id);
       this.failWorker(instance, generation, error as Error);
     }
   }

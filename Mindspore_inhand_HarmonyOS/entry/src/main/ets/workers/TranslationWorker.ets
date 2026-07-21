@@ -11,6 +11,8 @@ interface TranslationWorkerRequest {
   readonly targetLanguage?: string;
 }
 
+interface TranslationWorkerManifestLike { readonly graphs?: Array<Object>; }
+
 type TranslationWorkerRequestKind = 'initialize' | 'translate';
 
 const runtime = new TranslationWorkerRuntime();
@@ -55,12 +57,12 @@ worker.workerPort.onmessage = (event): void => {
 
 function parseTranslationWorkerRequest(value: Object): TranslationWorkerRequest | undefined {
   const request = value as TranslationWorkerRequest;
-  if (request === null || !Number.isInteger(request.id) || request.id <= 0 ||
+  if (request === undefined || request === null || !Number.isInteger(request.id) || request.id <= 0 ||
     (request.kind !== 'initialize' && request.kind !== 'translate')) {
     return undefined;
   }
   if (request.kind === 'initialize') {
-    if (typeof request.directory !== 'string' || request.manifest === undefined ||
+    if (typeof request.directory !== 'string' || !hasTranslationManifestShape(request.manifest) ||
       typeof request.tokenizerRuntime !== 'string') {
       return undefined;
     }
@@ -70,4 +72,10 @@ function parseTranslationWorkerRequest(value: Object): TranslationWorkerRequest 
     return undefined;
   }
   return request;
+}
+
+function hasTranslationManifestShape(value: Object | undefined): boolean {
+  if (value === undefined || value === null) return false;
+  const manifest = value as TranslationWorkerManifestLike;
+  return Array.isArray(manifest.graphs) && manifest.graphs.length === 3;
 }
