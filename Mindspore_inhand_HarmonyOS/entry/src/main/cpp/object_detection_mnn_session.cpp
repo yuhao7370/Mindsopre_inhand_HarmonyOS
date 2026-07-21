@@ -6,6 +6,7 @@
 #include <cmath>
 #include <cstring>
 #include <stdexcept>
+#include <type_traits>
 #include <utility>
 
 namespace {
@@ -15,6 +16,11 @@ const std::vector<int> kInputShape = {1, 3, 320, 320};
 const std::vector<int> kOutputShape = {1, 2125, 112};
 constexpr const char* kInputName = "data";
 constexpr const char* kOutputName = "output";
+
+static_assert(std::is_nothrow_move_constructible<ObjectDetectionModelInfo>::value,
+              "Model info handoff after session replacement must not throw.");
+static_assert(std::is_nothrow_move_assignable<ObjectDetectionModelInfo>::value,
+              "Async model-info publication after session replacement must not throw.");
 
 bool IsFloat32(const MNN::Tensor* tensor)
 {
@@ -138,16 +144,18 @@ ObjectDetectionModelInfo ObjectDetectionMnnSession::LoadModel(const uint8_t* byt
         throw std::runtime_error("Object-detection model probe produced only zero values.");
     }
 
+    ObjectDetectionModelInfo modelInfo{kInputName, {1, 3, 320, 320}, kOutputName, {1, 2125, 112}};
+
     std::lock_guard<std::mutex> lock(mutex_);
     ReleaseLocked();
-    modelBytes_ = std::move(candidate.bytes);
+    modelBytes_.swap(candidate.bytes);
     interpreter_ = candidate.interpreter;
     session_ = candidate.session;
     input_ = candidate.input;
     candidate.interpreter = nullptr;
     candidate.session = nullptr;
     candidate.input = nullptr;
-    return {kInputName, {1, 3, 320, 320}, kOutputName, {1, 2125, 112}};
+    return modelInfo;
 }
 
 std::vector<float> ObjectDetectionMnnSession::Predict(const std::vector<float>& input)

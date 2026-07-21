@@ -20,6 +20,8 @@ The native loader validates the only input and output names, dtypes, shapes, hos
 
 The NAPI model session is process-global, so all ArkTS runner instances now share one queue per runtime. Each load and its prediction stay atomic across runner instances. Immutable bundled rawfiles may reuse the loaded session; a custom URI is read and loaded on every queued request so replacement content at the same cache URI cannot be mistaken for the prior model. A valid finite `[1,2125,112]` inference with no detections is a successful empty result, while a wrong-sized or non-finite raw tensor is rejected before decoding.
 
+The native boundary rejects zero-length model views before pointer arithmetic (`validateModel` resolves `false`; `loadModel` rejects), constructs all allocating model metadata before replacing the live session, and applies one explicit cleanup policy to async-work deletion failures. Fixture redistribution selects CC BY-SA 3.0 and records its canonical license URI, attribution, retouch history, and unchanged-byte status; an automatic guard verifies those statements and the fixture hash through five negative mutations.
+
 ## RED and GREEN evidence
 
 - RED device baseline: the legacy still route stopped at API24 model loading with `Invalid mslite model`; no real class/confidence/box inference was possible.
@@ -31,8 +33,9 @@ The NAPI model session is process-global, so all ArkTS runner instances now shar
 
 ## API24 emulator and UI evidence
 
-`ObjectDetectionNativeTest` passed 3/3 on the API24 x86_64 emulator:
+`ObjectDetectionNativeTest` passed 4/4 on the API24 x86_64 emulator:
 
+- Empty `Uint8Array(0)` and an empty non-zero-offset subarray both returned `false` from validation and were rejected by loading without entering native model parsing.
 - The production artifact loaded as `data [1,3,320,320]` to `output [1,2125,112]`; its first output was finite and non-zero. Malformed load was rejected, and the prior valid session still inferred afterward.
 - The licensed Wikimedia Commons Labrador fixture passed through `HarmonyObjectDetectionInputPreprocessor` and the production decoder three times with the same result. The best dog result was score `0.6802144646644592`, box `[51.75085978571212,36.12126614568653,643.729175792449,548.1309714530502]`, IoU `0.9701549988030088` against the project-authored box, above thresholds 0.65 and 0.85.
 - A programmatically generated solid-gray JPEG produced zero detections.
@@ -45,7 +48,7 @@ Ignored local evidence, intentionally not committed as large/generated artifacts
 - `../.superpowers/sdd/task-8-evidence/api24-object-photo-hagrid-layout.json`
 - `../.superpowers/sdd/task-8-evidence/api24-object-photo-picker-layout.json`
 
-The Labrador fixture is the 700x577 Wikimedia Commons original credited to Elf, Djmirko, and FT2, available under CC BY-SA 3.0 and GFDL. Its SHA-256 and manual detection box are recorded in the ohosTest fixture notice.
+The Labrador fixture is the unchanged 700x577 Wikimedia Commons file: original photograph by Elf, derivative work by Djmirko, and retouch by FT2. This project explicitly selects CC BY-SA 3.0 for redistribution and records the canonical license URI, modification status, SHA-256, and separate project-authored manual detection box in the ohosTest fixture notice.
 
 ## Evidence boundary
 

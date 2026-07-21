@@ -77,6 +77,28 @@ function topDetectionSummary(detections: Array<ObjectDetection>): string {
 
 export default function objectDetectionNativeTest() {
   describe('ObjectDetectionNativeTest', () => {
+    it('rejectsEmptyModelViewsWithoutEnteringNativeModelLoading', 0, async () => {
+      const emptyView = new Uint8Array(0);
+      const emptySubarray = new Uint8Array([1, 2, 3, 4]).subarray(2, 2);
+      expect(await objectDetectionMnn.validateModel(emptyView)).assertFalse();
+      expect(await objectDetectionMnn.validateModel(emptySubarray)).assertFalse();
+
+      let emptyViewRejected: boolean = false;
+      try {
+        await objectDetectionMnn.loadModel(emptyView);
+      } catch (_) {
+        emptyViewRejected = true;
+      }
+      let emptySubarrayRejected: boolean = false;
+      try {
+        await objectDetectionMnn.loadModel(emptySubarray);
+      } catch (_) {
+        emptySubarrayRejected = true;
+      }
+      expect(emptyViewRejected).assertTrue();
+      expect(emptySubarrayRejected).assertTrue();
+    });
+
     it('loadsAndRunsTheProductionNanoDetContractOnApi24', 0, async () => {
       const applicationContext = abilityDelegatorRegistry.getAbilityDelegator()
         .getAppContext()

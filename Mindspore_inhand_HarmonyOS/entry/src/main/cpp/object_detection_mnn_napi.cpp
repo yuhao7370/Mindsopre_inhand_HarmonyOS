@@ -129,6 +129,16 @@ napi_status CreateErrorValue(napi_env env, const char* message, napi_value* resu
     return status == napi_ok ? napi_create_error(env, nullptr, text, result) : status;
 }
 
+void DeleteAsyncWorkOrFatal(napi_env env, napi_async_work work, const char* location, const char* message) noexcept
+{
+    // A queued-work creation failure is recoverable, but a failure to delete the
+    // resulting NAPI handle leaves its native context ownership indeterminate.
+    // Terminate instead of returning with either a leak or a dangling callback.
+    if (work == nullptr || napi_delete_async_work(env, work) != napi_ok) {
+        FatalNapi(location, message);
+    }
+}
+
 struct ModelWork {
     napi_deferred deferred = nullptr;
     napi_async_work work = nullptr;
@@ -206,10 +216,19 @@ void CompleteModelWork(napi_env env, napi_status status, void* raw) noexcept
     }
     const napi_async_work asyncWork = work->work;
     work->work = nullptr;
+    DeleteAsyncWorkOrFatal(env, asyncWork, "object_detection_mnn model completion",
+                           "Could not delete model async work.");
     work.reset();
-    if (napi_delete_async_work(env, asyncWork) != napi_ok) {
-        FatalNapi("object_detection_mnn model completion", "Could not delete model async work.");
+}
+
+napi_value ResolveInvalidValidationBeforeQueue(napi_env env, napi_deferred deferred, napi_value promise) noexcept
+{
+    napi_value value = nullptr;
+    if (napi_get_boolean(env, false, &value) != napi_ok || napi_resolve_deferred(env, deferred, value) != napi_ok) {
+        EstablishExceptionOrFatal(env, "Could not resolve empty-model validation result.");
+        return nullptr;
     }
+    return promise;
 }
 
 napi_value StartModelWork(napi_env env, napi_callback_info callbackInfo, bool validationOnly)
@@ -227,6 +246,11 @@ napi_value StartModelWork(napi_env env, napi_callback_info callbackInfo, bool va
             return RejectModelBeforeQueue(env, deferred, promise, expectation);
         }
         const TypedArrayView bytes = ReadTypedArray(env, argument, napi_uint8_array, sizeof(uint8_t), expectation);
+        if (bytes.visibleLength == 0) {
+            return validationOnly ? ResolveInvalidValidationBeforeQueue(env, deferred, promise) :
+                                    RejectModelBeforeQueue(env, deferred, promise,
+                                                           "Object-detection model bytes must not be empty.");
+        }
         auto work = std::make_unique<ModelWork>();
         work->deferred = deferred;
         work->validationOnly = validationOnly;
@@ -241,7 +265,8 @@ napi_value StartModelWork(napi_env env, napi_callback_info callbackInfo, bool va
         }
         napi_status queueStatus = napi_queue_async_work(env, work->work);
         if (queueStatus != napi_ok) {
-            napi_delete_async_work(env, work->work);
+            DeleteAsyncWorkOrFatal(env, work->work, "object_detection_mnn model queue cleanup",
+                                   "Could not delete queued model async work.");
             work->work = nullptr;
             return RejectModelBeforeQueue(env, deferred, promise, "Could not queue model async work.");
         }
@@ -350,10 +375,9 @@ void CompletePredict(napi_env env, napi_status status, void* raw) noexcept
     }
     const napi_async_work asyncWork = work->work;
     work->work = nullptr;
+    DeleteAsyncWorkOrFatal(env, asyncWork, "object_detection_mnn completion",
+                           "Could not delete prediction async work.");
     work.reset();
-    if (napi_delete_async_work(env, asyncWork) != napi_ok) {
-        FatalNapi("object_detection_mnn completion", "Could not delete prediction async work.");
-    }
 }
 
 napi_value PredictImpl(napi_env env, napi_callback_info callbackInfo)
@@ -387,7 +411,8 @@ napi_value PredictImpl(napi_env env, napi_callback_info callbackInfo)
         }
         napi_status queueStatus = napi_queue_async_work(env, work->work);
         if (queueStatus != napi_ok) {
-            napi_delete_async_work(env, work->work);
+            DeleteAsyncWorkOrFatal(env, work->work, "object_detection_mnn prediction queue cleanup",
+                                   "Could not delete queued prediction async work.");
             work->work = nullptr;
             return RejectBeforeQueue(env, deferred, promise, "Could not queue object-detection async work.");
         }
