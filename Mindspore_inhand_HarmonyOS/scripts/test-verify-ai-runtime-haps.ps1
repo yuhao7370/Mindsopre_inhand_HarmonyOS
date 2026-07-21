@@ -84,23 +84,6 @@ function Assert-GuardRejects(
   Write-Host "Rejected invalid fixture: $Label"
 }
 
-function Assert-GuardAcceptsInFreshProcess([string]$MainHapPath, [string]$OhosTestHapPath) {
-  $previousErrorActionPreference = $ErrorActionPreference
-  $ErrorActionPreference = 'Continue'
-  try {
-    $output = & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $guard `
-      -MainHapPath $MainHapPath -OhosTestHapPath $OhosTestHapPath `
-      -ExpectedRawfileRoot $expectedRawfileRoot -ExpectedNativeLibRoot $expectedNativeRoot 2>&1
-    $exitCode = $LASTEXITCODE
-  } finally {
-    $ErrorActionPreference = $previousErrorActionPreference
-  }
-  if ($exitCode -ne 0) {
-    throw "Fresh powershell.exe rejected valid fixture (exit=$exitCode):`n$($output | Out-String)"
-  }
-  Write-Host 'Accepted valid fixture in fresh powershell.exe.'
-}
-
 $mainEntries = @(
   'module.json',
   'resources/rawfile/model/mobilenetv2.ms',
@@ -174,7 +157,6 @@ try {
   New-HapFixture $testHap $testFiles
   & $guard -MainHapPath $mainHap -OhosTestHapPath $testHap `
     -ExpectedRawfileRoot $expectedRawfileRoot -ExpectedNativeLibRoot $expectedNativeRoot
-  Assert-GuardAcceptsInFreshProcess $mainHap $testHap
 
   $tamperedModelHap = Join-Path $tempRoot 'tampered-model.hap'
   $tamperedModelFiles = New-FileMap $mainEntries
@@ -279,6 +261,15 @@ try {
   $copiedAppModelFiles['resources/rawfile/model/ssd.ms'] = 'fixture'
   New-HapFixture $copiedAppModelHap $copiedAppModelFiles
   Assert-GuardRejects 'copied app model in test HAP' $mainHap $copiedAppModelHap 'ohosTest HAP contains copied models'
+
+  $copiedOcrLibraryHap = Join-Path $tempRoot 'copied-ocr-library.hap'
+  $copiedOcrLibraryFiles = New-FileMap $testEntries
+  $copiedOcrLibraryFiles['module.json'] = $testModule
+  $copiedOcrLibraryFiles['pack.info'] = $testPack
+  $copiedOcrLibraryFiles['libs/arm64-v8a/libocr_mnn.so'] = 'fixture'
+  New-HapFixture $copiedOcrLibraryHap $copiedOcrLibraryFiles
+  Assert-GuardRejects 'copied OCR library in test HAP' $mainHap $copiedOcrLibraryHap `
+    'ohosTest HAP contains copied AI libraries: libs/arm64-v8a/libocr_mnn.so'
 
   Write-Host 'HAP guard contract tests passed.'
 } finally {

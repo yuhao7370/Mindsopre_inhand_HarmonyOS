@@ -166,7 +166,7 @@ if ($OhosTestHapPath) {
   if ($copiedModels.Count -ne 0) {
     throw "ohosTest HAP contains copied models: $($copiedModels -join ', ')"
   }
-  $aiLibraries = @('libgesture_mnn.so', 'libMNN.so', 'libtranslation_archive.so', 'libsegmentation_mnn.so')
+  $aiLibraries = @('libgesture_mnn.so', 'libMNN.so', 'libtranslation_archive.so', 'libsegmentation_mnn.so', 'libocr_mnn.so')
   $copiedLibraries = @($testHapEntries | Where-Object { $aiLibraries -contains ($_ -split '/')[-1] })
   if ($copiedLibraries.Count -ne 0) {
     throw "ohosTest HAP contains copied AI libraries: $($copiedLibraries -join ', ')"
