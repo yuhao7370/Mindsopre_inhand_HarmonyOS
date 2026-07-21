@@ -32,6 +32,7 @@ import {
   TextTranslationRunner,
   TextTranslationRuntimeSource,
   TextTranslationService,
+  ocrCtcText,
   textRecognitionOutputFromBlocks,
   translationLanguagePairSupportsTarget,
   translationLanguagePairsRawfilePath
@@ -495,6 +496,7 @@ import {
 } from '../main/ets/common/data/ExperienceLayoutSpec';
 import {
   inputActionForKind,
+  isApi24EmulatorCameraPickerUnsupported,
   modelFileSuffixFilters,
   runtimeInputActionForWorkflowInput,
   runtimeInputActionsForWorkflow
@@ -4266,6 +4268,18 @@ export default function localUnitTest() {
       ]);
 
       expect(text).assertEqual('MindSpore\nHarmonyOS\nAI\n');
+    });
+
+    it('decodesCtcOutputWithoutRepeatingCharactersOrBlankTokens', 0, () => {
+      const scores = new Float32Array(40 * 6625);
+      const dictionary: Array<string> = [];
+      for (let index = 0; index < 6625; index++) {
+        dictionary.push(index === 1 ? 'A' : index === 2 ? 'B' : '');
+      }
+      scores[1] = 1;
+      scores[2 * 6625 + 1] = 1;
+      scores[3 * 6625 + 2] = 1;
+      expect(ocrCtcText(scores, dictionary)).assertEqual('AAB');
     });
 
     it('detectsAndroidChineseRangesForTranslationTarget', 0, () => {
@@ -8979,6 +8993,14 @@ export default function localUnitTest() {
       expect(inputKindReplacesPrimaryInput('stylePredictModelFile')).assertFalse();
       expect(inputKindReplacesPrimaryInput('backgroundImage')).assertFalse();
       expect(inputKindReplacesPrimaryInput('photo')).assertTrue();
+    });
+
+    it('keepsNativeCameraPickerForPhysicalDevicesAndGuardsApi24Emulator', 0, () => {
+      expect(isApi24EmulatorCameraPickerUnsupported('PHEMU-FD00')).assertTrue();
+      expect(isApi24EmulatorCameraPickerUnsupported('phemu-x86_64')).assertTrue();
+      expect(isApi24EmulatorCameraPickerUnsupported('emulator')).assertTrue();
+      expect(isApi24EmulatorCameraPickerUnsupported('LNA-AL00')).assertFalse();
+      expect(isApi24EmulatorCameraPickerUnsupported('')).assertFalse();
     });
 
     it('autoRunsTextImageInputsAfterAndroidImageInputReadyOnly', 0, () => {

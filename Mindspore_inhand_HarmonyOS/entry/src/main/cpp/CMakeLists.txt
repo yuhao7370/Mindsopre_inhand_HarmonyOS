@@ -30,3 +30,14 @@ set_target_properties(segmentation_mnn PROPERTIES
   BUILD_WITH_INSTALL_RPATH TRUE
   INSTALL_RPATH "\$ORIGIN"
 )
+
+add_library(ocr_mnn SHARED
+  ocr_mnn_napi.cpp
+  ocr_mnn_session.cpp
+)
+target_include_directories(ocr_mnn PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include")
+target_link_libraries(ocr_mnn PRIVATE MNN libace_napi.z.so)
+set_target_properties(ocr_mnn PROPERTIES
+  BUILD_WITH_INSTALL_RPATH TRUE
+  INSTALL_RPATH "\$ORIGIN"
+)

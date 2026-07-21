@@ -1,0 +1,23 @@
+{
+  "maximumCharacterErrorRate": 0.10,
+  "fixtures": [
+    {
+      "file": "english.png",
+      "groundTruth": "HELLO OCR 2026",
+      "sha256": "23986BDF77B8A0B388AAFDA3C7296C027A8AFBAF79ABD0B451D1482F0BB84E31",
+      "provenance": "Self-authored rendered printed text; released with this project under CC0-1.0."
+    },
+    {
+      "file": "chinese.png",
+      "groundTruth": "文字提取",
+      "sha256": "8984ABE0E92E50B036D23196B703D174209B207EDE42A63C12F41D8DE4676204",
+      "provenance": "Self-authored rendered printed text; released with this project under CC0-1.0."
+    },
+    {
+      "file": "multiline.png",
+      "groundTruth": "HELLO OCR\nMULTI LINE 2026",
+      "sha256": "A32EE857D212050A42311ADD54C404936CE0EEB2FC2930B57F7A9FAEDC8D808D",
+      "provenance": "Self-authored rendered printed text with Liberation Sans (OFL-1.1); fixture released with this project under CC0-1.0."
+    }
+  ]
+}

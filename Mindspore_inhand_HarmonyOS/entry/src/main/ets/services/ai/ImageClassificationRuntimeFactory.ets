@@ -96,7 +96,9 @@ import {
   sceneDetectionModelRawfilePath
 } from './SceneDetectionService';
 import {
+  CoreVisionFallbackTextRecognitionRunner,
   HarmonyTextRecognitionRunner,
+  LocalMnnTextRecognitionRunner,
   parseTranslationLanguagePairs,
   TextRecognitionRunner,
   TextRecognitionService,
@@ -457,7 +459,10 @@ export function createHarmonyTextRecognitionService(
   options: HarmonyImageClassificationRuntimeOptions
 ): TextRecognitionService {
   return new TextRecognitionService({
-    runner: options.textRecognitionRunner ?? new HarmonyTextRecognitionRunner()
+    runner: options.textRecognitionRunner ?? new CoreVisionFallbackTextRecognitionRunner(
+      new HarmonyTextRecognitionRunner(),
+      new LocalMnnTextRecognitionRunner({ resourceManager: options.resourceManager })
+    )
   });
 }
 

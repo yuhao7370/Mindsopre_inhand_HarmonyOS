@@ -832,7 +832,9 @@ struct FeatureRuntimePage {
     if (!result.ok) {
       const previousTextInputVisible = this.pendingPickTextInputVisible;
       this.pendingPickTextInputVisible = undefined;
-      this.statusKey = cancelledPickStatusKeyForWorkflow(workflow, inputKind, initialPick);
+      this.statusKey = result.failure === 'cameraUnavailable' ?
+        'feature_runtime_live_camera_failed' :
+        cancelledPickStatusKeyForWorkflow(workflow, inputKind, initialPick);
       this.applyPickedInputState(runtimePickedInputStateAfterCancelledPick(
         this.routeName,
         inputKind,
@@ -844,6 +846,9 @@ struct FeatureRuntimePage {
         this.textInputVisible,
         previousTextInputVisible
       );
+      if (inputKind === 'camera' && result.failure === 'cameraUnavailable') {
+        this.showRuntimeToast(this.statusKey);
+      }
       if (workflow && shouldLeaveRuntimeAfterCancelledInitialPick(workflow, inputKind, initialPick)) {
         this.showRuntimeToast(cancelledPickToastStatusKeyForWorkflow(workflow, inputKind, initialPick));
         router.back();

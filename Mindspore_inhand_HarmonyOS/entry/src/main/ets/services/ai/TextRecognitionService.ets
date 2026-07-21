@@ -2,6 +2,7 @@ import { fileIo } from '@kit.CoreFileKit';
 import { image } from '@kit.ImageKit';
 import { textRecognition } from '@kit.CoreVisionKit';
 import { createPixelMapWithExifOrientation } from './ImageDecodeOrientation';
+import { RawfileContentReader } from './MindSporeLiteModelRunner';
 
 export const translationLanguagePairsRawfilePath = 'hms/Country_pair_new.txt';
 
@@ -102,6 +103,337 @@ export class HarmonyTextRecognitionRunner implements TextRecognitionRunner {
       }
     }
   }
+}
+
+export const ppOcrDetectorModelRawfilePath: string = 'models/ocr/ppocrv3_det.mnn';
+export const ppOcrRecognizerModelRawfilePath: string = 'models/ocr/ppocrv3_rec.mnn';
+export const ppOcrDictionaryRawfilePath: string = 'models/ocr/ppocr_keys_v1.txt';
+const ppOcrDetectorSize: number = 960;
+const ppOcrRecognizerHeight: number = 48;
+const ppOcrRecognizerWidth: number = 320;
+const ppOcrDetectorThreshold: number = 0.3;
+
+export interface OcrMnnNativeSession {
+  loadModels(detector: Uint8Array, recognizer: Uint8Array): void;
+  predictDetector(input: Float32Array): Promise<ArrayBuffer>;
+  predictRecognizer(input: Float32Array): Promise<ArrayBuffer>;
+  release(): void;
+}
+
+export type OcrMnnNativeSessionFactory = () => Promise<OcrMnnNativeSession>;
+
+class HarmonyOcrMnnNativeSession implements OcrMnnNativeSession {
+  private readonly module: ESObject;
+
+  constructor(module: ESObject) {
+    this.module = module;
+  }
+
+  loadModels(detector: Uint8Array, recognizer: Uint8Array): void {
+    this.module.loadModels(detector, recognizer);
+  }
+
+  async predictDetector(input: Float32Array): Promise<ArrayBuffer> {
+    return await this.module.predictDetector(input) as ArrayBuffer;
+  }
+
+  async predictRecognizer(input: Float32Array): Promise<ArrayBuffer> {
+    return await this.module.predictRecognizer(input) as ArrayBuffer;
+  }
+
+  release(): void {
+    this.module.release();
+  }
+}
+
+export const createHarmonyOcrMnnNativeSession: OcrMnnNativeSessionFactory = async () => {
+  const namespace: ESObject = await import('libocr_mnn.so');
+  return new HarmonyOcrMnnNativeSession(namespace.default);
+};
+
+export interface LocalMnnTextRecognitionRunnerOptions {
+  readonly resourceManager: RawfileContentReader;
+  readonly sessionFactory?: OcrMnnNativeSessionFactory;
+}
+
+export class CoreVisionFallbackTextRecognitionRunner implements TextRecognitionRunner {
+  private readonly primary: TextRecognitionRunner;
+  private readonly fallback: TextRecognitionRunner;
+  private primaryAvailable: boolean = true;
+
+  constructor(primary: TextRecognitionRunner, fallback: TextRecognitionRunner) {
+    this.primary = primary;
+    this.fallback = fallback;
+  }
+
+  async recognizeText(imageUri: string): Promise<TextRecognitionResult> {
+    if (this.primaryAvailable) {
+      try {
+        const result = await this.primary.recognizeText(imageUri);
+        if (result.ok && hasMeaningfulText(result.text)) {
+          return result;
+        }
+      } catch (_) {
+      }
+      this.primaryAvailable = false;
+    }
+    return await this.fallback.recognizeText(imageUri);
+  }
+}
+
+export class LocalMnnTextRecognitionRunner implements TextRecognitionRunner {
+  private readonly resourceManager: RawfileContentReader;
+  private readonly sessionFactory: OcrMnnNativeSessionFactory;
+  private sessionPromise: Promise<OcrMnnNativeSession> | undefined = undefined;
+  private dictionaryPromise: Promise<Array<string>> | undefined = undefined;
+
+  constructor(options: LocalMnnTextRecognitionRunnerOptions) {
+    this.resourceManager = options.resourceManager;
+    this.sessionFactory = options.sessionFactory ?? createHarmonyOcrMnnNativeSession;
+  }
+
+  async recognizeText(imageUri: string): Promise<TextRecognitionResult> {
+    const startMs = Date.now();
+    const source = await ocrSourceImageFromUri(imageUri);
+    const session = await this.modelSession();
+    const detector = new Float32Array(await session.predictDetector(ocrDetectorInput(source)));
+    const bounds = ocrTextBounds(detector, source.width, source.height);
+    if (bounds.length === 0) {
+      return { ok: false, text: '', lineCount: 0, blockCount: 0, executionMs: Date.now() - startMs };
+    }
+    const dictionary = await this.dictionary();
+    const lines: Array<string> = [];
+    for (const lineBounds of bounds) {
+      const recognizer = new Float32Array(await session.predictRecognizer(ocrRecognizerInput(source, lineBounds)));
+      const line = ocrCtcText(recognizer, dictionary);
+      if (hasMeaningfulText(line) && lines.indexOf(line) < 0) { lines.push(line); }
+    }
+    const text = lines.join('\n');
+    return {
+      ok: hasMeaningfulText(text),
+      text: text,
+      lineCount: lines.length,
+      blockCount: lines.length,
+      executionMs: Date.now() - startMs
+    };
+  }
+
+  private async modelSession(): Promise<OcrMnnNativeSession> {
+    if (this.sessionPromise === undefined) {
+      this.sessionPromise = this.createModelSession();
+    }
+    return await this.sessionPromise;
+  }
+
+  private async createModelSession(): Promise<OcrMnnNativeSession> {
+    const session = await this.sessionFactory();
+    try {
+      const detector = await this.resourceManager.getRawFileContent(ppOcrDetectorModelRawfilePath);
+      const recognizer = await this.resourceManager.getRawFileContent(ppOcrRecognizerModelRawfilePath);
+      session.loadModels(detector, recognizer);
+      return session;
+    } catch (error) {
+      session.release();
+      throw new Error(`Unable to initialize the local PP-OCR models: ${error}`);
+    }
+  }
+
+  private async dictionary(): Promise<Array<string>> {
+    if (this.dictionaryPromise === undefined) {
+      this.dictionaryPromise = this.loadDictionary();
+    }
+    return await this.dictionaryPromise;
+  }
+
+  private async loadDictionary(): Promise<Array<string>> {
+    const text = ocrUtf8Text(await this.resourceManager.getRawFileContent(ppOcrDictionaryRawfilePath));
+    const dictionary: Array<string> = [''];
+    text.split('\n').forEach((line: string) => {
+      const value = line.split('\r').join('');
+      if (value.length > 0) {
+        dictionary.push(value);
+      }
+    });
+    dictionary.push(' ');
+    if (dictionary.length !== 6625) {
+      throw new Error('PP-OCR dictionary contract mismatch.');
+    }
+    return dictionary;
+  }
+}
+
+interface OcrSourceImage {
+  readonly rgba: Uint8Array;
+  readonly width: number;
+  readonly height: number;
+}
+
+interface OcrBounds {
+  readonly left: number;
+  readonly top: number;
+  readonly right: number;
+  readonly bottom: number;
+}
+
+async function ocrSourceImageFromUri(imageUri: string): Promise<OcrSourceImage> {
+  let imageFile: fileIo.File | undefined = undefined;
+  let imageSource: image.ImageSource | undefined = undefined;
+  let pixelMap: image.PixelMap | undefined = undefined;
+  try {
+    imageFile = await openTextRecognitionImageFile(imageUri);
+    imageSource = image.createImageSource(imageFile.fd);
+    pixelMap = await createPixelMapWithExifOrientation(imageSource);
+    const info = await pixelMap.getImageInfo();
+    const width = info.size.width;
+    const height = info.size.height;
+    if (width <= 0 || height <= 0) {
+      throw new Error('Invalid OCR image size.');
+    }
+    const buffer = new ArrayBuffer(width * height * 4);
+    await pixelMap.readPixelsToBuffer(buffer);
+    return { rgba: new Uint8Array(buffer), width: width, height: height };
+  } finally {
+    if (pixelMap !== undefined) { await pixelMap.release(); }
+    if (imageSource !== undefined) { await imageSource.release(); }
+    if (imageFile !== undefined) { await closeTextRecognitionImageFile(imageFile); }
+  }
+}
+
+function ocrDetectorInput(source: OcrSourceImage): Float32Array {
+  const values = new Float32Array(3 * ppOcrDetectorSize * ppOcrDetectorSize);
+  const mean: Array<number> = [0.485, 0.456, 0.406];
+  const deviation: Array<number> = [0.229, 0.224, 0.225];
+  for (let y = 0; y < ppOcrDetectorSize; y++) {
+    for (let x = 0; x < ppOcrDetectorSize; x++) {
+      const pixel = ocrSourcePixel(source, Math.floor(x * source.width / ppOcrDetectorSize),
+        Math.floor(y * source.height / ppOcrDetectorSize));
+      const offset = y * ppOcrDetectorSize + x;
+      values[offset] = (pixel[0] / 255 - mean[0]) / deviation[0];
+      values[ppOcrDetectorSize * ppOcrDetectorSize + offset] = (pixel[1] / 255 - mean[1]) / deviation[1];
+      values[2 * ppOcrDetectorSize * ppOcrDetectorSize + offset] = (pixel[2] / 255 - mean[2]) / deviation[2];
+    }
+  }
+  return values;
+}
+
+function ocrTextBounds(detector: Float32Array, sourceWidth: number, sourceHeight: number): Array<OcrBounds> {
+  if (detector.length !== ppOcrDetectorSize * ppOcrDetectorSize) {
+    throw new Error('PP-OCR detector output contract mismatch.');
+  }
+  const lines: Array<OcrBounds> = [];
+  let top = -1;
+  let bottom = -1;
+  let inactiveRows = 0;
+  for (let y = 0; y <= ppOcrDetectorSize; y++) {
+    let hasText = false;
+    if (y < ppOcrDetectorSize) {
+      for (let x = 0; x < ppOcrDetectorSize; x++) {
+        const probability = detector[y * ppOcrDetectorSize + x];
+        if (!Number.isFinite(probability)) { throw new Error('PP-OCR detector output is non-finite.'); }
+        if (probability >= ppOcrDetectorThreshold) { hasText = true; break; }
+      }
+    }
+    if (hasText) {
+      if (top < 0) { top = y; }
+      bottom = y;
+      inactiveRows = 0;
+    } else if (top >= 0 && ++inactiveRows > 8) {
+      const bounds = ocrTextLineBounds(detector, top, bottom, sourceWidth, sourceHeight);
+      if (bounds !== undefined) { lines.push(bounds); }
+      top = -1;
+      bottom = -1;
+      inactiveRows = 0;
+    }
+  }
+  return lines.slice(0, 16);
+}
+
+function ocrTextLineBounds(detector: Float32Array, top: number, bottom: number,
+  sourceWidth: number, sourceHeight: number): OcrBounds | undefined {
+  let left = ppOcrDetectorSize;
+  let right = -1;
+  for (let y = top; y <= bottom; y++) {
+    for (let x = 0; x < ppOcrDetectorSize; x++) {
+      if (detector[y * ppOcrDetectorSize + x] >= ppOcrDetectorThreshold) {
+        left = Math.min(left, x);
+        right = Math.max(right, x);
+      }
+    }
+  }
+  if (right < left || bottom - top < 2) { return undefined; }
+  const mappedLeft = Math.max(0, Math.floor(left * sourceWidth / ppOcrDetectorSize));
+  const mappedTop = Math.max(0, Math.floor(top * sourceHeight / ppOcrDetectorSize));
+  const mappedRight = Math.min(sourceWidth - 1, Math.ceil((right + 1) * sourceWidth / ppOcrDetectorSize));
+  const mappedBottom = Math.min(sourceHeight - 1, Math.ceil((bottom + 1) * sourceHeight / ppOcrDetectorSize));
+  const horizontalPadding = Math.ceil((mappedRight - mappedLeft + 1) * 0.05);
+  const verticalPadding = Math.ceil((mappedBottom - mappedTop + 1) * 0.5);
+  return {
+    left: Math.max(0, mappedLeft - horizontalPadding), top: Math.max(0, mappedTop - verticalPadding),
+    right: Math.min(sourceWidth - 1, mappedRight + horizontalPadding), bottom: Math.min(sourceHeight - 1, mappedBottom + verticalPadding)
+  };
+}
+
+function ocrRecognizerInput(source: OcrSourceImage, bounds: OcrBounds): Float32Array {
+  const cropWidth = Math.max(1, bounds.right - bounds.left + 1);
+  const cropHeight = Math.max(1, bounds.bottom - bounds.top + 1);
+  const resizedWidth = Math.min(ppOcrRecognizerWidth, Math.max(1, Math.round(ppOcrRecognizerHeight * cropWidth / cropHeight)));
+  const values = new Float32Array(3 * ppOcrRecognizerHeight * ppOcrRecognizerWidth);
+  values.fill(1);
+  for (let y = 0; y < ppOcrRecognizerHeight; y++) {
+    for (let x = 0; x < resizedWidth; x++) {
+      const pixel = ocrSourcePixel(source,
+        bounds.left + Math.floor(x * cropWidth / resizedWidth),
+        bounds.top + Math.floor(y * cropHeight / ppOcrRecognizerHeight));
+      const offset = y * ppOcrRecognizerWidth + x;
+      values[offset] = pixel[0] / 127.5 - 1;
+      values[ppOcrRecognizerHeight * ppOcrRecognizerWidth + offset] = pixel[1] / 127.5 - 1;
+      values[2 * ppOcrRecognizerHeight * ppOcrRecognizerWidth + offset] = pixel[2] / 127.5 - 1;
+    }
+  }
+  return values;
+}
+
+function ocrSourcePixel(source: OcrSourceImage, x: number, y: number): Array<number> {
+  const clampedX = Math.min(source.width - 1, Math.max(0, x));
+  const clampedY = Math.min(source.height - 1, Math.max(0, y));
+  const offset = (clampedY * source.width + clampedX) * 4;
+  return [source.rgba[offset], source.rgba[offset + 1], source.rgba[offset + 2]];
+}
+
+export function ocrCtcText(scores: Float32Array, dictionary: Array<string>): string {
+  if (scores.length !== 40 * 6625 || dictionary.length !== 6625) {
+    throw new Error('PP-OCR recognizer output contract mismatch.');
+  }
+  const text: Array<string> = [];
+  let previous = 0;
+  for (let timestep = 0; timestep < 40; timestep++) {
+    let bestIndex = 0;
+    let bestScore = -Infinity;
+    for (let index = 0; index < 6625; index++) {
+      const score = scores[timestep * 6625 + index];
+      if (!Number.isFinite(score)) { throw new Error('PP-OCR recognizer output is non-finite.'); }
+      if (score > bestScore) { bestScore = score; bestIndex = index; }
+    }
+    if (bestIndex !== 0 && bestIndex !== previous) { text.push(dictionary[bestIndex]); }
+    previous = bestIndex;
+  }
+  return text.join('').trim();
+}
+
+function ocrUtf8Text(content: Uint8Array): string {
+  const chars: Array<string> = [];
+  let index = 0;
+  while (index < content.length) {
+    const first = content[index];
+    let codePoint = first;
+    let count = 1;
+    if ((first & 0xE0) === 0xC0 && index + 1 < content.length) { codePoint = ((first & 0x1F) << 6) | (content[index + 1] & 0x3F); count = 2; }
+    else if ((first & 0xF0) === 0xE0 && index + 2 < content.length) { codePoint = ((first & 0x0F) << 12) | ((content[index + 1] & 0x3F) << 6) | (content[index + 2] & 0x3F); count = 3; }
+    else if ((first & 0xF8) === 0xF0 && index + 3 < content.length) { codePoint = ((first & 0x07) << 18) | ((content[index + 1] & 0x3F) << 12) | ((content[index + 2] & 0x3F) << 6) | (content[index + 3] & 0x3F); count = 4; }
+    chars.push(codePoint <= 0xFFFF ? String.fromCharCode(codePoint) : String.fromCharCode(0xD800 + ((codePoint - 0x10000) >> 10), 0xDC00 + ((codePoint - 0x10000) & 0x3FF)));
+    index += count;
+  }
+  return chars.join('');
 }
 
 export interface TextTranslationLanguagePair {
