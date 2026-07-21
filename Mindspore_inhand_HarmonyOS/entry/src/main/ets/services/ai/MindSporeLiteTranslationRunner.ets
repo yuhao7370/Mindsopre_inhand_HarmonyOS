@@ -1,4 +1,5 @@
 import { mindSporeLite } from '@kit.MindSporeLiteKit';
+import { fileIo } from '@kit.CoreFileKit';
 import {
   TranslationGraphManifest,
   TranslationModelManifest,
@@ -79,6 +80,11 @@ export interface TranslationProductionBundleOptions {
   readonly cacheRoot: string;
 }
 
+export interface PreparedTranslationModelFiles {
+  readonly manifest: TranslationModelManifest;
+  readonly directory: string;
+}
+
 interface TranslationArchiveMember {
   readonly name: 'encoder.ms' | 'decoder_prefill.ms' | 'decoder_step.ms';
   readonly size: number;
@@ -111,11 +117,11 @@ export class MindSporeLiteTranslationRunner implements TextTranslationRunner {
 
   async translate(text: string, targetLanguage: string): Promise<TextTranslationResult> {
     if (targetLanguage !== 'en' && targetLanguage !== 'zh') {
-      return failedTranslation(text, targetLanguage);
+      return failedTranslation(text, targetLanguage, 'UNSUPPORTED_TARGET');
     }
     const segments = prepareTranslationInput(text);
     if (segments.length === 0 || text.trim().length === 0) {
-      return failedTranslation(text, targetLanguage);
+      return failedTranslation(text, targetLanguage, 'EMPTY_INPUT');
     }
     if (!hasTranslationModelSegment(segments)) {
       return successfulTranslation(text, text, targetLanguage);
@@ -125,10 +131,10 @@ export class MindSporeLiteTranslationRunner implements TextTranslationRunner {
       // be ready before the first call to encodeTranslationText().
       const bundle = await cachedTranslationBundle(this.bundleFactory);
       return await bundle.requestQueue.runExclusive(async (): Promise<TextTranslationResult> => {
-        return await translateInputSegments(bundle, segments, text, targetLanguage);
+        return await runTranslationModelRequest(bundle, text, targetLanguage);
       });
     } catch (_) {
-      return failedTranslation(text, targetLanguage);
+      return failedTranslation(text, targetLanguage, 'MODEL_EXECUTION_FAILED');
     }
   }
 }
@@ -148,16 +154,16 @@ async function translateInputSegments(
     }
     const chunks = encodeTranslationText(segment.text, targetLanguage);
     if (chunks.length === 0) {
-      return failedTranslation(text, targetLanguage);
+      return failedTranslation(text, targetLanguage, 'DECODE_FAILED');
     }
     const translatedSegment = await translateChunksToText(bundle, chunks);
     if (translatedSegment.length === 0) {
-      return failedTranslation(text, targetLanguage);
+      return failedTranslation(text, targetLanguage, 'DECODE_FAILED');
     }
     translatedText += translatedSegment;
   }
   if (translatedText.trim().length === 0) {
-    return failedTranslation(text, targetLanguage);
+    return failedTranslation(text, targetLanguage, 'DECODE_FAILED');
   }
   return successfulTranslation(text, translatedText, targetLanguage);
 }
@@ -209,14 +215,56 @@ export function productionTranslationModelBundleFactory(
 async function loadProductionTranslationModelBundle(
   options: TranslationProductionBundleOptions
 ): Promise<TranslationModelBundle> {
+  const prepared = await prepareProductionTranslationModelFiles(options);
+  const tokenizerContent = await options.resourceManager.getRawFileContent(translationTokenizerRuntimeRawfilePath);
+  configureTranslationTokenizer(asciiContentToText(tokenizerContent));
+  const encoderPath = modelFilePath(prepared.directory, prepared.manifest.graphs[0].file);
+  const prefillPath = modelFilePath(prepared.directory, prepared.manifest.graphs[1].file);
+  const stepPath = modelFilePath(prepared.directory, prepared.manifest.graphs[2].file);
+  const encoderBuffer = await readVerifiedTranslationModel(encoderPath, prepared.manifest.graphs[0]);
+  const encoder = await mindSporeLite.loadModelFromBuffer(encoderBuffer, mindSporeLiteCpuContext());
+  const prefillBuffer = await readVerifiedTranslationModel(prefillPath, prepared.manifest.graphs[1]);
+  const prefill = await mindSporeLite.loadModelFromBuffer(prefillBuffer, mindSporeLiteCpuContext());
+  const stepBuffer = await readVerifiedTranslationModel(stepPath, prepared.manifest.graphs[2]);
+  const step = await mindSporeLite.loadModelFromBuffer(stepBuffer, mindSporeLiteCpuContext());
+  return {
+    manifest: prepared.manifest,
+    session: new MindSporeLiteTranslationTensorSession(
+      prepared.manifest,
+      new TranslationMindSporeModelAdapter(encoder),
+      new TranslationMindSporeModelAdapter(prefill),
+      new TranslationMindSporeModelAdapter(step)
+    ),
+    requestQueue: new TranslationRequestQueue()
+  };
+}
+
+export async function runTranslationModelRequest(
+  bundle: TranslationModelBundle,
+  text: string,
+  targetLanguage: string
+): Promise<TextTranslationResult> {
+  if (targetLanguage !== 'en' && targetLanguage !== 'zh') {
+    return failedTranslation(text, targetLanguage, 'UNSUPPORTED_TARGET');
+  }
+  const segments = prepareTranslationInput(text);
+  if (segments.length === 0 || text.trim().length === 0) {
+    return failedTranslation(text, targetLanguage, 'EMPTY_INPUT');
+  }
+  if (!hasTranslationModelSegment(segments)) {
+    return successfulTranslation(text, text, targetLanguage);
+  }
+  return await translateInputSegments(bundle, segments, text, targetLanguage);
+}
+
+export async function prepareProductionTranslationModelFiles(
+  options: TranslationProductionBundleOptions
+): Promise<PreparedTranslationModelFiles> {
   if (options.cacheRoot.trim().length === 0) {
     throw new Error('Translation model cache root is empty.');
   }
   const manifestContent = await options.resourceManager.getRawFileContent(translationManifestRawfilePath);
   const manifest = parseTranslationModelManifest(asciiContentToText(manifestContent));
-  const tokenizerContent = await options.resourceManager.getRawFileContent(translationTokenizerRuntimeRawfilePath);
-  configureTranslationTokenizer(asciiContentToText(tokenizerContent));
-
   const descriptor = await options.resourceManager.getRawFd(translationArchiveRawfilePath);
   let extraction: TranslationArchiveResult;
   try {
@@ -239,24 +287,9 @@ async function loadProductionTranslationModelBundle(
   if (extraction.directory.trim().length === 0) {
     throw new Error('Translation archive extractor returned an empty directory.');
   }
-  const encoder = await mindSporeLite.loadModelFromFile(
-    modelFilePath(extraction.directory, manifest.graphs[0].file), mindSporeLiteCpuContext()
-  );
-  const prefill = await mindSporeLite.loadModelFromFile(
-    modelFilePath(extraction.directory, manifest.graphs[1].file), mindSporeLiteCpuContext()
-  );
-  const step = await mindSporeLite.loadModelFromFile(
-    modelFilePath(extraction.directory, manifest.graphs[2].file), mindSporeLiteCpuContext()
-  );
   return {
     manifest: manifest,
-    session: new MindSporeLiteTranslationTensorSession(
-      manifest,
-      new TranslationMindSporeModelAdapter(encoder),
-      new TranslationMindSporeModelAdapter(prefill),
-      new TranslationMindSporeModelAdapter(step)
-    ),
-    requestQueue: new TranslationRequestQueue()
+    directory: extraction.directory
   };
 }
 
@@ -620,6 +653,9 @@ function validateModelInputContract(
   graphName: string
 ): void {
   const runtimeInputs = model.getInputs();
+  if (runtimeInputs === undefined) {
+    throw new Error(`${graphName} model returned no inputs after load.`);
+  }
   if (runtimeInputs.length !== graph.inputs.length) {
     throw new Error(`${graphName} model input count mismatch.`);
   }
@@ -835,7 +871,41 @@ function modelFilePath(directory: string, file: string): string {
   return `${directory}${separator}${file}`;
 }
 
-function asciiContentToText(content: Uint8Array): string {
+async function readVerifiedTranslationModel(
+  path: string,
+  graph: TranslationGraphManifest
+): Promise<ArrayBuffer> {
+  let file: fileIo.File | undefined = undefined;
+  try {
+    file = await fileIo.open(path, fileIo.OpenMode.READ_ONLY);
+    const stat = await fileIo.stat(file.fd);
+    if (!Number.isInteger(stat.size) || stat.size !== graph.size) {
+      throw new Error(`${graph.file} size differs from the verified translation manifest.`);
+    }
+    return await readTranslationModelFully(file.fd, stat.size, graph.file);
+  } finally {
+    if (file !== undefined) {
+      await fileIo.close(file);
+    }
+  }
+}
+
+async function readTranslationModelFully(fd: number, size: number, fileName: string): Promise<ArrayBuffer> {
+  const buffer = new ArrayBuffer(size);
+  let copied = 0;
+  while (copied < size) {
+    const chunk = new ArrayBuffer(Math.min(1024 * 1024, size - copied));
+    const bytesRead = await fileIo.read(fd, chunk, { offset: copied, length: chunk.byteLength });
+    if (!Number.isInteger(bytesRead) || bytesRead <= 0 || bytesRead > chunk.byteLength) {
+      throw new Error(`${fileName} could not be read completely.`);
+    }
+    new Uint8Array(buffer, copied, bytesRead).set(new Uint8Array(chunk, 0, bytesRead));
+    copied += bytesRead;
+  }
+  return buffer;
+}
+
+export function asciiContentToText(content: Uint8Array): string {
   const chunks: Array<string> = [];
   let chunk = '';
   for (let index = 0; index < content.length; index++) {
@@ -865,11 +935,16 @@ async function closeBundle(bundle: TranslationModelBundle): Promise<void> {
   });
 }
 
-function failedTranslation(sourceText: string, targetLanguage: string): TextTranslationResult {
+function failedTranslation(
+  sourceText: string,
+  targetLanguage: string,
+  errorCode: 'EMPTY_INPUT' | 'UNSUPPORTED_TARGET' | 'DECODE_FAILED' | 'MODEL_EXECUTION_FAILED'
+): TextTranslationResult {
   return {
     ok: false,
     sourceText: sourceText,
     translatedText: '',
-    targetLanguage: targetLanguage
+    targetLanguage: targetLanguage,
+    errorCode: errorCode
   };
 }

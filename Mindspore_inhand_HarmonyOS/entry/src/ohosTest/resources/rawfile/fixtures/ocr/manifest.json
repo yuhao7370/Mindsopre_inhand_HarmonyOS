@@ -14,6 +14,12 @@
       "provenance": "Self-authored rendered printed text; released with this project under CC0-1.0."
     },
     {
+      "file": "chinese_sentence.png",
+      "groundTruth": "请把门关上然后打开窗户",
+      "sha256": "3E292996B311C21410F67F92E0C92BC1DEDE29FCF0C0790FE55AFF076AC92F63",
+      "provenance": "Self-authored rendered printed text with Noto Sans SC (SIL Open Font License 1.1; renderer font SHA-256 763146584CF0710223441356B4395E279021B0806C196614377A7A0174AE074A); fixture released with this project under CC0-1.0."
+    },
+    {
       "file": "multiline.png",
       "groundTruth": "HELLO OCR\nMULTI LINE 2026",
       "sha256": "A32EE857D212050A42311ADD54C404936CE0EEB2FC2930B57F7A9FAEDC8D808D",

@@ -57,8 +57,10 @@ import {
   resetTranslationModelCacheForTests,
   TranslationModelBundleFactory,
   TranslationModelResourceManager,
-  TranslationRawFileDescriptor
+  TranslationRawFileDescriptor,
+  TranslationProductionBundleOptions
 } from './MindSporeLiteTranslationRunner';
+import { TranslationWorkerClient } from './TranslationWorkerClient';
 import {
   CoreVisionFallbackSegmentationRunner,
   HarmonySubjectSegmentationRunner,
@@ -177,7 +179,17 @@ export class HarmonyRawfileContentReader implements RawfileContentReader {
 }
 
 export const harmonyTranslationModelCacheRoot: string =
-  '/data/storage/el2/base/haps/entry/cache/translation';
+  '/data/storage/el2/base/files/translation';
+
+class HarmonyTranslationProductionOptions implements TranslationProductionBundleOptions {
+  readonly resourceManager: TranslationModelResourceManager;
+  readonly cacheRoot: string;
+
+  constructor(resourceManager: TranslationModelResourceManager, cacheRoot: string) {
+    this.resourceManager = resourceManager;
+    this.cacheRoot = cacheRoot;
+  }
+}
 
 export function cachedHarmonyDefaultAiServiceForResourceManager(
   resourceManager: RawfileContentReader
@@ -470,15 +482,14 @@ export async function createHarmonyTextTranslationService(
   options: HarmonyImageClassificationRuntimeOptions
 ): Promise<TextTranslationService> {
   const languagePairs = await loadOptionalTranslationLanguagePairs(options.resourceManager);
-  const bundleFactory = options.translationModelBundleFactory ?? productionTranslationModelBundleFactory({
-    resourceManager: options.translationModelResourceManager ??
-      options.resourceManager as TranslationModelResourceManager,
-    cacheRoot: options.translationModelCacheRoot ?? harmonyTranslationModelCacheRoot
-  });
+  const productionOptions = new HarmonyTranslationProductionOptions(
+    options.translationModelResourceManager ?? options.resourceManager as TranslationModelResourceManager,
+    options.translationModelCacheRoot ?? harmonyTranslationModelCacheRoot
+  );
   return new TextTranslationService({
-    runner: options.textTranslationRunner ?? new MindSporeLiteTranslationRunner({
-      bundleFactory: bundleFactory
-    }),
+    runner: options.textTranslationRunner ?? (options.translationModelBundleFactory === undefined ?
+      new TranslationWorkerClient(productionOptions) :
+      new MindSporeLiteTranslationRunner({ bundleFactory: options.translationModelBundleFactory })),
     languagePairs: languagePairs
   });
 }

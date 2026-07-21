@@ -443,12 +443,17 @@ export interface TextTranslationLanguagePair {
 
 export type TextTranslationRuntimeSource = 'offlineDictionary' | 'localModel';
 
+export type TextTranslationFailureCode =
+  'EMPTY_INPUT' | 'UNSUPPORTED_LANGUAGE_PAIR' | 'UNSUPPORTED_TARGET' |
+  'DECODE_FAILED' | 'MODEL_EXECUTION_FAILED';
+
 export interface TextTranslationResult {
   readonly ok: boolean;
   readonly sourceText: string;
   readonly translatedText: string;
   readonly targetLanguage: string;
   readonly runtimeSource?: TextTranslationRuntimeSource;
+  readonly errorCode?: TextTranslationFailureCode;
 }
 
 export interface TextTranslationRunner {
@@ -868,7 +873,8 @@ export class TextTranslationService {
         ok: false,
         sourceText: text,
         translatedText: '',
-        targetLanguage: targetLanguage
+        targetLanguage: targetLanguage,
+        errorCode: 'UNSUPPORTED_LANGUAGE_PAIR'
       };
     }
     try {
@@ -878,7 +884,8 @@ export class TextTranslationService {
         ok: false,
         sourceText: text,
         translatedText: '',
-        targetLanguage: targetLanguage
+        targetLanguage: targetLanguage,
+        errorCode: 'MODEL_EXECUTION_FAILED'
       };
     }
   }

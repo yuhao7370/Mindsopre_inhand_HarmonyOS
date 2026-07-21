@@ -9,6 +9,7 @@ $required = @(
   'entry\src\main\resources\rawfile\models\ocr\NOTICE.md',
   'entry\src\ohosTest\resources\rawfile\fixtures\ocr\english.png',
   'entry\src\ohosTest\resources\rawfile\fixtures\ocr\chinese.png',
+  'entry\src\ohosTest\resources\rawfile\fixtures\ocr\chinese_sentence.png',
   'entry\src\ohosTest\resources\rawfile\fixtures\ocr\multiline.png',
   'entry\src\ohosTest\resources\rawfile\fixtures\ocr\manifest.json'
 )
@@ -20,8 +21,8 @@ foreach ($relativePath in $required) {
 }
 
 $manifest = Get-Content -LiteralPath (Join-Path $root 'entry\src\ohosTest\resources\rawfile\fixtures\ocr\manifest.json') -Raw | ConvertFrom-Json
-if ($manifest.maximumCharacterErrorRate -gt 0.10 -or $manifest.fixtures.Count -ne 3) {
-  throw 'OCR fixture oracle must contain Chinese, English, and multiline samples with CER <= 0.10.'
+if ($manifest.maximumCharacterErrorRate -gt 0.10 -or $manifest.fixtures.Count -ne 4) {
+  throw 'OCR fixture oracle must contain Chinese, Chinese sentence, English, and multiline samples with CER <= 0.10.'
 }
 foreach ($fixture in $manifest.fixtures) {
   if ([string]::IsNullOrWhiteSpace($fixture.groundTruth) -or [string]::IsNullOrWhiteSpace($fixture.sha256)) {

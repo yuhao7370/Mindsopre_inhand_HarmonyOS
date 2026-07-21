@@ -60,6 +60,11 @@ export default function ocrNativeTest() {
     const fixtures: Array<OcrFixture> = [
       { rawfilePath: 'fixtures/ocr/english.png', expected: 'HELLO OCR 2026', name: 'ocr-english.png' },
       { rawfilePath: 'fixtures/ocr/chinese.png', expected: '\u6587\u5b57\u63d0\u53d6', name: 'ocr-chinese.png' },
+      {
+        rawfilePath: 'fixtures/ocr/chinese_sentence.png',
+        expected: '\u8bf7\u628a\u95e8\u5173\u4e0a\u7136\u540e\u6253\u5f00\u7a97\u6237',
+        name: 'ocr-chinese-sentence.png'
+      },
       { rawfilePath: 'fixtures/ocr/multiline.png', expected: 'HELLO OCR\nMULTI LINE 2026', name: 'ocr-multiline.png' }
     ];
     fixtures.forEach((fixture: OcrFixture) => {

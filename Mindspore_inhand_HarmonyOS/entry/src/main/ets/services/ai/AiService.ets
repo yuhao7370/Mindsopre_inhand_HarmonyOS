@@ -961,7 +961,8 @@ export class DefaultAiService {
     const lines: Array<string> = [
       `targetLanguage=${result.targetLanguage}`,
       `source=${result.sourceText}`,
-      `translated=${result.translatedText}`
+      `translated=${result.translatedText}`,
+      `errorCode=${result.errorCode ?? 'NONE'}`
     ];
     return lines.join('\n');
   }

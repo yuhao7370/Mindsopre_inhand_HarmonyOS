@@ -98,10 +98,14 @@ public:
             throw std::runtime_error("SHA-256 was finalized twice.");
         }
         std::array<uint8_t, 32> digest{};
-        Crypto_DataBlob output{digest.data(), digest.size()};
-        if (OH_CryptoDigest_Final(context_, &output) != CRYPTO_SUCCESS || output.len != digest.size()) {
+        Crypto_DataBlob output{nullptr, 0};
+        if (OH_CryptoDigest_Final(context_, &output) != CRYPTO_SUCCESS || output.data == nullptr ||
+            output.len != digest.size()) {
+            OH_Crypto_FreeDataBlob(&output);
             throw std::runtime_error("SHA-256 finalization failed.");
         }
+        std::copy_n(output.data, digest.size(), digest.begin());
+        OH_Crypto_FreeDataBlob(&output);
         finished_ = true;
         static constexpr char hex[] = "0123456789abcdef";
         std::string result(digest.size() * 2, '0');
