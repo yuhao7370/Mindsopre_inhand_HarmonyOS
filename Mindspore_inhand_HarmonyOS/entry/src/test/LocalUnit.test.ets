@@ -532,6 +532,9 @@ import {
   LiveCameraPosition,
   LiveCameraPreviewService,
   LiveCameraSwitchCapabilityService,
+  LiveDisplayRotationProvider,
+  LivePreviewRotationOutput,
+  LivePreviewRotationTracker,
   LiveFrameImageEncoder,
   LiveFrameImageResult,
   LiveFrameImageService,
@@ -1987,6 +1990,36 @@ class RecordingLiveCameraPreviewDriver implements LiveCameraPreviewDriver {
 
   setRotationDegrees(rotationDegrees: number): void {
     this.rotationDegrees = rotationDegrees;
+  }
+}
+
+class MutableLiveDisplayRotationProvider implements LiveDisplayRotationProvider {
+  rotation: number;
+
+  constructor(rotation: number) {
+    this.rotation = rotation;
+  }
+
+  currentDisplayRotation(): number {
+    return this.rotation;
+  }
+}
+
+class RecordingLivePreviewRotationOutput implements LivePreviewRotationOutput {
+  readonly displayRotations: Array<number> = [];
+  private readonly rotations: Array<number>;
+  fail: boolean = false;
+
+  constructor(rotations: Array<number>) {
+    this.rotations = rotations;
+  }
+
+  getPreviewRotation(displayRotation: number): number {
+    this.displayRotations.push(displayRotation);
+    if (this.fail) {
+      throw new Error('preview rotation unavailable');
+    }
+    return this.rotations[this.displayRotations.length - 1] ?? 0;
   }
 }
 
@@ -10284,6 +10317,39 @@ export default function localUnitTest() {
       expect(livePreviewContentRotationDegrees(90, 1, 'front', 0)).assertEqual(180);
       expect(livePreviewContentRotationDegrees(270, 1, 'front', 0)).assertEqual(0);
       expect(livePreviewContentRotationDegrees(-1, 0, 'back', 90)).assertEqual(90);
+    });
+
+    it('refreshesNativeFallbackWhenDisplayRotatesWithInvalidSensorOrientation', 0, () => {
+      const displayProvider = new MutableLiveDisplayRotationProvider(0);
+      const output = new RecordingLivePreviewRotationOutput([90, 0, 45]);
+      const tracker = new LivePreviewRotationTracker(-1, 'back', output, displayProvider);
+
+      expect(tracker.currentRotationDegrees()).assertEqual(90);
+      displayProvider.rotation = 1;
+      expect(tracker.currentRotationDegrees()).assertEqual(0);
+      expect(output.displayRotations.length).assertEqual(2);
+      expect(output.displayRotations[0]).assertEqual(0);
+      expect(output.displayRotations[1]).assertEqual(1);
+
+      displayProvider.rotation = 2;
+      expect(tracker.currentRotationDegrees()).assertEqual(0);
+      expect(output.displayRotations[2]).assertEqual(2);
+
+      output.fail = true;
+      displayProvider.rotation = 3;
+      expect(tracker.currentRotationDegrees()).assertEqual(0);
+      expect(output.displayRotations[3]).assertEqual(3);
+    });
+
+    it('doesNotCallNativeFallbackWhenSensorOrientationIsValid', 0, () => {
+      const displayProvider = new MutableLiveDisplayRotationProvider(0);
+      const output = new RecordingLivePreviewRotationOutput([180]);
+      const tracker = new LivePreviewRotationTracker(90, 'back', output, displayProvider);
+
+      expect(tracker.currentRotationDegrees()).assertEqual(90);
+      displayProvider.rotation = 1;
+      expect(tracker.currentRotationDegrees()).assertEqual(0);
+      expect(output.displayRotations.length).assertEqual(0);
     });
 
     it('liveCameraPreviewServiceUsesRequestedCameraPositionLikeAndroidSwitch', 0, async () => {
