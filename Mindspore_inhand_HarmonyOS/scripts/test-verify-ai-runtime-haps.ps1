@@ -87,6 +87,7 @@ function Assert-GuardRejects(
 $mainEntries = @(
   'module.json',
   'resources/rawfile/model/mobilenetv2.ms',
+  'resources/rawfile/model/movenet_singlepose_lightning_float16_v4.ms',
   'resources/rawfile/model/resnet18-place365.ms',
   'resources/rawfile/model/nanodet_plus_m_320.mnn',
   'resources/rawfile/model/style_predict_fp16.mnn',
@@ -142,7 +143,8 @@ $testEntries = @(
   'module.json',
   'pack.info',
   'ets/modules.abc',
-  'resources/rawfile/fixtures/gesture/open_palm.png'
+  'resources/rawfile/fixtures/gesture/open_palm.png',
+  'resources/rawfile/fixtures/posenet/labels.json'
 )
 
 New-Item -ItemType Directory -Path $tempRoot | Out-Null

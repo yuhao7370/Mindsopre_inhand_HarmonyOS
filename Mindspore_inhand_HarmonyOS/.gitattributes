@@ -17,3 +17,7 @@ entry/src/main/resources/rawfile/model/custom_channel_mean.ms -text -diff
 entry/src/main/resources/rawfile/model/custom_channel_mean_inverted.ms -text -diff
 entry/src/main/resources/rawfile/model/custom_channel_mean_non_finite.ms -text -diff
 model_sources/custom_model/*.tflite -text -diff
+entry/src/main/resources/rawfile/model/movenet_singlepose_lightning_float16_v4.ms -text -diff
+model_sources/posenet/*.tflite -text -diff
+entry/src/main/resources/rawfile/posenet/*.jpg -text -diff
+entry/src/main/resources/rawfile/posenet/*.JPG -text -diff

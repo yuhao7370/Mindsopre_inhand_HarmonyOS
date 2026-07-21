@@ -1,0 +1,54 @@
+{
+  "format": "COCO17 pixel coordinates",
+  "annotationMethod": "Manually placed and visually reviewed against the pinned image bytes",
+  "fixtures": [
+    {
+      "rawfilePath": "posenet/skeleton_image.JPG",
+      "width": 762,
+      "height": 952,
+      "sha256": "034E369C0DE1578FBCC0EB12E524D546405CA46AE45F340280971EB2577DFD98",
+      "keypoints": [
+        { "index": 0, "name": "nose", "x": 483, "y": 180 },
+        { "index": 1, "name": "left_eye", "x": 497, "y": 166 },
+        { "index": 2, "name": "right_eye", "x": 468, "y": 166 },
+        { "index": 3, "name": "left_ear", "x": 516, "y": 177 },
+        { "index": 4, "name": "right_ear", "x": 447, "y": 179 },
+        { "index": 5, "name": "left_shoulder", "x": 582, "y": 302 },
+        { "index": 6, "name": "right_shoulder", "x": 391, "y": 302 },
+        { "index": 7, "name": "left_elbow", "x": 650, "y": 399 },
+        { "index": 8, "name": "right_elbow", "x": 347, "y": 400 },
+        { "index": 9, "name": "left_wrist", "x": 571, "y": 461 },
+        { "index": 10, "name": "right_wrist", "x": 419, "y": 465 },
+        { "index": 11, "name": "left_hip", "x": 543, "y": 505 },
+        { "index": 12, "name": "right_hip", "x": 447, "y": 505 },
+        { "index": 13, "name": "left_knee", "x": 554, "y": 684 },
+        { "index": 14, "name": "right_knee", "x": 456, "y": 683 },
+        { "index": 15, "name": "left_ankle", "x": 566, "y": 889 },
+        { "index": 16, "name": "right_ankle", "x": 435, "y": 886 }
+      ]
+    },
+    {
+      "rawfilePath": "posenet/man_standing_indoor.jpg",
+      "width": 500,
+      "height": 752,
+      "sha256": "CC1575DA1C5CE13EC1ED67A548C67A210B033A99D4DA2DDF0CF72272498AE7A6",
+      "keypoints": [
+        { "index": 0, "name": "nose", "x": 249, "y": 204 },
+        { "index": 1, "name": "left_eye", "x": 258, "y": 196 },
+        { "index": 2, "name": "right_eye", "x": 240, "y": 196 },
+        { "index": 3, "name": "left_ear", "x": 269, "y": 204 },
+        { "index": 4, "name": "right_ear", "x": 226, "y": 205 },
+        { "index": 5, "name": "left_shoulder", "x": 326, "y": 288 },
+        { "index": 6, "name": "right_shoulder", "x": 165, "y": 291 },
+        { "index": 7, "name": "left_elbow", "x": 362, "y": 352 },
+        { "index": 8, "name": "right_elbow", "x": 130, "y": 350 },
+        { "index": 9, "name": "left_wrist", "x": 306, "y": 416 },
+        { "index": 10, "name": "right_wrist", "x": 191, "y": 410 },
+        { "index": 11, "name": "left_hip", "x": 277, "y": 457 },
+        { "index": 12, "name": "right_hip", "x": 218, "y": 456 },
+        { "index": 13, "name": "left_knee", "x": 275, "y": 568 },
+        { "index": 14, "name": "right_knee", "x": 211, "y": 565 }
+      ]
+    }
+  ]
+}

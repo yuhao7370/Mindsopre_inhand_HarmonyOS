@@ -70,7 +70,10 @@ import {
   SegmentationService
 } from './SegmentationService';
 import {
+  CoreVisionFallbackPoseRunner,
   HarmonySkeletonDetectionRunner,
+  LocalMoveNetPoseRunner,
+  moveNetModelRawfilePath,
   PoseRunner,
   PoseService
 } from './PoseService';
@@ -527,9 +530,15 @@ export function createHarmonyPoseService(
 ): PoseService {
   return new PoseService({
     mode: workflow === undefined ? 'normal' : poseModeForWorkflow(workflow),
-    runner: options.poseRunner ?? new HarmonySkeletonDetectionRunner({
-      resourceManager: options.resourceManager
-    })
+    runner: options.poseRunner ?? new CoreVisionFallbackPoseRunner(
+      new HarmonySkeletonDetectionRunner({
+        resourceManager: options.resourceManager
+      }),
+      new LocalMoveNetPoseRunner({
+        resourceManager: options.resourceManager,
+        modelRawfilePath: moveNetModelRawfilePath
+      })
+    )
   });
 }
 

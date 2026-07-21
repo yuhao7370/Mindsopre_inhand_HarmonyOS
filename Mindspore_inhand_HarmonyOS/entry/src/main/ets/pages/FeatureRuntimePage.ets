@@ -4041,6 +4041,16 @@ struct FeatureRuntimePage {
     })
   }
 
+  private poseNetStillImageSource(uri: string): ResourceStr {
+    if (uri === 'rawfile://posenet/skeleton_image.JPG') {
+      return $rawfile('posenet/skeleton_image.JPG');
+    }
+    if (uri === 'rawfile://posenet/man_standing_indoor.jpg') {
+      return $rawfile('posenet/man_standing_indoor.jpg');
+    }
+    return uri;
+  }
+
   @Builder
   poseNetStillPosePoint(point: PosePoint) {
     Column() {
@@ -4060,7 +4070,7 @@ struct FeatureRuntimePage {
     Stack({ alignContent: Alignment.TopStart }) {
       if (this.poseImageUri.length > 0 && this.posePoints.length > 0) {
         Stack({ alignContent: Alignment.TopStart }) {
-          Image(this.poseImageUri)
+          Image(this.poseNetStillImageSource(this.poseImageUri))
             .orientation(this.poseImageOrientation)
             .width('100%')
             .height('100%')
@@ -4076,7 +4086,7 @@ struct FeatureRuntimePage {
         .aspectRatio(this.poseAspectRatio())
         .clip(true)
       } else if (this.imageInputUri.length > 0) {
-        Image(this.imageInputUri)
+        Image(this.poseNetStillImageSource(this.imageInputUri))
           .width('100%')
           .objectFit(ImageFit.Contain)
       }

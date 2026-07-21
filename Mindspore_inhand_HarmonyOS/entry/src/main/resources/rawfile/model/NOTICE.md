@@ -22,6 +22,35 @@ float32 NHWC input `[1,224,224,3]` and float32 output `[1,1001]`; output index
 `i`. This trained model remains limited to this private repository's
 non-commercial research, educational, and local learning use.
 
+## Google MoveNet SinglePose Lightning asset
+
+`movenet_singlepose_lightning_float16_v4.ms` is a reproducibly converted copy
+of Google MoveNet SinglePose Lightning FLOAT16 release 4. The TF Hub model card
+and TFLite source are Apache-2.0 licensed; the complete Apache-2.0 text is
+included as `LICENSE-Apache-2.0.txt`.
+
+| Artifact | Official source | Bytes | SHA-256 |
+| --- | --- | ---: | --- |
+| TFLite FLOAT16 v4 source | https://tfhub.dev/google/lite-model/movenet/singlepose/lightning/tflite/float16/4?lite-format=tflite | 4758512 | `0FAC2226112D0371903CA86E3853CEC24EF603A0B2F96F589B180F0EBDD135AB` |
+| `movenet_singlepose_lightning_float16_v4.ms` | Converted audited artifact | 9348680 | `972F3BE55A484B0A86A418693CF134C5BD5BD32B3418965891E7FF1DD2874677` |
+
+The official MindSpore Lite 2.6.0 Linux x64 converter archive is
+`https://ms-release.obs.cn-north-4.myhuaweicloud.com/2.6.0/MindSpore/lite/release/linux/x86_64/mindspore-lite-2.6.0-linux-x64.tar.gz`,
+SHA-256
+`DC70D965C440ECAB9692FD2DD7362E967D79E92CCB0FF632AC021D25D2AF9C9E`.
+Two clean conversions produced byte-identical output with:
+
+```text
+converter_lite --fmk=TFLITE --modelFile=<source.tflite> --outputFile=<output-without-.ms> --saveType=MINDIR_LITE --optimize=general --fp16=off
+```
+
+The runtime contract is one UINT8 NHWC input named
+`serving_default_input:0`, shape `[1,192,192,3]`, and one FLOAT32 output named
+`StatefulPartitionedCall:0`, shape `[1,1,17,3]`. Preprocessing preserves aspect
+ratio, uses black letterbox padding, and passes RGB bytes without numerical
+normalization. Decoding reverses the letterbox into source-image pixels. No MNN
+conversion or numerical-equivalence claim is made for this asset.
+
 ## Project-authored Custom Model contract fixtures
 
 The Task 11 Custom Model fixtures are project-authored calculation graphs with

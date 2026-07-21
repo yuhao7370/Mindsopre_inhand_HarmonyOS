@@ -1,8 +1,10 @@
 import { fileIo } from '@kit.CoreFileKit';
 import { image } from '@kit.ImageKit';
+import { mindSporeLite } from '@kit.MindSporeLiteKit';
 import { skeletonDetection, visionBase } from '@kit.CoreVisionKit';
 import {
   RawfileContentReader,
+  mindSporeLiteCpuContext,
   rawfileContentToArrayBuffer
 } from './MindSporeLiteModelRunner';
 import {
@@ -81,6 +83,36 @@ export interface HarmonySkeletonDetectionRunnerOptions {
   readonly resourceManager?: RawfileContentReader;
 }
 
+export interface MoveNetLetterbox {
+  readonly originalWidth: number;
+  readonly originalHeight: number;
+  readonly resizedWidth: number;
+  readonly resizedHeight: number;
+  readonly padX: number;
+  readonly padY: number;
+}
+
+export interface MoveNetInput {
+  readonly inputBuffer: ArrayBuffer;
+  readonly letterbox: MoveNetLetterbox;
+}
+
+export interface MoveNetInputPreprocessor {
+  createInput(imageUri: string): Promise<MoveNetInput>;
+}
+
+export interface MoveNetRuntime {
+  loadModel(content: Uint8Array): Promise<void>;
+  predict(input: Uint8Array): Promise<Float32Array>;
+}
+
+export interface LocalMoveNetPoseRunnerOptions {
+  readonly resourceManager: RawfileContentReader;
+  readonly modelRawfilePath: string;
+  readonly preprocessor?: MoveNetInputPreprocessor;
+  readonly runtime?: MoveNetRuntime;
+}
+
 export interface PoseImageSourceInput {
   readonly imageSource: image.ImageSource;
   readonly imageFile?: fileIo.File;
@@ -104,6 +136,17 @@ export interface PoseImageSourceForUriOptions {
 
 export const poseMinPointScore = 0.2;
 export const poseRawfileUriPrefix = 'rawfile://';
+export const moveNetModelRawfilePath: string = 'model/movenet_singlepose_lightning_float16_v4.ms';
+export const moveNetInputSize: number = 192;
+export const moveNetInputChannelCount: number = 3;
+export const moveNetInputByteCount: number = moveNetInputSize * moveNetInputSize * moveNetInputChannelCount;
+export const moveNetPointCount: number = 17;
+export const moveNetOutputFloatCount: number = moveNetPointCount * 3;
+const moveNetOutputByteCount: number = moveNetOutputFloatCount * Float32Array.BYTES_PER_ELEMENT;
+const moveNetInputName: string = 'serving_default_input:0';
+const moveNetOutputName: string = 'StatefulPartitionedCall:0';
+const moveNetMinVisiblePointCount: number = 6;
+const moveNetMinVisibleLineCount: number = 4;
 
 export const androidLiveSkeletonTemplatePoints: Array<PosePoint> = [
   { x: 416.6629, y: 312.46442, type: 101, score: 0.8042025 },
@@ -270,6 +313,197 @@ export class HarmonySkeletonDetectionRunner implements PoseRunner {
   }
 }
 
+export class CoreVisionFallbackPoseRunner implements PoseRunner {
+  private readonly coreVisionRunner: PoseRunner;
+  private readonly localRunner: PoseRunner;
+
+  constructor(coreVisionRunner: PoseRunner, localRunner: PoseRunner) {
+    this.coreVisionRunner = coreVisionRunner;
+    this.localRunner = localRunner;
+  }
+
+  async detectPose(imageUri: string, mode?: PoseDetectionMode): Promise<PoseResult> {
+    try {
+      const result = await this.coreVisionRunner.detectPose(imageUri, mode);
+      if (isUsablePoseResult(result)) {
+        return result;
+      }
+    } catch (_) {
+    }
+    return this.localRunner.detectPose(imageUri, mode);
+  }
+}
+
+export class HarmonyMoveNetInputPreprocessor implements MoveNetInputPreprocessor {
+  private readonly resourceManager?: RawfileContentReader;
+
+  constructor(resourceManager?: RawfileContentReader) {
+    this.resourceManager = resourceManager;
+  }
+
+  async createInput(imageUri: string): Promise<MoveNetInput> {
+    let imageFile: fileIo.File | undefined = undefined;
+    let imageSource: image.ImageSource | undefined = undefined;
+    let pixelMap: image.PixelMap | undefined = undefined;
+    try {
+      const sourceInput = await createPoseImageSourceForUri(imageUri, {
+        resourceManager: this.resourceManager
+      });
+      imageSource = sourceInput.imageSource;
+      imageFile = sourceInput.imageFile;
+      const imageInfo = await imageSource.getImageInfo();
+      const rotationDegrees = await imageRotationDegreesFromImageSource(imageSource);
+      const displaySize = rotatedImageSize(imageInfo.size.width, imageInfo.size.height, rotationDegrees);
+      const letterbox = moveNetLetterboxForImage(displaySize.width, displaySize.height);
+      pixelMap = await imageSource.createPixelMap(decodingOptionsWithImageRotation({
+        desiredPixelFormat: image.PixelMapFormat.RGBA_8888
+      }, rotationDegrees));
+      await pixelMap.scale(
+        letterbox.resizedWidth / displaySize.width,
+        letterbox.resizedHeight / displaySize.height,
+        image.AntiAliasingLevel.LOW
+      );
+      const rgba = new Uint8Array(letterbox.resizedWidth * letterbox.resizedHeight * 4);
+      await pixelMap.readPixelsToBuffer(rgba.buffer as ArrayBuffer);
+      return {
+        inputBuffer: moveNetRgbInputFromResizedRgba(rgba, letterbox),
+        letterbox: letterbox
+      };
+    } finally {
+      if (pixelMap !== undefined) {
+        await pixelMap.release();
+      }
+      if (imageSource !== undefined) {
+        await imageSource.release();
+      }
+      if (imageFile !== undefined) {
+        await closePoseImageFile(imageFile);
+      }
+    }
+  }
+}
+
+class MindSporeLiteMoveNetRuntime implements MoveNetRuntime {
+  private model?: mindSporeLite.Model;
+
+  async loadModel(content: Uint8Array): Promise<void> {
+    const candidate = await mindSporeLite.loadModelFromBuffer(
+      rawfileContentToArrayBuffer(content),
+      mindSporeLiteCpuContext()
+    );
+    const inputs = candidate.getInputs();
+    if (inputs.length !== 1 || !moveNetInputTensorMatches(inputs[0])) {
+      throw new Error('MoveNet input tensor contract mismatch.');
+    }
+    this.model = candidate;
+  }
+
+  async predict(input: Uint8Array): Promise<Float32Array> {
+    if (this.model === undefined || input.length !== moveNetInputByteCount) {
+      throw new Error('MoveNet runtime is not ready.');
+    }
+    const inputs = this.model.getInputs();
+    if (inputs.length !== 1 || !moveNetInputTensorMatches(inputs[0])) {
+      throw new Error('MoveNet input tensor contract mismatch.');
+    }
+    const inputBuffer = new ArrayBuffer(input.length);
+    new Uint8Array(inputBuffer).set(input);
+    inputs[0].setData(inputBuffer);
+    const outputs = await this.model.predict(inputs);
+    if (outputs.length !== 1 || !moveNetOutputTensorMatches(outputs[0])) {
+      throw new Error('MoveNet output tensor contract mismatch.');
+    }
+    const output = new Float32Array(outputs[0].getData());
+    if (!moveNetOutputValuesAreFiniteAndNormalized(output)) {
+      throw new Error('MoveNet output contains invalid values.');
+    }
+    return output;
+  }
+}
+
+class MoveNetRuntimeState {
+  loadedModelKey: string = '';
+  operationTail: Promise<void> = Promise.resolve();
+}
+
+const sharedMindSporeLiteMoveNetRuntime: MoveNetRuntime = new MindSporeLiteMoveNetRuntime();
+const moveNetRuntimeStates: Map<MoveNetRuntime, MoveNetRuntimeState> = new Map<MoveNetRuntime, MoveNetRuntimeState>();
+
+function moveNetRuntimeState(runtime: MoveNetRuntime): MoveNetRuntimeState {
+  const existing = moveNetRuntimeStates.get(runtime);
+  if (existing !== undefined) {
+    return existing;
+  }
+  const state = new MoveNetRuntimeState();
+  moveNetRuntimeStates.set(runtime, state);
+  return state;
+}
+
+export class LocalMoveNetPoseRunner implements PoseRunner {
+  private readonly resourceManager: RawfileContentReader;
+  private readonly modelRawfilePath: string;
+  private readonly preprocessor: MoveNetInputPreprocessor;
+  private readonly runtime: MoveNetRuntime;
+  private readonly runtimeState: MoveNetRuntimeState;
+
+  constructor(options: LocalMoveNetPoseRunnerOptions) {
+    this.resourceManager = options.resourceManager;
+    this.modelRawfilePath = options.modelRawfilePath;
+    this.preprocessor = options.preprocessor ?? new HarmonyMoveNetInputPreprocessor(options.resourceManager);
+    this.runtime = options.runtime ?? sharedMindSporeLiteMoveNetRuntime;
+    this.runtimeState = moveNetRuntimeState(this.runtime);
+  }
+
+  detectPose(imageUri: string, _mode?: PoseDetectionMode): Promise<PoseResult> {
+    const operation = this.runtimeState.operationTail.then(async (): Promise<PoseResult> =>
+      await this.detectPoseExclusive(imageUri));
+    this.runtimeState.operationTail = operation.then((): void => {}, (): void => {});
+    return operation;
+  }
+
+  private async detectPoseExclusive(imageUri: string): Promise<PoseResult> {
+    const startMs = Date.now();
+    const input = await this.preprocessor.createInput(imageUri);
+    if (input.inputBuffer.byteLength !== moveNetInputByteCount) {
+      throw new Error('MoveNet input byte length mismatch.');
+    }
+    const modelKey = `rawfile:${this.modelRawfilePath}`;
+    if (this.runtimeState.loadedModelKey !== modelKey) {
+      const content = await this.resourceManager.getRawFileContent(this.modelRawfilePath);
+      await this.runtime.loadModel(content);
+      this.runtimeState.loadedModelKey = modelKey;
+    }
+    const output = await this.runtime.predict(new Uint8Array(input.inputBuffer));
+    return moveNetPoseResultFromOutput(output, input.letterbox, Date.now() - startMs);
+  }
+}
+
+function isUsablePoseResult(result: PoseResult): boolean {
+  return result.ok && result.skeletonCount > 0 && result.pointCount > 0 && result.points.length > 0;
+}
+
+function moveNetInputTensorMatches(tensor: mindSporeLite.MSTensor): boolean {
+  return moveNetTensorContractMatches(
+    1,
+    tensor.name,
+    tensor.shape,
+    tensor.dtype,
+    tensor.dataSize,
+    1,
+    moveNetOutputName,
+    [1, 1, moveNetPointCount, 3],
+    mindSporeLite.DataType.NUMBER_TYPE_FLOAT32,
+    moveNetOutputByteCount
+  ) && tensor.elementNum === moveNetInputByteCount;
+}
+
+function moveNetOutputTensorMatches(tensor: mindSporeLite.MSTensor): boolean {
+  return tensor.name === moveNetOutputName &&
+    tensor.dtype === mindSporeLite.DataType.NUMBER_TYPE_FLOAT32 &&
+    tensor.elementNum === moveNetOutputFloatCount && tensor.dataSize === moveNetOutputByteCount &&
+    numberArraysEqual(tensor.shape, [1, 1, moveNetPointCount, 3]);
+}
+
 export class HarmonyPoseImageSourceFactory implements PoseImageSourceFactory {
   createSourceFromRawfileContent(content: Uint8Array): image.ImageSource {
     return image.createImageSource(rawfileContentToArrayBuffer(content));
@@ -324,6 +558,154 @@ export function rawfilePathFromPoseImageUri(uri: string): string {
     return '';
   }
   return uri.substring(poseRawfileUriPrefix.length);
+}
+
+export function moveNetLetterboxForImage(imageWidth: number, imageHeight: number): MoveNetLetterbox {
+  if (imageWidth <= 0 || imageHeight <= 0) {
+    throw new Error('MoveNet image dimensions must be positive.');
+  }
+  const scale = Math.min(moveNetInputSize / imageWidth, moveNetInputSize / imageHeight);
+  const resizedWidth = Math.min(moveNetInputSize, Math.max(1, Math.round(imageWidth * scale)));
+  const resizedHeight = Math.min(moveNetInputSize, Math.max(1, Math.round(imageHeight * scale)));
+  return {
+    originalWidth: imageWidth,
+    originalHeight: imageHeight,
+    resizedWidth: resizedWidth,
+    resizedHeight: resizedHeight,
+    padX: Math.floor((moveNetInputSize - resizedWidth) / 2),
+    padY: Math.floor((moveNetInputSize - resizedHeight) / 2)
+  };
+}
+
+export function moveNetRgbInputFromResizedRgba(
+  rgba: Uint8Array,
+  letterbox: MoveNetLetterbox
+): ArrayBuffer {
+  const expectedRgbaLength = letterbox.resizedWidth * letterbox.resizedHeight * 4;
+  if (rgba.length !== expectedRgbaLength || !validMoveNetLetterbox(letterbox)) {
+    throw new Error('MoveNet resized RGBA input mismatch.');
+  }
+  const rgb = new Uint8Array(moveNetInputByteCount);
+  for (let y = 0; y < letterbox.resizedHeight; y++) {
+    for (let x = 0; x < letterbox.resizedWidth; x++) {
+      const sourceOffset = (y * letterbox.resizedWidth + x) * 4;
+      const targetOffset = ((y + letterbox.padY) * moveNetInputSize + x + letterbox.padX) * 3;
+      rgb[targetOffset] = rgba[sourceOffset];
+      rgb[targetOffset + 1] = rgba[sourceOffset + 1];
+      rgb[targetOffset + 2] = rgba[sourceOffset + 2];
+    }
+  }
+  return rgb.buffer as ArrayBuffer;
+}
+
+export function moveNetPoseResultFromOutput(
+  output: Float32Array,
+  letterbox: MoveNetLetterbox,
+  executionMs: number
+): PoseResult {
+  if (!validMoveNetLetterbox(letterbox) || !moveNetOutputValuesAreFiniteAndNormalized(output)) {
+    return emptyMoveNetPoseResult(executionMs, letterbox);
+  }
+  const points: Array<PosePoint> = [];
+  for (let index = 0; index < moveNetPointCount; index++) {
+    const normalizedY = output[index * 3];
+    const normalizedX = output[index * 3 + 1];
+    const score = output[index * 3 + 2];
+    const resizedX = normalizedX * moveNetInputSize - letterbox.padX;
+    const resizedY = normalizedY * moveNetInputSize - letterbox.padY;
+    points.push({
+      type: index,
+      score: score,
+      x: clampPoseCoordinate(resizedX * letterbox.originalWidth / letterbox.resizedWidth, letterbox.originalWidth),
+      y: clampPoseCoordinate(resizedY * letterbox.originalHeight / letterbox.resizedHeight, letterbox.originalHeight)
+    });
+  }
+  let visiblePointCount = 0;
+  points.forEach((point: PosePoint) => {
+    if (isPosePointVisible(point)) {
+      visiblePointCount++;
+    }
+  });
+  const usable = visiblePointCount >= moveNetMinVisiblePointCount &&
+    poseSkeletonLines(points).length >= moveNetMinVisibleLineCount;
+  return {
+    ok: usable,
+    skeletonCount: usable ? 1 : 0,
+    pointCount: points.length,
+    imageWidth: letterbox.originalWidth,
+    imageHeight: letterbox.originalHeight,
+    points: points,
+    executionMs: executionMs
+  };
+}
+
+export function moveNetTensorContractMatches(
+  inputCount: number,
+  inputName: string,
+  inputShape: Array<number>,
+  inputDtype: number,
+  inputDataSize: number,
+  outputCount: number,
+  outputName: string,
+  outputShape: Array<number>,
+  outputDtype: number,
+  outputDataSize: number
+): boolean {
+  return inputCount === 1 && inputName === moveNetInputName &&
+    numberArraysEqual(inputShape, [1, moveNetInputSize, moveNetInputSize, moveNetInputChannelCount]) &&
+    inputDtype === mindSporeLite.DataType.NUMBER_TYPE_UINT8 && inputDataSize === moveNetInputByteCount &&
+    outputCount === 1 && outputName === moveNetOutputName &&
+    numberArraysEqual(outputShape, [1, 1, moveNetPointCount, 3]) &&
+    outputDtype === mindSporeLite.DataType.NUMBER_TYPE_FLOAT32 && outputDataSize === moveNetOutputByteCount;
+}
+
+function validMoveNetLetterbox(letterbox: MoveNetLetterbox): boolean {
+  return letterbox.originalWidth > 0 && letterbox.originalHeight > 0 &&
+    letterbox.resizedWidth > 0 && letterbox.resizedHeight > 0 &&
+    letterbox.resizedWidth <= moveNetInputSize && letterbox.resizedHeight <= moveNetInputSize &&
+    letterbox.padX >= 0 && letterbox.padY >= 0 &&
+    letterbox.padX + letterbox.resizedWidth <= moveNetInputSize &&
+    letterbox.padY + letterbox.resizedHeight <= moveNetInputSize;
+}
+
+function moveNetOutputValuesAreFiniteAndNormalized(output: Float32Array): boolean {
+  if (output.length !== moveNetOutputFloatCount) {
+    return false;
+  }
+  for (let index = 0; index < output.length; index++) {
+    if (!Number.isFinite(output[index]) || output[index] < 0 || output[index] > 1) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function emptyMoveNetPoseResult(executionMs: number, letterbox: MoveNetLetterbox): PoseResult {
+  return {
+    ok: false,
+    skeletonCount: 0,
+    pointCount: 0,
+    imageWidth: letterbox.originalWidth,
+    imageHeight: letterbox.originalHeight,
+    points: [],
+    executionMs: executionMs
+  };
+}
+
+function numberArraysEqual(left: Array<number>, right: Array<number>): boolean {
+  if (left.length !== right.length) {
+    return false;
+  }
+  for (let index = 0; index < left.length; index++) {
+    if (left[index] !== right[index]) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function clampPoseCoordinate(value: number, length: number): number {
+  return Math.min(length, Math.max(0, value));
 }
 
 export function poseResultFromCoreVision(

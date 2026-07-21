@@ -10,6 +10,7 @@ $modelRelativeRoot = 'entry/src/main/resources/rawfile/model'
 $modelRoot = Join-Path $projectRoot $modelRelativeRoot
 $contracts = @(
   [pscustomobject]@{ Name = 'mobilenetv2.ms'; Bytes = 13988384; Sha256 = '5A7CCD53BF92D8B294A703A1302D4230A311B2D19A8D212EEDD65FF6838CFA84'; Verifier = 'verify-image-classification-model.ps1'; Downloader = 'download-image-classification-model.ps1' },
+  [pscustomobject]@{ Name = 'movenet_singlepose_lightning_float16_v4.ms'; Bytes = 9348680; Sha256 = '972F3BE55A484B0A86A418693CF134C5BD5BD32B3418965891E7FF1DD2874677'; Verifier = 'verify-posenet-model.ps1'; Downloader = 'download-posenet-model.ps1' },
   [pscustomobject]@{ Name = 'resnet18-place365.ms'; Bytes = 45448504; Sha256 = '286F2C85249FD51F6C437986E1C2C1F4EC10358A9B0EB97C886F2DC1AC63ECD9'; Verifier = 'verify-scene-detection-model.ps1'; Downloader = 'download-scene-detection-model.ps1' },
   [pscustomobject]@{ Name = 'nanodet_plus_m_320.mnn'; Bytes = 4785492; Sha256 = '8E0266D957F8CCA939952F4349639438967EB855FA2EDD1C430546EC0C447E9C'; Verifier = 'verify-object-detection-model.ps1'; Downloader = 'download-object-detection-model.ps1' },
   [pscustomobject]@{ Name = 'style_predict_fp16.mnn'; Bytes = 9354924; Sha256 = 'E23E713FA343B20B11110F8E02FFAA54E3E18B9CB17F26E42B3D7F32135144A6'; Verifier = 'verify-style-transfer-models.ps1'; Downloader = 'download-style-transfer-models.ps1' },
@@ -62,6 +63,7 @@ $ensureAst = Read-CoreGuardPowerShellAst $ensurePath
 $requiredVerifiers = @(
   'verify-image-classification-model.ps1',
   'verify-image-classification-labels.ps1',
+  'verify-posenet-model.ps1',
   'verify-object-detection-model.ps1',
   'verify-object-detection-labels.ps1',
   'verify-scene-detection-model.ps1',
@@ -103,12 +105,13 @@ foreach ($contract in $contracts) {
 
 foreach ($downloaderName in @(
   'download-image-classification-model.ps1',
+  'download-posenet-model.ps1',
   'download-object-detection-model.ps1',
   'download-scene-detection-model.ps1',
   'download-style-transfer-models.ps1'
 )) {
   $downloaderAst = Read-CoreGuardPowerShellAst (Join-Path $PSScriptRoot $downloaderName)
-  $guidCount = if ($downloaderName -eq 'download-scene-detection-model.ps1') { 2 } else { 1 }
+  $guidCount = if ($downloaderName -in @('download-scene-detection-model.ps1', 'download-posenet-model.ps1')) { 2 } else { 1 }
   Assert-CoreGuardExecutableMemberCall $downloaderAst '[System.Guid]::NewGuid().ToString(''N'')' "$downloaderName must create request-private GUID names." $guidCount
   Assert-CoreGuardExecutableCommand $downloaderAst 'Get-FileHash -LiteralPath $tmpPath -Algorithm SHA256' "$downloaderName must validate the staged same-directory temp."
   if ($downloaderName -eq 'download-style-transfer-models.ps1') {
@@ -197,7 +200,10 @@ foreach ($marker in @(
   '99A725E615C3B6B64C015DCE2EFE5796DCA65DDA22DD6B5B1753F500447A9B7A',
   'AFC464560DFE364E68B7D83544FB45E141B5A471813166FA7FCEEC37166D47AD',
   'C722CA178EBBAB5AD6ECDF4327B46FFD72E009EE62FC46E858C4D41DA03DA52D',
-  'DC70D965C440ECAB9692FD2DD7362E967D79E92CCB0FF632AC021D25D2AF9C9E'
+  'DC70D965C440ECAB9692FD2DD7362E967D79E92CCB0FF632AC021D25D2AF9C9E',
+  'https://tfhub.dev/google/lite-model/movenet/singlepose/lightning/tflite/float16/4?lite-format=tflite',
+  '0FAC2226112D0371903CA86E3853CEC24EF603A0B2F96F589B180F0EBDD135AB',
+  '972F3BE55A484B0A86A418693CF134C5BD5BD32B3418965891E7FF1DD2874677'
 )) {
   Assert-TextContains $notice $marker "NOTICE.md is missing provenance marker: $marker."
 }
@@ -217,6 +223,7 @@ $hapVerifierAst = Read-CoreGuardPowerShellAst (Join-Path $PSScriptRoot 'verify-a
 $hapFixtureAst = Read-CoreGuardPowerShellAst (Join-Path $PSScriptRoot 'test-verify-ai-runtime-haps.ps1')
 foreach ($entry in @(
   'resources/rawfile/model/mobilenetv2.ms',
+  'resources/rawfile/model/movenet_singlepose_lightning_float16_v4.ms',
   'resources/rawfile/model/resnet18-place365.ms',
   'resources/rawfile/model/nanodet_plus_m_320.mnn',
   'resources/rawfile/model/style_predict_fp16.mnn',
