@@ -104,6 +104,10 @@ $resourceEntries = @(
   'resources/rawfile/models/gesture/GestureDetector.ms',
   'resources/rawfile/models/gesture/manifest.json',
   'resources/rawfile/models/gesture/NOTICE.md',
+  'resources/rawfile/models/ocr/ppocrv3_det.mnn',
+  'resources/rawfile/models/ocr/ppocrv3_rec.mnn',
+  'resources/rawfile/models/ocr/ppocr_keys_v1.txt',
+  'resources/rawfile/models/ocr/NOTICE.md',
   'resources/rawfile/models/translation/translation-models.tar.xz',
   'resources/rawfile/models/translation/tokenizer.model',
   'resources/rawfile/models/translation/tokenizer_runtime.json',
@@ -118,6 +122,7 @@ $nativeEntries = @(
     "libs/$abi/libMNN.so"
     "libs/$abi/libtranslation_archive.so"
     "libs/$abi/libsegmentation_mnn.so"
+    "libs/$abi/libocr_mnn.so"
   }
 )
 $mainEntries = @('module.json') + $resourceEntries + $nativeEntries

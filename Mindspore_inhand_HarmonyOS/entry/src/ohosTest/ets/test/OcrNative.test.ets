@@ -6,6 +6,12 @@ import {
   createHarmonyTextRecognitionService,
   HarmonyRawfileContentReader
 } from '../../../main/ets/services/ai/ImageClassificationRuntimeFactory';
+import {
+  AiRunResult,
+  aiRunResultRows,
+  copyableTextForAiResult,
+  textRecognitionOutputForAiResult
+} from '../../../main/ets/services/ai/AiService';
 
 interface OcrFixture {
   readonly rawfilePath: string;
@@ -70,6 +76,23 @@ export default function ocrNativeTest() {
         expect(result.ok).assertTrue();
         expect(cer <= 0.10).assertTrue();
       });
+    });
+
+    it('keepsFailedRecognitionVisibleAndCopyable', 0, () => {
+      const failure: AiRunResult = {
+        ok: false,
+        code: 'TEXT_RECOGNITION_FAILED',
+        aiMethod: 'recognizeText',
+        messageKey: 'feature_runtime_text_recognition_failed',
+        detailText: ''
+      };
+      const rows = aiRunResultRows(failure);
+      expect(rows.length).assertEqual(1);
+      expect(rows[0].labelKey).assertEqual('feature_runtime_result_text');
+      expect(rows[0].valueKey).assertEqual('feature_runtime_text_recognition_failed');
+      expect(copyableTextForAiResult('recognizeText', rows)).assertEqual('feature_runtime_text_recognition_failed');
+      expect(textRecognitionOutputForAiResult(rows, () => 'Text extraction failed.'))
+        .assertEqual('Text extraction failed.');
     });
   });
 }

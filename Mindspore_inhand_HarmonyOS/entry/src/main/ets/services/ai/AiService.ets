@@ -991,6 +991,13 @@ export class DefaultAiService {
 export function aiRunResultRows(result: AiRunResult): Array<AiRunResultRow> {
   const data = result.data;
   if (data === undefined) {
+    if (result.aiMethod === 'recognizeText' && !result.ok) {
+      return [resultRow(
+        'feature_runtime_result_text',
+        result.messageKey,
+        result.messageKey
+      )];
+    }
     return [];
   }
 
@@ -1191,6 +1198,17 @@ export function copyableTextForAiResult(aiMethod: string, rows: Array<AiRunResul
     return translatedText.length > 0 ? translatedText : resultRowValue(rows, 'feature_runtime_result_text');
   }
   return '';
+}
+
+export function textRecognitionOutputForAiResult(
+  rows: Array<AiRunResultRow>,
+  resolveMessage: (key: AppStringKey) => ResourceStr
+): ResourceStr {
+  const row = rows.find((candidate: AiRunResultRow) => candidate.labelKey === 'feature_runtime_result_text');
+  if (row === undefined) {
+    return '';
+  }
+  return row.valueKey === undefined ? row.value : resolveMessage(row.valueKey);
 }
 
 export function translatedTextForAiResult(rows: Array<AiRunResultRow>): string {

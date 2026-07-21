@@ -96,7 +96,7 @@ function Assert-GuardAcceptsInFreshProcess([string]$MainHapPath, [string]$OhosTe
     $ErrorActionPreference = $previousErrorActionPreference
   }
   if ($exitCode -ne 0) {
-    throw "Fresh powershell.exe rejected valid fixture:`n$($output | Out-String)"
+    throw "Fresh powershell.exe rejected valid fixture (exit=$exitCode):`n$($output | Out-String)"
   }
   Write-Host 'Accepted valid fixture in fresh powershell.exe.'
 }
@@ -115,6 +115,10 @@ $mainEntries = @(
   'resources/rawfile/models/gesture/GestureDetector.ms',
   'resources/rawfile/models/gesture/manifest.json',
   'resources/rawfile/models/gesture/NOTICE.md',
+  'resources/rawfile/models/ocr/ppocrv3_det.mnn',
+  'resources/rawfile/models/ocr/ppocrv3_rec.mnn',
+  'resources/rawfile/models/ocr/ppocr_keys_v1.txt',
+  'resources/rawfile/models/ocr/NOTICE.md',
   'resources/rawfile/models/translation/translation-models.tar.xz',
   'resources/rawfile/models/translation/tokenizer.model',
   'resources/rawfile/models/translation/tokenizer_runtime.json',
@@ -125,7 +129,8 @@ $mainEntries = @(
   'libs/arm64-v8a/libgesture_mnn.so',
   'libs/arm64-v8a/libMNN.so',
   'libs/arm64-v8a/libtranslation_archive.so',
-  'libs/arm64-v8a/libsegmentation_mnn.so'
+  'libs/arm64-v8a/libsegmentation_mnn.so',
+  'libs/arm64-v8a/libocr_mnn.so'
 )
 $mainModule = @{
   app = @{ bundleName = 'com.yuhaofeng.mih' }
@@ -206,6 +211,22 @@ try {
   $expectedLibraryPath = Join-Path $expectedNativeRoot 'libgesture_mnn.so'
   Assert-GuardRejects 'tampered native library content' $tamperedLibraryHap $testHap `
     "payload differs from expected file: $tamperedLibraryEntry; expected source path: $expectedLibraryPath"
+
+  $tamperedOcrHap = Join-Path $tempRoot 'tampered-ocr.hap'
+  $tamperedOcrFiles = New-FileMap $mainEntries
+  $tamperedOcrFiles['module.json'] = $mainModule
+  $tamperedOcrEntry = 'resources/rawfile/models/ocr/ppocrv3_rec.mnn'
+  $tamperedOcrFiles[$tamperedOcrEntry] = 'fixturf'
+  New-HapFixture $tamperedOcrHap $tamperedOcrFiles
+  $expectedOcrPath = Join-Path $expectedRawfileRoot 'models/ocr/ppocrv3_rec.mnn'
+  Assert-GuardRejects 'tampered OCR payload' $tamperedOcrHap $testHap `
+    "payload differs from expected file: $tamperedOcrEntry; expected source path: $expectedOcrPath"
+
+  $missingOcrHap = Join-Path $tempRoot 'missing-ocr.hap'
+  $missingOcrFiles = New-FileMap @($mainEntries | Where-Object { $_ -ne 'libs/arm64-v8a/libocr_mnn.so' })
+  $missingOcrFiles['module.json'] = $mainModule
+  New-HapFixture $missingOcrHap $missingOcrFiles
+  Assert-GuardRejects 'missing OCR library payload' $missingOcrHap $testHap 'Main HAP is missing: libs/arm64-v8a/libocr_mnn.so'
 
   $wrongMainBundleHap = Join-Path $tempRoot 'wrong-main-bundle.hap'
   $wrongMainBundleFiles = New-FileMap $mainEntries

@@ -15,6 +15,7 @@ import {
   androidStillSceneResultRows,
   aiRunResultRows,
   copyableTextForAiResult,
+  textRecognitionOutputForAiResult,
   translatedTextForAiResult,
   segmentationMetadataWithBackground,
   sceneDetectionOverlayRows
@@ -4270,15 +4271,16 @@ export default function localUnitTest() {
       expect(text).assertEqual('MindSpore\nHarmonyOS\nAI\n');
     });
 
-    it('decodesCtcOutputWithoutRepeatingCharactersOrBlankTokens', 0, () => {
+    it('collapsesAdjacentCtcRepeatsAndResetsAfterBlankTokens', 0, () => {
       const scores = new Float32Array(40 * 6625);
       const dictionary: Array<string> = [];
       for (let index = 0; index < 6625; index++) {
         dictionary.push(index === 1 ? 'A' : index === 2 ? 'B' : '');
       }
       scores[1] = 1;
-      scores[2 * 6625 + 1] = 1;
-      scores[3 * 6625 + 2] = 1;
+      scores[1 * 6625 + 1] = 1;
+      scores[3 * 6625 + 1] = 1;
+      scores[4 * 6625 + 2] = 1;
       expect(ocrCtcText(scores, dictionary)).assertEqual('AAB');
     });
 
@@ -4364,6 +4366,13 @@ export default function localUnitTest() {
       expect(result.ok).assertFalse();
       expect(result.code).assertEqual('TEXT_RECOGNITION_FAILED');
       expect(result.messageKey).assertEqual('feature_runtime_text_recognition_failed');
+      const rows = aiRunResultRows(result);
+      expect(rows.length).assertEqual(1);
+      expect(rows[0].labelKey).assertEqual('feature_runtime_result_text');
+      expect(rows[0].valueKey).assertEqual('feature_runtime_text_recognition_failed');
+      expect(copyableTextForAiResult('recognizeText', rows)).assertEqual('feature_runtime_text_recognition_failed');
+      expect(textRecognitionOutputForAiResult(rows, () => 'Text extraction failed.'))
+        .assertEqual('Text extraction failed.');
     });
 
     it('aiServiceReportsBlankTextRecognitionAsFailure', 0, async () => {

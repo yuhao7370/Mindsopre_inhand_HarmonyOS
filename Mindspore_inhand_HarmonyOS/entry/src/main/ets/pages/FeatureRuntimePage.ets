@@ -114,6 +114,7 @@ import {
   androidStillSceneResultRows,
   aiRunResultRows,
   copyableTextForAiResult,
+  textRecognitionOutputForAiResult,
   translatedTextForAiResult,
   segmentationMetadataWithBackground,
   sceneDetectionOverlayRows
@@ -1836,7 +1837,25 @@ struct FeatureRuntimePage {
   }
 
   private recognizedTextForCopy(): string {
+    if (this.aiMethod !== 'recognizeText') {
+      return copyableTextForAiResult(this.aiMethod, this.resultRows);
+    }
+    const recognizedText = this.textRecognitionOutputText();
+    if (typeof recognizedText === 'string') {
+      return recognizedText;
+    }
+    const context = this.uiAbilityContext();
+    if (context !== undefined) {
+      try {
+        return context.resourceManager.getStringSync(recognizedText.id);
+      } catch (_) {
+      }
+    }
     return copyableTextForAiResult(this.aiMethod, this.resultRows);
+  }
+
+  private textRecognitionOutputText(): ResourceStr {
+    return textRecognitionOutputForAiResult(this.resultRows, appString);
   }
 
   private copyRecognizedText(): void {
@@ -4153,7 +4172,7 @@ struct FeatureRuntimePage {
         .margin({ left: 10, right: 10, top: 14, bottom: 10 })
         .alignItems(VerticalAlign.Center)
         Scroll() {
-          Text(this.recognizedTextForCopy())
+          Text(this.textRecognitionOutputText())
             .width('100%')
             .fontSize(14)
             .fontColor('#000000')
