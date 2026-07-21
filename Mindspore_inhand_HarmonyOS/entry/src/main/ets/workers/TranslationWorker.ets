@@ -11,16 +11,25 @@ interface TranslationWorkerRequest {
   readonly targetLanguage?: string;
 }
 
+type TranslationWorkerRequestKind = 'initialize' | 'translate';
+
 const runtime = new TranslationWorkerRuntime();
 let initialized: boolean = false;
 let initCount: number = 0;
 let tail: Promise<void> = Promise.resolve();
 
 worker.workerPort.onmessage = (event): void => {
-  const request = event.data as TranslationWorkerRequest;
+  const request = parseTranslationWorkerRequest(event.data);
+  if (request === undefined) {
+    worker.workerPort.postMessage({ kind: 'error', id: 0, ok: false, error: 'Translation worker received an invalid request.' });
+    return;
+  }
   const operation = async (): Promise<void> => {
     try {
       if (request.kind === 'initialize') {
+        if (initialized) {
+          throw new Error('Translation worker is already initialized.');
+        }
         await runtime.initialize({
           directory: request.directory ?? '',
           manifest: request.manifest as never,
@@ -43,3 +52,22 @@ worker.workerPort.onmessage = (event): void => {
   };
   tail = tail.then(operation, operation);
 };
+
+function parseTranslationWorkerRequest(value: Object): TranslationWorkerRequest | undefined {
+  const request = value as TranslationWorkerRequest;
+  if (request === null || !Number.isInteger(request.id) || request.id <= 0 ||
+    (request.kind !== 'initialize' && request.kind !== 'translate')) {
+    return undefined;
+  }
+  if (request.kind === 'initialize') {
+    if (typeof request.directory !== 'string' || request.manifest === undefined ||
+      typeof request.tokenizerRuntime !== 'string') {
+      return undefined;
+    }
+    return request;
+  }
+  if (typeof request.text !== 'string' || typeof request.targetLanguage !== 'string') {
+    return undefined;
+  }
+  return request;
+}

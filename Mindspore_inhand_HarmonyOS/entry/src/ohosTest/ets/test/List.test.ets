@@ -2,6 +2,7 @@ import gestureNativeTest from './GestureNative.test';
 import imageClassificationNativeTest from './ImageClassificationNative.test';
 import segmentationNativeTest from './SegmentationNative.test';
 import translationNativeTest from './TranslationNative.test';
+import translationWorkerClientTest from './TranslationWorkerClient.test';
 import ocrNativeTest from './OcrNative.test';
 
 export default function testsuite() {
@@ -9,5 +10,6 @@ export default function testsuite() {
   imageClassificationNativeTest();
   segmentationNativeTest();
   translationNativeTest();
+  translationWorkerClientTest();
   ocrNativeTest();
 }

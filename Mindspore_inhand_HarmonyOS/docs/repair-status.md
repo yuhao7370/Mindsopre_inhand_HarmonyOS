@@ -18,3 +18,5 @@ Updated: 2026-07-21
 | Custom Model | pending | — | Picker + API24 runtime | User-selected model | first-output contract missing | orchestration tests pass | picker preflight only | pending | compatible `.ms` fixture and output validation needed |
 
 Baseline build: `scripts/build-hap.ps1` passed for Image Classification after the camera/model repair. The other feature rows retain their prior independent evidence.
+
+Text Translation follow-up: production Worker lifecycle now terminates on runtime-session invalidation; API24 `TranslationWorkerClientTest` passed 1/1 for idempotent pending-work termination and ignoring an old Worker exit after replacement. OCR fixture coverage is not claimed as production picker OCR-to-Worker E2E because protected media cannot be imported and the test HAP uses the legacy injected factory.

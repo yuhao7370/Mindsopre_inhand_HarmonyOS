@@ -458,6 +458,7 @@ export interface TextTranslationResult {
 
 export interface TextTranslationRunner {
   translate(text: string, targetLanguage: string): Promise<TextTranslationResult>;
+  stop?(): Promise<void> | void;
 }
 
 interface LocalTranslationPhrase {
@@ -888,6 +889,10 @@ export class TextTranslationService {
         errorCode: 'MODEL_EXECUTION_FAILED'
       };
     }
+  }
+
+  async stop(): Promise<void> {
+    await this.runner.stop?.();
   }
 }
 

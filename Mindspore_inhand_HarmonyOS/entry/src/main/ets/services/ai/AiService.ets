@@ -269,9 +269,19 @@ export class DefaultAiService {
 
   stop(): Promise<void> {
     if (this.stopPromise === undefined) {
-      this.stopPromise = this.stopGestureService();
+      this.stopPromise = this.stopRuntimeServices();
     }
-    return this.stopPromise;
+    return this.stopPromise as Promise<void>;
+  }
+
+  private async stopRuntimeServices(): Promise<void> {
+    await this.stopGestureService();
+    if (this.textTranslationService !== undefined) {
+      try {
+        await this.textTranslationService.stop();
+      } catch (_) {
+      }
+    }
   }
 
   private async stopGestureService(): Promise<void> {

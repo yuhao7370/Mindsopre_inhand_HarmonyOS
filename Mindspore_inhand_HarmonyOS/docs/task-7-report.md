@@ -24,6 +24,12 @@ The archive native SHA finalization was repaired to use the API-allocated digest
 
 `aa test -b com.yuhaofeng.mih -m entry_test -s unittest OpenHarmonyTestRunner -s class OcrNativeTest -w 90` passed with 5/5 cases. The permanent suite now runs English, Chinese, Chinese sentence, and multiline fixtures plus the failure-visibility contract. The Chinese sentence fixture produced `青把门关上然后打开窗户` with CER `0.090909...`, within the 0.10 limit.
 
+## Evidence boundary and lifecycle hardening
+
+The OCR device suite is OCR-runtime evidence only. The test HAP injects the legacy translation bundle factory because it cannot load the production Worker URI across the HAP boundary; it is not evidence of OCR flowing into the production Worker. Protected-media import limitations also mean no production picker OCR-to-Worker end-to-end claim is made.
+
+Leaving the runtime page awaits `DefaultAiService.stop()`, which stops the translation service and terminates its Worker. The client rejects pending work, clears request timers, detaches handlers, and uses a generation plus Worker-instance check so an old exit/error event cannot affect a replacement Worker. `TranslationWorkerClientTest` covers idempotent termination and an old-Worker exit after replacement. The Worker rejects malformed requests and a duplicate initialization request.
+
 ## Remaining scope
 
 The final default ABI is arm64-v8a. x86_64 was used only for the API24 emulator build and device evidence. No arm64 physical-device test is claimed.
