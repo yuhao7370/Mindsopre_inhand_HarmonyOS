@@ -1,4 +1,4 @@
-"""Generate the two project-authored TFLite sources used by Task 11.
+"""Generate the three project-authored TFLite sources used by Task 11.
 
 The locked hashes are reproducible with CPython 3.11.7, TensorFlow/Keras 2.15.0,
 NumPy 1.26.4, protobuf 4.25.9, flatbuffers 25.9.23, and ml-dtypes 0.2.0.

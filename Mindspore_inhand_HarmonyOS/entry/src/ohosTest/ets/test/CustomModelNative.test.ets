@@ -1,4 +1,4 @@
-import { fileIo } from '@kit.CoreFileKit';
+import { fileIo, hash } from '@kit.CoreFileKit';
 import { image } from '@kit.ImageKit';
 import { abilityDelegatorRegistry } from '@kit.TestKit';
 import { describe, it, expect } from '@ohos/hypium';
@@ -12,6 +12,7 @@ import { HarmonyCustomModelInputPreprocessor } from
   '../../../main/ets/services/ai/HarmonyCustomModelInputPreprocessor';
 import { RuntimeModelFileCacheService } from '../../../main/ets/services/picker/ModelFileCacheService';
 import { AppRoute } from '../../../main/ets/app/AppRoutes';
+import { FileUriContentReader } from '../../../main/ets/services/ai/FileUriContentReader';
 
 const primaryModelPath: string = 'model/custom_channel_mean.ms';
 const invertedModelPath: string = 'model/custom_channel_mean_inverted.ms';
@@ -86,6 +87,36 @@ function outputIsFiniteUnitRgb(output: Array<number>): boolean {
 
 export default function customModelNativeTest() {
   describe('CustomModelNativeTest', () => {
+    it('readsLargeCoreFileKitContentExactlyAcrossTheOneMiBBoundary', 0, async () => {
+      const applicationContext = abilityDelegatorRegistry.getAbilityDelegator()
+        .getAppContext()
+        .getApplicationContext();
+      const byteCount = 1024 * 1024 + 37;
+      const expected = new Uint8Array(byteCount);
+      for (let index = 0; index < expected.length; index++) {
+        expected[index] = (index * 31 + 7) % 256;
+      }
+      const sourcePath = await cacheBytes(applicationContext.cacheDir, 'custom-model-exact-read-source.bin', expected);
+
+      const actual = await new FileUriContentReader().readFileContent(sourcePath);
+
+      let mismatches = 0;
+      for (let index = 0; index < expected.length; index++) {
+        if (actual[index] !== expected[index]) {
+          mismatches++;
+        }
+      }
+      const copyPath = await cacheBytes(applicationContext.cacheDir, 'custom-model-exact-read-copy.bin', actual);
+      const sourceSha = await hash.hash(sourcePath, 'sha256');
+      const copySha = await hash.hash(copyPath, 'sha256');
+      const expectedSha = 'ded6bc08234e6a4aece8ff14ffc2ac1f662602eaed4472146a5a9ac1a738a4a8';
+      expect(actual.length).assertEqual(expected.length);
+      expect(mismatches).assertEqual(0);
+      expect(sourceSha.toLowerCase()).assertEqual(expectedSha);
+      expect(copySha.toLowerCase()).assertEqual(expectedSha);
+      console.info(`custom-model-core-file exactReadBytes=${actual.length} sourceSha=${sourceSha} copySha=${copySha}`);
+    });
+
     it('validatesCachesReloadsAndRunsInputDependentCustomModels', 0, async () => {
       const applicationContext = abilityDelegatorRegistry.getAbilityDelegator()
         .getAppContext()

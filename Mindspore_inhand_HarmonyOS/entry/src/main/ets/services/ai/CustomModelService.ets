@@ -231,24 +231,45 @@ function customModelInputTensorsCompatible(inputs: Array<mindSporeLite.MSTensor>
 }
 
 function customModelOutputValues(output: mindSporeLite.MSTensor): Array<number> {
-  if (!customModelOutputMetadataCanDecode(output)) {
+  return customModelOutputValuesFromMetadata(
+    output.dtype,
+    output.elementNum,
+    output.dataSize,
+    output.shape,
+    (): ArrayBuffer => output.getData()
+  );
+}
+
+export function customModelOutputValuesFromMetadata(
+  dtype: mindSporeLite.DataType,
+  elementNum: number,
+  dataSize: number,
+  shape: Array<number>,
+  readData: () => ArrayBuffer
+): Array<number> {
+  if (!customModelOutputMetadataCanDecode(dtype, elementNum, dataSize, shape)) {
     return [];
   }
-  const data = output.getData();
-  if (!customModelOutputBufferContractValid(output.dtype, data, output.elementNum, output.dataSize)) {
+  const data = readData();
+  if (!customModelOutputBufferContractValid(dtype, data, elementNum, dataSize)) {
     return [];
   }
   const values = floatScoresFromOutputBuffer(data);
   return customModelOutputValuesAreValid(values) ? values : [];
 }
 
-function customModelOutputMetadataCanDecode(output: mindSporeLite.MSTensor): boolean {
-  return output.dtype === mindSporeLite.DataType.NUMBER_TYPE_FLOAT32 &&
-    output.elementNum > 0 && output.elementNum <= customModelMaxOutputElementCount &&
-    output.dataSize > 0 && output.dataSize <= customModelMaxOutputByteCount &&
-    output.dataSize % Float32Array.BYTES_PER_ELEMENT === 0 &&
-    output.dataSize === output.elementNum * Float32Array.BYTES_PER_ELEMENT &&
-    customModelOutputShapeIsCoherent(output.shape, output.elementNum);
+export function customModelOutputMetadataCanDecode(
+  dtype: mindSporeLite.DataType,
+  elementNum: number,
+  dataSize: number,
+  shape: Array<number>
+): boolean {
+  return dtype === mindSporeLite.DataType.NUMBER_TYPE_FLOAT32 &&
+    elementNum > 0 && elementNum <= customModelMaxOutputElementCount &&
+    dataSize > 0 && dataSize <= customModelMaxOutputByteCount &&
+    dataSize % Float32Array.BYTES_PER_ELEMENT === 0 &&
+    dataSize === elementNum * Float32Array.BYTES_PER_ELEMENT &&
+    customModelOutputShapeIsCoherent(shape, elementNum);
 }
 
 function customModelOutputShapeIsCoherent(shape: Array<number>, elementNum: number): boolean {

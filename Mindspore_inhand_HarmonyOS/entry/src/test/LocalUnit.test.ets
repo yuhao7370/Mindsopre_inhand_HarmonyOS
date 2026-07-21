@@ -260,6 +260,7 @@ import {
   customModelInputFloatCount,
   customModelInputSize,
   customModelOutputCanDecode,
+  customModelOutputValuesFromMetadata,
   rgbUnitInputFromResizedRgba
 } from '../main/ets/services/ai/CustomModelService';
 import {
@@ -1058,6 +1059,7 @@ class ChunkedFileUriContentBackend extends FileUriContentBackend {
   readonly events: Array<string> = [];
   private readonly content: Uint8Array;
   private readonly chunkSize: number;
+  private position: number = 0;
 
   constructor(content: Uint8Array, chunkSize: number) {
     super();
@@ -1067,6 +1069,7 @@ class ChunkedFileUriContentBackend extends FileUriContentBackend {
 
   async open(uri: string): Promise<FileUriDescriptor> {
     this.events.push(`open:${uri}`);
+    this.position = 0;
     return new FileUriDescriptor(44);
   }
 
@@ -1075,13 +1078,15 @@ class ChunkedFileUriContentBackend extends FileUriContentBackend {
     return this.content.length;
   }
 
-  async read(file: FileUriDescriptor, buffer: ArrayBuffer, fileOffset: number): Promise<number> {
-    this.events.push(`read:${file.fd}`);
-    const count = Math.min(this.chunkSize, this.content.length - fileOffset, buffer.byteLength);
+  async read(file: FileUriDescriptor, buffer: ArrayBuffer, relativeOffset: number): Promise<number> {
+    this.events.push(`read:${file.fd}:${relativeOffset}`);
+    const start = this.position + relativeOffset;
+    const count = Math.min(this.chunkSize, this.content.length - start, buffer.byteLength);
     if (count <= 0) {
       return 0;
     }
-    new Uint8Array(buffer).set(this.content.subarray(fileOffset, fileOffset + count));
+    new Uint8Array(buffer).set(this.content.subarray(start, start + count));
+    this.position = start + count;
     return count;
   }
 
@@ -6656,6 +6661,25 @@ export default function localUnitTest() {
       )).assertFalse();
     });
 
+    it('rejectsIncoherentCustomModelOutputMetadataBeforeReadingTensorData', 0, () => {
+      let getDataCalls = 0;
+      const readData = (): ArrayBuffer => {
+        getDataCalls++;
+        return new ArrayBuffer(12);
+      };
+
+      expect(customModelOutputValuesFromMetadata(
+        mindSporeLite.DataType.NUMBER_TYPE_FLOAT32, 2, 12, [1, 3], readData
+      ).length).assertEqual(0);
+      expect(customModelOutputValuesFromMetadata(
+        mindSporeLite.DataType.NUMBER_TYPE_FLOAT32, 3, 8, [1, 3], readData
+      ).length).assertEqual(0);
+      expect(customModelOutputValuesFromMetadata(
+        mindSporeLite.DataType.NUMBER_TYPE_FLOAT32, 3, 12, [1, 2], readData
+      ).length).assertEqual(0);
+      expect(getDataCalls).assertEqual(0);
+    });
+
     it('rejectsCustomModelInputThatDoesNotMatchTheExactTensorByteContract', 0, async () => {
       const tensorRunner = new FixedCustomModelTensorRunner([0.1]);
       const service = new CustomModelService({
@@ -7571,8 +7595,29 @@ export default function localUnitTest() {
       expect(content.length).assertEqual(5);
       expect(content.join(',')).assertEqual('1,2,3,4,5');
       expect(backend.events.join('|')).assertEqual(
-        'open:file://selected/large.ms|size:44|read:44|read:44|read:44|close:44'
+        'open:file://selected/large.ms|size:44|read:44:0|read:44:0|read:44:0|close:44'
       );
+    });
+
+    it('readsMoreThanOneMiBExactlyAcrossSequentialShortReads', 0, async () => {
+      const byteCount = 1024 * 1024 + 37;
+      const expected = new Uint8Array(byteCount);
+      for (let index = 0; index < expected.length; index++) {
+        expected[index] = (index * 31 + 7) % 256;
+      }
+      const backend = new ChunkedFileUriContentBackend(expected, 65537);
+
+      const actual = await new FileUriContentReader(backend).readFileContent('file://selected/large-exact.ms');
+
+      let mismatches = 0;
+      for (let index = 0; index < expected.length; index++) {
+        if (actual[index] !== expected[index]) {
+          mismatches++;
+        }
+      }
+      expect(actual.length).assertEqual(expected.length);
+      expect(mismatches).assertEqual(0);
+      expect(backend.events.filter((event: string): boolean => event === 'read:44:0').length > 2).assertTrue();
     });
 
     it('closesSelectedModelUriWhenReadFails', 0, async () => {

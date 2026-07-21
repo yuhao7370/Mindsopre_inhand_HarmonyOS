@@ -26,12 +26,12 @@ non-commercial research, educational, and local learning use.
 
 The Task 11 Custom Model fixtures are project-authored calculation graphs with
 no trained weights or third-party image data. The fixture author/project party
-provides these two graphs and their generated artifacts separately under
+provides all three graphs and their generated artifacts separately under
 Apache-2.0; the complete license text is included as
 `LICENSE-Apache-2.0.txt`. This notice does not claim that the repository as a
 whole is Apache-2.0.
 
-Both graphs accept exactly one float32 NHWC input named `image` with shape
+All three graphs accept exactly one float32 NHWC input named `image` with shape
 `[1,224,224,3]`. `custom_channel_mean.ms` returns the three RGB channel means
 as float32 `[1,3]`; `custom_channel_mean_inverted.ms` returns one minus those
 means. The inverted graph exists only to verify same-path replacement and does

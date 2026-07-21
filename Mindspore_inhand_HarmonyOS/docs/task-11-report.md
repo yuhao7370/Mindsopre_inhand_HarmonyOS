@@ -36,23 +36,25 @@ An independent generator run reproduced all three exact source hashes. The conve
 - The same checks are repeated during production inference before any success output is returned. An invalid result becomes a terminal failure rather than partial or stale success.
 - The selected runner reads the current file bytes and builds a fresh model on every queued run, so replacing the fixed `custom_model.ms` path cannot pin the previous model. A process-global Promise tail serializes users of the shared native runtime and recovers after rejection.
 - Candidate validation happens before the atomic stable-cache write. Rejected non-finite content leaves the last-good file and inference result usable.
-- DocumentPicker files are read in bounded 1 MiB chunks with absolute file offsets, explicit short-read/overshoot checks, and a 64 MiB file limit.
+- DocumentPicker files are read in bounded 1 MiB chunks from the descriptor's advancing current pointer. Every CoreFileKit read uses relative offset zero; the reader's accumulated byte count is used only to place each chunk in the destination. Explicit short-read/overshoot checks and a 64 MiB file limit remain enforced.
 
 ## RED/GREEN evidence
 
 Tests were added before implementation for malformed two-byte, NaN, oversized, and metadata-incoherent outputs; wrong input byte counts; pre-publication non-finite rejection; real validator wiring; same-URI reload; overlapping-run serialization; and exact chunked file reads. The extended RED run failed to compile because the new runtime/validator abstractions and constructor dependencies did not exist. Earlier RED assertions also demonstrated that malformed and non-finite outputs were accepted.
 
-The final fresh `hvigorw test --no-daemon` run returned 0 and printed `BUILD SUCCESSFUL in 32 s 386 ms`. An explicit scan of the complete output found zero `AssertException`, `ERROR`, or `FAILED` lines; Hvigor's exit code alone was not treated as sufficient evidence.
+The review follow-up added direct count/data-size/shape metadata mismatch cases through a lazy output decoder. All three are rejected before its `readData` callback runs (`readDataCalls=0`). It also changed the file-reader fake to model CoreFileKit's advancing descriptor position and relative offset semantics. Before the production fix, both the existing five-byte short-read test and a `1,048,613`-byte exact-read oracle failed with `Selected file ended before its declared size`; Hvigor still returned 0, so complete output scanning remains mandatory. After the fix, the large oracle passes with `65,537`-byte backend short reads and byte-for-byte equality.
+
+The fresh follow-up `hvigorw test --no-daemon` run returned 0 and printed `BUILD SUCCESSFUL in 36 s 503 ms`. An explicit scan of the complete output found zero `AssertException`, `ERROR`, or `FAILED` lines; Hvigor's exit code alone was not treated as sufficient evidence.
 
 The permanent API24 test uses production cache, preprocessing, selected-file runner, service, and the three controlled main-module assets. It programmatically creates solid red and blue PNGs, checks UI event-loop progress during native work, rejects the non-finite replacement without losing the last-good model, publishes the inverted model to the same cache URI, and then restores the primary model.
 
-The API24 x86_64 test passed 1/1 in 410 ms with:
+The API24 x86_64 suite passed 2/2 in 643 ms. Its real CoreFileKit exact-read case crossed the 1 MiB boundary at `1,048,613` bytes with zero byte mismatches. The source and returned-copy SHA-256 values both matched `DED6BC08234E6A4AECE8FF14FFC2AC1F662602EAED4472146A5A9AC1A738A4A8`. The original production-runtime case also passed with:
 
 - exact input floats: `150528`
 - primary red output: `[1,0,0]`
 - primary blue output: `[0,0,1]`
 - red-vs-blue MAE: `0.6666666667`; maximum absolute difference: `1`
-- UI timer ticks during work: `11`
+- UI timer ticks during work: `9`
 - inverted model at the same URI, red output: `[0,1,1]`
 - non-finite candidate rejected before publication: `true`
 - primary model recovery and output equality: passed
@@ -76,8 +78,8 @@ Both output panels reported `Model execution completed!`, and the two real Galle
 
 ## Final arm64 gates and boundary
 
-`scripts/build-ai-runtime-acceptance.ps1` returned 0 in 53.9 seconds with the tracked `arm64-v8a` profile. Fixture/source hashes, license and notice markers, layout/cache mutation guards, core assets, native ABI contracts, main HAP, ohosTest HAP, exact payload bytes, and main/test model isolation all pass. The main HAP contains the three controlled `.ms` assets; the ohosTest HAP contains no duplicated model assets.
+`scripts/build-ai-runtime-acceptance.ps1` returned 0 in 61.8 seconds with the tracked `arm64-v8a` profile. Fixture/source hashes, license and notice markers, layout/cache mutation guards, core assets, native ABI contracts, main HAP, ohosTest HAP, exact payload bytes, and main/test model isolation all pass. The main HAP contains the three controlled `.ms` assets; the ohosTest HAP contains no duplicated model assets.
 
-The first final arm64 resource build stopped at `CompileResource` because Windows ReadOnly attributes copied from the newly created fixture files prevented deletion of a generated resource copy. Clearing those filesystem attributes in the three fixture sources and the scoped generated resource directory resolved the environment-only failure; the subsequent full acceptance run passed without a source-code workaround.
+The first final arm64 resource build stopped at `CompileResource` because Windows ReadOnly attributes copied from the newly created fixture files prevented deletion of a generated resource copy. A review follow-up encountered the same attribute only in the verified worktree's generated `entry/.test` directory. Clearing the attributes only on those scoped generated copies resolved the environment-only failure; no source-code or product-build workaround was added.
 
 No arm64 physical-device inference is claimed. Runtime, DocumentPicker, PhotoPicker, UI responsiveness, same-path replacement, rejection, and recovery evidence is from the API24 x86_64 emulator; arm64 evidence is build, native-contract, and exact HAP verification.

@@ -16,7 +16,7 @@ export abstract class FileUriContentBackend {
 
   abstract size(file: FileUriDescriptor): Promise<number>;
 
-  abstract read(file: FileUriDescriptor, buffer: ArrayBuffer, offset: number): Promise<number>;
+  abstract read(file: FileUriDescriptor, buffer: ArrayBuffer, relativeOffset: number): Promise<number>;
 
   abstract close(file: FileUriDescriptor): Promise<void>;
 }
@@ -32,9 +32,9 @@ export class CoreFileKitContentBackend extends FileUriContentBackend {
     return stat.size;
   }
 
-  async read(file: FileUriDescriptor, buffer: ArrayBuffer, offset: number): Promise<number> {
+  async read(file: FileUriDescriptor, buffer: ArrayBuffer, relativeOffset: number): Promise<number> {
     return fileIo.read(file.fd, buffer, {
-      offset: offset,
+      offset: relativeOffset,
       length: buffer.byteLength
     });
   }
@@ -65,7 +65,7 @@ export class FileUriContentReader {
       while (offset < size) {
         const chunkByteCount = Math.min(fileUriContentReadChunkBytes, size - offset);
         const chunk = new ArrayBuffer(chunkByteCount);
-        const bytesRead = await this.backend.read(file, chunk, offset);
+        const bytesRead = await this.backend.read(file, chunk, 0);
         if (bytesRead <= 0 || bytesRead > size - offset) {
           throw new Error('Selected file ended before its declared size.');
         }
