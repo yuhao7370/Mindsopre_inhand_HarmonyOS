@@ -243,6 +243,9 @@ export class ObjectDetectionService {
       return this.runResult(false, 'DETECTION_INVALID_OUTPUT', []);
     }
 
+    if (detections.length === 0) {
+      return this.runResult(true, 'DETECTION_DONE', []);
+    }
     const mappedDetections = mapObjectDetectionLabels(detections, this.labels);
     if (mappedDetections.length === 0) {
       return this.runResult(false, 'DETECTION_INVALID_OUTPUT', []);
@@ -307,6 +310,41 @@ export interface LocalMnnObjectDetectionRunnerOptions {
   readonly modelRawfilePath: string;
   readonly preprocessor: ObjectDetectionInputPreprocessor;
   readonly modelContentReader?: FileUriContentReader;
+  readonly runtime?: ObjectDetectionMnnRuntime;
+}
+
+export interface ObjectDetectionMnnRuntime {
+  loadModel(content: Uint8Array): Promise<void>;
+  predict(input: Float32Array): Promise<Float32Array>;
+}
+
+class NativeObjectDetectionMnnRuntime implements ObjectDetectionMnnRuntime {
+  async loadModel(content: Uint8Array): Promise<void> {
+    await objectDetectionMnn.loadModel(content);
+  }
+
+  async predict(input: Float32Array): Promise<Float32Array> {
+    return await objectDetectionMnn.predict(input);
+  }
+}
+
+const nativeObjectDetectionMnnRuntime: ObjectDetectionMnnRuntime = new NativeObjectDetectionMnnRuntime();
+
+class ObjectDetectionMnnRuntimeState {
+  loadedBuiltinModelKey: string = '';
+  operationTail: Promise<void> = Promise.resolve();
+}
+
+const objectDetectionMnnRuntimeStates: Map<ObjectDetectionMnnRuntime, ObjectDetectionMnnRuntimeState> = new Map();
+
+function getObjectDetectionMnnRuntimeState(runtime: ObjectDetectionMnnRuntime): ObjectDetectionMnnRuntimeState {
+  const existingState = objectDetectionMnnRuntimeStates.get(runtime);
+  if (existingState !== undefined) {
+    return existingState;
+  }
+  const state = new ObjectDetectionMnnRuntimeState();
+  objectDetectionMnnRuntimeStates.set(runtime, state);
+  return state;
 }
 
 export class LocalMnnObjectDetectionRunner implements ObjectDetectionRunner {
@@ -314,40 +352,50 @@ export class LocalMnnObjectDetectionRunner implements ObjectDetectionRunner {
   private readonly modelRawfilePath: string;
   private readonly preprocessor: ObjectDetectionInputPreprocessor;
   private readonly modelContentReader: FileUriContentReader;
-  private loadedModelKey: string = '';
-  private operationTail: Promise<void> = Promise.resolve();
+  private readonly runtime: ObjectDetectionMnnRuntime;
+  private readonly runtimeState: ObjectDetectionMnnRuntimeState;
 
   constructor(options: LocalMnnObjectDetectionRunnerOptions) {
     this.resourceManager = options.resourceManager;
     this.modelRawfilePath = options.modelRawfilePath;
     this.preprocessor = options.preprocessor;
     this.modelContentReader = options.modelContentReader ?? new FileUriContentReader();
+    this.runtime = options.runtime ?? nativeObjectDetectionMnnRuntime;
+    this.runtimeState = getObjectDetectionMnnRuntimeState(this.runtime);
   }
 
   detectObjects(imageUri: string, modelUri?: string): Promise<Array<ObjectDetection>> {
-    const result = this.operationTail.then(async (): Promise<Array<ObjectDetection>> =>
+    const result = this.runtimeState.operationTail.then(async (): Promise<Array<ObjectDetection>> =>
       await this.detectObjectsExclusive(imageUri, modelUri));
-    this.operationTail = result.then((): void => {}, (): void => {});
+    this.runtimeState.operationTail = result.then((): void => {}, (): void => {});
     return result;
   }
 
   private async detectObjectsExclusive(imageUri: string, modelUri?: string): Promise<Array<ObjectDetection>> {
     const input = await this.preprocessor.createInput(imageUri);
     await this.ensureModelLoaded(modelUri);
-    const output = await objectDetectionMnn.predict(new Float32Array(input.inputBuffer));
+    const output = await this.runtime.predict(new Float32Array(input.inputBuffer));
+    if (!isValidNanoDetObjectDetectionOutput(output)) {
+      throw new Error('Invalid NanoDet output tensor');
+    }
     return decodeNanoDetObjectDetections(output, input.imageWidth, input.imageHeight);
   }
 
   private async ensureModelLoaded(modelUri?: string): Promise<void> {
-    const modelKey = modelUri !== undefined && modelUri.length > 0 ? modelUri : `rawfile:${this.modelRawfilePath}`;
-    if (this.loadedModelKey === modelKey) {
+    if (modelUri !== undefined && modelUri.length > 0) {
+      const content = await this.modelContentReader.readFileContent(modelUri);
+      await this.runtime.loadModel(content);
+      this.runtimeState.loadedBuiltinModelKey = '';
       return;
     }
-    const content = modelUri !== undefined && modelUri.length > 0 ?
-      await this.modelContentReader.readFileContent(modelUri) :
-      await this.resourceManager.getRawFileContent(this.modelRawfilePath);
-    await objectDetectionMnn.loadModel(content);
-    this.loadedModelKey = modelKey;
+
+    const modelKey = `rawfile:${this.modelRawfilePath}`;
+    if (this.runtimeState.loadedBuiltinModelKey === modelKey) {
+      return;
+    }
+    const content = await this.resourceManager.getRawFileContent(this.modelRawfilePath);
+    await this.runtime.loadModel(content);
+    this.runtimeState.loadedBuiltinModelKey = modelKey;
   }
 }
 
@@ -369,19 +417,28 @@ interface NanoDetCandidate {
   readonly bottom: number;
 }
 
+function isValidNanoDetObjectDetectionOutput(output: Float32Array): boolean {
+  if (output.length !== objectDetectionOutputFloatCount) {
+    return false;
+  }
+  for (let index = 0; index < output.length; index++) {
+    if (!Number.isFinite(output[index])) {
+      return false;
+    }
+  }
+  return true;
+}
+
 export function decodeNanoDetObjectDetections(
   output: Float32Array,
   imageWidth: number,
   imageHeight: number
 ): Array<ObjectDetection> {
-  if (output.length !== objectDetectionOutputFloatCount || imageWidth <= 0 || imageHeight <= 0) {
+  if (!isValidNanoDetObjectDetectionOutput(output) || imageWidth <= 0 || imageHeight <= 0) {
     return [];
   }
   let hasSignal = false;
   for (let index = 0; index < output.length; index++) {
-    if (!Number.isFinite(output[index])) {
-      return [];
-    }
     if (Math.abs(output[index]) > 1.0e-12) {
       hasSignal = true;
     }

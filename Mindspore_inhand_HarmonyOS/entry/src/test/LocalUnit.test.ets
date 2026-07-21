@@ -300,6 +300,8 @@ import {
   ObjectDetectionInput,
   ObjectDetectionInputPreprocessor,
   ObjectDetectionLiveLabelOffset,
+  LocalMnnObjectDetectionRunner,
+  ObjectDetectionMnnRuntime,
   ObjectDetectionMindSporeRunner,
   ObjectDetectionModelOutput,
   ObjectDetectionTensorRunner,
@@ -1030,6 +1032,35 @@ class RecordingModelFileCompatibilityLoader implements ModelFileCompatibilityLoa
       throw new Error('invalid MindSpore model');
     }
     return this.inputs;
+  }
+}
+
+class MutableFileUriContentBackend extends FileUriContentBackend {
+  private content: Uint8Array;
+
+  constructor(content: Uint8Array) {
+    super();
+    this.content = content;
+  }
+
+  setContent(content: Uint8Array): void {
+    this.content = content;
+  }
+
+  async open(_uri: string): Promise<FileUriDescriptor> {
+    return new FileUriDescriptor(43);
+  }
+
+  async size(_file: FileUriDescriptor): Promise<number> {
+    return this.content.length;
+  }
+
+  async read(_file: FileUriDescriptor, buffer: ArrayBuffer): Promise<number> {
+    new Uint8Array(buffer).set(this.content);
+    return this.content.length;
+  }
+
+  async close(_file: FileUriDescriptor): Promise<void> {
   }
 }
 
@@ -2078,6 +2109,70 @@ class FixedObjectDetectionTensorRunner implements ObjectDetectionTensorRunner {
   async predictOutput(inputBuffer: ArrayBuffer, modelUri?: string): Promise<ObjectDetectionModelOutput> {
     this.seenByteLengths.push(inputBuffer.byteLength);
     this.seenModelUris.push(modelUri ?? '');
+    return this.output;
+  }
+}
+
+class RecordingObjectDetectionMnnRuntime implements ObjectDetectionMnnRuntime {
+  readonly events: Array<string> = [];
+  private activeModel: number = 0;
+  private blockFirstPredict: boolean;
+  private firstPredictStartedResolver: (() => void) | undefined = undefined;
+  private firstPredictStarted: Promise<void>;
+  private firstPredictRelease: (() => void) | undefined = undefined;
+
+  constructor(blockFirstPredict: boolean = false) {
+    this.blockFirstPredict = blockFirstPredict;
+    this.firstPredictStarted = new Promise<void>((resolve: () => void) => {
+      this.firstPredictStartedResolver = resolve;
+    });
+  }
+
+  async loadModel(content: Uint8Array): Promise<void> {
+    this.activeModel = content[0] ?? 0;
+    this.events.push(`load:${this.activeModel}`);
+  }
+
+  async predict(_input: Float32Array): Promise<Float32Array> {
+    const modelAtStart = this.activeModel;
+    this.events.push(`predict-start:${modelAtStart}`);
+    if (this.blockFirstPredict) {
+      this.blockFirstPredict = false;
+      if (this.firstPredictStartedResolver !== undefined) {
+        this.firstPredictStartedResolver();
+        this.firstPredictStartedResolver = undefined;
+      }
+      await new Promise<void>((resolve: () => void) => {
+        this.firstPredictRelease = resolve;
+      });
+    }
+    this.events.push(`predict-end:${this.activeModel}`);
+    return new Float32Array(objectDetectionOutputFloatCount);
+  }
+
+  async waitForFirstPredict(): Promise<void> {
+    await this.firstPredictStarted;
+  }
+
+  releaseFirstPredict(): void {
+    if (this.firstPredictRelease !== undefined) {
+      this.firstPredictRelease();
+      this.firstPredictRelease = undefined;
+    }
+  }
+}
+
+class FixedOutputObjectDetectionMnnRuntime implements ObjectDetectionMnnRuntime {
+  private readonly output: Float32Array;
+
+  constructor(output: Float32Array) {
+    this.output = output;
+  }
+
+  async loadModel(_content: Uint8Array): Promise<void> {
+  }
+
+  async predict(_input: Float32Array): Promise<Float32Array> {
     return this.output;
   }
 }
@@ -6921,7 +7016,7 @@ export default function localUnitTest() {
       expect(result.code).assertEqual('DETECTION_INVALID_OUTPUT');
     });
 
-    it('objectDetectionServiceTreatsEmptyRunnerResultAsAndroidInvalidOutput', 0, async () => {
+    it('objectDetectionServiceTreatsEmptyRunnerResultAsSuccessfulNoTargetDetection', 0, async () => {
       const service = new ObjectDetectionService({
         labels: ['background'],
         runner: new FixedObjectDetectionRunner([])
@@ -6929,12 +7024,12 @@ export default function localUnitTest() {
 
       const result: ObjectDetectionRunResult = await service.detectObjects('file://selected/street.jpg');
 
-      expect(result.ok).assertFalse();
-      expect(result.code).assertEqual('DETECTION_INVALID_OUTPUT');
+      expect(result.ok).assertTrue();
+      expect(result.code).assertEqual('DETECTION_DONE');
       expect(result.detections.length).assertEqual(0);
     });
 
-    it('aiServiceReportsObjectDetectionFailureWhenNoObjectsAreDetected', 0, async () => {
+    it('aiServiceReportsSuccessfulEmptyResultWhenNoObjectsAreDetected', 0, async () => {
       const workflow = workflowForRoute(AppRoute.OBJECT_PHOTO.name);
       expect(workflow !== undefined).assertTrue();
       const service = new ObjectDetectionService({
@@ -6946,9 +7041,13 @@ export default function localUnitTest() {
         imageUri: 'file://selected/street.jpg'
       });
 
-      expect(result.ok).assertFalse();
-      expect(result.code).assertEqual('OBJECT_DETECTION_FAILED');
-      expect(result.messageKey).assertEqual('feature_runtime_object_detection_failed');
+      expect(result.ok).assertTrue();
+      expect(result.code).assertEqual('OBJECT_DETECTION_DONE');
+      expect(result.messageKey).assertEqual('feature_runtime_object_detection_done');
+      expect(result.data !== undefined).assertTrue();
+      if (result.data !== undefined && result.data.kind === 'objectDetections') {
+        expect(result.data.detections.length).assertEqual(0);
+      }
     });
 
     it('aiServiceUsesRealObjectDetectionServiceWhenProvided', 0, async () => {
@@ -8987,6 +9086,107 @@ export default function localUnitTest() {
       expect(decodeNanoDetObjectDetections(nonFinite, 320, 320).length).assertEqual(0);
       expect(decodeNanoDetObjectDetections(new Float32Array(objectDetectionOutputFloatCount), 320, 320).length)
         .assertEqual(0);
+    });
+
+    it('serializesLoadAndPredictAcrossObjectDetectionRunnerInstances', 0, async () => {
+      const runtime = new RecordingObjectDetectionMnnRuntime(true);
+      const input: ObjectDetectionInput = {
+        inputBuffer: new ArrayBuffer(objectDetectionInputFloatCount * 4),
+        imageWidth: 320,
+        imageHeight: 320
+      };
+      const runnerA = new LocalMnnObjectDetectionRunner({
+        resourceManager: new FixedRawfileContentReader(new Uint8Array([9])),
+        modelRawfilePath: 'model/a.mnn',
+        preprocessor: new FixedObjectDetectionPreprocessor(input),
+        modelContentReader: new FileUriContentReader(new FixedFileUriContentBackend(new Uint8Array([1]))),
+        runtime: runtime
+      });
+      const runnerB = new LocalMnnObjectDetectionRunner({
+        resourceManager: new FixedRawfileContentReader(new Uint8Array([9])),
+        modelRawfilePath: 'model/b.mnn',
+        preprocessor: new FixedObjectDetectionPreprocessor(input),
+        modelContentReader: new FileUriContentReader(new FixedFileUriContentBackend(new Uint8Array([2]))),
+        runtime: runtime
+      });
+
+      const first = runnerA.detectObjects('file://image-a.jpg', 'file://model-a.mnn');
+      await runtime.waitForFirstPredict();
+      const second = runnerB.detectObjects('file://image-b.jpg', 'file://model-b.mnn');
+      for (let tick = 0; tick < 20; tick++) {
+        await Promise.resolve();
+      }
+      const eventsBeforeRelease = runtime.events.join(',');
+      runtime.releaseFirstPredict();
+      await first;
+      await second;
+      await runnerA.detectObjects('file://image-a-again.jpg', 'file://model-a.mnn');
+
+      expect(eventsBeforeRelease).assertEqual('load:1,predict-start:1');
+      expect(runtime.events.join(','))
+        .assertEqual('load:1,predict-start:1,predict-end:1,load:2,predict-start:2,predict-end:2,' +
+          'load:1,predict-start:1,predict-end:1');
+    });
+
+    it('reloadsCustomObjectDetectionModelWhenSameCacheUriContentChanges', 0, async () => {
+      const runtime = new RecordingObjectDetectionMnnRuntime();
+      const backend = new MutableFileUriContentBackend(new Uint8Array([3]));
+      const input: ObjectDetectionInput = {
+        inputBuffer: new ArrayBuffer(objectDetectionInputFloatCount * 4),
+        imageWidth: 320,
+        imageHeight: 320
+      };
+      const runner = new LocalMnnObjectDetectionRunner({
+        resourceManager: new FixedRawfileContentReader(new Uint8Array([9])),
+        modelRawfilePath: 'model/builtin.mnn',
+        preprocessor: new FixedObjectDetectionPreprocessor(input),
+        modelContentReader: new FileUriContentReader(backend),
+        runtime: runtime
+      });
+
+      await runner.detectObjects('file://first.jpg', 'file://cache/object_detection_model.mnn');
+      backend.setContent(new Uint8Array([4]));
+      await runner.detectObjects('file://second.jpg', 'file://cache/object_detection_model.mnn');
+
+      expect(runtime.events.join(','))
+        .assertEqual('load:3,predict-start:3,predict-end:3,load:4,predict-start:4,predict-end:4');
+    });
+
+    it('rejectsMalformedMnnOutputInsteadOfReportingSuccessfulNoTargetDetection', 0, async () => {
+      const input: ObjectDetectionInput = {
+        inputBuffer: new ArrayBuffer(objectDetectionInputFloatCount * 4),
+        imageWidth: 320,
+        imageHeight: 320
+      };
+      const wrongSizedRunner = new LocalMnnObjectDetectionRunner({
+        resourceManager: new FixedRawfileContentReader(new Uint8Array([9])),
+        modelRawfilePath: 'model/builtin.mnn',
+        preprocessor: new FixedObjectDetectionPreprocessor(input),
+        runtime: new FixedOutputObjectDetectionMnnRuntime(
+          new Float32Array(objectDetectionOutputFloatCount - 1))
+      });
+      const nonFiniteOutput = new Float32Array(objectDetectionOutputFloatCount);
+      nonFiniteOutput[0] = Number.NaN;
+      const nonFiniteRunner = new LocalMnnObjectDetectionRunner({
+        resourceManager: new FixedRawfileContentReader(new Uint8Array([9])),
+        modelRawfilePath: 'model/builtin.mnn',
+        preprocessor: new FixedObjectDetectionPreprocessor(input),
+        runtime: new FixedOutputObjectDetectionMnnRuntime(nonFiniteOutput)
+      });
+
+      const wrongSizedResult = await new ObjectDetectionService({
+        labels: ['background'],
+        runner: wrongSizedRunner
+      }).detectObjects('file://wrong-sized.jpg');
+      const nonFiniteResult = await new ObjectDetectionService({
+        labels: ['background'],
+        runner: nonFiniteRunner
+      }).detectObjects('file://non-finite.jpg');
+
+      expect(wrongSizedResult.ok).assertFalse();
+      expect(wrongSizedResult.code).assertEqual('DETECTION_INVALID_OUTPUT');
+      expect(nonFiniteResult.ok).assertFalse();
+      expect(nonFiniteResult.code).assertEqual('DETECTION_INVALID_OUTPUT');
     });
 
     it('keepsNativeCameraPickerForPhysicalDevicesAndGuardsApi24Emulator', 0, () => {
