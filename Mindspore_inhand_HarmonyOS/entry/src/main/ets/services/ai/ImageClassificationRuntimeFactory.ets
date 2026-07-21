@@ -36,7 +36,7 @@ import {
   styleTransferModelRawfilePath
 } from './StyleTransferService';
 import {
-  MindSporeLiteObjectDetectionTensorRunner,
+  LocalMnnObjectDetectionRunner,
   objectCategoryLabelRawfilePath,
   objectDetectionModelRawfilePath,
   ObjectDetectionInputPreprocessor,
@@ -434,12 +434,16 @@ export async function createHarmonyObjectDetectionService(
 export function createHarmonyObjectDetectionRunner(
   options: HarmonyImageClassificationRuntimeOptions
 ): ObjectDetectionRunner {
+  if (options.objectDetectionTensorRunner === undefined) {
+    return new LocalMnnObjectDetectionRunner({
+      resourceManager: options.resourceManager,
+      modelRawfilePath: objectDetectionModelRawfilePath,
+      preprocessor: options.objectDetectionPreprocessor ?? new HarmonyObjectDetectionInputPreprocessor()
+    });
+  }
   return new ObjectDetectionMindSporeRunner({
     preprocessor: options.objectDetectionPreprocessor ?? new HarmonyObjectDetectionInputPreprocessor(),
-    tensorRunner: options.objectDetectionTensorRunner ?? new MindSporeLiteObjectDetectionTensorRunner({
-      resourceManager: options.resourceManager,
-      modelRawfilePath: objectDetectionModelRawfilePath
-    })
+    tensorRunner: options.objectDetectionTensorRunner
   });
 }
 

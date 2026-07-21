@@ -24,6 +24,17 @@ add_library(segmentation_mnn SHARED
   segmentation_mnn_napi.cpp
   segmentation_mnn_session.cpp
 )
+
+add_library(object_detection_mnn SHARED
+  object_detection_mnn_napi.cpp
+  object_detection_mnn_session.cpp
+)
+target_include_directories(object_detection_mnn PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include")
+target_link_libraries(object_detection_mnn PRIVATE MNN libace_napi.z.so)
+set_target_properties(object_detection_mnn PROPERTIES
+  BUILD_WITH_INSTALL_RPATH TRUE
+  INSTALL_RPATH "\$ORIGIN"
+)
 target_include_directories(segmentation_mnn PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include")
 target_link_libraries(segmentation_mnn PRIVATE MNN libace_napi.z.so)
 set_target_properties(segmentation_mnn PROPERTIES

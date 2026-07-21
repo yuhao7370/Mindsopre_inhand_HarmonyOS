@@ -9,7 +9,7 @@ entry/src/main/resources/rawfile/models/translation/** -text -diff
 # Core MindSpore Lite model bytes are pinned and verified before every HAP build.
 entry/src/main/resources/rawfile/model/mobilenetv2.ms -text -diff
 entry/src/main/resources/rawfile/model/resnet18-place365.ms -text -diff
-entry/src/main/resources/rawfile/model/ssd.ms -text -diff
+entry/src/main/resources/rawfile/model/nanodet_plus_m_320.mnn -text -diff
 entry/src/main/resources/rawfile/model/style_predict_quant.ms -text -diff
 entry/src/main/resources/rawfile/model/style_transfer_quant.ms -text -diff
 entry/src/main/resources/rawfile/model/selfie_segmentation.mnn -text -diff

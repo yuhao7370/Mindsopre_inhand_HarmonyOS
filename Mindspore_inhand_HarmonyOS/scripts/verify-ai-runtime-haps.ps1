@@ -94,7 +94,7 @@ function Assert-HapPayloadHashes([string]$Path, [object[]]$Payloads) {
 $resourceEntries = @(
   'resources/rawfile/model/mobilenetv2.ms',
   'resources/rawfile/model/resnet18-place365.ms',
-  'resources/rawfile/model/ssd.ms',
+  'resources/rawfile/model/nanodet_plus_m_320.mnn',
   'resources/rawfile/model/style_predict_quant.ms',
   'resources/rawfile/model/style_transfer_quant.ms',
   'resources/rawfile/model/selfie_segmentation.mnn',
@@ -122,6 +122,7 @@ $nativeEntries = @(
     "libs/$abi/libMNN.so"
     "libs/$abi/libtranslation_archive.so"
     "libs/$abi/libsegmentation_mnn.so"
+    "libs/$abi/libobject_detection_mnn.so"
     "libs/$abi/libocr_mnn.so"
   }
 )
@@ -166,7 +167,7 @@ if ($OhosTestHapPath) {
   if ($copiedModels.Count -ne 0) {
     throw "ohosTest HAP contains copied models: $($copiedModels -join ', ')"
   }
-  $aiLibraries = @('libgesture_mnn.so', 'libMNN.so', 'libtranslation_archive.so', 'libsegmentation_mnn.so', 'libocr_mnn.so')
+  $aiLibraries = @('libgesture_mnn.so', 'libMNN.so', 'libtranslation_archive.so', 'libsegmentation_mnn.so', 'libobject_detection_mnn.so', 'libocr_mnn.so')
   $copiedLibraries = @($testHapEntries | Where-Object { $aiLibraries -contains ($_ -split '/')[-1] })
   if ($copiedLibraries.Count -ne 0) {
     throw "ohosTest HAP contains copied AI libraries: $($copiedLibraries -join ', ')"

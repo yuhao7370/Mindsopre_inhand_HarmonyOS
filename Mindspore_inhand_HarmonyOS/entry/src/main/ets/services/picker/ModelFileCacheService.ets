@@ -4,6 +4,7 @@ import { AppRoute } from '../../app/AppRoutes';
 import { AppStringKey } from '../../common/i18n/AppStrings';
 import { FeatureInputKind } from '../../features/runtime/FeatureWorkflowCatalog';
 import { FileUriContentReader } from '../ai/FileUriContentReader';
+import { validateObjectDetectionModelContent } from '../ai/ObjectDetectionService';
 import { mindSporeLiteCpuContext, rawfileContentToArrayBuffer } from '../ai/MindSporeLiteModelRunner';
 
 export interface ModelFileCacheResult {
@@ -61,6 +62,16 @@ export interface ModelFileCompatibilityLoader {
   loadModel(content: Uint8Array): Promise<Array<ModelFileTensorMetadata>>;
 }
 
+export interface ObjectDetectionModelContentValidator {
+  validate(content: Uint8Array): Promise<boolean>;
+}
+
+export class NativeObjectDetectionModelContentValidator implements ObjectDetectionModelContentValidator {
+  async validate(content: Uint8Array): Promise<boolean> {
+    return await validateObjectDetectionModelContent(content);
+  }
+}
+
 export class MindSporeLiteModelCompatibilityLoader implements ModelFileCompatibilityLoader {
   async loadModel(content: Uint8Array): Promise<Array<ModelFileTensorMetadata>> {
     if (!modelFileContentLooksUsable(content)) {
@@ -82,9 +93,15 @@ export class MindSporeLiteModelCompatibilityLoader implements ModelFileCompatibi
 
 export class BasicModelFileCompatibilityChecker implements ModelFileCompatibilityChecker {
   private readonly loader: ModelFileCompatibilityLoader;
+  private readonly objectDetectionValidator: ObjectDetectionModelContentValidator;
 
-  constructor(loader: ModelFileCompatibilityLoader = new MindSporeLiteModelCompatibilityLoader()) {
+  constructor(
+    loader: ModelFileCompatibilityLoader = new MindSporeLiteModelCompatibilityLoader(),
+    objectDetectionValidator: ObjectDetectionModelContentValidator =
+      new NativeObjectDetectionModelContentValidator()
+  ) {
     this.loader = loader;
+    this.objectDetectionValidator = objectDetectionValidator;
   }
 
   async isCompatible(
@@ -94,6 +111,10 @@ export class BasicModelFileCompatibilityChecker implements ModelFileCompatibilit
     content: Uint8Array
   ): Promise<boolean> {
     try {
+      if (inputKind === 'modelFile' &&
+        (routeName === AppRoute.OBJECT_PHOTO.name || routeName === AppRoute.OBJECT_CAMERA.name)) {
+        return await this.objectDetectionValidator.validate(content);
+      }
       const inputs = await this.loader.loadModel(content);
       if (routeName === AppRoute.CUSTOM_MODEL.name && inputKind === 'modelFile') {
         return customModelInputContractCompatible(inputs);
@@ -325,7 +346,7 @@ export function cachedModelFileNameForInputKind(routeName: string, inputKind: Fe
   }
   if ((routeName === AppRoute.OBJECT_PHOTO.name || routeName === AppRoute.OBJECT_CAMERA.name) &&
     inputKind === 'modelFile') {
-    return 'object_detection_model.ms';
+    return 'object_detection_model.mnn';
   }
   return '';
 }

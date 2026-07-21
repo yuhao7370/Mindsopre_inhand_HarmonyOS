@@ -68,6 +68,7 @@
                 "**/libMNN.so",
                 "**/libtranslation_archive.so",
                 "**/libsegmentation_mnn.so",
+                "**/libobject_detection_mnn.so",
                 "**/libocr_mnn.so"
               ]
             }

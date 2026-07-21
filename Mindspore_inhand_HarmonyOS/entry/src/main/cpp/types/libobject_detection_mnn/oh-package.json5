@@ -1,0 +1,6 @@
+{
+  "name": "libobject_detection_mnn.so",
+  "version": "1.0.0",
+  "description": "Typed boundary for the local NanoDet MNN runtime.",
+  "types": "./index.d.ts"
+}

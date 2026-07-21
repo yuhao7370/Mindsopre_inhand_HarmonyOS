@@ -11,7 +11,7 @@ $modelRoot = Join-Path $projectRoot $modelRelativeRoot
 $contracts = @(
   [pscustomobject]@{ Name = 'mobilenetv2.ms'; Bytes = 13988384; Sha256 = '5A7CCD53BF92D8B294A703A1302D4230A311B2D19A8D212EEDD65FF6838CFA84'; Verifier = 'verify-image-classification-model.ps1'; Downloader = 'download-image-classification-model.ps1' },
   [pscustomobject]@{ Name = 'resnet18-place365.ms'; Bytes = 45448504; Sha256 = '286F2C85249FD51F6C437986E1C2C1F4EC10358A9B0EB97C886F2DC1AC63ECD9'; Verifier = 'verify-scene-detection-model.ps1'; Downloader = 'download-scene-detection-model.ps1' },
-  [pscustomobject]@{ Name = 'ssd.ms'; Bytes = 17515528; Sha256 = '0AAB891E297109836120F4F0A43C1547F813D4B530948F2926DE171FFF91B553'; Verifier = 'verify-object-detection-model.ps1'; Downloader = 'download-object-detection-model.ps1' },
+  [pscustomobject]@{ Name = 'nanodet_plus_m_320.mnn'; Bytes = 4785492; Sha256 = '8E0266D957F8CCA939952F4349639438967EB855FA2EDD1C430546EC0C447E9C'; Verifier = 'verify-object-detection-model.ps1'; Downloader = 'download-object-detection-model.ps1' },
   [pscustomobject]@{ Name = 'style_predict_quant.ms'; Bytes = 3022576; Sha256 = '6737696ACC9B2F3ACF7460FEE986614B0107DF347EC9947D9D346D085AFCFBCC'; Verifier = 'verify-style-transfer-models.ps1'; Downloader = 'download-style-transfer-models.ps1' },
   [pscustomobject]@{ Name = 'style_transfer_quant.ms'; Bytes = 256864; Sha256 = 'AEB4963C3906B90F9480E96CC29C39F6BC9CF9DE1ED84C370308E5A0B5B82682'; Verifier = 'verify-style-transfer-models.ps1'; Downloader = 'download-style-transfer-models.ps1' }
 )
@@ -140,7 +140,7 @@ foreach ($marker in @(
   'Copyright 2025 Huawei Device Co., Ltd.',
   'no additional NOTICE',
   'https://download.mindspore.cn/model_zoo/official/lite/quick_start/mobilenetv2.ms',
-  'https://download.mindspore.cn/model_zoo/official/lite/ssd_mobilenetv2_lite/ssd.ms',
+  'https://github.com/RangiLyu/nanodet/releases/download/v1.0.0-alpha-1/nanodet-plus-m_320.onnx',
   'https://download.mindspore.cn/model_zoo/official/lite/style_lite/style_predict_quant.ms',
   'https://download.mindspore.cn/model_zoo/official/lite/style_lite/style_transfer_quant.ms',
   'https://gitee.com/harmonyos_samples/MSLiteSceneRecognition'
@@ -164,7 +164,7 @@ $hapFixtureAst = Read-CoreGuardPowerShellAst (Join-Path $PSScriptRoot 'test-veri
 foreach ($entry in @(
   'resources/rawfile/model/mobilenetv2.ms',
   'resources/rawfile/model/resnet18-place365.ms',
-  'resources/rawfile/model/ssd.ms',
+  'resources/rawfile/model/nanodet_plus_m_320.mnn',
   'resources/rawfile/model/style_predict_quant.ms',
   'resources/rawfile/model/style_transfer_quant.ms',
   'resources/rawfile/model/LICENSE-Apache-2.0.txt',
@@ -174,11 +174,11 @@ foreach ($entry in @(
   Assert-CoreGuardStringArrayContains $hapFixtureAst 'mainEntries' $entry "HAP fixture is missing $entry."
 }
 Assert-CoreGuardExecutableCommand $hapVerifierAst 'Assert-HapPayloadHashes $MainHapPath $payloads' 'main HAP must reuse exact payload hash verification.'
-Assert-CoreGuardAssignmentLiteral $hapFixtureAst 'tamperedAppModelEntry' 'resources/rawfile/model/ssd.ms' 'HAP fixture must reject a tampered core model.'
+Assert-CoreGuardAssignmentLiteral $hapFixtureAst 'tamperedAppModelEntry' 'resources/rawfile/model/nanodet_plus_m_320.mnn' 'HAP fixture must reject a tampered core model.'
 
 $entryBuildProfile = Get-Content -Raw -LiteralPath (Join-Path $projectRoot 'entry/build-profile.json5')
 $testHapExclusions = @(Get-CoreGuardJson5ArrayForNamedObject $entryBuildProfile 'ohosTest' 'ignoreResourcePattern')
-foreach ($testHapExclusion in @('*.ms', 'NOTICE.md', 'LICENSE-Apache-2.0.txt')) {
+foreach ($testHapExclusion in @('*.ms', '*.mnn', 'NOTICE.md', 'LICENSE-Apache-2.0.txt')) {
   if ($testHapExclusions -cnotcontains $testHapExclusion) {
     throw "Core model asset guard failed: ohosTest ignoreResourcePattern must exclude $testHapExclusion."
   }

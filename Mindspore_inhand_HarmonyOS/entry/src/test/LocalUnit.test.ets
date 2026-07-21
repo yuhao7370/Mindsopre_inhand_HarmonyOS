@@ -305,6 +305,7 @@ import {
   ObjectDetectionTensorRunner,
   objectDetectionBoxPercent,
   objectDetectionLiveLabelOffset,
+  decodeNanoDetObjectDetections,
   decodeSsdObjectDetections,
   generateObjectDetectionDefaultBoxes,
   objectDetectionAnchorCount,
@@ -312,6 +313,8 @@ import {
   objectDetectionDecodeOptions,
   objectDetectionInputFloatCount,
   objectDetectionInputSize,
+  objectDetectionOutputChannelCount,
+  objectDetectionOutputFloatCount,
   ObjectDetectionNormalBox,
   objectDetectionModelOutputFromFloatArrays,
   objectDetectionOverlayColor,
@@ -512,6 +515,7 @@ import {
   ModelFileTensorMetadata,
   ModelFileCompatibilityChecker,
   ModelFileCompatibilityLoader,
+  ObjectDetectionModelContentValidator,
   modelFileCacheWriteSucceeded,
   ModelFileCacheWriter,
   RuntimeModelFileCacheService,
@@ -1026,6 +1030,20 @@ class RecordingModelFileCompatibilityLoader implements ModelFileCompatibilityLoa
       throw new Error('invalid MindSpore model');
     }
     return this.inputs;
+  }
+}
+
+class RecordingObjectDetectionModelContentValidator implements ObjectDetectionModelContentValidator {
+  readonly seenByteLengths: Array<number> = [];
+  private readonly compatible: boolean;
+
+  constructor(compatible: boolean) {
+    this.compatible = compatible;
+  }
+
+  async validate(content: Uint8Array): Promise<boolean> {
+    this.seenByteLengths.push(content.byteLength);
+    return this.compatible;
   }
 }
 
@@ -3946,7 +3964,7 @@ export default function localUnitTest() {
         styleImageUri: 'file://album/old-style.jpg',
         backgroundImageUri: '',
         selectedPortraitBackgroundPresetId: '',
-        modelInputUri: 'file://cache/object_detection_model.ms',
+        modelInputUri: 'file://cache/object_detection_model.mnn',
         stylePredictModelInputUri: 'file://cache/style_predict_quant.ms',
         styleTransferModelInputUri: 'file://cache/style_transfer_quant.ms'
       };
@@ -3955,7 +3973,7 @@ export default function localUnitTest() {
         'modelFile',
         state
       );
-      expect(objectState.modelInputUri).assertEqual('file://cache/object_detection_model.ms');
+      expect(objectState.modelInputUri).assertEqual('file://cache/object_detection_model.mnn');
       expect(objectState.imageInputUri).assertEqual('file://album/old-image.jpg');
       expect(objectState.selectedInputSummary).assertEqual('');
 
@@ -6752,18 +6770,18 @@ export default function localUnitTest() {
       expect(objectCategoryLabelCount).assertEqual(81);
     });
 
-    it('usesAndroidSsdObjectDetectionAssetContract', 0, () => {
+    it('usesNanoDetObjectDetectionAssetContract', 0, () => {
       expect(objectCategoryLabelRawfilePath).assertEqual('labels/object_category.txt');
-      expect(objectDetectionModelRawfilePath).assertEqual('model/ssd.ms');
-      expect(objectDetectionModelDownloadUrl).assertEqual('https://download.mindspore.cn/model_zoo/official/lite/ssd_mobilenetv2_lite/ssd.ms');
+      expect(objectDetectionModelRawfilePath).assertEqual('model/nanodet_plus_m_320.mnn');
+      expect(objectDetectionModelDownloadUrl).assertEqual('https://github.com/RangiLyu/nanodet/releases/download/v1.0.0-alpha-1/nanodet-plus-m_320.onnx');
     });
 
-    it('definesAndroidObjectDetectionPreprocessContract', 0, () => {
-      expect(objectDetectionInputSize).assertEqual(300);
-      expect(objectDetectionInputFloatCount).assertEqual(300 * 300 * 3);
+    it('definesNanoDetObjectDetectionPreprocessContract', 0, () => {
+      expect(objectDetectionInputSize).assertEqual(320);
+      expect(objectDetectionInputFloatCount).assertEqual(320 * 320 * 3);
     });
 
-    it('normalizesObjectDetectionRgbaToRgbHwcInput', 0, () => {
+    it('normalizesObjectDetectionRgbaToBgrNchwInputAtTheLegacyContractLocation', 0, () => {
       const rgba: Uint8Array = new Uint8Array(objectDetectionInputSize * objectDetectionInputSize * 4);
       rgba[0] = 255;
       rgba[1] = 0;
@@ -6773,15 +6791,16 @@ export default function localUnitTest() {
       const input = new Float32Array(normalizedObjectDetectionRgbInputFromRgba(rgba));
 
       expect(input.length).assertEqual(objectDetectionInputFloatCount);
-      expect(input[0].toFixed(6)).assertEqual('2.248908');
-      expect(input[1].toFixed(6)).assertEqual('-2.035714');
-      expect(input[2].toFixed(6)).assertEqual('-1.804444');
+      const planeSize = objectDetectionInputSize * objectDetectionInputSize;
+      expect(input[0].toFixed(6)).assertEqual('-1.804444');
+      expect(input[planeSize].toFixed(6)).assertEqual('-2.035714');
+      expect(input[planeSize * 2].toFixed(6)).assertEqual('2.248908');
     });
 
-    it('requestsObjectDetectionDecodeAsAndroid300Rgba', 0, () => {
+    it('requestsObjectDetectionDecodeAsNanoDet320Rgba', 0, () => {
       const options: image.DecodingOptions = objectDetectionDecodeOptions();
-      expect(options.desiredSize!.width).assertEqual(300);
-      expect(options.desiredSize!.height).assertEqual(300);
+      expect(options.desiredSize!.width).assertEqual(320);
+      expect(options.desiredSize!.height).assertEqual(320);
       expect(options.desiredPixelFormat).assertEqual(image.PixelMapFormat.RGBA_8888);
     });
 
@@ -6802,14 +6821,14 @@ export default function localUnitTest() {
         runner: runner
       });
 
-      const result: ObjectDetectionRunResult = await service.detectObjects('file://selected/street.jpg', 'file://selected/ssd.ms');
+      const result: ObjectDetectionRunResult = await service.detectObjects('file://selected/street.jpg', 'file://selected/model.mnn');
 
       expect(result.ok).assertTrue();
       expect(result.code).assertEqual('DETECTION_DONE');
       expect(result.detections.length).assertEqual(1);
       expect(result.detections[0].label).assertEqual('person');
       expect(runner.seenImageUris[0]).assertEqual('file://selected/street.jpg');
-      expect(runner.seenModelUris[0]).assertEqual('file://selected/ssd.ms');
+      expect(runner.seenModelUris[0]).assertEqual('file://selected/model.mnn');
     });
 
     it('mapsObjectDetectionBoxToPercentOverlay', 0, () => {
@@ -6952,7 +6971,7 @@ export default function localUnitTest() {
 
       const result: AiRunResult = await new DefaultAiService({ objectDetectionService: service }).run(workflow!, {
         imageUri: 'file://selected/street.jpg',
-        modelUri: 'file://selected/ssd.ms'
+        modelUri: 'file://selected/model.mnn'
       });
 
       expect(result.ok).assertTrue();
@@ -7066,95 +7085,6 @@ export default function localUnitTest() {
       expect(result.ok).assertTrue();
       expect(result.code).assertEqual('OBJECT_DETECTION_DONE');
       expect(aiRunResultRows(result)[1].value.indexOf('人') >= 0).assertTrue();
-    });
-
-    it('generatesAndroidSsdDefaultBoxes', 0, () => {
-      const boxes: Array<ObjectDetectionNormalBox> = generateObjectDetectionDefaultBoxes();
-
-      expect(objectDetectionAnchorCount).assertEqual(1917);
-      expect(objectDetectionClassCount).assertEqual(81);
-      expect(boxes.length).assertEqual(objectDetectionAnchorCount);
-      expect(boxes[0].x.toFixed(6)).assertEqual('0.026667');
-      expect(boxes[0].y.toFixed(6)).assertEqual('0.026667');
-      expect(boxes[0].w.toFixed(6)).assertEqual('0.100000');
-      expect(boxes[0].h.toFixed(6)).assertEqual('0.100000');
-      expect(boxes[1916].x.toFixed(6)).assertEqual('0.500000');
-      expect(boxes[1916].h.toFixed(6)).assertEqual('0.974679');
-    });
-
-    it('decodesAndroidSsdBoxesToOriginalImageCoordinates', 0, () => {
-      const scores: Float32Array = new Float32Array(objectDetectionAnchorCount * objectDetectionClassCount);
-      const boxes: Float32Array = new Float32Array(objectDetectionAnchorCount * 4);
-      scores[1] = 0.7;
-
-      const detections: Array<ObjectDetection> =
-        decodeSsdObjectDetections(scores, boxes, ['background', 'person'], 600, 300);
-
-      expect(detections.length).assertEqual(1);
-      expect(detections[0].imageId).assertEqual(0);
-      expect(detections[0].labelId).assertEqual(1);
-      expect(detections[0].label).assertEqual('person');
-      expect(detections[0].left.toFixed(0)).assertEqual('0');
-      expect(detections[0].top.toFixed(0)).assertEqual('0');
-      expect(detections[0].right.toFixed(0)).assertEqual('46');
-      expect(detections[0].bottom.toFixed(0)).assertEqual('23');
-    });
-
-    it('appliesAndroidSsdThresholdsAndNmsPerClass', 0, () => {
-      const scores: Float32Array = new Float32Array(objectDetectionAnchorCount * objectDetectionClassCount);
-      const boxes: Float32Array = new Float32Array(objectDetectionAnchorCount * 4);
-      scores[1] = 0.9;
-      scores[objectDetectionClassCount + 1] = 0.8;
-
-      const detections: Array<ObjectDetection> =
-        decodeSsdObjectDetections(scores, boxes, ['background', 'person'], 300, 300);
-
-      expect(detections.length).assertEqual(1);
-      expect(detections[0].imageId).assertEqual(0);
-      expect(detections[0].score.toFixed(1)).assertEqual('0.9');
-    });
-
-    it('identifiesObjectDetectionModelOutputsByAndroidElementCount', 0, () => {
-      const boxes: Float32Array = new Float32Array(objectDetectionAnchorCount * 4);
-      const scores: Float32Array = new Float32Array(objectDetectionAnchorCount * objectDetectionClassCount);
-      boxes[3] = 0.25;
-      scores[1] = 0.7;
-
-      const output: ObjectDetectionModelOutput = objectDetectionModelOutputFromFloatArrays([boxes, scores]);
-
-      expect(output.boxes.length).assertEqual(objectDetectionAnchorCount * 4);
-      expect(output.scores.length).assertEqual(objectDetectionAnchorCount * objectDetectionClassCount);
-      expect(output.boxes[3]).assertEqual(0.25);
-      expect(output.scores[1].toFixed(1)).assertEqual('0.7');
-    });
-
-    it('objectDetectionMindSporeRunnerBridgesPreprocessorTensorRunnerAndSsdDecode', 0, async () => {
-      const scores: Float32Array = new Float32Array(objectDetectionAnchorCount * objectDetectionClassCount);
-      const boxes: Float32Array = new Float32Array(objectDetectionAnchorCount * 4);
-      scores[1] = 0.7;
-      const input: ObjectDetectionInput = {
-        inputBuffer: new ArrayBuffer(12),
-        imageWidth: 600,
-        imageHeight: 300
-      };
-      const preprocessor: FixedObjectDetectionPreprocessor = new FixedObjectDetectionPreprocessor(input);
-      const tensorRunner: FixedObjectDetectionTensorRunner = new FixedObjectDetectionTensorRunner({
-        scores: scores,
-        boxes: boxes
-      });
-      const runner = new ObjectDetectionMindSporeRunner({
-        preprocessor: preprocessor,
-        tensorRunner: tensorRunner
-      });
-
-      const detections: Array<ObjectDetection> =
-        await runner.detectObjects('file://selected/street.jpg', 'file://selected/ssd.ms');
-
-      expect(detections.length).assertEqual(1);
-      expect(detections[0].right.toFixed(0)).assertEqual('46');
-      expect(preprocessor.seenImageUris[0]).assertEqual('file://selected/street.jpg');
-      expect(tensorRunner.seenByteLengths[0]).assertEqual(12);
-      expect(tensorRunner.seenModelUris[0]).assertEqual('file://selected/ssd.ms');
     });
 
     it('copiesRawfileViewToExactModelBuffer', 0, () => {
@@ -9004,6 +8934,61 @@ export default function localUnitTest() {
       expect(inputKindReplacesPrimaryInput('photo')).assertTrue();
     });
 
+    it('definesTheNanoDetApi24TensorContract', 0, () => {
+      expect(objectDetectionInputSize).assertEqual(320);
+      expect(objectDetectionInputFloatCount).assertEqual(1 * 3 * 320 * 320);
+      expect(objectDetectionOutputChannelCount).assertEqual(112);
+      expect(objectDetectionOutputFloatCount).assertEqual(1 * 2125 * 112);
+    });
+
+    it('normalizesObjectDetectionRgbaToBgrNchwInput', 0, () => {
+      const rgba: Uint8Array = new Uint8Array(objectDetectionInputSize * objectDetectionInputSize * 4);
+      rgba[0] = 255;
+      rgba[1] = 0;
+      rgba[2] = 0;
+      rgba[3] = 77;
+
+      const input = new Float32Array(normalizedObjectDetectionRgbInputFromRgba(rgba));
+      const planeSize = objectDetectionInputSize * objectDetectionInputSize;
+
+      expect(input.length).assertEqual(objectDetectionInputFloatCount);
+      expect(input[0].toFixed(6)).assertEqual('-1.804444');
+      expect(input[planeSize].toFixed(6)).assertEqual('-2.035714');
+      expect(input[planeSize * 2].toFixed(6)).assertEqual('2.248908');
+    });
+
+    it('decodesTheDocumentedNanoDetOutputAndMapsCocoIdsAfterBackground', 0, () => {
+      const output = new Float32Array(objectDetectionOutputFloatCount);
+      output[16] = 0.9;
+      for (let side = 0; side < 4; side++) {
+        const offset = 80 + side * 8;
+        for (let bin = 0; bin < 8; bin++) {
+          output[offset + bin] = bin === 1 ? 20 : -20;
+        }
+      }
+
+      const detections = decodeNanoDetObjectDetections(output, 640, 320);
+
+      expect(detections.length).assertEqual(1);
+      expect(detections[0].imageId).assertEqual(0);
+      expect(detections[0].labelId).assertEqual(17);
+      expect(detections[0].score.toFixed(1)).assertEqual('0.9');
+      expect(detections[0].left.toFixed(0)).assertEqual('0');
+      expect(detections[0].top.toFixed(0)).assertEqual('0');
+      expect(detections[0].right.toFixed(0)).assertEqual('16');
+      expect(detections[0].bottom.toFixed(0)).assertEqual('8');
+    });
+
+    it('rejectsMalformedOrNonFiniteNanoDetOutput', 0, () => {
+      expect(decodeNanoDetObjectDetections(new Float32Array(objectDetectionOutputFloatCount - 1), 320, 320).length)
+        .assertEqual(0);
+      const nonFinite = new Float32Array(objectDetectionOutputFloatCount);
+      nonFinite[0] = Number.NaN;
+      expect(decodeNanoDetObjectDetections(nonFinite, 320, 320).length).assertEqual(0);
+      expect(decodeNanoDetObjectDetections(new Float32Array(objectDetectionOutputFloatCount), 320, 320).length)
+        .assertEqual(0);
+    });
+
     it('keepsNativeCameraPickerForPhysicalDevicesAndGuardsApi24Emulator', 0, () => {
       expect(isApi24EmulatorCameraPickerUnsupported('PHEMU-FD00')).assertTrue();
       expect(isApi24EmulatorCameraPickerUnsupported('phemu-x86_64')).assertTrue();
@@ -10236,8 +10221,8 @@ export default function localUnitTest() {
     it('cachesObjectDetectionPickedModelsInDedicatedCacheSlot', 0, () => {
       expect(shouldCachePickedModelFileForRoute(AppRoute.OBJECT_PHOTO.name, 'modelFile')).assertTrue();
       expect(shouldCachePickedModelFileForRoute(AppRoute.OBJECT_CAMERA.name, 'modelFile')).assertTrue();
-      expect(cachedModelFileNameForInputKind(AppRoute.OBJECT_PHOTO.name, 'modelFile')).assertEqual('object_detection_model.ms');
-      expect(cachedModelFileNameForInputKind(AppRoute.OBJECT_CAMERA.name, 'modelFile')).assertEqual('object_detection_model.ms');
+      expect(cachedModelFileNameForInputKind(AppRoute.OBJECT_PHOTO.name, 'modelFile')).assertEqual('object_detection_model.mnn');
+      expect(cachedModelFileNameForInputKind(AppRoute.OBJECT_CAMERA.name, 'modelFile')).assertEqual('object_detection_model.mnn');
       expect(cachedModelFileNameForInputKind(AppRoute.CUSTOM_MODEL.name, 'modelFile')).assertEqual('custom_model.ms');
     });
 
@@ -10262,16 +10247,20 @@ export default function localUnitTest() {
 
     it('cachesPickedObjectDetectionModelFileContentBeforeRuntimeUse', 0, async () => {
       const reader = new FileUriContentReader(new FixedFileUriContentBackend(new Uint8Array([5, 6, 7, 8])));
-      const writer = new RecordingModelFileCacheWriter('/cache/object_detection_model.ms');
-      const service = new RuntimeModelFileCacheService(reader, writer);
+      const writer = new RecordingModelFileCacheWriter('/cache/object_detection_model.mnn');
+      const service = new RuntimeModelFileCacheService(
+        reader,
+        writer,
+        new RecordingModelFileCompatibilityChecker(true)
+      );
 
       const result = await service.cachePickedModelFile('file://selected/ssd.ms', '/cache', AppRoute.OBJECT_PHOTO.name, 'modelFile');
 
       expect(result.ok).assertTrue();
-      expect(result.uri).assertEqual('/cache/object_detection_model.ms');
+      expect(result.uri).assertEqual('/cache/object_detection_model.mnn');
       expect(result.messageKey).assertEqual('feature_runtime_model_ready');
       expect(writer.seenCacheDirs[0]).assertEqual('/cache');
-      expect(writer.seenFileNames[0]).assertEqual('object_detection_model.ms');
+      expect(writer.seenFileNames[0]).assertEqual('object_detection_model.mnn');
       expect(writer.writtenBytes[0]).assertEqual(4);
     });
 
@@ -10366,7 +10355,7 @@ export default function localUnitTest() {
       expect(result.messageKey).assertEqual('feature_runtime_model_ready');
       expect(checker.seenRouteNames[0]).assertEqual(AppRoute.OBJECT_CAMERA.name);
       expect(checker.seenInputKinds[0]).assertEqual('modelFile');
-      expect(checker.seenUris[0]).assertEqual('/cache/object_detection_model.ms');
+      expect(checker.seenUris[0]).assertEqual('/cache/object_detection_model.mnn');
       expect(checker.seenByteLengths[0]).assertEqual(4);
     });
 
@@ -10403,19 +10392,60 @@ export default function localUnitTest() {
       expect(writer.writtenBytes.length).assertEqual(0);
     });
 
-    it('defaultModelCompatibilityCheckerRejectsMalformedNonEmptyModelContent', 0, async () => {
+    it('defaultModelCompatibilityCheckerRoutesObjectModelsToTheNativeValidator', 0, async () => {
       const loader = new RecordingModelFileCompatibilityLoader(true);
-      const checker = new BasicModelFileCompatibilityChecker(loader);
+      const validator = new RecordingObjectDetectionModelContentValidator(false);
+      const checker = new BasicModelFileCompatibilityChecker(loader, validator);
 
       const compatible = await checker.isCompatible(
         AppRoute.OBJECT_PHOTO.name,
         'modelFile',
-        '/cache/object_detection_model.ms',
+        '/cache/object_detection_model.mnn',
         new Uint8Array([1, 2, 3, 4])
       );
 
       expect(compatible).assertFalse();
-      expect(loader.seenByteLengths[0]).assertEqual(4);
+      expect(validator.seenByteLengths[0]).assertEqual(4);
+      expect(loader.seenByteLengths.length).assertEqual(0);
+    });
+
+    it('preflightsObjectDetectionTensorAndFirstOutputBeforeAtomicPublication', 0, async () => {
+      const loader = new RecordingModelFileCompatibilityLoader(true);
+      const validator = new RecordingObjectDetectionModelContentValidator(true);
+      const checker = new BasicModelFileCompatibilityChecker(loader, validator);
+
+      const compatible = await checker.isCompatible(
+        AppRoute.OBJECT_PHOTO.name,
+        'modelFile',
+        '/cache/object_detection_model.mnn',
+        new Uint8Array([9, 8, 7, 6])
+      );
+
+      expect(compatible).assertTrue();
+      expect(validator.seenByteLengths.length).assertEqual(1);
+      expect(validator.seenByteLengths[0]).assertEqual(4);
+      expect(loader.seenByteLengths.length).assertEqual(0);
+    });
+
+    it('rejectsBadObjectDetectionOverrideWithoutReplacingTheLastValidCache', 0, async () => {
+      const reader = new FileUriContentReader(new FixedFileUriContentBackend(new Uint8Array([9, 8, 7, 6])));
+      const writer = new RecordingModelFileCacheWriter('/cache/object_detection_model.mnn');
+      const checker = new BasicModelFileCompatibilityChecker(
+        new RecordingModelFileCompatibilityLoader(true),
+        new RecordingObjectDetectionModelContentValidator(false)
+      );
+      const service = new RuntimeModelFileCacheService(reader, writer, checker);
+
+      const result = await service.cachePickedModelFile(
+        'file://selected/bad.ms',
+        '/cache',
+        AppRoute.OBJECT_PHOTO.name,
+        'modelFile'
+      );
+
+      expect(result.ok).assertFalse();
+      expect(result.messageKey).assertEqual('feature_runtime_model_incompatible');
+      expect(writer.writtenBytes.length).assertEqual(0);
     });
 
     it('acceptsOnlyTheFixedCustomModelInputTensorContract', 0, async () => {
@@ -10496,9 +10526,9 @@ export default function localUnitTest() {
       );
 
       expect(await checker.isCompatible(
-        AppRoute.OBJECT_PHOTO.name,
-        'modelFile',
-        '/cache/object_detection_model.ms',
+        AppRoute.STYLE_TRANSFER.name,
+        'stylePredictModelFile',
+        '/cache/custom_predict.ms',
         new Uint8Array([1])
       )).assertTrue();
     });
@@ -10679,7 +10709,7 @@ export default function localUnitTest() {
       expect(backend.replacedStablePaths[0]).assertEqual('/cache/custom_predict.ms');
       expect(backend.replacedStablePaths[1]).assertEqual('/cache/custom_predict.ms');
       expect(cachedModelFileNameForInputKind(AppRoute.OBJECT_PHOTO.name, 'modelFile'))
-        .assertEqual('object_detection_model.ms');
+        .assertEqual('object_detection_model.mnn');
       expect(cachedModelFileNameForInputKind(AppRoute.STYLE_TRANSFER.name, 'styleTransferModelFile'))
         .assertEqual('custom_transfer.ms');
     });

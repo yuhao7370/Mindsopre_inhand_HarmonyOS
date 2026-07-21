@@ -1,5 +1,6 @@
 import { image } from '@kit.ImageKit';
 import { mindSporeLite } from '@kit.MindSporeLiteKit';
+import objectDetectionMnn from 'libobject_detection_mnn.so';
 import { FileUriContentReader } from './FileUriContentReader';
 import {
   mindSporeLiteCpuContext,
@@ -9,17 +10,25 @@ import {
 
 export const objectCategoryLabelRawfilePath: string = 'labels/object_category.txt';
 export const objectCategoryLabelCount: number = 81;
-export const objectDetectionModelRawfilePath: string = 'model/ssd.ms';
+export const objectDetectionModelRawfilePath: string = 'model/nanodet_plus_m_320.mnn';
 export const objectDetectionModelDownloadUrl: string =
-  'https://download.mindspore.cn/model_zoo/official/lite/ssd_mobilenetv2_lite/ssd.ms';
-export const objectDetectionInputSize: number = 300;
+  'https://github.com/RangiLyu/nanodet/releases/download/v1.0.0-alpha-1/nanodet-plus-m_320.onnx';
+export const objectDetectionInputSize: number = 320;
 export const objectDetectionInputChannels: number = 3;
 export const objectDetectionInputFloatCount: number =
   objectDetectionInputSize * objectDetectionInputSize * objectDetectionInputChannels;
-export const objectDetectionMean: Array<number> = [0.485, 0.456, 0.406];
-export const objectDetectionStd: Array<number> = [0.229, 0.224, 0.225];
-export const objectDetectionAnchorCount: number = 1917;
+export const objectDetectionMean: Array<number> = [103.53, 116.28, 123.675];
+export const objectDetectionStd: Array<number> = [57.375, 57.12, 58.395];
+export const objectDetectionAnchorCount: number = 2125;
 export const objectDetectionClassCount: number = objectCategoryLabelCount;
+export const objectDetectionOutputChannelCount: number = 112;
+export const objectDetectionOutputFloatCount: number = objectDetectionAnchorCount * objectDetectionOutputChannelCount;
+const objectDetectionNanoDetClassCount: number = 80;
+const objectDetectionDflBins: number = 8;
+const objectDetectionNanoDetStrides: Array<number> = [8, 16, 32, 64];
+const objectDetectionNanoDetScoreThreshold: number = 0.35;
+const objectDetectionNanoDetNmsThreshold: number = 0.6;
+const objectDetectionNanoDetMaxResults: number = 100;
 const objectDetectionFeatureSizes: Array<number> = [19, 10, 5, 3, 2, 1];
 const objectDetectionDefaultCounts: Array<number> = [3, 6, 6, 6, 6, 6];
 const objectDetectionSteps: Array<number> = [16, 32, 64, 100, 150, 300];
@@ -282,18 +291,193 @@ export function normalizedObjectDetectionRgbInputFromRgba(rgba: Uint8Array): Arr
   }
 
   const input = new Float32Array(objectDetectionInputFloatCount);
-  let outputIndex = 0;
+  const planeSize = objectDetectionInputSize * objectDetectionInputSize;
+  let pixelIndex = 0;
   for (let index = 0; index < rgba.length; index += 4) {
-    input[outputIndex] = normalizeObjectDetectionChannel(rgba[index], 0);
-    input[outputIndex + 1] = normalizeObjectDetectionChannel(rgba[index + 1], 1);
-    input[outputIndex + 2] = normalizeObjectDetectionChannel(rgba[index + 2], 2);
-    outputIndex += objectDetectionInputChannels;
+    input[pixelIndex] = normalizeObjectDetectionChannel(rgba[index + 2], 0);
+    input[planeSize + pixelIndex] = normalizeObjectDetectionChannel(rgba[index + 1], 1);
+    input[planeSize * 2 + pixelIndex] = normalizeObjectDetectionChannel(rgba[index], 2);
+    pixelIndex++;
   }
   return input.buffer as ArrayBuffer;
 }
 
+export interface LocalMnnObjectDetectionRunnerOptions {
+  readonly resourceManager: RawfileContentReader;
+  readonly modelRawfilePath: string;
+  readonly preprocessor: ObjectDetectionInputPreprocessor;
+  readonly modelContentReader?: FileUriContentReader;
+}
+
+export class LocalMnnObjectDetectionRunner implements ObjectDetectionRunner {
+  private readonly resourceManager: RawfileContentReader;
+  private readonly modelRawfilePath: string;
+  private readonly preprocessor: ObjectDetectionInputPreprocessor;
+  private readonly modelContentReader: FileUriContentReader;
+  private loadedModelKey: string = '';
+  private operationTail: Promise<void> = Promise.resolve();
+
+  constructor(options: LocalMnnObjectDetectionRunnerOptions) {
+    this.resourceManager = options.resourceManager;
+    this.modelRawfilePath = options.modelRawfilePath;
+    this.preprocessor = options.preprocessor;
+    this.modelContentReader = options.modelContentReader ?? new FileUriContentReader();
+  }
+
+  detectObjects(imageUri: string, modelUri?: string): Promise<Array<ObjectDetection>> {
+    const result = this.operationTail.then(async (): Promise<Array<ObjectDetection>> =>
+      await this.detectObjectsExclusive(imageUri, modelUri));
+    this.operationTail = result.then((): void => {}, (): void => {});
+    return result;
+  }
+
+  private async detectObjectsExclusive(imageUri: string, modelUri?: string): Promise<Array<ObjectDetection>> {
+    const input = await this.preprocessor.createInput(imageUri);
+    await this.ensureModelLoaded(modelUri);
+    const output = await objectDetectionMnn.predict(new Float32Array(input.inputBuffer));
+    return decodeNanoDetObjectDetections(output, input.imageWidth, input.imageHeight);
+  }
+
+  private async ensureModelLoaded(modelUri?: string): Promise<void> {
+    const modelKey = modelUri !== undefined && modelUri.length > 0 ? modelUri : `rawfile:${this.modelRawfilePath}`;
+    if (this.loadedModelKey === modelKey) {
+      return;
+    }
+    const content = modelUri !== undefined && modelUri.length > 0 ?
+      await this.modelContentReader.readFileContent(modelUri) :
+      await this.resourceManager.getRawFileContent(this.modelRawfilePath);
+    await objectDetectionMnn.loadModel(content);
+    this.loadedModelKey = modelKey;
+  }
+}
+
+export async function validateObjectDetectionModelContent(content: Uint8Array): Promise<boolean> {
+  return await objectDetectionMnn.validateModel(content);
+}
+
 function normalizeObjectDetectionChannel(value: number, channel: number): number {
-  return ((value / 255) - objectDetectionMean[channel]) / objectDetectionStd[channel];
+  return (value - objectDetectionMean[channel]) / objectDetectionStd[channel];
+}
+
+interface NanoDetCandidate {
+  readonly imageId: number;
+  readonly labelId: number;
+  readonly score: number;
+  readonly left: number;
+  readonly top: number;
+  readonly right: number;
+  readonly bottom: number;
+}
+
+export function decodeNanoDetObjectDetections(
+  output: Float32Array,
+  imageWidth: number,
+  imageHeight: number
+): Array<ObjectDetection> {
+  if (output.length !== objectDetectionOutputFloatCount || imageWidth <= 0 || imageHeight <= 0) {
+    return [];
+  }
+  let hasSignal = false;
+  for (let index = 0; index < output.length; index++) {
+    if (!Number.isFinite(output[index])) {
+      return [];
+    }
+    if (Math.abs(output[index]) > 1.0e-12) {
+      hasSignal = true;
+    }
+  }
+  if (!hasSignal) {
+    return [];
+  }
+
+  const candidates: Array<NanoDetCandidate> = [];
+  let pointIndex = 0;
+  for (let strideIndex = 0; strideIndex < objectDetectionNanoDetStrides.length; strideIndex++) {
+    const stride = objectDetectionNanoDetStrides[strideIndex];
+    const featureSize = Math.ceil(objectDetectionInputSize / stride);
+    for (let row = 0; row < featureSize; row++) {
+      for (let column = 0; column < featureSize; column++) {
+        const outputOffset = pointIndex * objectDetectionOutputChannelCount;
+        for (let classIndex = 0; classIndex < objectDetectionNanoDetClassCount; classIndex++) {
+          const score = output[outputOffset + classIndex];
+          if (score >= objectDetectionNanoDetScoreThreshold) {
+            const leftDistance = nanoDetDflDistance(output, outputOffset + objectDetectionNanoDetClassCount, 0) * stride;
+            const topDistance = nanoDetDflDistance(output, outputOffset + objectDetectionNanoDetClassCount, 1) * stride;
+            const rightDistance = nanoDetDflDistance(output, outputOffset + objectDetectionNanoDetClassCount, 2) * stride;
+            const bottomDistance = nanoDetDflDistance(output, outputOffset + objectDetectionNanoDetClassCount, 3) * stride;
+            candidates.push({
+              imageId: pointIndex,
+              labelId: classIndex + 1,
+              score: score,
+              left: Math.max(0, (column * stride - leftDistance) * imageWidth / objectDetectionInputSize),
+              top: Math.max(0, (row * stride - topDistance) * imageHeight / objectDetectionInputSize),
+              right: Math.min(imageWidth, (column * stride + rightDistance) * imageWidth / objectDetectionInputSize),
+              bottom: Math.min(imageHeight, (row * stride + bottomDistance) * imageHeight / objectDetectionInputSize)
+            });
+          }
+        }
+        pointIndex++;
+      }
+    }
+  }
+  if (pointIndex !== objectDetectionAnchorCount) {
+    return [];
+  }
+
+  candidates.sort((left: NanoDetCandidate, right: NanoDetCandidate): number => right.score - left.score);
+  const kept: Array<NanoDetCandidate> = [];
+  for (let index = 0; index < candidates.length && kept.length < objectDetectionNanoDetMaxResults; index++) {
+    const candidate = candidates[index];
+    let suppressed = false;
+    for (let keptIndex = 0; keptIndex < kept.length; keptIndex++) {
+      if (kept[keptIndex].labelId === candidate.labelId &&
+        nanoDetIntersectionOverUnion(kept[keptIndex], candidate) > objectDetectionNanoDetNmsThreshold) {
+        suppressed = true;
+        break;
+      }
+    }
+    if (!suppressed && candidate.right > candidate.left && candidate.bottom > candidate.top) {
+      kept.push(candidate);
+    }
+  }
+  return kept.map((candidate: NanoDetCandidate): ObjectDetection => ({
+    imageId: candidate.imageId,
+    labelId: candidate.labelId,
+    label: `${candidate.labelId}`,
+    score: candidate.score,
+    imageWidth: imageWidth,
+    imageHeight: imageHeight,
+    left: candidate.left,
+    top: candidate.top,
+    right: candidate.right,
+    bottom: candidate.bottom
+  }));
+}
+
+function nanoDetDflDistance(output: Float32Array, distributionOffset: number, side: number): number {
+  const offset = distributionOffset + side * objectDetectionDflBins;
+  let maximum = output[offset];
+  for (let bin = 1; bin < objectDetectionDflBins; bin++) {
+    maximum = Math.max(maximum, output[offset + bin]);
+  }
+  let denominator = 0;
+  let numerator = 0;
+  for (let bin = 0; bin < objectDetectionDflBins; bin++) {
+    const weight = Math.exp(output[offset + bin] - maximum);
+    denominator += weight;
+    numerator += bin * weight;
+  }
+  return denominator > 0 ? numerator / denominator : 0;
+}
+
+function nanoDetIntersectionOverUnion(left: NanoDetCandidate, right: NanoDetCandidate): number {
+  const intersectionWidth = Math.max(0, Math.min(left.right, right.right) - Math.max(left.left, right.left));
+  const intersectionHeight = Math.max(0, Math.min(left.bottom, right.bottom) - Math.max(left.top, right.top));
+  const intersection = intersectionWidth * intersectionHeight;
+  const leftArea = Math.max(0, left.right - left.left) * Math.max(0, left.bottom - left.top);
+  const rightArea = Math.max(0, right.right - right.left) * Math.max(0, right.bottom - right.top);
+  const union = leftArea + rightArea - intersection;
+  return union > 0 ? intersection / union : 0;
 }
 
 export function generateObjectDetectionDefaultBoxes(): Array<ObjectDetectionNormalBox> {

@@ -88,7 +88,7 @@ $mainEntries = @(
   'module.json',
   'resources/rawfile/model/mobilenetv2.ms',
   'resources/rawfile/model/resnet18-place365.ms',
-  'resources/rawfile/model/ssd.ms',
+  'resources/rawfile/model/nanodet_plus_m_320.mnn',
   'resources/rawfile/model/style_predict_quant.ms',
   'resources/rawfile/model/style_transfer_quant.ms',
   'resources/rawfile/model/selfie_segmentation.mnn',
@@ -113,6 +113,7 @@ $mainEntries = @(
   'libs/arm64-v8a/libMNN.so',
   'libs/arm64-v8a/libtranslation_archive.so',
   'libs/arm64-v8a/libsegmentation_mnn.so',
+  'libs/arm64-v8a/libobject_detection_mnn.so',
   'libs/arm64-v8a/libocr_mnn.so'
 )
 $mainModule = @{
@@ -171,10 +172,10 @@ try {
   $tamperedAppModelHap = Join-Path $tempRoot 'tampered-app-model.hap'
   $tamperedAppModelFiles = New-FileMap $mainEntries
   $tamperedAppModelFiles['module.json'] = $mainModule
-  $tamperedAppModelEntry = 'resources/rawfile/model/ssd.ms'
+  $tamperedAppModelEntry = 'resources/rawfile/model/nanodet_plus_m_320.mnn'
   $tamperedAppModelFiles[$tamperedAppModelEntry] = 'fixturf'
   New-HapFixture $tamperedAppModelHap $tamperedAppModelFiles
-  $expectedAppModelPath = Join-Path $expectedRawfileRoot 'model/ssd.ms'
+  $expectedAppModelPath = Join-Path $expectedRawfileRoot 'model/nanodet_plus_m_320.mnn'
   Assert-GuardRejects 'tampered app model content' $tamperedAppModelHap $testHap `
     "payload differs from expected file: $tamperedAppModelEntry; expected source path: $expectedAppModelPath"
 
@@ -209,6 +210,13 @@ try {
   $missingOcrFiles['module.json'] = $mainModule
   New-HapFixture $missingOcrHap $missingOcrFiles
   Assert-GuardRejects 'missing OCR library payload' $missingOcrHap $testHap 'Main HAP is missing: libs/arm64-v8a/libocr_mnn.so'
+
+  $missingObjectDetectionHap = Join-Path $tempRoot 'missing-object-detection.hap'
+  $missingObjectDetectionFiles = New-FileMap @($mainEntries | Where-Object { $_ -ne 'libs/arm64-v8a/libobject_detection_mnn.so' })
+  $missingObjectDetectionFiles['module.json'] = $mainModule
+  New-HapFixture $missingObjectDetectionHap $missingObjectDetectionFiles
+  Assert-GuardRejects 'missing object-detection library payload' $missingObjectDetectionHap $testHap `
+    'Main HAP is missing: libs/arm64-v8a/libobject_detection_mnn.so'
 
   $wrongMainBundleHap = Join-Path $tempRoot 'wrong-main-bundle.hap'
   $wrongMainBundleFiles = New-FileMap $mainEntries
@@ -258,7 +266,7 @@ try {
   $copiedAppModelFiles = New-FileMap $testEntries
   $copiedAppModelFiles['module.json'] = $testModule
   $copiedAppModelFiles['pack.info'] = $testPack
-  $copiedAppModelFiles['resources/rawfile/model/ssd.ms'] = 'fixture'
+  $copiedAppModelFiles['resources/rawfile/model/nanodet_plus_m_320.mnn'] = 'fixture'
   New-HapFixture $copiedAppModelHap $copiedAppModelFiles
   Assert-GuardRejects 'copied app model in test HAP' $mainHap $copiedAppModelHap 'ohosTest HAP contains copied models'
 
@@ -270,6 +278,15 @@ try {
   New-HapFixture $copiedOcrLibraryHap $copiedOcrLibraryFiles
   Assert-GuardRejects 'copied OCR library in test HAP' $mainHap $copiedOcrLibraryHap `
     'ohosTest HAP contains copied AI libraries: libs/arm64-v8a/libocr_mnn.so'
+
+  $copiedObjectDetectionLibraryHap = Join-Path $tempRoot 'copied-object-detection-library.hap'
+  $copiedObjectDetectionLibraryFiles = New-FileMap $testEntries
+  $copiedObjectDetectionLibraryFiles['module.json'] = $testModule
+  $copiedObjectDetectionLibraryFiles['pack.info'] = $testPack
+  $copiedObjectDetectionLibraryFiles['libs/arm64-v8a/libobject_detection_mnn.so'] = 'fixture'
+  New-HapFixture $copiedObjectDetectionLibraryHap $copiedObjectDetectionLibraryFiles
+  Assert-GuardRejects 'copied object-detection library in test HAP' $mainHap $copiedObjectDetectionLibraryHap `
+    'ohosTest HAP contains copied AI libraries: libs/arm64-v8a/libobject_detection_mnn.so'
 
   Write-Host 'HAP guard contract tests passed.'
 } finally {
