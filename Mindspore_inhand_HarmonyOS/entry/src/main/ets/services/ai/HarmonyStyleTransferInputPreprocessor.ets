@@ -80,7 +80,7 @@ async function createStyleTransferImageInput(
     const rotationDegrees = await imageRotationDegreesFromImageSource(imageSource);
     const displaySize = rotatedImageSize(imageInfo.size.width, imageInfo.size.height, rotationDegrees);
     pixelMap = await imageSource.createPixelMap(decodingOptionsWithImageRotation(
-      styleTransferDecodeOptions(size),
+      styleTransferDecodeOptions(size, imageInfo.size.width, imageInfo.size.height),
       rotationDegrees
     ));
     const rgbaBuffer = new ArrayBuffer(size * size * 4);

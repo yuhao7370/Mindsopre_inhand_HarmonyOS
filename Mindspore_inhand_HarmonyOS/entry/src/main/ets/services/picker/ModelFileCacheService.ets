@@ -5,6 +5,10 @@ import { AppStringKey } from '../../common/i18n/AppStrings';
 import { FeatureInputKind } from '../../features/runtime/FeatureWorkflowCatalog';
 import { FileUriContentReader } from '../ai/FileUriContentReader';
 import { validateObjectDetectionModelContent } from '../ai/ObjectDetectionService';
+import {
+  validateStyleTransferPredictModelContent,
+  validateStyleTransferTransferModelContent
+} from '../ai/StyleTransferService';
 import { mindSporeLiteCpuContext, rawfileContentToArrayBuffer } from '../ai/MindSporeLiteModelRunner';
 
 export interface ModelFileCacheResult {
@@ -66,6 +70,21 @@ export interface ObjectDetectionModelContentValidator {
   validate(content: Uint8Array): Promise<boolean>;
 }
 
+export interface StyleTransferModelContentValidator {
+  validatePredict(content: Uint8Array): Promise<boolean>;
+  validateTransfer(content: Uint8Array): Promise<boolean>;
+}
+
+export class NativeStyleTransferModelContentValidator implements StyleTransferModelContentValidator {
+  async validatePredict(content: Uint8Array): Promise<boolean> {
+    return await validateStyleTransferPredictModelContent(content);
+  }
+
+  async validateTransfer(content: Uint8Array): Promise<boolean> {
+    return await validateStyleTransferTransferModelContent(content);
+  }
+}
+
 export class NativeObjectDetectionModelContentValidator implements ObjectDetectionModelContentValidator {
   async validate(content: Uint8Array): Promise<boolean> {
     return await validateObjectDetectionModelContent(content);
@@ -94,14 +113,18 @@ export class MindSporeLiteModelCompatibilityLoader implements ModelFileCompatibi
 export class BasicModelFileCompatibilityChecker implements ModelFileCompatibilityChecker {
   private readonly loader: ModelFileCompatibilityLoader;
   private readonly objectDetectionValidator: ObjectDetectionModelContentValidator;
+  private readonly styleTransferValidator: StyleTransferModelContentValidator;
 
   constructor(
     loader: ModelFileCompatibilityLoader = new MindSporeLiteModelCompatibilityLoader(),
     objectDetectionValidator: ObjectDetectionModelContentValidator =
-      new NativeObjectDetectionModelContentValidator()
+      new NativeObjectDetectionModelContentValidator(),
+    styleTransferValidator: StyleTransferModelContentValidator =
+      new NativeStyleTransferModelContentValidator()
   ) {
     this.loader = loader;
     this.objectDetectionValidator = objectDetectionValidator;
+    this.styleTransferValidator = styleTransferValidator;
   }
 
   async isCompatible(
@@ -114,6 +137,12 @@ export class BasicModelFileCompatibilityChecker implements ModelFileCompatibilit
       if (inputKind === 'modelFile' &&
         (routeName === AppRoute.OBJECT_PHOTO.name || routeName === AppRoute.OBJECT_CAMERA.name)) {
         return await this.objectDetectionValidator.validate(content);
+      }
+      if (routeName === AppRoute.STYLE_TRANSFER.name && inputKind === 'stylePredictModelFile') {
+        return await this.styleTransferValidator.validatePredict(content);
+      }
+      if (routeName === AppRoute.STYLE_TRANSFER.name && inputKind === 'styleTransferModelFile') {
+        return await this.styleTransferValidator.validateTransfer(content);
       }
       const inputs = await this.loader.loadModel(content);
       if (routeName === AppRoute.CUSTOM_MODEL.name && inputKind === 'modelFile') {
@@ -336,10 +365,10 @@ export async function cachedModelFileInputStateForRoute(
 
 export function cachedModelFileNameForInputKind(routeName: string, inputKind: FeatureInputKind): string {
   if (inputKind === 'stylePredictModelFile') {
-    return 'custom_predict.ms';
+    return 'custom_predict.mnn';
   }
   if (inputKind === 'styleTransferModelFile') {
-    return 'custom_transfer.ms';
+    return 'custom_transfer.mnn';
   }
   if (routeName === AppRoute.CUSTOM_MODEL.name && inputKind === 'modelFile') {
     return 'custom_model.ms';

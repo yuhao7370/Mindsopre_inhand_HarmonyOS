@@ -26,7 +26,7 @@ import {
   parseImageCategoryLabels
 } from './ImageClassificationService';
 import {
-  MindSporeLiteStyleTransferTensorRunner,
+  LocalMnnStyleTransferTensorRunner,
   StyleTransferRunner,
   StyleTransferService,
   StyleTransferInputPreprocessor,
@@ -463,7 +463,7 @@ export function createHarmonyStyleTransferRunner(
     preprocessor: options.styleTransferPreprocessor ?? new HarmonyStyleTransferInputPreprocessor({
       resourceManager: options.resourceManager
     }),
-    tensorRunner: options.styleTransferTensorRunner ?? new MindSporeLiteStyleTransferTensorRunner({
+    tensorRunner: options.styleTransferTensorRunner ?? new LocalMnnStyleTransferTensorRunner({
       resourceManager: options.resourceManager,
       predictModelRawfilePath: stylePredictModelRawfilePath,
       transferModelRawfilePath: styleTransferModelRawfilePath

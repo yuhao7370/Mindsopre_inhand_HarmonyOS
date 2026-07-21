@@ -301,35 +301,19 @@ try {
   $saveEnabledRoot = New-MutationRoot 'save-enabled-while-running'
   Replace-Once `
     (Join-Path $saveEnabledRoot 'entry\src\main\ets\pages\FeatureRuntimePage.ets') `
-    ".enabled(!this.workflowRunning)`n              .onClick((_event: ClickEvent, result: SaveButtonOnClickResult) => {" `
-    ".enabled(true)`n              .onClick((_event: ClickEvent, result: SaveButtonOnClickResult) => {"
-  Assert-GuardFails $saveEnabledRoot 'secure Save is not rendered disabled while running'
+    '.enabled(styleTransferSaveReady(' `
+    '.enabled(true && styleTransferSaveReady('
+  Assert-GuardFails $saveEnabledRoot 'secure Save no longer uses the exact shared readiness policy'
 
-  $saveEntryRoot = New-MutationRoot 'secure-save-entry-unguarded'
-  $saveEntryPage = Join-Path $saveEntryRoot 'entry\src\main\ets\pages\FeatureRuntimePage.ets'
-  $saveEntryText = Normalize-Newlines ([IO.File]::ReadAllText($saveEntryPage))
-  $saveEntryGuard = "                if (this.workflowRunning) {`n                  return;`n                }`n"
-  if ($saveEntryText.Contains($saveEntryGuard)) {
-    Replace-Once $saveEntryPage $saveEntryGuard ''
-  } elseif (-not $saveEntryText.Contains(
-      '              .onClick((_event: ClickEvent, result: SaveButtonOnClickResult) => {'
-    )) {
-    throw 'Style Transfer guard fixture could not find the secure Save handler entry.'
-  }
-  Assert-GuardFails $saveEntryRoot 'secure Save handler entry no longer rejects while running'
+  Assert-PageSectionMutationFails 'secure-save-entry-unguarded' `
+    '  styleTransferAndroidLayout() {' '  stillSegmentationAndroidLayout() {' `
+    'if (!styleTransferSaveReady(' 'if (false && !styleTransferSaveReady(' `
+    'secure Save handler entry no longer enforces the shared readiness policy'
 
-  $saveEntryDecoyRoot = New-MutationRoot 'secure-save-entry-quoted-guard'
-  $saveEntryDecoyPage = Join-Path $saveEntryDecoyRoot 'entry\src\main\ets\pages\FeatureRuntimePage.ets'
-  $saveEntryDecoyText = Normalize-Newlines ([IO.File]::ReadAllText($saveEntryDecoyPage))
-  if ($saveEntryDecoyText.Contains($saveEntryGuard)) {
-    Replace-Once $saveEntryDecoyPage $saveEntryGuard `
-      "                const runningGuardDecoy = 'if (this.workflowRunning) { return; }';`n"
-  } else {
-    Replace-Once $saveEntryDecoyPage `
-      '              .onClick((_event: ClickEvent, result: SaveButtonOnClickResult) => {' `
-      "              .onClick((_event: ClickEvent, result: SaveButtonOnClickResult) => {`n                const runningGuardDecoy = 'if (this.workflowRunning) { return; }';"
-  }
-  Assert-GuardFails $saveEntryDecoyRoot 'secure Save running guard exists only in a quoted decoy'
+  Assert-PageSectionMutationFails 'secure-save-entry-quoted-guard' `
+    '  styleTransferAndroidLayout() {' '  stillSegmentationAndroidLayout() {' `
+    'if (!styleTransferSaveReady(' "const readinessDecoy = 'if (!styleTransferSaveReady('; if (false) {" `
+    'secure Save readiness guard exists only in a quoted decoy'
 
   Assert-PageSectionMutationFails 'recovery-handler-unguarded' `
     '  private recoverStyleOriginalPreview()' '  private selectPortraitBackgroundPreset' `
@@ -340,8 +324,8 @@ try {
   Replace-NthInSection `
     (Join-Path $saveGuardRoot 'entry\src\main\ets\pages\FeatureRuntimePage.ets') `
     '  private saveStyleTransferResultImage()' '  private saveStillSegmentationResultImage' `
-    'if (this.workflowRunning) {' 'if (false) {' 1
-  Assert-GuardFails $saveGuardRoot 'Save click wrapper no longer rejects while running'
+    'if (!styleTransferSaveReady(' 'if (false && !styleTransferSaveReady(' 1
+  Assert-GuardFails $saveGuardRoot 'Save click wrapper no longer enforces full readiness'
 
   Assert-PageSectionMutationFails 'denied-save-no-toast' `
     '  styleTransferAndroidLayout() {' '  stillSegmentationAndroidLayout() {' `

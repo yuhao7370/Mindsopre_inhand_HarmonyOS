@@ -233,19 +233,25 @@ $recoveryControl = $builder.Substring($recoveryButtonIndex, $saveIndex - $recove
 $saveControl = $builder.Substring($saveIndex, $predictButtonIndex - $saveIndex)
 Assert-CodeLine $recoveryControl '.enabled(!this.workflowRunning)' `
   'Recovery must render disabled while Style Transfer is running.'
-Assert-CodeLine $saveControl '.enabled(!this.workflowRunning)' `
-  'secure Save must render disabled while Style Transfer is running.'
+Assert-CodeLine $saveControl '.enabled(styleTransferSaveReady(' `
+  'secure Save must use the shared readiness policy.'
+Assert-CodeLine $saveControl 'this.workflowRunning,' `
+  'secure Save readiness must reject running inference.'
+Assert-CodeLine $saveControl 'this.styleTransferResultReady && this.styledImagePixelMap !== undefined,' `
+  'secure Save readiness must require a current accepted result.'
+Assert-CodeLine $saveControl 'this.resultImageSaveInFlight' `
+  'secure Save readiness must reject an in-flight save.'
 Assert-CodeLine $saveControl 'this.showRuntimeToast(this.statusKey);' `
   'denied secure Save must immediately show failure Toast.'
 $saveOnClick = Get-TextSection $saveControl `
   '.onClick((_event: ClickEvent, result: SaveButtonOnClickResult) => {' `
   "`n              })" 'secure Save click handler'
-Assert-CodeLineCount $saveOnClick 'if (this.workflowRunning) {' 1 `
-  'secure Save click handler must reject delayed/programmatic callbacks while running.'
-$saveRunningIndex = Get-CodeLineIndex $saveOnClick 'if (this.workflowRunning) {'
+Assert-CodeLineCount $saveOnClick 'if (!styleTransferSaveReady(' 1 `
+  'secure Save click handler must re-check the full readiness policy.'
+$saveRunningIndex = Get-CodeLineIndex $saveOnClick 'if (!styleTransferSaveReady('
 $saveResultIndex = Get-CodeLineIndex $saveOnClick 'if (result === SaveButtonOnClickResult.SUCCESS) {'
 if ($saveRunningIndex -lt 0 -or $saveResultIndex -le $saveRunningIndex) {
-  throw 'Style Transfer parity guard failed: secure Save running guard must precede result handling.'
+  throw 'Style Transfer parity guard failed: secure Save readiness guard must precede result handling.'
 }
 
 foreach ($marker in @(
@@ -260,6 +266,8 @@ Assert-CodeLine $pick "if (usesAndroidStyleTransferLayout(workflow) && (inputKin
   'accepted Style Transfer picks must enter the pending-replacement invalidation branch.'
 Assert-CodeLine $pick 'this.styledImagePixelMapOwner.invalidatePendingReplacement();' `
   'accepted Style Transfer picks must invalidate pending styled replacement.'
+Assert-CodeLine $pick 'this.styleTransferResultReady = false;' `
+  'accepted Style Transfer picks must revoke stale save readiness.'
 Assert-CodeLine $pick 'if (shouldShowStyleOriginalAfterInputReady(workflow, inputKind)) {' `
   'content/camera picks must switch to original preview.'
 Assert-CodeLine $pick "} else if (inputKind === 'camera' && usesAndroidStyleTransferLayout(workflow)) {" `
@@ -275,6 +283,8 @@ $builtIn = Get-TextSection $page '  private selectBuiltInStyle(' `
   "`n`n  private shouldRunStyleTransferAfterStyleReady" 'built-in style selection'
 Assert-CodeLine $builtIn 'this.styledImagePixelMapOwner.invalidatePendingReplacement();' `
   'built-in style selection must invalidate pending styled replacement.'
+Assert-CodeLine $builtIn 'this.styleTransferResultReady = false;' `
+  'built-in style selection must revoke stale save readiness.'
 Assert-CodeLineCount $builtIn "this.showStyleTransferStyleSelectionToastIfNeeded('styleImage');" 1 `
   'built-in style selection must invoke the route-scoped no-content Toast helper.'
 
@@ -325,6 +335,8 @@ Assert-CodeLine $failure "if (!shouldPreserveRuntimeVisualResultOnAiResult(workf
   'thrown Style Transfer runs must preserve visuals.'
 Assert-CodeLine $failure 'this.showStyleTransferFailureToastIfNeeded(false);' `
   'thrown Style Transfer runs must show the route-scoped Toast.'
+Assert-CodeLine $failure 'this.styleTransferResultReady = false;' `
+  'thrown Style Transfer runs must revoke stale save readiness.'
 
 $aiResult = Get-TextSection $page '  private async applyAiResult(' `
   "`n`n  private showObjectPhotoFailureToastIfNeeded" 'AI result handler'
@@ -341,6 +353,7 @@ foreach ($line in @(
   'const pixelMap = await styleTransferPixelMapFromRgbaOutput(rgba, width, height);',
   'this.styledImagePixelMapOwner.accept(requestId, pixelMap);',
   'if (this.styledImagePixelMapOwner.accept(requestId, pixelMap)) {',
+  'this.styleTransferResultReady = true;',
   'this.styleOriginalPreviewRecovered = false;',
   "this.statusKey = 'feature_runtime_style_transfer_failed';",
   'this.showStyleTransferFailureToastIfNeeded(false);'
@@ -361,12 +374,18 @@ $recovery = Get-TextSection $page '  private recoverStyleOriginalPreview()' `
 Assert-CodeLine $recovery 'if (this.workflowRunning) {' 'Recovery must be handler-guarded while running.'
 Assert-CodeLine $recovery 'this.showRuntimeToast(this.statusKey);' `
   'Recovery without an original must show a Toast.'
+Assert-CodeLine $recovery 'this.styleTransferResultReady = false;' `
+  'Recovery must revoke styled-result save readiness.'
 
 $save = Get-TextSection $page '  private saveStyleTransferResultImage()' `
   "`n`n  private saveStillSegmentationResultImage" 'Style Transfer Save wrapper'
-Assert-CodeLine $save 'if (this.workflowRunning) {' 'Save must be handler-guarded while running.'
-Assert-CodeLineCount $save 'if (this.workflowRunning) {' 2 `
-  'both the Save click wrapper and async service path must reject while running.'
+Assert-CodeLine $save 'if (!styleTransferSaveReady(' 'Save must be handler-guarded by the full readiness policy.'
+Assert-CodeLineCount $save 'if (!styleTransferSaveReady(' 2 `
+  'both the Save click wrapper and async path must reject stale, running, and in-flight calls.'
+Assert-CodeLineCount $save 'this.styleTransferResultReady && this.styledImagePixelMap !== undefined,' 2 `
+  'both Style Transfer Save entry points must require a current accepted result.'
+Assert-CodeLineCount $save 'this.resultImageSaveInFlight' 2 `
+  'both Style Transfer Save entry points must reject an in-flight save.'
 Assert-CodeLine $save 'await this.saveResultPixelMapAsync(this.styledImagePixelMap);' `
   'Style Transfer Save must reuse the shared save service.'
 Assert-CodeLine $save 'this.showRuntimeToast(this.statusKey);' `

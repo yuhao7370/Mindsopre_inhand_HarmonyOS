@@ -209,12 +209,16 @@ import {
   StyleTransferOutputImageResizer,
   StyleTransferTensorOutput,
   StyleTransferTensorRunner,
+  LocalMnnStyleTransferTensorRunner,
+  StyleTransferMnnRuntime,
+  StyleTransferNativeOutput,
   StyleTransferMindSporeRunner,
   styleTransferMaxOutputImageSize,
   styleTransferMindSporeCpuThreadNum,
   stylePredictModelDownloadUrl,
   stylePredictModelRawfilePath,
   styleTransferContentImageSize,
+  styleTransferCenterCropRegion,
   styleTransferDecodeOptions,
   styleTransferModelDownloadUrl,
   styleTransferModelRawfilePath,
@@ -223,6 +227,7 @@ import {
   styleTransferPixelMapOptions,
   styleTransferRgbaOutputFromFloatOutput,
   styleTransferRgbUnitInputFromRgba,
+  styleTransferSaveReady,
   styleTransferCustomStylePickerIndex,
   styleTransferStylePickerItemCount,
   styleTransferStyleImageSize
@@ -521,6 +526,7 @@ import {
   ModelFileCompatibilityChecker,
   ModelFileCompatibilityLoader,
   ObjectDetectionModelContentValidator,
+  StyleTransferModelContentValidator,
   modelFileCacheWriteSucceeded,
   ModelFileCacheWriter,
   RuntimeModelFileCacheService,
@@ -1081,6 +1087,26 @@ class RecordingObjectDetectionModelContentValidator implements ObjectDetectionMo
 
   async validate(content: Uint8Array): Promise<boolean> {
     this.seenByteLengths.push(content.byteLength);
+    return this.compatible;
+  }
+}
+
+class RecordingStyleTransferModelContentValidator implements StyleTransferModelContentValidator {
+  readonly predictByteLengths: Array<number> = [];
+  readonly transferByteLengths: Array<number> = [];
+  private readonly compatible: boolean;
+
+  constructor(compatible: boolean) {
+    this.compatible = compatible;
+  }
+
+  async validatePredict(content: Uint8Array): Promise<boolean> {
+    this.predictByteLengths.push(content.byteLength);
+    return this.compatible;
+  }
+
+  async validateTransfer(content: Uint8Array): Promise<boolean> {
+    this.transferByteLengths.push(content.byteLength);
     return this.compatible;
   }
 }
@@ -1990,6 +2016,29 @@ class RecordingLiveCameraPreviewDriver implements LiveCameraPreviewDriver {
 
   setRotationDegrees(rotationDegrees: number): void {
     this.rotationDegrees = rotationDegrees;
+  }
+}
+
+class RecordingStyleTransferMnnRuntime implements StyleTransferMnnRuntime {
+  readonly loadedPredictByteLengths: Array<number> = [];
+  readonly loadedTransferByteLengths: Array<number> = [];
+  readonly seenStyleFloatCounts: Array<number> = [];
+  readonly seenContentFloatCounts: Array<number> = [];
+  private readonly output: StyleTransferNativeOutput;
+
+  constructor(output: StyleTransferNativeOutput) {
+    this.output = output;
+  }
+
+  async loadModels(predictModel: Uint8Array, transferModel: Uint8Array): Promise<void> {
+    this.loadedPredictByteLengths.push(predictModel.byteLength);
+    this.loadedTransferByteLengths.push(transferModel.byteLength);
+  }
+
+  async run(styleInput: Float32Array, contentInput: Float32Array): Promise<StyleTransferNativeOutput> {
+    this.seenStyleFloatCounts.push(styleInput.length);
+    this.seenContentFloatCounts.push(contentInput.length);
+    return this.output;
   }
 }
 
@@ -4120,8 +4169,8 @@ export default function localUnitTest() {
         backgroundImageUri: '',
         selectedPortraitBackgroundPresetId: '',
         modelInputUri: 'file://cache/object_detection_model.mnn',
-        stylePredictModelInputUri: 'file://cache/style_predict_quant.ms',
-        styleTransferModelInputUri: 'file://cache/style_transfer_quant.ms'
+        stylePredictModelInputUri: 'file://cache/custom_predict.mnn',
+        styleTransferModelInputUri: 'file://cache/custom_transfer.mnn'
       };
 
       const objectState: FeatureRuntimePickedInputState = runtimePickedInputStateAfterModelCacheFailure(
@@ -4136,8 +4185,8 @@ export default function localUnitTest() {
         'stylePredictModelFile',
         state
       );
-      expect(stylePredictState.stylePredictModelInputUri).assertEqual('file://cache/style_predict_quant.ms');
-      expect(stylePredictState.styleTransferModelInputUri).assertEqual('file://cache/style_transfer_quant.ms');
+      expect(stylePredictState.stylePredictModelInputUri).assertEqual('file://cache/custom_predict.mnn');
+      expect(stylePredictState.styleTransferModelInputUri).assertEqual('file://cache/custom_transfer.mnn');
       expect(stylePredictState.selectedInputSummary).assertEqual('');
     });
 
@@ -6709,12 +6758,12 @@ export default function localUnitTest() {
       await new DefaultAiService({ styleTransferService: styleTransferService }).run(workflow!, {
         contentImageUri: 'file://selected/content.jpg',
         styleImageUri: 'file://selected/style.jpg',
-        stylePredictModelUri: 'file://selected/custom_predict.ms',
-        styleTransferModelUri: 'file://selected/custom_transfer.ms'
+        stylePredictModelUri: 'file://selected/custom_predict.mnn',
+        styleTransferModelUri: 'file://selected/custom_transfer.mnn'
       });
 
-      expect(runner.seenPredictModelUris[0]).assertEqual('file://selected/custom_predict.ms');
-      expect(runner.seenTransferModelUris[0]).assertEqual('file://selected/custom_transfer.ms');
+      expect(runner.seenPredictModelUris[0]).assertEqual('file://selected/custom_predict.mnn');
+      expect(runner.seenTransferModelUris[0]).assertEqual('file://selected/custom_transfer.mnn');
     });
 
     it('aiServiceReportsStyleTransferRunnerFailureWithI18nKey', 0, async () => {
@@ -6735,10 +6784,14 @@ export default function localUnitTest() {
     });
 
     it('usesAndroidStyleTransferModelAssetContract', 0, () => {
-      expect(stylePredictModelRawfilePath).assertEqual('model/style_predict_quant.ms');
-      expect(styleTransferModelRawfilePath).assertEqual('model/style_transfer_quant.ms');
-      expect(stylePredictModelDownloadUrl).assertEqual('https://download.mindspore.cn/model_zoo/official/lite/style_lite/style_predict_quant.ms');
-      expect(styleTransferModelDownloadUrl).assertEqual('https://download.mindspore.cn/model_zoo/official/lite/style_lite/style_transfer_quant.ms');
+      expect(stylePredictModelRawfilePath).assertEqual('model/style_predict_fp16.mnn');
+      expect(styleTransferModelRawfilePath).assertEqual('model/style_transform_fp16.mnn');
+      expect(stylePredictModelDownloadUrl).assertEqual(
+        'https://tfhub.dev/google/lite-model/magenta/arbitrary-image-stylization-v1-256/fp16/prediction/1?lite-format=tflite'
+      );
+      expect(styleTransferModelDownloadUrl).assertEqual(
+        'https://tfhub.dev/google/lite-model/magenta/arbitrary-image-stylization-v1-256/fp16/transfer/1?lite-format=tflite'
+      );
     });
 
     it('usesAndroidStyleTransferMindSporeCpuThreadContract', 0, () => {
@@ -6791,6 +6844,19 @@ export default function localUnitTest() {
       expect(styleOptions.desiredSize!.width).assertEqual(256);
       expect(styleOptions.desiredPixelFormat).assertEqual(image.PixelMapFormat.RGBA_8888);
       expect(contentOptions.desiredSize!.height).assertEqual(384);
+    });
+
+    it('centerCropsTheShorterSideBeforeStyleTransferResize', 0, () => {
+      const landscape = styleTransferCenterCropRegion(800, 600);
+      expect(landscape.x).assertEqual(100);
+      expect(landscape.y).assertEqual(0);
+      expect(landscape.size.width).assertEqual(600);
+      expect(landscape.size.height).assertEqual(600);
+      const portrait = styleTransferCenterCropRegion(600, 800);
+      expect(portrait.x).assertEqual(0);
+      expect(portrait.y).assertEqual(100);
+      expect(portrait.size.width).assertEqual(600);
+      expect(portrait.size.height).assertEqual(600);
     });
 
     it('convertsAndroidStyleTransferFloatOutputToRgbaPixels', 0, () => {
@@ -6888,12 +6954,12 @@ export default function localUnitTest() {
       });
 
       await runner.run('file://selected/content.jpg', 'file://selected/style.jpg', {
-        predictModelUri: 'file://selected/custom_predict.ms',
-        transferModelUri: 'file://selected/custom_transfer.ms'
+        predictModelUri: 'file://selected/custom_predict.mnn',
+        transferModelUri: 'file://selected/custom_transfer.mnn'
       });
 
-      expect(tensorRunner.seenPredictModelUris[0]).assertEqual('file://selected/custom_predict.ms');
-      expect(tensorRunner.seenTransferModelUris[0]).assertEqual('file://selected/custom_transfer.ms');
+      expect(tensorRunner.seenPredictModelUris[0]).assertEqual('file://selected/custom_predict.mnn');
+      expect(tensorRunner.seenTransferModelUris[0]).assertEqual('file://selected/custom_transfer.mnn');
     });
 
     it('parsesAndroidImageClassificationLabels', 0, () => {
@@ -6929,6 +6995,47 @@ export default function localUnitTest() {
       expect(objectCategoryLabelRawfilePath).assertEqual('labels/object_category.txt');
       expect(objectDetectionModelRawfilePath).assertEqual('model/nanodet_plus_m_320.mnn');
       expect(objectDetectionModelDownloadUrl).assertEqual('https://github.com/RangiLyu/nanodet/releases/download/v1.0.0-alpha-1/nanodet-plus-m_320.onnx');
+    });
+
+    it('enablesStyleTransferSaveOnlyForACurrentReadyResult', 0, () => {
+      expect(styleTransferSaveReady(false, false, false)).assertFalse();
+      expect(styleTransferSaveReady(false, true, false)).assertTrue();
+      expect(styleTransferSaveReady(true, true, false)).assertFalse();
+      expect(styleTransferSaveReady(false, true, true)).assertFalse();
+    });
+
+    it('runsTheTwoNamedMnnStagesOffTheArktsPathAndReusesTheLoadedPair', 0, async () => {
+      const runtime = new RecordingStyleTransferMnnRuntime({
+        output: new Float32Array(styleTransferOutputFloatCount),
+        predictMs: 3,
+        transferMs: 5
+      });
+      const resourceReader = new FixedRawfileContentReader(new Uint8Array([1, 2, 3, 4]));
+      const runner = new LocalMnnStyleTransferTensorRunner({
+        resourceManager: resourceReader,
+        predictModelRawfilePath: stylePredictModelRawfilePath,
+        transferModelRawfilePath: styleTransferModelRawfilePath,
+        runtime: runtime
+      });
+      const input: StyleTransferInput = {
+        styleInputBuffer: new ArrayBuffer(styleTransferStyleImageSize * styleTransferStyleImageSize * 3 * 4),
+        contentInputBuffer: new ArrayBuffer(styleTransferContentImageSize * styleTransferContentImageSize * 3 * 4)
+      };
+
+      const first = await runner.runStyleTransfer(input);
+      const second = await runner.runStyleTransfer(input);
+
+      expect(first.output.length).assertEqual(styleTransferOutputFloatCount);
+      expect(first.predictMs).assertEqual(3);
+      expect(first.transferMs).assertEqual(5);
+      expect(second.output.length).assertEqual(styleTransferOutputFloatCount);
+      expect(runtime.loadedPredictByteLengths.length).assertEqual(1);
+      expect(runtime.loadedTransferByteLengths.length).assertEqual(1);
+      expect(runtime.seenStyleFloatCounts.join(',')).assertEqual('196608,196608');
+      expect(runtime.seenContentFloatCounts.join(',')).assertEqual('442368,442368');
+      expect(resourceReader.seenPaths.join(',')).assertEqual(
+        `${stylePredictModelRawfilePath},${styleTransferModelRawfilePath}`
+      );
     });
 
     it('definesNanoDetObjectDetectionPreprocessContract', 0, () => {
@@ -10598,21 +10705,21 @@ export default function localUnitTest() {
 
     it('usesAndroidModelCacheFileNamesForPickedModelInputs', 0, () => {
       expect(cachedModelFileNameForInputKind(AppRoute.CUSTOM_MODEL.name, 'modelFile')).assertEqual('custom_model.ms');
-      expect(cachedModelFileNameForInputKind(AppRoute.STYLE_TRANSFER.name, 'stylePredictModelFile')).assertEqual('custom_predict.ms');
-      expect(cachedModelFileNameForInputKind(AppRoute.STYLE_TRANSFER.name, 'styleTransferModelFile')).assertEqual('custom_transfer.ms');
+      expect(cachedModelFileNameForInputKind(AppRoute.STYLE_TRANSFER.name, 'stylePredictModelFile')).assertEqual('custom_predict.mnn');
+      expect(cachedModelFileNameForInputKind(AppRoute.STYLE_TRANSFER.name, 'styleTransferModelFile')).assertEqual('custom_transfer.mnn');
     });
 
     it('restoresCachedStyleTransferModelOverridesAcrossRuntimeRecreation', 0, async () => {
       const checker = new FixedCachedModelFileExistenceChecker([
-        '/cache/custom_predict.ms',
-        '/cache/custom_transfer.ms'
+        '/cache/custom_predict.mnn',
+        '/cache/custom_transfer.mnn'
       ]);
 
       const state = await cachedModelFileInputStateForRoute(AppRoute.STYLE_TRANSFER.name, '/cache', checker);
 
       expect(state.modelInputUri).assertEqual('');
-      expect(state.stylePredictModelInputUri).assertEqual('/cache/custom_predict.ms');
-      expect(state.styleTransferModelInputUri).assertEqual('/cache/custom_transfer.ms');
+      expect(state.stylePredictModelInputUri).assertEqual('/cache/custom_predict.mnn');
+      expect(state.styleTransferModelInputUri).assertEqual('/cache/custom_transfer.mnn');
     });
 
     it('cachesObjectDetectionPickedModelsInDedicatedCacheSlot', 0, () => {
@@ -10668,7 +10775,7 @@ export default function localUnitTest() {
       expect(hasAppStringKey('feature_runtime_style_transfer_model_load_failed')).assertTrue();
 
       const predictReader = new FileUriContentReader(new FixedFileUriContentBackend(new Uint8Array([1, 2, 3, 4])));
-      const predictWriter = new RecordingModelFileCacheWriter('/cache/custom_predict.ms');
+      const predictWriter = new RecordingModelFileCacheWriter('/cache/custom_predict.mnn');
       const predictService = new RuntimeModelFileCacheService(
         predictReader,
         predictWriter,
@@ -10684,11 +10791,11 @@ export default function localUnitTest() {
 
       expect(predictResult.ok).assertTrue();
       expect(predictResult.messageKey).assertEqual('feature_runtime_style_predict_model_loaded');
-      expect(predictWriter.seenFileNames[0]).assertEqual('custom_predict.ms');
+      expect(predictWriter.seenFileNames[0]).assertEqual('custom_predict.mnn');
 
       const failedPredictService = new RuntimeModelFileCacheService(
         new FileUriContentReader(new FixedFileUriContentBackend(new Uint8Array([1, 2, 3, 4]))),
-        new RecordingModelFileCacheWriter('/cache/custom_predict.ms'),
+        new RecordingModelFileCacheWriter('/cache/custom_predict.mnn'),
         new RecordingModelFileCompatibilityChecker(false)
       );
 
@@ -10702,7 +10809,7 @@ export default function localUnitTest() {
       expect(failedPredictResult.ok).assertFalse();
       expect(failedPredictResult.messageKey).assertEqual('feature_runtime_style_predict_model_load_failed');
 
-      const loadedTransferWriter = new RecordingModelFileCacheWriter('/cache/custom_transfer.ms');
+      const loadedTransferWriter = new RecordingModelFileCacheWriter('/cache/custom_transfer.mnn');
       const loadedTransferService = new RuntimeModelFileCacheService(
         new FileUriContentReader(new FixedFileUriContentBackend(new Uint8Array([5, 6, 7, 8]))),
         loadedTransferWriter,
@@ -10718,10 +10825,10 @@ export default function localUnitTest() {
 
       expect(loadedTransferResult.ok).assertTrue();
       expect(loadedTransferResult.messageKey).assertEqual('feature_runtime_style_transfer_model_loaded');
-      expect(loadedTransferWriter.seenFileNames[0]).assertEqual('custom_transfer.ms');
+      expect(loadedTransferWriter.seenFileNames[0]).assertEqual('custom_transfer.mnn');
 
       const transferReader = new FileUriContentReader(new FixedFileUriContentBackend(new Uint8Array([5, 6, 7, 8])));
-      const transferWriter = new RecordingModelFileCacheWriter('/cache/custom_transfer.ms');
+      const transferWriter = new RecordingModelFileCacheWriter('/cache/custom_transfer.mnn');
       const transferService = new RuntimeModelFileCacheService(
         transferReader,
         transferWriter,
@@ -10758,7 +10865,7 @@ export default function localUnitTest() {
 
     it('rejectsIncompatiblePickedModelFilesBeforeRuntimeUse', 0, async () => {
       const reader = new FileUriContentReader(new FixedFileUriContentBackend(new Uint8Array([5, 6, 7, 8])));
-      const writer = new RecordingModelFileCacheWriter('/cache/custom_transfer.ms');
+      const writer = new RecordingModelFileCacheWriter('/cache/custom_transfer.mnn');
       const checker = new RecordingModelFileCompatibilityChecker(false);
       const service = new RuntimeModelFileCacheService(reader, writer, checker);
 
@@ -10917,17 +11024,52 @@ export default function localUnitTest() {
       }
     });
 
-    it('keepsNonCustomModelCompatibilityLoadabilityOnly', 0, async () => {
-      const checker = new BasicModelFileCompatibilityChecker(
-        new RecordingModelFileCompatibilityLoader(false, [])
-      );
+    it('preflightsEachStyleTransferSlotSchemaAndFirstOutputBeforePublication', 0, async () => {
+      const loader = new RecordingModelFileCompatibilityLoader(true);
+      const objectValidator = new RecordingObjectDetectionModelContentValidator(true);
+      const styleValidator = new RecordingStyleTransferModelContentValidator(true);
+      const checker = new BasicModelFileCompatibilityChecker(loader, objectValidator, styleValidator);
 
       expect(await checker.isCompatible(
         AppRoute.STYLE_TRANSFER.name,
         'stylePredictModelFile',
-        '/cache/custom_predict.ms',
-        new Uint8Array([1])
+        '/cache/custom_predict.mnn',
+        new Uint8Array([1, 2])
       )).assertTrue();
+      expect(await checker.isCompatible(
+        AppRoute.STYLE_TRANSFER.name,
+        'styleTransferModelFile',
+        '/cache/custom_transfer.mnn',
+        new Uint8Array([3, 4, 5])
+      )).assertTrue();
+      expect(styleValidator.predictByteLengths.join(',')).assertEqual('2');
+      expect(styleValidator.transferByteLengths.join(',')).assertEqual('3');
+      expect(objectValidator.seenByteLengths.length).assertEqual(0);
+      expect(loader.seenByteLengths.length).assertEqual(0);
+    });
+
+    it('rejectsBadStyleTransferOverrideWithoutReplacingTheLastValidCache', 0, async () => {
+      const writer = new RecordingModelFileCacheWriter('/cache/custom_predict.mnn');
+      const checker = new BasicModelFileCompatibilityChecker(
+        new RecordingModelFileCompatibilityLoader(true),
+        new RecordingObjectDetectionModelContentValidator(true),
+        new RecordingStyleTransferModelContentValidator(false)
+      );
+      const service = new RuntimeModelFileCacheService(
+        new FileUriContentReader(new FixedFileUriContentBackend(new Uint8Array([9, 8, 7]))),
+        writer,
+        checker
+      );
+
+      const result = await service.cachePickedModelFile(
+        'file://selected/bad.mnn',
+        '/cache',
+        AppRoute.STYLE_TRANSFER.name,
+        'stylePredictModelFile'
+      );
+
+      expect(result.ok).assertFalse();
+      expect(writer.writtenBytes.length).assertEqual(0);
     });
 
     it('reportsPickedModelFileCacheFailureWithI18nKey', 0, async () => {
@@ -11096,19 +11238,19 @@ export default function localUnitTest() {
       const backend = new MemoryModelFileCacheFileBackend();
       const writer = new HarmonyModelFileCacheWriter(backend);
 
-      await writer.writeModelFile('/cache', 'custom_predict.ms', new Uint8Array([1]), 7, (): boolean => true);
-      await writer.writeModelFile('/cache', 'custom_predict.ms', new Uint8Array([2]), 7, (): boolean => true);
+      await writer.writeModelFile('/cache', 'custom_predict.mnn', new Uint8Array([1]), 7, (): boolean => true);
+      await writer.writeModelFile('/cache', 'custom_predict.mnn', new Uint8Array([2]), 7, (): boolean => true);
 
       expect(backend.openedPaths.length).assertEqual(2);
       expect(backend.openedPaths[0] === backend.openedPaths[1]).assertFalse();
-      expect(backend.openedPaths[0].startsWith('/cache/custom_predict.ms.tmp-')).assertTrue();
-      expect(backend.openedPaths[1].startsWith('/cache/custom_predict.ms.tmp-')).assertTrue();
-      expect(backend.replacedStablePaths[0]).assertEqual('/cache/custom_predict.ms');
-      expect(backend.replacedStablePaths[1]).assertEqual('/cache/custom_predict.ms');
+      expect(backend.openedPaths[0].startsWith('/cache/custom_predict.mnn.tmp-')).assertTrue();
+      expect(backend.openedPaths[1].startsWith('/cache/custom_predict.mnn.tmp-')).assertTrue();
+      expect(backend.replacedStablePaths[0]).assertEqual('/cache/custom_predict.mnn');
+      expect(backend.replacedStablePaths[1]).assertEqual('/cache/custom_predict.mnn');
       expect(cachedModelFileNameForInputKind(AppRoute.OBJECT_PHOTO.name, 'modelFile'))
         .assertEqual('object_detection_model.mnn');
       expect(cachedModelFileNameForInputKind(AppRoute.STYLE_TRANSFER.name, 'styleTransferModelFile'))
-        .assertEqual('custom_transfer.ms');
+        .assertEqual('custom_transfer.mnn');
     });
 
     it('rejectsShortModelFileCacheWrites', 0, () => {

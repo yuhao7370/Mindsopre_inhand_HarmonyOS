@@ -1,5 +1,6 @@
 import { image } from '@kit.ImageKit';
 import { mindSporeLite } from '@kit.MindSporeLiteKit';
+import styleTransferMnn from 'libstyle_transfer_mnn.so';
 import {
   mindSporeLiteCpuContext,
   RawfileContentReader,
@@ -7,12 +8,12 @@ import {
 } from './MindSporeLiteModelRunner';
 import { FileUriContentReader } from './FileUriContentReader';
 
-export const stylePredictModelRawfilePath: string = 'model/style_predict_quant.ms';
-export const styleTransferModelRawfilePath: string = 'model/style_transfer_quant.ms';
+export const stylePredictModelRawfilePath: string = 'model/style_predict_fp16.mnn';
+export const styleTransferModelRawfilePath: string = 'model/style_transform_fp16.mnn';
 export const stylePredictModelDownloadUrl: string =
-  'https://download.mindspore.cn/model_zoo/official/lite/style_lite/style_predict_quant.ms';
+  'https://tfhub.dev/google/lite-model/magenta/arbitrary-image-stylization-v1-256/fp16/prediction/1?lite-format=tflite';
 export const styleTransferModelDownloadUrl: string =
-  'https://download.mindspore.cn/model_zoo/official/lite/style_lite/style_transfer_quant.ms';
+  'https://tfhub.dev/google/lite-model/magenta/arbitrary-image-stylization-v1-256/fp16/transfer/1?lite-format=tflite';
 export const styleTransferStyleImageSize: number = 256;
 export const styleTransferContentImageSize: number = 384;
 export const styleTransferMaxOutputImageSize: number = 1024;
@@ -88,6 +89,17 @@ export interface StyleTransferTensorOutput {
   readonly output: Float32Array;
   readonly predictMs: number;
   readonly transferMs: number;
+}
+
+export interface StyleTransferNativeOutput {
+  readonly output: Float32Array;
+  readonly predictMs: number;
+  readonly transferMs: number;
+}
+
+export interface StyleTransferMnnRuntime {
+  loadModels(predictModel: Uint8Array, transferModel: Uint8Array): Promise<void>;
+  run(styleInput: Float32Array, contentInput: Float32Array): Promise<StyleTransferNativeOutput>;
 }
 
 export interface StyleTransferTensorRunner {
@@ -326,6 +338,121 @@ export class MindSporeLiteStyleTransferTensorRunner implements StyleTransferTens
   }
 }
 
+class NativeStyleTransferMnnRuntime implements StyleTransferMnnRuntime {
+  async loadModels(predictModel: Uint8Array, transferModel: Uint8Array): Promise<void> {
+    await styleTransferMnn.loadModels(predictModel, transferModel);
+  }
+
+  async run(styleInput: Float32Array, contentInput: Float32Array): Promise<StyleTransferNativeOutput> {
+    return await styleTransferMnn.run(styleInput, contentInput);
+  }
+}
+
+const nativeStyleTransferMnnRuntime: StyleTransferMnnRuntime = new NativeStyleTransferMnnRuntime();
+
+class StyleTransferMnnRuntimeState {
+  loadedBuiltinPairKey: string = '';
+  operationTail: Promise<void> = Promise.resolve();
+}
+
+const styleTransferMnnRuntimeStates: Map<StyleTransferMnnRuntime, StyleTransferMnnRuntimeState> = new Map();
+
+function styleTransferMnnRuntimeState(runtime: StyleTransferMnnRuntime): StyleTransferMnnRuntimeState {
+  const existing = styleTransferMnnRuntimeStates.get(runtime);
+  if (existing !== undefined) {
+    return existing;
+  }
+  const state = new StyleTransferMnnRuntimeState();
+  styleTransferMnnRuntimeStates.set(runtime, state);
+  return state;
+}
+
+export interface LocalMnnStyleTransferTensorRunnerOptions {
+  readonly resourceManager: RawfileContentReader;
+  readonly predictModelRawfilePath: string;
+  readonly transferModelRawfilePath: string;
+  readonly modelFileReader?: FileUriContentReader;
+  readonly runtime?: StyleTransferMnnRuntime;
+}
+
+export class LocalMnnStyleTransferTensorRunner implements StyleTransferTensorRunner {
+  private readonly resourceManager: RawfileContentReader;
+  private readonly predictModelRawfilePath: string;
+  private readonly transferModelRawfilePath: string;
+  private readonly modelFileReader: FileUriContentReader;
+  private readonly runtime: StyleTransferMnnRuntime;
+  private readonly runtimeState: StyleTransferMnnRuntimeState;
+
+  constructor(options: LocalMnnStyleTransferTensorRunnerOptions) {
+    this.resourceManager = options.resourceManager;
+    this.predictModelRawfilePath = options.predictModelRawfilePath;
+    this.transferModelRawfilePath = options.transferModelRawfilePath;
+    this.modelFileReader = options.modelFileReader ?? new FileUriContentReader();
+    this.runtime = options.runtime ?? nativeStyleTransferMnnRuntime;
+    this.runtimeState = styleTransferMnnRuntimeState(this.runtime);
+  }
+
+  runStyleTransfer(
+    input: StyleTransferInput,
+    modelUris?: StyleTransferModelUris
+  ): Promise<StyleTransferTensorOutput> {
+    const result = this.runtimeState.operationTail.then(async (): Promise<StyleTransferTensorOutput> =>
+      await this.runExclusive(input, modelUris));
+    this.runtimeState.operationTail = result.then((): void => {}, (): void => {});
+    return result;
+  }
+
+  private async runExclusive(
+    input: StyleTransferInput,
+    modelUris?: StyleTransferModelUris
+  ): Promise<StyleTransferTensorOutput> {
+    await this.ensureModelsLoaded(modelUris);
+    const output = await this.runtime.run(
+      new Float32Array(input.styleInputBuffer),
+      new Float32Array(input.contentInputBuffer)
+    );
+    validateStyleTransferNativeOutput(output.output);
+    return output;
+  }
+
+  private async ensureModelsLoaded(modelUris?: StyleTransferModelUris): Promise<void> {
+    const predictUri = modelUris?.predictModelUri ?? '';
+    const transferUri = modelUris?.transferModelUri ?? '';
+    const builtinKey = `rawfile:${this.predictModelRawfilePath}|${this.transferModelRawfilePath}`;
+    if (predictUri.length === 0 && transferUri.length === 0 &&
+      this.runtimeState.loadedBuiltinPairKey === builtinKey) {
+      return;
+    }
+    const predictBytes = predictUri.length > 0 ?
+      await this.modelFileReader.readFileContent(predictUri) :
+      await this.resourceManager.getRawFileContent(this.predictModelRawfilePath);
+    const transferBytes = transferUri.length > 0 ?
+      await this.modelFileReader.readFileContent(transferUri) :
+      await this.resourceManager.getRawFileContent(this.transferModelRawfilePath);
+    await this.runtime.loadModels(predictBytes, transferBytes);
+    this.runtimeState.loadedBuiltinPairKey = predictUri.length === 0 && transferUri.length === 0 ? builtinKey : '';
+  }
+}
+
+export async function validateStyleTransferPredictModelContent(content: Uint8Array): Promise<boolean> {
+  return await styleTransferMnn.validatePredictModel(content);
+}
+
+export async function validateStyleTransferTransferModelContent(content: Uint8Array): Promise<boolean> {
+  return await styleTransferMnn.validateTransferModel(content);
+}
+
+function validateStyleTransferNativeOutput(output: Float32Array): void {
+  if (output.length !== styleTransferOutputFloatCount) {
+    throw new Error('Style-transfer output has an unexpected shape.');
+  }
+  for (let index = 0; index < output.length; index++) {
+    if (!Number.isFinite(output[index]) || output[index] < 0 || output[index] > 1) {
+      throw new Error('Style-transfer output contains an invalid pixel value.');
+    }
+  }
+}
+
 export interface StyleTransferServiceOptions {
   readonly runner?: StyleTransferRunner;
 }
@@ -363,14 +490,37 @@ function emptyStyleTransferResult(): StyleTransferResult {
   };
 }
 
-export function styleTransferDecodeOptions(size: number): image.DecodingOptions {
+export function styleTransferCenterCropRegion(width: number, height: number): image.Region {
+  if (!validStyleTransferImageSize(width) || !validStyleTransferImageSize(height)) {
+    throw new Error('Style-transfer source dimensions must be positive integers.');
+  }
+  const side = Math.min(width, height);
   return {
+    x: Math.trunc((width - side) / 2),
+    y: Math.trunc((height - side) / 2),
+    size: {
+      width: side,
+      height: side
+    }
+  };
+}
+
+export function styleTransferDecodeOptions(
+  size: number,
+  sourceWidth?: number,
+  sourceHeight?: number
+): image.DecodingOptions {
+  const options: image.DecodingOptions = {
     desiredSize: {
       width: size,
       height: size
     },
     desiredPixelFormat: image.PixelMapFormat.RGBA_8888
   };
+  if (validStyleTransferImageSize(sourceWidth) && validStyleTransferImageSize(sourceHeight)) {
+    options.desiredRegion = styleTransferCenterCropRegion(sourceWidth!, sourceHeight!);
+  }
+  return options;
 }
 
 export function styleTransferPixelMapOptions(width: number, height: number): image.InitializationOptions {
@@ -453,6 +603,14 @@ export function styleTransferOutputImageSizeForContent(
     width: Math.max(1, Math.round(width * scale)),
     height: Math.max(1, Math.round(height * scale))
   };
+}
+
+export function styleTransferSaveReady(
+  workflowRunning: boolean,
+  resultReady: boolean,
+  saveInFlight: boolean
+): boolean {
+  return resultReady && !workflowRunning && !saveInFlight;
 }
 
 export function styleTransferRgbUnitInputFromRgba(rgba: Uint8Array, size: number): ArrayBuffer {

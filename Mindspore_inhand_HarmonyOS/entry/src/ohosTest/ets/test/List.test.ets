@@ -5,6 +5,7 @@ import translationNativeTest from './TranslationNative.test';
 import translationWorkerClientTest from './TranslationWorkerClient.test';
 import ocrNativeTest from './OcrNative.test';
 import objectDetectionNativeTest from './ObjectDetectionNative.test';
+import styleTransferNativeTest from './StyleTransferNative.test';
 
 export default function testsuite() {
   gestureNativeTest();
@@ -14,4 +15,5 @@ export default function testsuite() {
   translationWorkerClientTest();
   ocrNativeTest();
   objectDetectionNativeTest();
+  styleTransferNativeTest();
 }

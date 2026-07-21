@@ -29,6 +29,17 @@ add_library(object_detection_mnn SHARED
   object_detection_mnn_napi.cpp
   object_detection_mnn_session.cpp
 )
+
+add_library(style_transfer_mnn SHARED
+  style_transfer_mnn_napi.cpp
+  style_transfer_mnn_session.cpp
+)
+target_include_directories(style_transfer_mnn PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include")
+target_link_libraries(style_transfer_mnn PRIVATE MNN libace_napi.z.so)
+set_target_properties(style_transfer_mnn PROPERTIES
+  BUILD_WITH_INSTALL_RPATH TRUE
+  INSTALL_RPATH "\$ORIGIN"
+)
 target_include_directories(object_detection_mnn PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include")
 target_link_libraries(object_detection_mnn PRIVATE MNN libace_napi.z.so)
 set_target_properties(object_detection_mnn PROPERTIES

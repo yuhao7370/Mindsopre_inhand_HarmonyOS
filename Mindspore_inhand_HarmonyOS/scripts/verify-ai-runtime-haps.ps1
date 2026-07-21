@@ -95,8 +95,8 @@ $resourceEntries = @(
   'resources/rawfile/model/mobilenetv2.ms',
   'resources/rawfile/model/resnet18-place365.ms',
   'resources/rawfile/model/nanodet_plus_m_320.mnn',
-  'resources/rawfile/model/style_predict_quant.ms',
-  'resources/rawfile/model/style_transfer_quant.ms',
+  'resources/rawfile/model/style_predict_fp16.mnn',
+  'resources/rawfile/model/style_transform_fp16.mnn',
   'resources/rawfile/model/selfie_segmentation.mnn',
   'resources/rawfile/model/selfie_segmentation.NOTICE.md',
   'resources/rawfile/model/LICENSE-Apache-2.0.txt',
@@ -124,6 +124,7 @@ $nativeEntries = @(
     "libs/$abi/libsegmentation_mnn.so"
     "libs/$abi/libobject_detection_mnn.so"
     "libs/$abi/libocr_mnn.so"
+    "libs/$abi/libstyle_transfer_mnn.so"
   }
 )
 $mainEntries = @('module.json') + $resourceEntries + $nativeEntries
@@ -167,7 +168,7 @@ if ($OhosTestHapPath) {
   if ($copiedModels.Count -ne 0) {
     throw "ohosTest HAP contains copied models: $($copiedModels -join ', ')"
   }
-  $aiLibraries = @('libgesture_mnn.so', 'libMNN.so', 'libtranslation_archive.so', 'libsegmentation_mnn.so', 'libobject_detection_mnn.so', 'libocr_mnn.so')
+  $aiLibraries = @('libgesture_mnn.so', 'libMNN.so', 'libtranslation_archive.so', 'libsegmentation_mnn.so', 'libobject_detection_mnn.so', 'libocr_mnn.so', 'libstyle_transfer_mnn.so')
   $copiedLibraries = @($testHapEntries | Where-Object { $aiLibraries -contains ($_ -split '/')[-1] })
   if ($copiedLibraries.Count -ne 0) {
     throw "ohosTest HAP contains copied AI libraries: $($copiedLibraries -join ', ')"

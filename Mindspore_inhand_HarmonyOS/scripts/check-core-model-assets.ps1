@@ -12,8 +12,8 @@ $contracts = @(
   [pscustomobject]@{ Name = 'mobilenetv2.ms'; Bytes = 13988384; Sha256 = '5A7CCD53BF92D8B294A703A1302D4230A311B2D19A8D212EEDD65FF6838CFA84'; Verifier = 'verify-image-classification-model.ps1'; Downloader = 'download-image-classification-model.ps1' },
   [pscustomobject]@{ Name = 'resnet18-place365.ms'; Bytes = 45448504; Sha256 = '286F2C85249FD51F6C437986E1C2C1F4EC10358A9B0EB97C886F2DC1AC63ECD9'; Verifier = 'verify-scene-detection-model.ps1'; Downloader = 'download-scene-detection-model.ps1' },
   [pscustomobject]@{ Name = 'nanodet_plus_m_320.mnn'; Bytes = 4785492; Sha256 = '8E0266D957F8CCA939952F4349639438967EB855FA2EDD1C430546EC0C447E9C'; Verifier = 'verify-object-detection-model.ps1'; Downloader = 'download-object-detection-model.ps1' },
-  [pscustomobject]@{ Name = 'style_predict_quant.ms'; Bytes = 3022576; Sha256 = '6737696ACC9B2F3ACF7460FEE986614B0107DF347EC9947D9D346D085AFCFBCC'; Verifier = 'verify-style-transfer-models.ps1'; Downloader = 'download-style-transfer-models.ps1' },
-  [pscustomobject]@{ Name = 'style_transfer_quant.ms'; Bytes = 256864; Sha256 = 'AEB4963C3906B90F9480E96CC29C39F6BC9CF9DE1ED84C370308E5A0B5B82682'; Verifier = 'verify-style-transfer-models.ps1'; Downloader = 'download-style-transfer-models.ps1' }
+  [pscustomobject]@{ Name = 'style_predict_fp16.mnn'; Bytes = 9354924; Sha256 = 'E23E713FA343B20B11110F8E02FFAA54E3E18B9CB17F26E42B3D7F32135144A6'; Verifier = 'verify-style-transfer-models.ps1'; Downloader = 'download-style-transfer-models.ps1' },
+  [pscustomobject]@{ Name = 'style_transform_fp16.mnn'; Bytes = 771144; Sha256 = '079005963B9EBA264BDEF0CD78921612A99344771AE31ACD0423A730D6FB9724'; Verifier = 'verify-style-transfer-models.ps1'; Downloader = 'download-style-transfer-models.ps1' }
 )
 
 foreach ($contract in $contracts) {
@@ -141,8 +141,10 @@ foreach ($marker in @(
   'no additional NOTICE',
   'https://download.mindspore.cn/model_zoo/official/lite/quick_start/mobilenetv2.ms',
   'https://github.com/RangiLyu/nanodet/releases/download/v1.0.0-alpha-1/nanodet-plus-m_320.onnx',
-  'https://download.mindspore.cn/model_zoo/official/lite/style_lite/style_predict_quant.ms',
-  'https://download.mindspore.cn/model_zoo/official/lite/style_lite/style_transfer_quant.ms',
+  'https://tfhub.dev/google/lite-model/magenta/arbitrary-image-stylization-v1-256/fp16/prediction/1?lite-format=tflite',
+  'https://tfhub.dev/google/lite-model/magenta/arbitrary-image-stylization-v1-256/fp16/transfer/1?lite-format=tflite',
+  'MNN 3.6.0',
+  'mnn_uuid',
   'https://gitee.com/harmonyos_samples/MSLiteSceneRecognition'
 )) {
   Assert-TextContains $notice $marker "NOTICE.md is missing provenance marker: $marker."
@@ -165,8 +167,8 @@ foreach ($entry in @(
   'resources/rawfile/model/mobilenetv2.ms',
   'resources/rawfile/model/resnet18-place365.ms',
   'resources/rawfile/model/nanodet_plus_m_320.mnn',
-  'resources/rawfile/model/style_predict_quant.ms',
-  'resources/rawfile/model/style_transfer_quant.ms',
+  'resources/rawfile/model/style_predict_fp16.mnn',
+  'resources/rawfile/model/style_transform_fp16.mnn',
   'resources/rawfile/model/LICENSE-Apache-2.0.txt',
   'resources/rawfile/model/NOTICE.md'
 )) {

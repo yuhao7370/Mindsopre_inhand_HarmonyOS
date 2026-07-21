@@ -1,4 +1,4 @@
-# Core MindSpore Lite model notice
+# Core on-device model notice
 
 These pinned model files are committed to a private repository for this
 project's private local learning use. No model-quality, device-runtime, or
@@ -11,8 +11,6 @@ The following trained-model assets come from the official MindSpore Model Zoo:
 | File | Purpose | Official source | Bytes | SHA-256 |
 | --- | --- | --- | ---: | --- |
 | `mobilenetv2.ms` | Image classification (MSL2) | https://download.mindspore.cn/model_zoo/official/lite/quick_start/mobilenetv2.ms | 13988384 | `5A7CCD53BF92D8B294A703A1302D4230A311B2D19A8D212EEDD65FF6838CFA84` |
-| `style_predict_quant.ms` | Style embedding | https://download.mindspore.cn/model_zoo/official/lite/style_lite/style_predict_quant.ms | 3022576 | `6737696ACC9B2F3ACF7460FEE986614B0107DF347EC9947D9D346D085AFCFBCC` |
-| `style_transfer_quant.ms` | Style transfer | https://download.mindspore.cn/model_zoo/official/lite/style_lite/style_transfer_quant.ms | 256864 | `AEB4963C3906B90F9480E96CC29C39F6BC9CF9DE1ED84C370308E5A0B5B82682` |
 
 The MindSpore Model Zoo repository is licensed under Apache-2.0. Its model
 README restricts trained models to non-commercial research and educational use.
@@ -23,6 +21,39 @@ float32 NHWC input `[1,224,224,3]` and float32 output `[1,1001]`; output index
 0 is background, so the app maps output index `i + 1` to ImageNet label index
 `i`. This trained model remains limited to this private repository's
 non-commercial research, educational, and local learning use.
+
+## Magenta arbitrary image stylization assets
+
+The style-transfer network is Google/Magenta arbitrary-image-stylization-v1-256
+FP16 release 1. The official Kaggle Models API reports Apache-2.0 for prediction
+instance 950/version 1103 and transfer instance 951/version 1104. The full
+Apache-2.0 text is included as `LICENSE-Apache-2.0.txt`.
+
+| Artifact | Official source | Bytes | SHA-256 |
+| --- | --- | ---: | --- |
+| Prediction TFLite source | https://tfhub.dev/google/lite-model/magenta/arbitrary-image-stylization-v1-256/fp16/prediction/1?lite-format=tflite | 4708350 | `DF9578B4141EF1D826F33B5F8E6E8E31BDBBB507B4E1F7CCBD2547AC1299DA42` |
+| `style_predict_fp16.mnn` | Converted audited artifact | 9354924 | `E23E713FA343B20B11110F8E02FFAA54E3E18B9CB17F26E42B3D7F32135144A6` |
+| Transfer TFLite source | https://tfhub.dev/google/lite-model/magenta/arbitrary-image-stylization-v1-256/fp16/transfer/1?lite-format=tflite | 422086 | `53B5243ED5AA33E408DB7976C8A8E51A90A0F7708FD122A31428CD00FBDF6AA6` |
+| `style_transform_fp16.mnn` | Converted audited artifact | 771144 | `079005963B9EBA264BDEF0CD78921612A99344771AE31ACD0423A730D6FB9724` |
+
+Both shipped artifacts were converted with MNN 3.6.0:
+
+```text
+python -m MNN.tools.mnnconvert -f TFLITE --modelFile <source.tflite> --MNNModel <output.mnn> --bizCode MNN
+```
+
+MNN 3.6.0 writes a random 36-byte `mnn_uuid`; the acquisition script replaces
+only that metadata with the source-SHA-derived UUID documented in the script,
+then verifies the exact shipped hashes above. Prediction conversion closely
+tracks the TFLite source, but transfer conversion is not claimed to be
+numerically equivalent to TFLite. Acceptance instead checks the locked MNN
+artifacts for exact tensor contracts, finite `[0,1]` output, visible content
+change, and materially different output for two styles on API 24.
+
+The bundled `styletransfer/style0.jpg` through `style18.jpg` bytes match the
+Apache-2.0 `mindspore-ai/models` repository tag `r1.8`, commit
+`8a0c1c4b4669918eaa9b8bc9e2314a710d1519a1`, under
+`official/lite/MindSpore_inhand/styletransfer/src/main/res/drawable-xxhdpi/`.
 
 ## NanoDet object-detection asset
 

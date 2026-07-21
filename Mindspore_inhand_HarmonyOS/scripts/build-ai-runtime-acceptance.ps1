@@ -42,16 +42,8 @@ $env:DEVECO_SDK_HOME = $devEcoSdkHome
 foreach ($abi in $abis) {
   $gestureLibPath = Join-Path $PSScriptRoot "..\entry\build\default\intermediates\stripped_native_libs\default\$abi\libgesture_mnn.so"
   $translationLibPath = Join-Path $PSScriptRoot "..\entry\build\default\intermediates\stripped_native_libs\default\$abi\libtranslation_archive.so"
-  if (Test-Path -LiteralPath $gestureLibPath -PathType Leaf) {
-    & (Join-Path $PSScriptRoot 'verify-gesture-native-contract.ps1') -DevEcoSdkRoot $env:DEVECO_SDK_HOME -LibraryPath $gestureLibPath
-  } else {
-    Write-Output "Skipping gesture native contract for $abi (library missing: $gestureLibPath)"
-  }
-  if (Test-Path -LiteralPath $translationLibPath -PathType Leaf) {
-    & (Join-Path $PSScriptRoot 'test-translation-xz-native-contract.ps1') -DevEcoSdkRoot $env:DEVECO_SDK_HOME -LibraryPath $translationLibPath
-  } else {
-    Write-Output "Skipping translation xz native contract for $abi (library missing: $translationLibPath)"
-  }
+  & (Join-Path $PSScriptRoot 'verify-gesture-native-contract.ps1') -DevEcoSdkRoot $env:DEVECO_SDK_HOME -LibraryPath $gestureLibPath
+  & (Join-Path $PSScriptRoot 'test-translation-xz-native-contract.ps1') -DevEcoSdkRoot $env:DEVECO_SDK_HOME -LibraryPath $translationLibPath
 }
 $devEcoRoot = Split-Path -Parent $env:DEVECO_SDK_HOME
 $hvigor = Join-Path $devEcoRoot 'tools\hvigor\bin\hvigorw.bat'

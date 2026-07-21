@@ -210,7 +210,8 @@ import {
   builtInStyleTransferStyles,
   builtInStyleTransferUri,
   isCustomStyleTransferUri,
-  styleTransferPixelMapFromRgbaOutput
+  styleTransferPixelMapFromRgbaOutput,
+  styleTransferSaveReady
 } from '../services/ai/StyleTransferService';
 import {
   initialPortraitSegmentationBackgroundState,
@@ -314,6 +315,7 @@ struct FeatureRuntimePage {
   @State userText: string = '';
   @State textInputVisible: boolean = true;
   @State styledImagePixelMap: image.PixelMap | undefined = undefined;
+  @State styleTransferResultReady: boolean = false;
   @State styleOriginalPreviewRecovered: boolean = false;
   @State objectDetectionImageUri: string = '';
   @State objectDetectionImageOrientation: ImageRotateOrientation = ImageRotateOrientation.UP;
@@ -393,6 +395,7 @@ struct FeatureRuntimePage {
     this.runtimeRequestGeneration.invalidate();
     this.runtimeAiServiceSession.invalidate();
     this.styledImagePixelMap = clearRuntimePixelMapState(this.styledImagePixelMapOwner);
+    this.styleTransferResultReady = false;
     this.segmentationForegroundPixelMap = clearRuntimePixelMapState(this.segmentationForegroundPixelMapOwner);
     this.setRuntimeKeepScreenOn(false);
     this.stopLiveCameraPreview();
@@ -609,6 +612,7 @@ struct FeatureRuntimePage {
     this.styleImageUri = '';
     this.selectedInputSummary = '';
     this.styledImagePixelMap = clearRuntimePixelMapState(this.styledImagePixelMapOwner);
+    this.styleTransferResultReady = false;
     this.styleOriginalPreviewRecovered = false;
     this.resultRows = [];
     this.resultText = '';
@@ -879,8 +883,10 @@ struct FeatureRuntimePage {
     }
     this.pendingPickTextInputVisible = undefined;
     if (usesAndroidStyleTransferLayout(workflow) && (inputKind === 'contentImage' ||
-      inputKind === 'camera' || inputKind === 'styleImage')) {
+      inputKind === 'camera' || inputKind === 'styleImage' || inputKind === 'stylePredictModelFile' ||
+      inputKind === 'styleTransferModelFile')) {
       this.styledImagePixelMapOwner.invalidatePendingReplacement();
+      this.styleTransferResultReady = false;
     }
     if (usesAndroidStillSegmentationLayout(workflow) && (inputKind === 'photo' || inputKind === 'camera')) {
       this.segmentationForegroundPixelMapOwner.invalidatePendingReplacement();
@@ -1050,6 +1056,9 @@ struct FeatureRuntimePage {
       return;
     }
     this.stopLiveRuntimeLoop();
+    if (usesAndroidStyleTransferLayout(workflow)) {
+      this.styleTransferResultReady = false;
+    }
     this.workflowRunning = true;
     const runtimeRequestId = this.beginRuntimeRequest();
     this.runWorkflowAsync(runtimeRequestId)
@@ -1207,6 +1216,9 @@ struct FeatureRuntimePage {
 
   private applyRuntimeFailure(): void {
     const workflow = workflowForRoute(this.routeName);
+    if (usesAndroidStyleTransferLayout(workflow)) {
+      this.styleTransferResultReady = false;
+    }
     this.statusKey = 'feature_runtime_run_failed';
     if (!shouldPreserveRuntimeTextResultOnAiResult(workflow, false)) {
       this.resultText = usesAndroidCustomModelLayout(workflow) ? this.customModelTerminalFailureText() : '';
@@ -1382,6 +1394,7 @@ struct FeatureRuntimePage {
   private clearVisualResults(): void {
     this.styledImagePixelMapOwner.clear();
     this.styledImagePixelMap = undefined;
+    this.styleTransferResultReady = false;
     this.styleOriginalPreviewRecovered = false;
     this.objectDetectionImageUri = '';
     this.objectDetectionImageOrientation = ImageRotateOrientation.UP;
@@ -1610,6 +1623,7 @@ struct FeatureRuntimePage {
       return;
     }
     if (!result.ok) {
+      this.styleTransferResultReady = false;
       return;
     }
 
@@ -1618,6 +1632,7 @@ struct FeatureRuntimePage {
     const height = data.result.outputImageHeight ?? 0;
     if (rgba === undefined || rgba.byteLength === 0 || width <= 0 || height <= 0) {
       this.styledImagePixelMapOwner.invalidatePendingReplacement();
+      this.styleTransferResultReady = false;
       this.statusKey = 'feature_runtime_style_transfer_failed';
       this.showStyleTransferFailureToastIfNeeded(false);
       return;
@@ -1633,12 +1648,14 @@ struct FeatureRuntimePage {
       }
       if (this.styledImagePixelMapOwner.accept(requestId, pixelMap)) {
         this.styledImagePixelMap = pixelMap;
+        this.styleTransferResultReady = true;
         this.styleOriginalPreviewRecovered = false;
       }
     } catch (_) {
       if (this.runtimeRequestGeneration.isCurrent(runtimeRequestId) &&
         this.styledImagePixelMapOwner.isCurrent(requestId)) {
         this.styledImagePixelMapOwner.invalidatePendingReplacement();
+        this.styleTransferResultReady = false;
         this.statusKey = 'feature_runtime_style_transfer_failed';
         this.showStyleTransferFailureToastIfNeeded(false);
       }
@@ -1874,6 +1891,7 @@ struct FeatureRuntimePage {
       return;
     }
     this.styledImagePixelMapOwner.invalidatePendingReplacement();
+    this.styleTransferResultReady = false;
     this.styleImageUri = builtInStyleTransferUri(style);
     this.selectedInputSummary = style.rawfilePath;
     this.statusKey = workflow ?
@@ -1904,6 +1922,7 @@ struct FeatureRuntimePage {
       return;
     }
     this.styleOriginalPreviewRecovered = true;
+    this.styleTransferResultReady = false;
     this.statusKey = styleTransferRecoveryStatusKey(true);
   }
 
@@ -1991,7 +2010,11 @@ struct FeatureRuntimePage {
   }
 
   private saveStyleTransferResultImage(): void {
-    if (this.workflowRunning) {
+    if (!styleTransferSaveReady(
+      this.workflowRunning,
+      this.styleTransferResultReady && this.styledImagePixelMap !== undefined,
+      this.resultImageSaveInFlight
+    )) {
       return;
     }
     this.saveStyleTransferResultImageAsync().catch(() => {
@@ -2001,7 +2024,11 @@ struct FeatureRuntimePage {
   }
 
   private async saveStyleTransferResultImageAsync(): Promise<void> {
-    if (this.workflowRunning) {
+    if (!styleTransferSaveReady(
+      this.workflowRunning,
+      this.styleTransferResultReady && this.styledImagePixelMap !== undefined,
+      this.resultImageSaveInFlight
+    )) {
       return;
     }
     await this.saveResultPixelMapAsync(this.styledImagePixelMap);
@@ -3682,9 +3709,17 @@ struct FeatureRuntimePage {
               .fontSize(14)
               .fontColor('#666666')
               .backgroundColor('#F4F3F8')
-              .enabled(!this.workflowRunning)
+              .enabled(styleTransferSaveReady(
+                this.workflowRunning,
+                this.styleTransferResultReady && this.styledImagePixelMap !== undefined,
+                this.resultImageSaveInFlight
+              ))
               .onClick((_event: ClickEvent, result: SaveButtonOnClickResult) => {
-                if (this.workflowRunning) {
+                if (!styleTransferSaveReady(
+                  this.workflowRunning,
+                  this.styleTransferResultReady && this.styledImagePixelMap !== undefined,
+                  this.resultImageSaveInFlight
+                )) {
                   return;
                 }
                 if (result === SaveButtonOnClickResult.SUCCESS) {

@@ -9,6 +9,7 @@
     "libgesture_mnn.so": "file:./src/main/cpp/types/libgesture_mnn",
     "libobject_detection_mnn.so": "file:./src/main/cpp/types/libobject_detection_mnn",
     "libsegmentation_mnn.so": "file:./src/main/cpp/types/libsegmentation_mnn",
+    "libstyle_transfer_mnn.so": "file:./src/main/cpp/types/libstyle_transfer_mnn",
     "libtranslation_archive.so": "file:./src/main/cpp/types/libtranslation_archive"
   }
 }

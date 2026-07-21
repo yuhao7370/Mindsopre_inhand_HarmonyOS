@@ -3,8 +3,8 @@ $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $modelDir = Join-Path $repoRoot 'entry/src/main/resources/rawfile/model'
 $models = @(
-  [pscustomobject]@{ Name = 'style_predict_quant.ms'; Bytes = 3022576; Sha256 = '6737696ACC9B2F3ACF7460FEE986614B0107DF347EC9947D9D346D085AFCFBCC' },
-  [pscustomobject]@{ Name = 'style_transfer_quant.ms'; Bytes = 256864; Sha256 = 'AEB4963C3906B90F9480E96CC29C39F6BC9CF9DE1ED84C370308E5A0B5B82682' }
+  [pscustomobject]@{ Name = 'style_predict_fp16.mnn'; Bytes = 9354924; Sha256 = 'E23E713FA343B20B11110F8E02FFAA54E3E18B9CB17F26E42B3D7F32135144A6' },
+  [pscustomobject]@{ Name = 'style_transform_fp16.mnn'; Bytes = 771144; Sha256 = '079005963B9EBA264BDEF0CD78921612A99344771AE31ACD0423A730D6FB9724' }
 )
 
 foreach ($model in $models) {

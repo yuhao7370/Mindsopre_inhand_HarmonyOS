@@ -89,8 +89,8 @@ $mainEntries = @(
   'resources/rawfile/model/mobilenetv2.ms',
   'resources/rawfile/model/resnet18-place365.ms',
   'resources/rawfile/model/nanodet_plus_m_320.mnn',
-  'resources/rawfile/model/style_predict_quant.ms',
-  'resources/rawfile/model/style_transfer_quant.ms',
+  'resources/rawfile/model/style_predict_fp16.mnn',
+  'resources/rawfile/model/style_transform_fp16.mnn',
   'resources/rawfile/model/selfie_segmentation.mnn',
   'resources/rawfile/model/selfie_segmentation.NOTICE.md',
   'resources/rawfile/model/LICENSE-Apache-2.0.txt',
@@ -114,7 +114,8 @@ $mainEntries = @(
   'libs/arm64-v8a/libtranslation_archive.so',
   'libs/arm64-v8a/libsegmentation_mnn.so',
   'libs/arm64-v8a/libobject_detection_mnn.so',
-  'libs/arm64-v8a/libocr_mnn.so'
+  'libs/arm64-v8a/libocr_mnn.so',
+  'libs/arm64-v8a/libstyle_transfer_mnn.so'
 )
 $mainModule = @{
   app = @{ bundleName = 'com.yuhaofeng.mih' }
@@ -218,6 +219,13 @@ try {
   Assert-GuardRejects 'missing object-detection library payload' $missingObjectDetectionHap $testHap `
     'Main HAP is missing: libs/arm64-v8a/libobject_detection_mnn.so'
 
+  $missingStyleTransferHap = Join-Path $tempRoot 'missing-style-transfer.hap'
+  $missingStyleTransferFiles = New-FileMap @($mainEntries | Where-Object { $_ -ne 'libs/arm64-v8a/libstyle_transfer_mnn.so' })
+  $missingStyleTransferFiles['module.json'] = $mainModule
+  New-HapFixture $missingStyleTransferHap $missingStyleTransferFiles
+  Assert-GuardRejects 'missing style-transfer library payload' $missingStyleTransferHap $testHap `
+    'Main HAP is missing: libs/arm64-v8a/libstyle_transfer_mnn.so'
+
   $wrongMainBundleHap = Join-Path $tempRoot 'wrong-main-bundle.hap'
   $wrongMainBundleFiles = New-FileMap $mainEntries
   $wrongMainBundleFiles['module.json'] = $mainModule.Replace('com.yuhaofeng.mih', 'com.example.other')
@@ -287,6 +295,15 @@ try {
   New-HapFixture $copiedObjectDetectionLibraryHap $copiedObjectDetectionLibraryFiles
   Assert-GuardRejects 'copied object-detection library in test HAP' $mainHap $copiedObjectDetectionLibraryHap `
     'ohosTest HAP contains copied AI libraries: libs/arm64-v8a/libobject_detection_mnn.so'
+
+  $copiedStyleTransferLibraryHap = Join-Path $tempRoot 'copied-style-transfer-library.hap'
+  $copiedStyleTransferLibraryFiles = New-FileMap $testEntries
+  $copiedStyleTransferLibraryFiles['module.json'] = $testModule
+  $copiedStyleTransferLibraryFiles['pack.info'] = $testPack
+  $copiedStyleTransferLibraryFiles['libs/arm64-v8a/libstyle_transfer_mnn.so'] = 'fixture'
+  New-HapFixture $copiedStyleTransferLibraryHap $copiedStyleTransferLibraryFiles
+  Assert-GuardRejects 'copied style-transfer library in test HAP' $mainHap $copiedStyleTransferLibraryHap `
+    'ohosTest HAP contains copied AI libraries: libs/arm64-v8a/libstyle_transfer_mnn.so'
 
   Write-Host 'HAP guard contract tests passed.'
 } finally {
