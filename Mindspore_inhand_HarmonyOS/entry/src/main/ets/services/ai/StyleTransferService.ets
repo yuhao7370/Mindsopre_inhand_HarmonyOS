@@ -442,6 +442,13 @@ export async function validateStyleTransferTransferModelContent(content: Uint8Ar
   return await styleTransferMnn.validateTransferModel(content);
 }
 
+export async function validateStyleTransferModelPairContent(
+  predictContent: Uint8Array,
+  transferContent: Uint8Array
+): Promise<boolean> {
+  return await styleTransferMnn.validateModelPair(predictContent, transferContent);
+}
+
 function validateStyleTransferNativeOutput(output: Float32Array): void {
   if (output.length !== styleTransferOutputFloatCount) {
     throw new Error('Style-transfer output has an unexpected shape.');

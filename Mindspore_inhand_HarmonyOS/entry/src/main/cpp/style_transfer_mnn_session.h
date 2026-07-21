@@ -27,6 +27,8 @@ public:
                     const uint8_t* transferBytes, size_t transferSize);
     bool ValidatePredictModel(const uint8_t* bytes, size_t size) noexcept;
     bool ValidateTransferModel(const uint8_t* bytes, size_t size) noexcept;
+    bool ValidateModelPair(const uint8_t* predictBytes, size_t predictSize,
+                           const uint8_t* transferBytes, size_t transferSize) noexcept;
     StyleTransferMnnOutput Run(const std::vector<float>& styleInput,
                                const std::vector<float>& contentInput);
     void Release() noexcept;

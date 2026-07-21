@@ -56,6 +56,7 @@ $env:PATH = (Join-Path $devEcoRoot 'jbr\bin') + ';' + $env:PATH
 & (Join-Path $PSScriptRoot 'check-runtime-header-actions.ps1')
 & (Join-Path $PSScriptRoot 'check-model-label-guards.ps1')
 & (Join-Path $PSScriptRoot 'check-core-model-assets.ps1')
+& (Join-Path $PSScriptRoot 'test-style-transfer-model-pair-publisher.ps1')
 & (Join-Path $PSScriptRoot 'check-object-detection-fixture-license.ps1')
 & (Join-Path $PSScriptRoot 'test-object-detection-fixture-license-guard.ps1')
 & (Join-Path $PSScriptRoot 'check-object-detection-native-safety.ps1')

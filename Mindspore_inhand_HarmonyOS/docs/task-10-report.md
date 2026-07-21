@@ -36,10 +36,11 @@ The built-in style0-style18 bytes match `mindspore-ai/models` branch r1.8 at com
 
 ## Runtime, cache, and save fixes
 
-- `libstyle_transfer_mnn.so` owns prediction and transfer sessions, validates exact names/shapes/types and probes the first consumed outputs before replacing the active pair. A malformed replacement rejects without releasing the last-good pair.
+- `libstyle_transfer_mnn.so` owns prediction and transfer sessions, validates exact names/shapes/float32/NHWC layout for every input and output, and probes the real prediction-to-transfer path before replacing the active pair. A malformed replacement rejects without releasing the last-good pair.
 - Load, validation, and inference run as Promise-backed native async work. A process-global ArkTS tail serializes every runner instance over the shared native session. Built-in models are reused; custom fixed cache URIs reload on each queued request so replaced same-path content takes effect.
 - Typed-array validation checks the JS-visible length, backing range, exact float counts, finite inputs, and empty buffers before pointer arithmetic.
-- Custom predict and transfer selections call their corresponding native validators before any stable-cache write. Each publishes atomically to `custom_predict.mnn` or `custom_transfer.mnn`; failed validation leaves the previous file and active native pair intact.
+- Custom predict and transfer selections call their stage validator and then a no-swap native pair validator against the current other custom stage, or the built-in stage when no custom file exists, before any stable-cache write. Pair failure leaves the previous file, restart recovery, and active native pair intact.
+- The two audited built-in models are completely downloaded, converted, and hash-verified before publication. Their publisher replaces both as one rollback-safe transaction; an injected second-member failure restores both prior stable files. If rollback itself fails, the original publication error is preserved, rollback context is reported, and recovery backup/discard artifacts are retained.
 - Result readiness is independent of the displayed PixelMap. It becomes true only after the current request's new PixelMap is accepted and becomes false on input/model/style change, run start, failure, recovery, page exit, malformed output, and preview conversion failure.
 - The secure Save button, callback, and async entry point all require idle workflow + current ready result + no save in flight. The shared save path takes single-flight ownership before its first await.
 
@@ -49,6 +50,8 @@ Tests were added before the implementation for model paths/contracts, MNN runner
 
 The permanent API24 device test uses a programmatically generated 640x360 geometric JPEG, production preprocessing, licensed style0/style1, production model assets, and the production local runner. It also ticks a UI timer during native work and attempts a malformed pair before reusing the last-good pair.
 
+The follow-up review started RED with missing pair-cache contracts and pair publisher module. LocalUnit reported the missing `StyleTransferModelPairCompatibilityChecker` export and fourth constructor argument, while the publisher test failed to import its absent module. The first strict-layout device fixture then proved the old validator accepted a model whose Input `dformat` alone changed from NHWC to NCHW. The corrected fixture parses FlatBuffers tables with bounds checks, mutates only Input `dformat` bytes, and verifies every other byte (including names, dims, and dtype metadata) is unchanged.
+
 The Style Transfer device case passed in 2,441 ms with:
 
 - UI timer ticks: 4
@@ -57,6 +60,8 @@ The Style Transfer device case passed in 2,441 ms with:
 - style0-vs-style1 MAE: `0.0694815`
 - changed-pixel ratio: `0.9998915`
 - exact float output size: `384 * 384 * 3`, all finite and within `[0,1]`
+
+The follow-up API24 x86_64 case passed 1/1 in 2,827 ms. Both real models and the real pair validate; same-name/shape/float32 models with only Input `dformat` changed to NCHW are rejected by the predict and transfer validators. A rejected no-swap pair validation and a rejected pair load both preserve the active last-good pair. The strict-layout run recorded 5 event-loop ticks, prediction 12 ms, transfer 105 ms, content MAE `0.32385/0.37356`, style MAE `0.06948`, and changed-pixel ratio `0.999891`.
 
 The wider 19-test device invocation still contained two pre-existing failures outside Task 10: the Gesture test could not create its module context (401), and Translation timed out. The Style Transfer test itself passed, so this report does not misstate the full unrelated suite as green.
 
@@ -95,7 +100,7 @@ Ignored UI/save evidence:
 
 ## Final arm64 gates and boundary
 
-The tracked build profile is `arm64-v8a`. Model hashes, core asset/license/downloader safety, cache tests, Style Transfer layout/readiness mutation fixtures, native ABI, HAP tamper/isolation fixtures, LocalUnit, main HAP, Gesture/Translation native contracts, and ohosTest HAP all pass. The final `scripts/build-ai-runtime-acceptance.ps1` returned 0 in 54.5 seconds, and `verify-ai-runtime-haps.ps1` confirmed exact main/test structure and payload bytes. The main HAP contains both MNNs, `libstyle_transfer_mnn.so`, and `libMNN.so`; ohosTest contains neither copied models nor AI native libraries.
+The tracked build profile is `arm64-v8a`. Model hashes, core asset/license/downloader safety, cache tests, Style Transfer layout/readiness mutation fixtures, native ABI, HAP tamper/isolation fixtures, LocalUnit, main HAP, Gesture/Translation native contracts, and ohosTest HAP all pass. The follow-up final `scripts/build-ai-runtime-acceptance.ps1` returned 0 in 53.6 seconds, and `verify-ai-runtime-haps.ps1` confirmed exact main/test structure and payload bytes. The main HAP contains both MNNs, `libstyle_transfer_mnn.so`, and `libMNN.so`; ohosTest contains neither copied models nor AI native libraries.
 
 Two early LocalUnit invocations did not enter compilation because the shell used an invalid SDK level: first `...\sdk\default\openharmony`, then `...\sdk\default`. This project and Hvigor require `DEVECO_SDK_HOME=F:\Program Files\Huawei\DevEco Studio\sdk`; the deeper `default\openharmony` path remains the native/HDC platform root. With the SDK container corrected, the fresh LocalUnit run and both full acceptance runs executed normally. These configuration errors are not reported as code regressions.
 

@@ -42,6 +42,9 @@ void ValidateTensor(const MNN::Tensor* tensor, const std::vector<int>& shape, co
     if (!IsFloat32(tensor)) {
         throw std::runtime_error(std::string("Style-transfer tensor is not float32: ") + name);
     }
+    if (tensor->getDimensionType() != MNN::Tensor::TENSORFLOW) {
+        throw std::runtime_error(std::string("Style-transfer tensor is not NHWC: ") + name);
+    }
     if (tensor->shape() != shape) {
         throw std::runtime_error(std::string("Style-transfer tensor shape mismatch: ") + name);
     }
@@ -225,6 +228,15 @@ void ProbeTransfer(StyleTransferMnnStage& stage)
         throw std::runtime_error("Style transform probe produced only zero values.");
     }
 }
+
+void ProbePair(StyleTransferMnnStage& predict, StyleTransferMnnStage& transfer)
+{
+    const std::vector<float> embedding = RunPredict(predict, std::vector<float>(kStyleElementCount, 0.5F));
+    const std::vector<float> output = RunTransfer(transfer, std::vector<float>(kContentElementCount, 0.5F), embedding);
+    if (output.size() != kOutputElementCount) {
+        throw std::runtime_error("Style-transfer pair probe produced an invalid output.");
+    }
+}
 }
 
 StyleTransferMnnSession::StyleTransferMnnSession() = default;
@@ -239,13 +251,7 @@ void StyleTransferMnnSession::LoadModels(const uint8_t* predictBytes, size_t pre
 {
     auto candidatePredict = BuildPredict(predictBytes, predictSize);
     auto candidateTransfer = BuildTransfer(transferBytes, transferSize);
-    const std::vector<float> embedding = RunPredict(*candidatePredict,
-                                                    std::vector<float>(kStyleElementCount, 0.5F));
-    const std::vector<float> output = RunTransfer(*candidateTransfer,
-                                                  std::vector<float>(kContentElementCount, 0.5F), embedding);
-    if (output.size() != kOutputElementCount) {
-        throw std::runtime_error("Style-transfer pair probe produced an invalid output.");
-    }
+    ProbePair(*candidatePredict, *candidateTransfer);
 
     std::lock_guard<std::mutex> lock(mutex_);
     predict_.swap(candidatePredict);
@@ -268,6 +274,19 @@ bool StyleTransferMnnSession::ValidateTransferModel(const uint8_t* bytes, size_t
     try {
         auto candidate = BuildTransfer(bytes, size);
         ProbeTransfer(*candidate);
+        return true;
+    } catch (...) {
+        return false;
+    }
+}
+
+bool StyleTransferMnnSession::ValidateModelPair(const uint8_t* predictBytes, size_t predictSize,
+                                                const uint8_t* transferBytes, size_t transferSize) noexcept
+{
+    try {
+        auto candidatePredict = BuildPredict(predictBytes, predictSize);
+        auto candidateTransfer = BuildTransfer(transferBytes, transferSize);
+        ProbePair(*candidatePredict, *candidateTransfer);
         return true;
     } catch (...) {
         return false;

@@ -4,6 +4,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+Import-Module (Join-Path $PSScriptRoot 'StyleTransferModelPairPublisher.psm1') -Force
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $modelDir = Join-Path $repoRoot 'entry/src/main/resources/rawfile/model'
@@ -35,19 +36,22 @@ if ($LASTEXITCODE -ne 0 -or $mnnPackage -notmatch '(?m)^Version:\s*3\.6\.0\s*$')
 
 New-Item -ItemType Directory -Force -Path $modelDir | Out-Null
 
-foreach ($model in $models) {
-  $modelPath = Join-Path $modelDir $model.Name
-  $requestId = [System.Guid]::NewGuid().ToString('N')
-  $sourceTmpPath = Join-Path $modelDir "$($model.Name).source.download.$requestId"
-  $tmpPath = Join-Path $modelDir "$($model.Name).download.$requestId"
-  $backupPath = "$tmpPath.backup"
+$stablePaths = @($models | ForEach-Object { Join-Path $modelDir $_.Name })
+if (-not $Force -and @($stablePaths | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf }).Count -eq 2) {
+  Write-Host "Style-transfer model pair already exists: $modelDir"
+  return
+}
 
-  if ((Test-Path -LiteralPath $modelPath) -and -not $Force) {
-    Write-Host "$($model.Name) already exists: $modelPath"
-    continue
-  }
+$sourceTmpPaths = @()
+$candidatePaths = @()
+try {
+  foreach ($model in $models) {
+    $requestId = [System.Guid]::NewGuid().ToString('N')
+    $sourceTmpPath = Join-Path $modelDir "$($model.Name).source.download.$requestId"
+    $tmpPath = Join-Path $modelDir "$($model.Name).download.$requestId"
+    $sourceTmpPaths += $sourceTmpPath
+    $candidatePaths += $tmpPath
 
-  try {
     Write-Host "Downloading audited TFLite source: $($model.Url)"
     Invoke-WebRequest -Uri $model.Url -OutFile $sourceTmpPath
     if ((Get-Item -LiteralPath $sourceTmpPath).Length -ne $model.SourceBytes) {
@@ -78,23 +82,14 @@ foreach ($model in $models) {
       throw "Converted $($model.Name) differs from the audited MNN artifact."
     }
 
-    if (Test-Path -LiteralPath $modelPath) {
-      [System.IO.File]::Replace($tmpPath, $modelPath, $backupPath)
-    } else {
-      [System.IO.File]::Move($tmpPath, $modelPath)
-    }
-    Write-Host "$($model.Name) published: $modelPath"
-  } catch {
-    $failure = $_
-    if ((Test-Path -LiteralPath $backupPath) -and -not (Test-Path -LiteralPath $modelPath)) {
-      [System.IO.File]::Move($backupPath, $modelPath)
-    }
-    throw $failure
-  } finally {
-    Remove-Item -LiteralPath $sourceTmpPath -Force -ErrorAction SilentlyContinue
-    Remove-Item -LiteralPath $tmpPath -Force -ErrorAction SilentlyContinue
-    if (Test-Path -LiteralPath $modelPath) {
-      Remove-Item -LiteralPath $backupPath -Force -ErrorAction SilentlyContinue
-    }
+  }
+
+  Publish-StyleTransferModelPair -CandidatePaths $candidatePaths -StablePaths $stablePaths
+  foreach ($modelPath in $stablePaths) {
+    Write-Host "Style-transfer pair member published: $modelPath"
+  }
+} finally {
+  foreach ($path in @($sourceTmpPaths + $candidatePaths)) {
+    Remove-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue
   }
 }

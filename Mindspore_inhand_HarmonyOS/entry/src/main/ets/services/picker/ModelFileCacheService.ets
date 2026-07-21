@@ -6,10 +6,17 @@ import { FeatureInputKind } from '../../features/runtime/FeatureWorkflowCatalog'
 import { FileUriContentReader } from '../ai/FileUriContentReader';
 import { validateObjectDetectionModelContent } from '../ai/ObjectDetectionService';
 import {
+  stylePredictModelRawfilePath,
+  styleTransferModelRawfilePath,
+  validateStyleTransferModelPairContent,
   validateStyleTransferPredictModelContent,
   validateStyleTransferTransferModelContent
 } from '../ai/StyleTransferService';
-import { mindSporeLiteCpuContext, rawfileContentToArrayBuffer } from '../ai/MindSporeLiteModelRunner';
+import {
+  mindSporeLiteCpuContext,
+  RawfileContentReader,
+  rawfileContentToArrayBuffer
+} from '../ai/MindSporeLiteModelRunner';
 
 export interface ModelFileCacheResult {
   readonly ok: boolean;
@@ -73,6 +80,11 @@ export interface ObjectDetectionModelContentValidator {
 export interface StyleTransferModelContentValidator {
   validatePredict(content: Uint8Array): Promise<boolean>;
   validateTransfer(content: Uint8Array): Promise<boolean>;
+  validatePair(predictContent: Uint8Array, transferContent: Uint8Array): Promise<boolean>;
+}
+
+export interface StyleTransferModelPairCompatibilityChecker {
+  isCompatible(inputKind: FeatureInputKind, cacheDir: string, candidate: Uint8Array): Promise<boolean>;
 }
 
 export class NativeStyleTransferModelContentValidator implements StyleTransferModelContentValidator {
@@ -82,6 +94,66 @@ export class NativeStyleTransferModelContentValidator implements StyleTransferMo
 
   async validateTransfer(content: Uint8Array): Promise<boolean> {
     return await validateStyleTransferTransferModelContent(content);
+  }
+
+  async validatePair(predictContent: Uint8Array, transferContent: Uint8Array): Promise<boolean> {
+    return await validateStyleTransferModelPairContent(predictContent, transferContent);
+  }
+}
+
+export class NativeStyleTransferModelPairCompatibilityChecker implements
+  StyleTransferModelPairCompatibilityChecker {
+  private readonly resourceManager: RawfileContentReader;
+  private readonly fileReader: FileUriContentReader;
+  private readonly existenceChecker: CachedModelFileExistenceChecker;
+  private readonly validator: StyleTransferModelContentValidator;
+
+  constructor(
+    resourceManager: RawfileContentReader,
+    fileReader: FileUriContentReader = new FileUriContentReader(),
+    existenceChecker: CachedModelFileExistenceChecker = new HarmonyCachedModelFileExistenceChecker(),
+    validator: StyleTransferModelContentValidator = new NativeStyleTransferModelContentValidator()
+  ) {
+    this.resourceManager = resourceManager;
+    this.fileReader = fileReader;
+    this.existenceChecker = existenceChecker;
+    this.validator = validator;
+  }
+
+  async isCompatible(
+    inputKind: FeatureInputKind,
+    cacheDir: string,
+    candidate: Uint8Array
+  ): Promise<boolean> {
+    try {
+      if (inputKind === 'stylePredictModelFile') {
+        const transfer = await this.otherStageContent(
+          cacheDir,
+          'custom_transfer.mnn',
+          styleTransferModelRawfilePath
+        );
+        return await this.validator.validatePair(candidate, transfer);
+      }
+      if (inputKind === 'styleTransferModelFile') {
+        const predict = await this.otherStageContent(
+          cacheDir,
+          'custom_predict.mnn',
+          stylePredictModelRawfilePath
+        );
+        return await this.validator.validatePair(predict, candidate);
+      }
+      return false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  private async otherStageContent(cacheDir: string, fileName: string, rawfilePath: string): Promise<Uint8Array> {
+    const stablePath = modelFileCachePath(cacheDir, fileName);
+    if (await this.existenceChecker.modelFileExists(stablePath)) {
+      return await this.fileReader.readFileContent(stablePath);
+    }
+    return await this.resourceManager.getRawFileContent(rawfilePath);
   }
 }
 
@@ -175,15 +247,18 @@ export class RuntimeModelFileCacheService {
   private readonly reader: FileUriContentReader;
   private readonly writer: ModelFileCacheWriter;
   private readonly compatibilityChecker: ModelFileCompatibilityChecker;
+  private readonly styleTransferPairChecker?: StyleTransferModelPairCompatibilityChecker;
 
   constructor(
     reader: FileUriContentReader = new FileUriContentReader(),
     writer: ModelFileCacheWriter = new HarmonyModelFileCacheWriter(),
-    compatibilityChecker: ModelFileCompatibilityChecker = new BasicModelFileCompatibilityChecker()
+    compatibilityChecker: ModelFileCompatibilityChecker = new BasicModelFileCompatibilityChecker(),
+    styleTransferPairChecker?: StyleTransferModelPairCompatibilityChecker
   ) {
     this.reader = reader;
     this.writer = writer;
     this.compatibilityChecker = compatibilityChecker;
+    this.styleTransferPairChecker = styleTransferPairChecker;
   }
 
   cachePickedModelFile(
@@ -223,6 +298,13 @@ export class RuntimeModelFileCacheService {
       if (!compatible) {
         return modelFileIncompatibleResult(routeName, inputKind);
       }
+      if (routeName === AppRoute.STYLE_TRANSFER.name &&
+        (inputKind === 'stylePredictModelFile' || inputKind === 'styleTransferModelFile')) {
+        if (this.styleTransferPairChecker === undefined ||
+          !await this.styleTransferPairChecker.isCompatible(inputKind, cacheDir, content)) {
+          return modelFileIncompatibleResult(routeName, inputKind);
+        }
+      }
       const uri = await this.writer.writeModelFile(cacheDir, fileName, content, requestToken, isCurrent);
       if (uri === undefined) {
         return undefined;
@@ -252,6 +334,15 @@ export class RuntimeModelFileCacheService {
       return false;
     }
   }
+}
+
+export function runtimeModelFileCacheService(rawfileReader: RawfileContentReader): RuntimeModelFileCacheService {
+  return new RuntimeModelFileCacheService(
+    new FileUriContentReader(),
+    new HarmonyModelFileCacheWriter(),
+    new BasicModelFileCompatibilityChecker(),
+    new NativeStyleTransferModelPairCompatibilityChecker(rawfileReader)
+  );
 }
 
 class HarmonyModelFileCacheFileBackend implements ModelFileCacheFileBackend {

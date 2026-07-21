@@ -101,6 +101,102 @@ function changedPixelRatio(left: Float32Array, right: Float32Array): number {
   return changed / pixels;
 }
 
+function requireByteRange(bytes: Uint8Array, offset: number, length: number): void {
+  if (offset < 0 || length < 0 || offset > bytes.length - length) {
+    throw new Error('Malformed MNN FlatBuffer fixture.');
+  }
+}
+
+function uint16(bytes: Uint8Array, offset: number): number {
+  requireByteRange(bytes, offset, 2);
+  return bytes[offset] | (bytes[offset + 1] << 8);
+}
+
+function uint32(bytes: Uint8Array, offset: number): number {
+  requireByteRange(bytes, offset, 4);
+  return (bytes[offset] | (bytes[offset + 1] << 8) | (bytes[offset + 2] << 16) |
+    (bytes[offset + 3] << 24)) >>> 0;
+}
+
+function int32(bytes: Uint8Array, offset: number): number {
+  const unsigned = uint32(bytes, offset);
+  return unsigned > 0x7FFFFFFF ? unsigned - 0x100000000 : unsigned;
+}
+
+function tableFieldOffset(bytes: Uint8Array, tableOffset: number, fieldIndex: number): number {
+  requireByteRange(bytes, tableOffset, 4);
+  const vtableDistance = int32(bytes, tableOffset);
+  if (vtableDistance === 0) {
+    throw new Error('Malformed MNN FlatBuffer table.');
+  }
+  const vtableOffset = tableOffset - vtableDistance;
+  const vtableSize = uint16(bytes, vtableOffset);
+  if (vtableSize < 4 || vtableSize % 2 !== 0) {
+    throw new Error('Malformed MNN FlatBuffer vtable.');
+  }
+  requireByteRange(bytes, vtableOffset, vtableSize);
+  const fieldEntry = vtableOffset + 4 + fieldIndex * 2;
+  return fieldEntry + 1 < vtableOffset + vtableSize ? uint16(bytes, fieldEntry) : 0;
+}
+
+function mnnModelWithCaffeTensorLayout(model: Uint8Array): Uint8Array {
+  const fixture = model.slice();
+  const netOffset = uint32(fixture, 0);
+  const opListFieldOffset = tableFieldOffset(fixture, netOffset, 3);
+  if (opListFieldOffset === 0) {
+    throw new Error('MNN fixture does not contain an op list.');
+  }
+  const opListField = netOffset + opListFieldOffset;
+  const opListOffset = opListField + uint32(fixture, opListField);
+  const opCount = uint32(fixture, opListOffset);
+  requireByteRange(fixture, opListOffset + 4, opCount * 4);
+  if (opCount === 0) {
+    throw new Error('MNN fixture op list is empty.');
+  }
+  let mutatedInputCount: number = 0;
+  for (let index: number = 0; index < opCount; index++) {
+    const opEntry = opListOffset + 4 + index * 4;
+    const opOffset = opEntry + uint32(fixture, opEntry);
+    const mainTypeField = tableFieldOffset(fixture, opOffset, 1);
+    if (mainTypeField === 0 || fixture[opOffset + mainTypeField] !== 21) {
+      continue;
+    }
+    const mainField = tableFieldOffset(fixture, opOffset, 2);
+    if (mainField === 0) {
+      throw new Error('MNN Input op does not contain a parameter table.');
+    }
+    const mainFieldOffset = opOffset + mainField;
+    const inputTableOffset = mainFieldOffset + uint32(fixture, mainFieldOffset);
+    const formatField = tableFieldOffset(fixture, inputTableOffset, 2);
+    if (formatField === 0) {
+      throw new Error('MNN Input op omits dformat.');
+    }
+    requireByteRange(fixture, inputTableOffset + formatField, 1);
+    if (fixture[inputTableOffset + formatField] !== 1) {
+      throw new Error('MNN Input tensor is not NHWC before mutation.');
+    }
+    fixture[inputTableOffset + formatField] = 0;
+    mutatedInputCount++;
+  }
+  if (mutatedInputCount === 0) {
+    throw new Error('MNN fixture does not contain an Input op.');
+  }
+  let changedByteCount: number = 0;
+  for (let index: number = 0; index < fixture.length; index++) {
+    if (fixture[index] === model[index]) {
+      continue;
+    }
+    if (model[index] !== 1 || fixture[index] !== 0) {
+      throw new Error('MNN fixture mutation changed data outside NHWC dformat fields.');
+    }
+    changedByteCount++;
+  }
+  if (changedByteCount !== mutatedInputCount) {
+    throw new Error('MNN fixture mutation count does not match Input op count.');
+  }
+  return fixture;
+}
+
 export default function styleTransferNativeTest() {
   describe('StyleTransferNativeTest', () => {
     it('runsTwoLicensedStylesAsynchronouslyAndRecoversFromRejectedPairLoadOnApi24', 0, async () => {
@@ -114,8 +210,15 @@ export default function styleTransferNativeTest() {
 
       expect(await styleTransferMnn.validatePredictModel(predictBytes)).assertTrue();
       expect(await styleTransferMnn.validateTransferModel(transferBytes)).assertTrue();
+      expect(await styleTransferMnn.validateModelPair(predictBytes, transferBytes)).assertTrue();
+      expect(await styleTransferMnn.validatePredictModel(mnnModelWithCaffeTensorLayout(predictBytes))).assertFalse();
+      expect(await styleTransferMnn.validateTransferModel(mnnModelWithCaffeTensorLayout(transferBytes))).assertFalse();
       expect(await styleTransferMnn.validatePredictModel(new Uint8Array([1, 2, 3, 4]))).assertFalse();
       expect(await styleTransferMnn.validateTransferModel(new Uint8Array([1, 2, 3, 4]))).assertFalse();
+      expect(await styleTransferMnn.validateModelPair(
+        predictBytes,
+        new Uint8Array([1, 2, 3, 4])
+      )).assertFalse();
 
       const contentPath = `${applicationContext.cacheDir}/style-transfer-geometric.jpg`;
       await writeBytes(contentPath, await geometricContentJpeg());
@@ -160,6 +263,17 @@ export default function styleTransferNativeTest() {
       expect(contentDifference1 > 0.05).assertTrue();
       expect(styleDifference > 0.02).assertTrue();
       expect(styleChangedRatio > 0.5).assertTrue();
+
+      expect(await styleTransferMnn.validateModelPair(
+        predictBytes,
+        new Uint8Array([1, 2, 3, 4])
+      )).assertFalse();
+      const pairValidationRecovered = await styleTransferMnn.run(
+        new Float32Array(style0Input.styleInputBuffer),
+        new Float32Array(style0Input.contentInputBuffer)
+      );
+      expect(pairValidationRecovered.output.length).assertEqual(first.output.length);
+      expect(outputContractValid(pairValidationRecovered.output)).assertTrue();
 
       let rejected: boolean = false;
       try {

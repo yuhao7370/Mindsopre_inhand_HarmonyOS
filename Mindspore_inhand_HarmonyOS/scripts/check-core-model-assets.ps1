@@ -110,9 +110,21 @@ foreach ($downloaderName in @(
   $guidCount = if ($downloaderName -eq 'download-scene-detection-model.ps1') { 2 } else { 1 }
   Assert-CoreGuardExecutableMemberCall $downloaderAst '[System.Guid]::NewGuid().ToString(''N'')' "$downloaderName must create request-private GUID names." $guidCount
   Assert-CoreGuardExecutableCommand $downloaderAst 'Get-FileHash -LiteralPath $tmpPath -Algorithm SHA256' "$downloaderName must validate the staged same-directory temp."
-  Assert-CoreGuardExecutableMemberCall $downloaderAst '[System.IO.File]::Replace($tmpPath, $modelPath, $backupPath)' "$downloaderName must atomically replace an existing stable model."
-  Assert-CoreGuardExecutableMemberCall $downloaderAst '[System.IO.File]::Move($tmpPath, $modelPath)' "$downloaderName must atomically publish when the stable model is absent."
-  Assert-CoreGuardFinallyCleanup $downloaderAst $downloaderName
+  if ($downloaderName -eq 'download-style-transfer-models.ps1') {
+    Assert-CoreGuardExecutableCommand $downloaderAst "Import-Module (Join-Path `$PSScriptRoot 'StyleTransferModelPairPublisher.psm1') -Force" `
+      "$downloaderName must load the transactional pair publisher."
+    Assert-CoreGuardExecutableCommand $downloaderAst 'Publish-StyleTransferModelPair -CandidatePaths $candidatePaths -StablePaths $stablePaths' `
+      "$downloaderName must publish both verified candidates as one rollback-safe pair."
+    $pairPublisherAst = Read-CoreGuardPowerShellAst (Join-Path $PSScriptRoot 'StyleTransferModelPairPublisher.psm1')
+    Assert-CoreGuardExecutableMemberCall $pairPublisherAst '[IO.File]::Replace($state.Candidate, $state.Stable, $state.Backup)' `
+      'Style-transfer pair publisher must preserve an existing stable member before replacement.'
+    Assert-CoreGuardExecutableMemberCall $pairPublisherAst '[IO.File]::Replace($state.Backup, $state.Stable, $state.RollbackDiscard)' `
+      'Style-transfer pair publisher must restore an existing stable member during rollback.'
+  } else {
+    Assert-CoreGuardExecutableMemberCall $downloaderAst '[System.IO.File]::Replace($tmpPath, $modelPath, $backupPath)' "$downloaderName must atomically replace an existing stable model."
+    Assert-CoreGuardExecutableMemberCall $downloaderAst '[System.IO.File]::Move($tmpPath, $modelPath)' "$downloaderName must atomically publish when the stable model is absent."
+    Assert-CoreGuardFinallyCleanup $downloaderAst $downloaderName
+  }
   Assert-CoreGuardNoStableMutation $downloaderAst $downloaderName
 }
 

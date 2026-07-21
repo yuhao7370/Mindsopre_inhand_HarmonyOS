@@ -521,12 +521,14 @@ import {
   cachedModelFileInputStateForRoute,
   cachedModelFileNameForInputKind,
   HarmonyModelFileCacheWriter,
+  NativeStyleTransferModelPairCompatibilityChecker,
   ModelFileCacheFileBackend,
   ModelFileTensorMetadata,
   ModelFileCompatibilityChecker,
   ModelFileCompatibilityLoader,
   ObjectDetectionModelContentValidator,
   StyleTransferModelContentValidator,
+  StyleTransferModelPairCompatibilityChecker,
   modelFileCacheWriteSucceeded,
   ModelFileCacheWriter,
   RuntimeModelFileCacheService,
@@ -1094,6 +1096,7 @@ class RecordingObjectDetectionModelContentValidator implements ObjectDetectionMo
 class RecordingStyleTransferModelContentValidator implements StyleTransferModelContentValidator {
   readonly predictByteLengths: Array<number> = [];
   readonly transferByteLengths: Array<number> = [];
+  readonly pairByteLengths: Array<string> = [];
   private readonly compatible: boolean;
 
   constructor(compatible: boolean) {
@@ -1107,6 +1110,29 @@ class RecordingStyleTransferModelContentValidator implements StyleTransferModelC
 
   async validateTransfer(content: Uint8Array): Promise<boolean> {
     this.transferByteLengths.push(content.byteLength);
+    return this.compatible;
+  }
+
+  async validatePair(predict: Uint8Array, transfer: Uint8Array): Promise<boolean> {
+    this.pairByteLengths.push(`${predict.byteLength}:${transfer.byteLength}`);
+    return this.compatible;
+  }
+}
+
+class RecordingStyleTransferModelPairCompatibilityChecker implements StyleTransferModelPairCompatibilityChecker {
+  readonly candidateByteLengths: Array<number> = [];
+  private readonly compatible: boolean;
+
+  constructor(compatible: boolean) {
+    this.compatible = compatible;
+  }
+
+  async isCompatible(
+    _inputKind: FeatureInputKind,
+    _cacheDir: string,
+    candidate: Uint8Array
+  ): Promise<boolean> {
+    this.candidateByteLengths.push(candidate.byteLength);
     return this.compatible;
   }
 }
@@ -10779,7 +10805,8 @@ export default function localUnitTest() {
       const predictService = new RuntimeModelFileCacheService(
         predictReader,
         predictWriter,
-        new RecordingModelFileCompatibilityChecker(true)
+        new RecordingModelFileCompatibilityChecker(true),
+        new RecordingStyleTransferModelPairCompatibilityChecker(true)
       );
 
       const predictResult = await predictService.cachePickedModelFile(
@@ -10813,7 +10840,8 @@ export default function localUnitTest() {
       const loadedTransferService = new RuntimeModelFileCacheService(
         new FileUriContentReader(new FixedFileUriContentBackend(new Uint8Array([5, 6, 7, 8]))),
         loadedTransferWriter,
-        new RecordingModelFileCompatibilityChecker(true)
+        new RecordingModelFileCompatibilityChecker(true),
+        new RecordingStyleTransferModelPairCompatibilityChecker(true)
       );
 
       const loadedTransferResult = await loadedTransferService.cachePickedModelFile(
@@ -11048,6 +11076,44 @@ export default function localUnitTest() {
       expect(loader.seenByteLengths.length).assertEqual(0);
     });
 
+    it('pairPreflightUsesTheStableCustomOtherStageWhenAvailable', 0, async () => {
+      const rawfiles = new FixedRawfileContentReader(new Uint8Array([8, 8, 8, 8]));
+      const validator = new RecordingStyleTransferModelContentValidator(true);
+      const checker = new NativeStyleTransferModelPairCompatibilityChecker(
+        rawfiles,
+        new FileUriContentReader(new FixedFileUriContentBackend(new Uint8Array([1, 2]))),
+        new FixedCachedModelFileExistenceChecker(['/cache/custom_predict.mnn']),
+        validator
+      );
+
+      expect(await checker.isCompatible(
+        'styleTransferModelFile',
+        '/cache',
+        new Uint8Array([3, 4, 5])
+      )).assertTrue();
+      expect(validator.pairByteLengths.join(',')).assertEqual('2:3');
+      expect(rawfiles.seenPaths.length).assertEqual(0);
+    });
+
+    it('pairPreflightFallsBackToTheBuiltinOtherStage', 0, async () => {
+      const rawfiles = new FixedRawfileContentReader(new Uint8Array([8, 8, 8, 8]));
+      const validator = new RecordingStyleTransferModelContentValidator(true);
+      const checker = new NativeStyleTransferModelPairCompatibilityChecker(
+        rawfiles,
+        new FileUriContentReader(new FixedFileUriContentBackend(new Uint8Array([1, 2]))),
+        new FixedCachedModelFileExistenceChecker([]),
+        validator
+      );
+
+      expect(await checker.isCompatible(
+        'stylePredictModelFile',
+        '/cache',
+        new Uint8Array([3])
+      )).assertTrue();
+      expect(validator.pairByteLengths.join(',')).assertEqual('1:4');
+      expect(rawfiles.seenPaths.join(',')).assertEqual(styleTransferModelRawfilePath);
+    });
+
     it('rejectsBadStyleTransferOverrideWithoutReplacingTheLastValidCache', 0, async () => {
       const writer = new RecordingModelFileCacheWriter('/cache/custom_predict.mnn');
       const checker = new BasicModelFileCompatibilityChecker(
@@ -11070,6 +11136,33 @@ export default function localUnitTest() {
 
       expect(result.ok).assertFalse();
       expect(writer.writtenBytes.length).assertEqual(0);
+    });
+
+    it('rejectsStageValidPairInvalidStyleOverrideWithoutPollutingStableCache', 0, async () => {
+      const stablePath = '/cache/custom_predict.mnn';
+      const backend = new MemoryModelFileCacheFileBackend();
+      backend.seed(stablePath, new Uint8Array([9, 9]));
+      const pairChecker = new RecordingStyleTransferModelPairCompatibilityChecker(false);
+      const service = new RuntimeModelFileCacheService(
+        new FileUriContentReader(new FixedFileUriContentBackend(new Uint8Array([1, 2, 3]))),
+        new HarmonyModelFileCacheWriter(backend),
+        new RecordingModelFileCompatibilityChecker(true),
+        pairChecker
+      );
+
+      const result = await service.cachePickedModelFile(
+        'file://selected/pair-invalid.mnn',
+        '/cache',
+        AppRoute.STYLE_TRANSFER.name,
+        'stylePredictModelFile'
+      );
+
+      expect(result.ok).assertFalse();
+      expect(pairChecker.candidateByteLengths.join(',')).assertEqual('3');
+      expect(backend.openedPaths.length).assertEqual(0);
+      expect(backend.replacedStablePaths.length).assertEqual(0);
+      expect(backend.bytes(stablePath)[0]).assertEqual(9);
+      expect(backend.bytes(stablePath)[1]).assertEqual(9);
     });
 
     it('reportsPickedModelFileCacheFailureWithI18nKey', 0, async () => {

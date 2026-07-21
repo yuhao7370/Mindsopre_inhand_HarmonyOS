@@ -110,7 +110,7 @@ TypedArrayView ReadTypedArray(napi_env env, napi_value value, napi_typedarray_ty
     return {data, visibleLength};
 }
 
-enum class WorkKind { Load, ValidatePredict, ValidateTransfer, Run };
+enum class WorkKind { Load, ValidatePredict, ValidateTransfer, ValidatePair, Run };
 
 struct Work {
     napi_deferred deferred = nullptr;
@@ -150,6 +150,10 @@ void Execute(napi_env, void* raw) noexcept
                 break;
             case WorkKind::ValidateTransfer:
                 work->valid = g_session.ValidateTransferModel(work->transferBytes.data(), work->transferBytes.size());
+                break;
+            case WorkKind::ValidatePair:
+                work->valid = g_session.ValidateModelPair(work->predictBytes.data(), work->predictBytes.size(),
+                                                          work->transferBytes.data(), work->transferBytes.size());
                 break;
             case WorkKind::Run:
                 work->runOutput = g_session.Run(work->styleInput, work->contentInput);
@@ -209,7 +213,8 @@ void Complete(napi_env env, napi_status status, void* raw) noexcept
     } else {
         try {
             napi_value value = nullptr;
-            if (work->kind == WorkKind::ValidatePredict || work->kind == WorkKind::ValidateTransfer) {
+            if (work->kind == WorkKind::ValidatePredict || work->kind == WorkKind::ValidateTransfer ||
+                work->kind == WorkKind::ValidatePair) {
                 Check(env, napi_get_boolean(env, work->valid, &value), "create validation result");
             } else if (work->kind == WorkKind::Run) {
                 value = RunOutputValue(env, work->runOutput);
@@ -253,14 +258,16 @@ napi_value Start(napi_env env, napi_callback_info callbackInfo, WorkKind kind)
         auto work = std::make_unique<Work>();
         work->deferred = deferred;
         work->kind = kind;
-        if (kind == WorkKind::Load) {
+        if (kind == WorkKind::Load || kind == WorkKind::ValidatePair) {
             if (argc != 2) {
-                return RejectBeforeQueue(env, deferred, promise, "loadModels expects two Uint8Arrays.");
+                return RejectBeforeQueue(env, deferred, promise,
+                                         kind == WorkKind::Load ? "loadModels expects two Uint8Arrays." :
+                                         "validateModelPair expects two Uint8Arrays.");
             }
             const TypedArrayView predict = ReadTypedArray(env, arguments[0], napi_uint8_array, sizeof(uint8_t),
-                                                          "loadModels expects two Uint8Arrays.");
+                                                          "Style-transfer model pair expects two Uint8Arrays.");
             const TypedArrayView transfer = ReadTypedArray(env, arguments[1], napi_uint8_array, sizeof(uint8_t),
-                                                           "loadModels expects two Uint8Arrays.");
+                                                           "Style-transfer model pair expects two Uint8Arrays.");
             if (predict.visibleLength == 0 || transfer.visibleLength == 0) {
                 return RejectBeforeQueue(env, deferred, promise, "Style-transfer model bytes must not be empty.");
             }
@@ -333,6 +340,7 @@ napi_value Start(napi_env env, napi_callback_info callbackInfo, WorkKind kind)
 STYLE_BOUNDARY(LoadModels, WorkKind::Load)
 STYLE_BOUNDARY(ValidatePredict, WorkKind::ValidatePredict)
 STYLE_BOUNDARY(ValidateTransfer, WorkKind::ValidateTransfer)
+STYLE_BOUNDARY(ValidatePair, WorkKind::ValidatePair)
 STYLE_BOUNDARY(Run, WorkKind::Run)
 
 napi_value Release(napi_env env, napi_callback_info) noexcept
@@ -352,6 +360,7 @@ napi_value Init(napi_env env, napi_value exports)
         {"loadModels", nullptr, LoadModels, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"validatePredictModel", nullptr, ValidatePredict, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"validateTransferModel", nullptr, ValidateTransfer, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"validateModelPair", nullptr, ValidatePair, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"run", nullptr, Run, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"release", nullptr, Release, nullptr, nullptr, nullptr, napi_default, nullptr},
     };

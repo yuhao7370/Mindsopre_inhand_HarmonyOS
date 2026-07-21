@@ -120,7 +120,10 @@ import {
   segmentationMetadataWithBackground,
   sceneDetectionOverlayRows
 } from '../services/ai/AiService';
-import { cachedRuntimeAiServiceForHarmonyResourceManager } from '../services/ai/ImageClassificationRuntimeFactory';
+import {
+  cachedRuntimeAiServiceForHarmonyResourceManager,
+  HarmonyRawfileContentReader
+} from '../services/ai/ImageClassificationRuntimeFactory';
 import { RuntimeAiServiceSession } from '../services/ai/RuntimeAiServiceSession';
 import {
   PermissionRequestSummary,
@@ -138,6 +141,7 @@ import {
   ModelFileCacheResult,
   RuntimeModelFileCacheService,
   cachedModelFileInputStateForRoute,
+  runtimeModelFileCacheService,
   shouldCachePickedModelFileForRoute
 } from '../services/picker/ModelFileCacheService';
 import {
@@ -543,7 +547,11 @@ struct FeatureRuntimePage {
       this.applyPickResult(result, 'feature_runtime_model_ready', inputKind, true, initialPick);
       return;
     }
-    const cacheResult = await new RuntimeModelFileCacheService()
+    const currentContext = this.uiAbilityContext();
+    const cacheService = currentContext === undefined ?
+      new RuntimeModelFileCacheService() :
+      runtimeModelFileCacheService(new HarmonyRawfileContentReader(currentContext.resourceManager));
+    const cacheResult = await cacheService
       .cachePickedModelFile(
         result.uri,
         cacheDir,
