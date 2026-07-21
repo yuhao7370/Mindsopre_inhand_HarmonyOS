@@ -306,6 +306,7 @@ import {
   ObjectDetectionModelOutput,
   ObjectDetectionTensorRunner,
   objectDetectionBoxPercent,
+  objectDetectionLiveOverlayBox,
   objectDetectionLiveLabelOffset,
   decodeNanoDetObjectDetections,
   decodeSsdObjectDetections,
@@ -322,6 +323,7 @@ import {
   objectDetectionOverlayColor,
   objectDetectionOverlayTextColor,
   objectDetectionOverlayLabel,
+  shouldLogObjectDetectionLiveFrame,
   normalizedObjectDetectionRgbInputFromRgba,
   parseObjectCategoryLabels
 } from '../main/ets/services/ai/ObjectDetectionService';
@@ -394,6 +396,7 @@ import {
   shouldPreserveRuntimeResultAfterInputReady,
   shouldPreserveRuntimeTextResultOnAiResult,
   shouldPreserveRuntimeVisualResultOnAiResult,
+  shouldPreserveRuntimeVisualResultOnLiveFrameFailure,
   shouldShowStyleOriginalAfterInputReady,
   styleTransferModelCacheToastKey,
   styleTransferResultToastKey,
@@ -541,6 +544,7 @@ import {
   liveFrameImageCachePath,
   liveRuntimeIntervalForAiMethod,
   liveRuntimeIntervalMs,
+  livePreviewContentRotationDegrees,
   liveCameraXComponentId,
   liveFrameImagePackingOption,
   liveCameraPreferredPositionForAvailablePositions,
@@ -1959,9 +1963,11 @@ class RecordingLiveCameraPreviewDriver implements LiveCameraPreviewDriver {
   startedSurfaceIds: Array<string> = [];
   startedPositions: Array<LiveCameraPosition> = [];
   private readonly failStart: boolean;
+  private rotationDegrees: number;
 
-  constructor(failStart: boolean) {
+  constructor(failStart: boolean, rotationDegrees: number = 0) {
     this.failStart = failStart;
+    this.rotationDegrees = rotationDegrees;
   }
 
   async start(surfaceId: string, position: LiveCameraPosition): Promise<void> {
@@ -1973,6 +1979,14 @@ class RecordingLiveCameraPreviewDriver implements LiveCameraPreviewDriver {
   }
 
   async stop(): Promise<void> {
+  }
+
+  previewRotationDegrees(): number {
+    return this.rotationDegrees;
+  }
+
+  setRotationDegrees(rotationDegrees: number): void {
+    this.rotationDegrees = rotationDegrees;
   }
 }
 
@@ -2110,6 +2124,19 @@ class FixedObjectDetectionTensorRunner implements ObjectDetectionTensorRunner {
     this.seenByteLengths.push(inputBuffer.byteLength);
     this.seenModelUris.push(modelUri ?? '');
     return this.output;
+  }
+}
+
+class RejectingOnceLiveRuntimeFrameRunner implements LiveRuntimeFrameRunner {
+  runCount: number = 0;
+  successCount: number = 0;
+
+  async runOnce(): Promise<void> {
+    this.runCount += 1;
+    if (this.runCount === 1) {
+      throw new Error('first live frame failed');
+    }
+    this.successCount += 1;
   }
 }
 
@@ -9487,11 +9514,35 @@ export default function localUnitTest() {
       expect(shouldClearRuntimeResultAtWorkflowStart(workflowForRoute(AppRoute.PORTRAIT_SEGMENTATION.name)))
         .assertFalse();
       expect(shouldClearRuntimeResultAtWorkflowStart(workflowForRoute(AppRoute.OBJECT_CAMERA.name)))
-        .assertTrue();
+        .assertFalse();
       expect(shouldClearRuntimeResultAtWorkflowStart(workflowForRoute(AppRoute.TEXT_RECOGNITION.name)))
         .assertTrue();
       expect(shouldClearRuntimeResultAtWorkflowStart(undefined))
         .assertTrue();
+    });
+
+    it('keepsLiveObjectOverlayOnFailureAndAtomicallyReplacesItOnCurrentSuccess', 0, () => {
+      const objectCamera = workflowForRoute(AppRoute.OBJECT_CAMERA.name);
+
+      expect(shouldPreserveRuntimeVisualResultOnAiResult(objectCamera, false, ''))
+        .assertTrue();
+      expect(shouldPreserveRuntimeVisualResultOnAiResult(objectCamera, true, 'objectDetections'))
+        .assertTrue();
+      expect(shouldPreserveRuntimeVisualResultOnAiResult(objectCamera, true, 'classification'))
+        .assertFalse();
+      expect(shouldPreserveRuntimeVisualResultOnLiveFrameFailure(objectCamera)).assertTrue();
+      expect(shouldPreserveRuntimeVisualResultOnLiveFrameFailure(
+        workflowForRoute(AppRoute.TEXT_RECOGNITION.name)
+      )).assertFalse();
+    });
+
+    it('samplesLiveObjectFrameLogsWithoutGrowingAtFrameRateForever', 0, () => {
+      expect(shouldLogObjectDetectionLiveFrame(1)).assertTrue();
+      expect(shouldLogObjectDetectionLiveFrame(8)).assertTrue();
+      expect(shouldLogObjectDetectionLiveFrame(9)).assertFalse();
+      expect(shouldLogObjectDetectionLiveFrame(9, false)).assertTrue();
+      expect(shouldLogObjectDetectionLiveFrame(10)).assertTrue();
+      expect(shouldLogObjectDetectionLiveFrame(11)).assertFalse();
     });
 
     it('autoStartsOnlyCameraOnlyLiveWorkflowsLikeAndroidLiveActivities', 0, () => {
@@ -10201,7 +10252,7 @@ export default function localUnitTest() {
     });
 
     it('liveCameraPreviewServiceReportsReadyAndFailure', 0, async () => {
-      const readyDriver = new RecordingLiveCameraPreviewDriver(false);
+      const readyDriver = new RecordingLiveCameraPreviewDriver(false, 90);
       const readyResult = await new LiveCameraPreviewService(readyDriver).start('surface-1');
       const failedResult = await new LiveCameraPreviewService(new RecordingLiveCameraPreviewDriver(true)).start('surface-2');
 
@@ -10209,10 +10260,30 @@ export default function localUnitTest() {
       expect(readyResult.ok).assertTrue();
       expect(readyResult.surfaceId).assertEqual('surface-1');
       expect(readyResult.messageKey).assertEqual('feature_runtime_live_camera_ready');
+      expect(readyResult.previewRotationDegrees).assertEqual(90);
       expect(readyDriver.startedSurfaceIds[0]).assertEqual('surface-1');
       expect(readyDriver.startedPositions[0]).assertEqual('back');
       expect(failedResult.ok).assertFalse();
       expect(failedResult.messageKey).assertEqual('feature_runtime_live_camera_failed');
+    });
+
+    it('liveCameraPreviewServiceReadsTheCurrentRotationForEachFrame', 0, async () => {
+      const driver = new RecordingLiveCameraPreviewDriver(false, 90);
+      const service = new LiveCameraPreviewService(driver);
+      await service.start('surface-rotation');
+
+      expect(service.previewRotationDegrees()).assertEqual(90);
+      driver.setRotationDegrees(180);
+      expect(service.previewRotationDegrees()).assertEqual(180);
+    });
+
+    it('mapsBackCameraSensorContentIntoTheCurrentDisplayRotation', 0, () => {
+      expect(livePreviewContentRotationDegrees(90, 0, 'back', 0)).assertEqual(90);
+      expect(livePreviewContentRotationDegrees(90, 1, 'back', 0)).assertEqual(0);
+      expect(livePreviewContentRotationDegrees(270, 0, 'back', 0)).assertEqual(270);
+      expect(livePreviewContentRotationDegrees(90, 1, 'front', 0)).assertEqual(180);
+      expect(livePreviewContentRotationDegrees(270, 1, 'front', 0)).assertEqual(0);
+      expect(livePreviewContentRotationDegrees(-1, 0, 'back', 90)).assertEqual(90);
     });
 
     it('liveCameraPreviewServiceUsesRequestedCameraPositionLikeAndroidSwitch', 0, async () => {
@@ -10392,6 +10463,66 @@ export default function localUnitTest() {
       await Promise.resolve();
       expect(scheduler.cancelledIds[0]).assertEqual(1);
       expect(runner.runCount).assertEqual(2);
+    });
+
+    it('liveRuntimeLoopRecoversOnTheNextBoundedTickAfterAFrameFailure', 0, async () => {
+      const scheduler = new ManualLiveRuntimeLoopScheduler();
+      const runner = new RejectingOnceLiveRuntimeFrameRunner();
+      const service = new LiveRuntimeLoopService(scheduler);
+
+      service.start(liveRuntimeIntervalMs, runner);
+      await Promise.resolve();
+      await Promise.resolve();
+      scheduler.tick();
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(runner.runCount).assertEqual(2);
+      expect(runner.successCount).assertEqual(1);
+      service.stop();
+    });
+
+    it('mapsClockwiseRotatedDetectionIntoTheContainedLivePreview', 0, () => {
+      const detection: ObjectDetection = {
+        imageId: 1,
+        labelId: 0,
+        label: 'object',
+        score: 0.9,
+        left: 100,
+        top: 20,
+        right: 300,
+        bottom: 120
+      };
+
+      const exactPortrait = objectDetectionLiveOverlayBox(detection, 400, 200, 200, 400, 90);
+      expect(exactPortrait.left).assertEqual(80);
+      expect(exactPortrait.top).assertEqual(100);
+      expect(exactPortrait.width).assertEqual(100);
+      expect(exactPortrait.height).assertEqual(200);
+
+      const letterboxedPortrait = objectDetectionLiveOverlayBox(detection, 400, 200, 300, 500, 90);
+      expect(letterboxedPortrait.left).assertEqual(125);
+      expect(letterboxedPortrait.top).assertEqual(125);
+      expect(letterboxedPortrait.width).assertEqual(125);
+      expect(letterboxedPortrait.height).assertEqual(250);
+
+      const unrotated = objectDetectionLiveOverlayBox(detection, 400, 200, 400, 200, 0);
+      expect(unrotated.left).assertEqual(100);
+      expect(unrotated.top).assertEqual(20);
+      expect(unrotated.width).assertEqual(200);
+      expect(unrotated.height).assertEqual(100);
+
+      const upsideDown = objectDetectionLiveOverlayBox(detection, 400, 200, 400, 200, 180);
+      expect(upsideDown.left).assertEqual(100);
+      expect(upsideDown.top).assertEqual(80);
+      expect(upsideDown.width).assertEqual(200);
+      expect(upsideDown.height).assertEqual(100);
+
+      const counterClockwise = objectDetectionLiveOverlayBox(detection, 400, 200, 200, 400, 270);
+      expect(counterClockwise.left).assertEqual(20);
+      expect(counterClockwise.top).assertEqual(100);
+      expect(counterClockwise.width).assertEqual(100);
+      expect(counterClockwise.height).assertEqual(200);
     });
 
     it('usesMindSporeModelFileSuffixForModelPicker', 0, () => {

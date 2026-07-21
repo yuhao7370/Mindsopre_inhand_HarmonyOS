@@ -752,6 +752,7 @@ export function liveClassificationEmptyPromptKey(workflow: FeatureWorkflow | und
 
 export function shouldClearRuntimeResultAtWorkflowStart(workflow: FeatureWorkflow | undefined): boolean {
   return !shouldShowLiveClassificationCameraOverlay(workflow) &&
+    !shouldShowLiveObjectDetectionCameraOverlay(workflow) &&
     workflow?.routeName !== AppRoute.PORTRAIT_SEGMENTATION.name &&
     !usesAndroidStyleTransferLayout(workflow) &&
     !usesAndroidStillSegmentationLayout(workflow) &&
@@ -830,6 +831,9 @@ export function shouldPreserveRuntimeVisualResultOnAiResult(
   resultOk: boolean,
   dataKind: string
 ): boolean {
+  if (shouldShowLiveObjectDetectionCameraOverlay(workflow)) {
+    return !resultOk || dataKind === 'objectDetections';
+  }
   if (usesAndroidStyleTransferLayout(workflow)) {
     return !resultOk || dataKind === 'styleTransfer';
   }
@@ -839,6 +843,12 @@ export function shouldPreserveRuntimeVisualResultOnAiResult(
   return workflow?.routeName === AppRoute.PORTRAIT_SEGMENTATION.name &&
     resultOk &&
     dataKind === 'segmentation';
+}
+
+export function shouldPreserveRuntimeVisualResultOnLiveFrameFailure(
+  workflow: FeatureWorkflow | undefined
+): boolean {
+  return shouldPreserveRuntimeVisualResultOnAiResult(workflow, false, '');
 }
 
 export function runtimeSegmentationBackgroundImageUri(

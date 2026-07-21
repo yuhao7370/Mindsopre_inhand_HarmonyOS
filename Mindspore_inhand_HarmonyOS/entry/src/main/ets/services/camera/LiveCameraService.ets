@@ -2,6 +2,7 @@ import { common } from '@kit.AbilityKit';
 import { fileIo } from '@kit.CoreFileKit';
 import { camera } from '@kit.CameraKit';
 import { image } from '@kit.ImageKit';
+import { display } from '@kit.ArkUI';
 import { AppStringKey } from '../../common/i18n/AppStrings';
 
 export const liveCameraXComponentId = 'liveCameraPreview';
@@ -18,15 +19,42 @@ export interface LiveCameraPreviewResult {
   readonly ok: boolean;
   readonly surfaceId: string;
   readonly messageKey: AppStringKey;
+  readonly previewRotationDegrees?: number;
 }
 
 export type LiveCameraPosition = 'back' | 'front';
 
 export const defaultLiveCameraPosition: LiveCameraPosition = 'back';
 
+export function livePreviewContentRotationDegrees(
+  cameraOrientation: number,
+  displayRotation: number,
+  position: LiveCameraPosition,
+  reportedPreviewRotation: number
+): number {
+  const normalizedReported = normalizedQuarterTurnDegrees(reportedPreviewRotation);
+  const normalizedCamera = normalizedQuarterTurnDegrees(cameraOrientation);
+  if (normalizedCamera < 0 || !Number.isInteger(displayRotation) || displayRotation < 0 || displayRotation > 3) {
+    return normalizedReported >= 0 ? normalizedReported : 0;
+  }
+  const displayDegrees = displayRotation * 90;
+  const contentRotation = position === 'front' ?
+    normalizedCamera + displayDegrees : normalizedCamera - displayDegrees;
+  return (contentRotation + 360) % 360;
+}
+
+function normalizedQuarterTurnDegrees(rotationDegrees: number): number {
+  if (!Number.isFinite(rotationDegrees)) {
+    return -1;
+  }
+  const normalized = ((rotationDegrees % 360) + 360) % 360;
+  return normalized % 90 === 0 ? normalized : -1;
+}
+
 export interface LiveCameraPreviewDriver {
   start(surfaceId: string, position: LiveCameraPosition): Promise<void>;
   stop(): Promise<void>;
+  previewRotationDegrees?(): number;
 }
 
 export interface LiveCameraDevicePositionProvider {
@@ -278,7 +306,12 @@ export class LiveCameraPreviewService {
 
     try {
       await this.driver.start(surfaceId, position);
-      return { ok: true, surfaceId: surfaceId, messageKey: 'feature_runtime_live_camera_ready' };
+      return {
+        ok: true,
+        surfaceId: surfaceId,
+        messageKey: 'feature_runtime_live_camera_ready',
+        previewRotationDegrees: this.driver.previewRotationDegrees?.() ?? 0
+      };
     } catch (_) {
       return { ok: false, surfaceId: surfaceId, messageKey: 'feature_runtime_live_camera_failed' };
     }
@@ -289,6 +322,10 @@ export class LiveCameraPreviewService {
       await this.driver.stop();
     } catch (_) {
     }
+  }
+
+  previewRotationDegrees(): number {
+    return this.driver.previewRotationDegrees?.() ?? 0;
   }
 }
 
@@ -321,6 +358,10 @@ export class HarmonyLiveCameraPreviewDriver implements LiveCameraPreviewDriver {
   private cameraInput: camera.CameraInput | undefined = undefined;
   private previewOutput: camera.PreviewOutput | undefined = undefined;
   private session: camera.Session | undefined = undefined;
+  private previewRotation: number = 0;
+  private cameraOrientation: number = -1;
+  private cameraPosition: LiveCameraPosition = defaultLiveCameraPosition;
+  private reportedPreviewRotation: number = -1;
 
   constructor(context: common.UIAbilityContext) {
     this.context = context;
@@ -355,6 +396,20 @@ export class HarmonyLiveCameraPreviewDriver implements LiveCameraPreviewDriver {
       this.session.addOutput(this.previewOutput);
       await this.session.commitConfig();
       await this.session.start();
+      const displayRotation = display.getDefaultDisplaySync().rotation;
+      this.cameraOrientation = device.cameraOrientation;
+      this.cameraPosition = position;
+      try {
+        this.reportedPreviewRotation = this.previewOutput.getPreviewRotation(displayRotation);
+      } catch (_) {
+        this.reportedPreviewRotation = -1;
+      }
+      this.previewRotation = livePreviewContentRotationDegrees(
+        this.cameraOrientation,
+        displayRotation,
+        this.cameraPosition,
+        this.reportedPreviewRotation
+      );
     } catch (_) {
       await this.stop();
       throw new Error('live camera preview failed');
@@ -362,6 +417,10 @@ export class HarmonyLiveCameraPreviewDriver implements LiveCameraPreviewDriver {
   }
 
   async stop(): Promise<void> {
+    this.previewRotation = 0;
+    this.cameraOrientation = -1;
+    this.cameraPosition = defaultLiveCameraPosition;
+    this.reportedPreviewRotation = -1;
     if (this.session !== undefined) {
       try {
         await this.session.stop();
@@ -389,6 +448,19 @@ export class HarmonyLiveCameraPreviewDriver implements LiveCameraPreviewDriver {
       }
       this.cameraInput = undefined;
     }
+  }
+
+  previewRotationDegrees(): number {
+    try {
+      this.previewRotation = livePreviewContentRotationDegrees(
+        this.cameraOrientation,
+        display.getDefaultDisplaySync().rotation,
+        this.cameraPosition,
+        this.reportedPreviewRotation
+      );
+    } catch (_) {
+    }
+    return this.previewRotation;
   }
 }
 

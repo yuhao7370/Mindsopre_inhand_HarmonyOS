@@ -48,6 +48,7 @@ import {
   shouldPreserveRuntimeTextResultOnAiResult,
   shouldRestoreCachedModelFileInputs,
   shouldPreserveRuntimeVisualResultOnAiResult,
+  shouldPreserveRuntimeVisualResultOnLiveFrameFailure,
   shouldShowStyleOriginalAfterInputReady,
   runtimeSegmentationBackgroundImageUri,
   shouldStartWorkflowRun,
@@ -170,12 +171,15 @@ import {
 import {
   ObjectDetection,
   ObjectDetectionBoxPercent,
+  ObjectDetectionLiveOverlayBox,
   ObjectDetectionLiveLabelOffset,
   objectDetectionBoxPercent,
+  objectDetectionLiveOverlayBox,
   objectDetectionLiveLabelOffset,
   objectDetectionOverlayColor,
   objectDetectionOverlayLabel,
-  objectDetectionOverlayTextColor
+  objectDetectionOverlayTextColor,
+  shouldLogObjectDetectionLiveFrame
 } from '../services/ai/ObjectDetectionService';
 import {
   SegmentationRectangle,
@@ -228,6 +232,7 @@ import {
 } from '../services/window/KeepScreenOnService';
 import { common, OpenLinkOptions } from '@kit.AbilityKit';
 import { image } from '@kit.ImageKit';
+import { hilog } from '@kit.PerformanceAnalysisKit';
 import {
   ExternalHelpLinkContext,
   ExternalHelpLinkOpenOptions,
@@ -240,6 +245,9 @@ interface FeatureRuntimeParams {
   titleKey?: AppStringKey;
   routeName?: string;
 }
+
+const runtimeLogDomain: number = 0x0000;
+const liveObjectDetectionLogTag: string = 'ObjectDetectionLive';
 
 class PageLiveRuntimeFrameRunner implements LiveRuntimeFrameRunner {
   private readonly runFrame: () => Promise<void>;
@@ -312,7 +320,9 @@ struct FeatureRuntimePage {
   @State objectDetections: Array<ObjectDetection> = [];
   @State objectDetectionImageWidth: number = 0;
   @State objectDetectionImageHeight: number = 0;
+  @State liveObjectDetectionOverlayWidthVp: number = 0;
   @State liveObjectDetectionOverlayHeightVp: number = 0;
+  @State liveCameraPreviewRotationDegrees: number = 0;
   @State segmentationImageUri: string = '';
   @State segmentationImageOrientation: ImageRotateOrientation = ImageRotateOrientation.UP;
   @State segmentationBackgroundImageUri: string = '';
@@ -346,6 +356,7 @@ struct FeatureRuntimePage {
   private liveCameraInputSelected: boolean = false;
   private liveCameraPreviewRequestId: number = 0;
   private liveRuntimeGeneration: number = 0;
+  private liveObjectDetectionFrameId: number = 0;
   private runtimeRequestGeneration: RuntimeRequestGeneration = new RuntimeRequestGeneration();
   private inputPreparationRequestId: number = 0;
   private liveRuntimeLoopService: LiveRuntimeLoopService = new LiveRuntimeLoopService();
@@ -759,8 +770,17 @@ struct FeatureRuntimePage {
     this.statusKey = result.messageKey;
     this.liveCameraActive = result.ok;
     this.liveCameraSurfaceId = result.surfaceId;
+    this.liveCameraPreviewRotationDegrees = result.previewRotationDegrees ?? 0;
     this.selectedInputSummary = result.surfaceId;
     const workflow = workflowForRoute(this.routeName);
+    if (result.ok && shouldShowLiveObjectDetectionCameraOverlay(workflow)) {
+      hilog.info(
+        runtimeLogDomain,
+        liveObjectDetectionLogTag,
+        'preview ready rotation=%{public}d',
+        this.liveCameraPreviewRotationDegrees
+      );
+    }
     if (!result.ok) {
       this.pendingPickTextInputVisible = undefined;
       this.liveCameraInputSelected = false;
@@ -787,6 +807,7 @@ struct FeatureRuntimePage {
     this.liveCameraInputSelected = false;
     this.liveCameraActive = false;
     this.liveCameraSurfaceId = '';
+    this.liveCameraPreviewRotationDegrees = 0;
     const service = this.liveCameraService;
     this.liveCameraService = undefined;
     if (service !== undefined) {
@@ -1052,6 +1073,15 @@ struct FeatureRuntimePage {
   }
 
   private stopLiveRuntimeLoop(): void {
+    if (this.liveRuntimeLoopService.isRunning() &&
+      shouldShowLiveObjectDetectionCameraOverlay(workflowForRoute(this.routeName))) {
+      hilog.info(
+        runtimeLogDomain,
+        liveObjectDetectionLogTag,
+        'loop stopped after frame=%{public}d',
+        this.liveObjectDetectionFrameId
+      );
+    }
     this.liveRuntimeGeneration++;
     this.runtimeRequestGeneration.invalidate();
     this.styledImagePixelMapOwner.invalidatePendingReplacement();
@@ -1090,6 +1120,7 @@ struct FeatureRuntimePage {
       this.resultRows = [];
       this.clearVisualResults();
     }
+    let liveObjectFrameId = 0;
     try {
       const permission: PermissionRequestSummary = await new PermissionService().requestForWorkflow(context, workflow);
       if (!this.isRuntimeRequestCurrent(runtimeRequestId, liveGeneration)) {
@@ -1120,12 +1151,54 @@ struct FeatureRuntimePage {
       if (!this.isRuntimeRequestCurrent(runtimeRequestId, liveGeneration)) {
         return;
       }
+      liveObjectFrameId = shouldShowLiveObjectDetectionCameraOverlay(workflow) ?
+        this.liveObjectDetectionFrameId : 0;
+      if (shouldLogObjectDetectionLiveFrame(liveObjectFrameId)) {
+        hilog.info(
+          runtimeLogDomain,
+          liveObjectDetectionLogTag,
+          'frame=%{public}d request=%{public}d generation=%{public}d inference=start',
+          liveObjectFrameId,
+          runtimeRequestId,
+          liveGeneration ?? 0
+        );
+      }
       const result: AiRunResult = await aiService.run(workflow, this.aiRunInputs());
-      if (!this.isRuntimeRequestCurrent(runtimeRequestId, liveGeneration)) {
+      const requestCurrent = this.isRuntimeRequestCurrent(runtimeRequestId, liveGeneration);
+      if (shouldLogObjectDetectionLiveFrame(liveObjectFrameId, result.ok)) {
+        const detectionCount = result.data?.kind === 'objectDetections' ? result.data.detections.length : 0;
+        hilog.info(
+          runtimeLogDomain,
+          liveObjectDetectionLogTag,
+          'frame=%{public}d inference=end ok=%{public}s current=%{public}s detections=%{public}d',
+          liveObjectFrameId,
+          `${result.ok}`,
+          `${requestCurrent}`,
+          detectionCount
+        );
+      }
+      if (!requestCurrent) {
         return;
       }
       await this.applyAiResult(result, runtimeRequestId);
+      if (shouldLogObjectDetectionLiveFrame(liveObjectFrameId)) {
+        hilog.info(
+          runtimeLogDomain,
+          liveObjectDetectionLogTag,
+          'frame=%{public}d published',
+          liveObjectFrameId
+        );
+      }
     } catch (_) {
+      if (liveObjectFrameId > 0) {
+        hilog.error(
+          runtimeLogDomain,
+          liveObjectDetectionLogTag,
+          'frame=%{public}d inference=error current=%{public}s',
+          liveObjectFrameId,
+          `${this.isRuntimeRequestCurrent(runtimeRequestId, liveGeneration)}`
+        );
+      }
       if (this.isRuntimeRequestCurrent(runtimeRequestId, liveGeneration)) {
         this.applyRuntimeFailure();
       }
@@ -1181,12 +1254,36 @@ struct FeatureRuntimePage {
       this.statusKey = result.messageKey;
       this.resultText = '';
       this.resultRows = [];
-      this.clearVisualResults();
+      const workflow = workflowForRoute(this.routeName);
+      if (shouldShowLiveObjectDetectionCameraOverlay(workflow)) {
+        hilog.error(
+          runtimeLogDomain,
+          liveObjectDetectionLogTag,
+          'frame=%{public}d capture=failed',
+          this.liveObjectDetectionFrameId + 1
+        );
+      }
+      if (!shouldPreserveRuntimeVisualResultOnLiveFrameFailure(workflow)) {
+        this.clearVisualResults();
+      }
       return false;
     }
 
     this.imageInputUri = result.uri;
     this.selectedInputSummary = result.uri;
+    if (shouldShowLiveObjectDetectionCameraOverlay(workflowForRoute(this.routeName))) {
+      const rotation = this.liveCameraService?.previewRotationDegrees() ?? this.liveCameraPreviewRotationDegrees;
+      if (rotation !== this.liveCameraPreviewRotationDegrees) {
+        hilog.info(
+          runtimeLogDomain,
+          liveObjectDetectionLogTag,
+          'preview rotation changed=%{public}d',
+          rotation
+        );
+      }
+      this.liveCameraPreviewRotationDegrees = rotation;
+      this.liveObjectDetectionFrameId += 1;
+    }
     return true;
   }
 
@@ -1315,7 +1412,7 @@ struct FeatureRuntimePage {
 
   private updateObjectDetectionPreview(result: AiRunResult): void {
     const data = result.data;
-    if (data === undefined || data.kind !== 'objectDetections' || data.detections.length === 0) {
+    if (data === undefined || data.kind !== 'objectDetections') {
       return;
     }
 
@@ -2249,7 +2346,9 @@ struct FeatureRuntimePage {
       shouldShowLiveObjectDetectionCameraOverlay(workflowForRoute(this.routeName))) {
       ForEach(this.objectDetections, (detection: ObjectDetection, index: number) => {
         this.liveObjectDetectionBox(detection, index)
-      }, (detection: ObjectDetection) => `${detection.imageId}-${detection.labelId}-${detection.score}`)
+      }, (detection: ObjectDetection) =>
+        `${detection.imageId}-${detection.labelId}-${detection.score}-${detection.left}-${detection.top}` +
+          `-${detection.right}-${detection.bottom}`)
     }
     if (this.posePoints.length > 0 && shouldShowLivePoseCameraOverlay(workflowForRoute(this.routeName))) {
       ForEach(this.poseLines(), (line: PoseLine) => {
@@ -2471,9 +2570,23 @@ struct FeatureRuntimePage {
   }
 
   private liveObjectDetectionLabelOffset(detection: ObjectDetection): ObjectDetectionLiveLabelOffset {
+    const style = this.liveObjectDetectionBoxStyle(detection);
+    const topPercent = this.liveObjectDetectionOverlayHeightVp > 0 ?
+      style.top * 100 / this.liveObjectDetectionOverlayHeightVp : 0;
     return objectDetectionLiveLabelOffset(
-      this.objectDetectionBoxStyle(detection).top,
+      topPercent,
       this.liveObjectDetectionOverlayHeightVp
+    );
+  }
+
+  private liveObjectDetectionBoxStyle(detection: ObjectDetection): ObjectDetectionLiveOverlayBox {
+    return objectDetectionLiveOverlayBox(
+      detection,
+      this.objectDetectionImageWidth,
+      this.objectDetectionImageHeight,
+      this.liveObjectDetectionOverlayWidthVp,
+      this.liveObjectDetectionOverlayHeightVp,
+      this.liveCameraPreviewRotationDegrees
     );
   }
 
@@ -2873,11 +2986,11 @@ struct FeatureRuntimePage {
           y: this.liveObjectDetectionLabelOffset(detection).y
         })
     }
-    .width(this.percentLength(this.objectDetectionBoxStyle(detection).width))
-    .height(this.percentLength(this.objectDetectionBoxStyle(detection).height))
+    .width(this.liveObjectDetectionBoxStyle(detection).width)
+    .height(this.liveObjectDetectionBoxStyle(detection).height)
     .position({
-      x: this.percentLength(this.objectDetectionBoxStyle(detection).left),
-      y: this.percentLength(this.objectDetectionBoxStyle(detection).top)
+      x: this.liveObjectDetectionBoxStyle(detection).left,
+      y: this.liveObjectDetectionBoxStyle(detection).top
     })
   }
 
@@ -3421,7 +3534,9 @@ struct FeatureRuntimePage {
       .layoutWeight(1)
       .backgroundColor('#111827')
       .onAreaChange((_previousArea: Area, currentArea: Area) => {
+        const width = Number(currentArea.width);
         const height = Number(currentArea.height);
+        this.liveObjectDetectionOverlayWidthVp = Number.isFinite(width) && width > 0 ? width : 0;
         this.liveObjectDetectionOverlayHeightVp = Number.isFinite(height) && height > 0 ? height : 0;
       })
     }

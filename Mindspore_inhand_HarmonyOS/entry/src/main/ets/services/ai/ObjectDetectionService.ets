@@ -68,6 +68,13 @@ export interface ObjectDetectionBoxPercent {
   readonly height: number;
 }
 
+export interface ObjectDetectionLiveOverlayBox {
+  readonly left: number;
+  readonly top: number;
+  readonly width: number;
+  readonly height: number;
+}
+
 export interface ObjectDetectionLiveLabelOffset {
   readonly x: number;
   readonly y: number;
@@ -682,6 +689,72 @@ export function objectDetectionBoxPercent(
     width: Math.max(0, right - left),
     height: Math.max(0, bottom - top)
   };
+}
+
+export function objectDetectionLiveOverlayBox(
+  detection: ObjectDetection,
+  imageWidth: number,
+  imageHeight: number,
+  overlayWidth: number,
+  overlayHeight: number,
+  previewRotationDegrees: number
+): ObjectDetectionLiveOverlayBox {
+  if (imageWidth <= 0 || imageHeight <= 0 || overlayWidth <= 0 || overlayHeight <= 0) {
+    return { left: 0, top: 0, width: 0, height: 0 };
+  }
+
+  const left = Math.min(imageWidth, Math.max(0, Math.min(detection.left, detection.right)));
+  const top = Math.min(imageHeight, Math.max(0, Math.min(detection.top, detection.bottom)));
+  const right = Math.min(imageWidth, Math.max(0, Math.max(detection.left, detection.right)));
+  const bottom = Math.min(imageHeight, Math.max(0, Math.max(detection.top, detection.bottom)));
+  const rotation = normalizedObjectDetectionPreviewRotation(previewRotationDegrees);
+  let rotatedWidth = imageWidth;
+  let rotatedHeight = imageHeight;
+  let rotatedLeft = left;
+  let rotatedTop = top;
+  let rotatedRight = right;
+  let rotatedBottom = bottom;
+  if (rotation === 90) {
+    rotatedWidth = imageHeight;
+    rotatedHeight = imageWidth;
+    rotatedLeft = imageHeight - bottom;
+    rotatedTop = left;
+    rotatedRight = imageHeight - top;
+    rotatedBottom = right;
+  } else if (rotation === 180) {
+    rotatedLeft = imageWidth - right;
+    rotatedTop = imageHeight - bottom;
+    rotatedRight = imageWidth - left;
+    rotatedBottom = imageHeight - top;
+  } else if (rotation === 270) {
+    rotatedWidth = imageHeight;
+    rotatedHeight = imageWidth;
+    rotatedLeft = top;
+    rotatedTop = imageWidth - right;
+    rotatedRight = bottom;
+    rotatedBottom = imageWidth - left;
+  }
+
+  const scale = Math.min(overlayWidth / rotatedWidth, overlayHeight / rotatedHeight);
+  const offsetX = (overlayWidth - rotatedWidth * scale) / 2;
+  const offsetY = (overlayHeight - rotatedHeight * scale) / 2;
+  return {
+    left: offsetX + rotatedLeft * scale,
+    top: offsetY + rotatedTop * scale,
+    width: Math.max(0, (rotatedRight - rotatedLeft) * scale),
+    height: Math.max(0, (rotatedBottom - rotatedTop) * scale)
+  };
+}
+
+export function shouldLogObjectDetectionLiveFrame(frameId: number, resultOk: boolean = true): boolean {
+  return frameId > 0 && (!resultOk || frameId <= 8 || frameId % 10 === 0);
+}
+
+function normalizedObjectDetectionPreviewRotation(rotationDegrees: number): number {
+  if (rotationDegrees === 90 || rotationDegrees === 180 || rotationDegrees === 270) {
+    return rotationDegrees;
+  }
+  return 0;
 }
 
 export function objectDetectionLiveLabelOffset(
