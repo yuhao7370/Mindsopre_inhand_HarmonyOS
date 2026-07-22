@@ -106,6 +106,10 @@ import {
 } from '../features/runtime/RuntimePixelMapOwner';
 import { RuntimeRequestGeneration } from '../features/runtime/RuntimeRequestGeneration';
 import {
+  LiveGestureResultState,
+  projectLiveGestureResult
+} from '../features/runtime/LiveGestureResultProjector';
+import {
   AiRunInputs,
   AiRunResult,
   AiRunResultRow,
@@ -1532,6 +1536,13 @@ struct FeatureRuntimePage {
   }
 
   private updateGesturePreview(result: AiRunResult): void {
+    if (shouldShowLiveGestureCameraOverlay(workflowForRoute(this.routeName))) {
+      const state = projectLiveGestureResult(result, this.liveRuntimeGeneration, this.liveRuntimeGeneration);
+      if (state !== undefined) {
+        this.applyLiveGestureResultState(state);
+      }
+      return;
+    }
     const data = result.data;
     if (data === undefined || data.kind !== 'gesture' || data.result.gestures.length === 0) {
       return;
@@ -1542,6 +1553,18 @@ struct FeatureRuntimePage {
     this.gestureDetections = data.result.gestures;
     this.gestureImageWidth = data.result.imageWidth ?? this.gestureSourceWidth(data.result.gestures);
     this.gestureImageHeight = data.result.imageHeight ?? this.gestureSourceHeight(data.result.gestures);
+  }
+
+  private applyLiveGestureResultState(state: LiveGestureResultState): void {
+    this.gestureImageUri = state.imageUri;
+    this.gestureDetections = state.detections;
+    this.gestureImageWidth = state.imageWidth;
+    this.gestureImageHeight = state.imageHeight;
+    if (state.imageUri.length > 0) {
+      this.updateGestureImageOrientation(state.imageUri);
+    } else {
+      this.gestureImageOrientation = ImageRotateOrientation.UP;
+    }
   }
 
   private updateSceneOverlay(result: AiRunResult): void {

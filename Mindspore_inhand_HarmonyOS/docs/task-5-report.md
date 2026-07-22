@@ -26,6 +26,14 @@ views without weakening the input-size contract.
   3 with score `0.9031183391820973` and box IoU `0.9999774151087018`; the gray
   fixture decoded to zero detections. Repeated positive inference was bitwise
   deterministic and all output values were finite.
+- The same real Four and gray MNN results were then published consecutively
+  through the production live-result projector. The current generation changed
+  from one scored Four rectangle to an empty image/detection state, while a
+  stale-generation empty result was rejected. The device log records
+  `gesture-live-transition=four->empty stale-overlay=false stale-score=false`.
+- LocalUnit drives `LiveRuntimeLoopService` and `DefaultAiService` over the same
+  fixture sequence and asserts the page-facing state changes from Four to empty
+  dimensions, URI, detections, overlay, and score.
 - Fixture, license, hash, model-manifest, native ABI/contract, and HAP payload
   guards passed, including their negative mutation cases.
 - Fresh `hvigorw test --no-daemon` and the final ARM64
@@ -51,6 +59,8 @@ clears visual state before each frame and again before publishing a current
 result, so an empty frame cannot retain an earlier positive overlay.
 
 DevEco Studio exposed the host UVC feed but no native still-image or video
-injection path. A physical live positive-to-empty transition is therefore not
-claimed. No arm64 physical-device run is claimed; the final tracked arm64 HAP
-and native payloads were built and verified exactly.
+injection path. A physical-camera hand transition is therefore not claimed;
+the production live publication transition is instead covered deterministically
+with the licensed real MNN positive and negative results above. No arm64
+physical-device run is claimed; the final tracked arm64 HAP and native payloads
+were built and verified exactly.

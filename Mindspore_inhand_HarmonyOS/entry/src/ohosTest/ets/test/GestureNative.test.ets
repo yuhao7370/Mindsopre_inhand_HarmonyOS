@@ -16,6 +16,8 @@ import {
   decodeHmsGestureOutputs
 } from '../../../main/ets/services/ai/HmsGestureYoloDecoder';
 import { AndroidGestureModelDetection } from '../../../main/ets/services/ai/GestureService';
+import { AiRunResult } from '../../../main/ets/services/ai/AiService';
+import { projectLiveGestureResult } from '../../../main/ets/features/runtime/LiveGestureResultProjector';
 
 interface ExpectedGestureTensor {
   readonly name: string;
@@ -139,6 +141,45 @@ export default function gestureNativeTest() {
         );
         console.info(`gesture-solid-gray-count=${negativeDetections.length}`);
         expect(negativeDetections.length).assertEqual(0);
+
+        const generation = 42;
+        const positiveResult: AiRunResult = {
+          ok: true,
+          code: 'GESTURE_DETECTION_DONE',
+          aiMethod: 'detectGesture',
+          messageKey: 'feature_runtime_gesture_done',
+          detailText: 'fixture=four.jpg',
+          data: {
+            kind: 'gesture',
+            imageUri: 'fixtures/gesture/four.jpg',
+            result: {
+              ok: true,
+              gestures: [{ category: four!.category, label: 'Four', score: four!.score, rect: four!.rect }],
+              imageWidth: positive.width,
+              imageHeight: positive.height,
+              executionMs: 1
+            }
+          }
+        };
+        const emptyResult: AiRunResult = {
+          ok: false,
+          code: 'GESTURE_DETECTION_FAILED',
+          aiMethod: 'detectGesture',
+          messageKey: 'feature_runtime_gesture_failed',
+          detailText: 'fixture=solid_gray.png'
+        };
+        const positiveState = projectLiveGestureResult(positiveResult, generation, generation)!;
+        expect(positiveState.detections.length).assertEqual(1);
+        expect(positiveState.detections[0].category).assertEqual(3);
+        expect(positiveState.detections[0].score >= 0.85).assertTrue();
+        expect(projectLiveGestureResult(emptyResult, generation - 1, generation) === undefined).assertTrue();
+        const emptyState = projectLiveGestureResult(emptyResult, generation, generation)!;
+        expect(emptyState.generation).assertEqual(generation);
+        expect(emptyState.imageUri).assertEqual('');
+        expect(emptyState.detections.length).assertEqual(0);
+        expect(emptyState.imageWidth).assertEqual(0);
+        expect(emptyState.imageHeight).assertEqual(0);
+        console.info('gesture-live-transition=four->empty stale-overlay=false stale-score=false');
       } finally {
         session.release();
       }

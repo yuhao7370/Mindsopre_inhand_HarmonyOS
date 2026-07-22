@@ -572,6 +572,10 @@ import {
   shouldCaptureLiveFrameImage
 } from '../main/ets/services/camera/LiveCameraService';
 import {
+  LiveGestureResultState,
+  projectLiveGestureResult
+} from '../main/ets/features/runtime/LiveGestureResultProjector';
+import {
   allExperienceFeatures,
   FeatureItem,
   FeatureSection,
@@ -2128,6 +2132,23 @@ class RecordingLiveCameraPreviewDriver implements LiveCameraPreviewDriver {
   }
 }
 
+class SequenceGestureRunner implements GestureRunner {
+  readonly seenImageUris: Array<string> = [];
+  private readonly results: Array<GestureResult>;
+  private nextResult: number = 0;
+
+  constructor(results: Array<GestureResult>) {
+    this.results = results;
+  }
+
+  async detectGesture(imageUri: string): Promise<GestureResult> {
+    this.seenImageUris.push(imageUri);
+    const result = this.results[Math.min(this.nextResult, this.results.length - 1)];
+    this.nextResult += 1;
+    return result;
+  }
+}
+
 class RecordingStyleTransferMnnRuntime implements StyleTransferMnnRuntime {
   readonly loadedPredictByteLengths: Array<number> = [];
   readonly loadedTransferByteLengths: Array<number> = [];
@@ -2315,6 +2336,52 @@ class FixedObjectDetectionTensorRunner implements ObjectDetectionTensorRunner {
     this.seenByteLengths.push(inputBuffer.byteLength);
     this.seenModelUris.push(modelUri ?? '');
     return this.output;
+  }
+}
+
+class LiveGestureAiFrameRunner implements LiveRuntimeFrameRunner {
+  private readonly service: DefaultAiService;
+  private readonly workflow: FeatureWorkflow;
+  private readonly imageUris: Array<string>;
+  private readonly generation: number;
+  private nextFrame: number = 0;
+  private completedFrames: number = 0;
+  private frameWaiters: Array<() => void> = [];
+  private latestState: LiveGestureResultState | undefined = undefined;
+
+  constructor(
+    service: DefaultAiService,
+    workflow: FeatureWorkflow,
+    imageUris: Array<string>,
+    generation: number
+  ) {
+    this.service = service;
+    this.workflow = workflow;
+    this.imageUris = imageUris;
+    this.generation = generation;
+  }
+
+  async runOnce(): Promise<void> {
+    const imageUri = this.imageUris[Math.min(this.nextFrame, this.imageUris.length - 1)];
+    this.nextFrame += 1;
+    const result = await this.service.run(this.workflow, { imageUri: imageUri });
+    const state = projectLiveGestureResult(result, this.generation, this.generation);
+    if (state !== undefined) {
+      this.latestState = state;
+    }
+    this.completedFrames += 1;
+    this.frameWaiters.forEach((resolve: () => void) => resolve());
+    this.frameWaiters = [];
+  }
+
+  current(): LiveGestureResultState {
+    return this.latestState!;
+  }
+
+  async waitForFrameCount(count: number): Promise<void> {
+    while (this.completedFrames < count) {
+      await new Promise<void>((resolve: () => void) => this.frameWaiters.push(resolve));
+    }
   }
 }
 
@@ -10860,6 +10927,59 @@ export default function localUnitTest() {
 
       expect(scheduler.intervalMsValues[0]).assertEqual(1000);
       expect(runner.runCount).assertEqual(2);
+    });
+
+    it('liveGesturePublishesLicensedFourThenClearsOverlayAndScoreForGrayFrame', 0, async () => {
+      const scheduler = new ManualLiveRuntimeLoopScheduler();
+      const gestureRunner = new SequenceGestureRunner([
+        {
+          ok: true,
+          gestures: [{
+            category: 3,
+            label: 'Four',
+            score: 0.9031183391820973,
+            rect: { left: 242.214, top: 182.637, width: 41.648, height: 59.506 }
+          }],
+          imageWidth: 384,
+          imageHeight: 512,
+          executionMs: 1
+        },
+        { ok: false, gestures: [], imageWidth: 384, imageHeight: 512, executionMs: 1 }
+      ]);
+      const service = new DefaultAiService({
+        gestureService: new GestureService({ runner: gestureRunner })
+      });
+      const workflow = workflowForRoute(AppRoute.GESTURE_LIVE.name)!;
+      const loop = new LiveRuntimeLoopService(scheduler);
+      const frameRunner = new LiveGestureAiFrameRunner(
+        service,
+        workflow,
+        ['fixtures/gesture/four.jpg', 'fixtures/gesture/solid_gray.png'],
+        12
+      );
+
+      loop.start(liveRuntimeIntervalForAiMethod('detectGesture'), frameRunner);
+      await frameRunner.waitForFrameCount(1);
+      const positive = frameRunner.current();
+      expect(positive.generation).assertEqual(12);
+      expect(positive.imageUri).assertEqual('fixtures/gesture/four.jpg');
+      expect(positive.detections.length).assertEqual(1);
+      expect(positive.detections[0].category).assertEqual(3);
+      expect(positive.detections[0].score > 0).assertTrue();
+
+      await Promise.resolve();
+      scheduler.tick();
+      await frameRunner.waitForFrameCount(2);
+      const empty = frameRunner.current();
+      expect(empty.generation).assertEqual(12);
+      expect(empty.imageUri).assertEqual('');
+      expect(empty.detections.length).assertEqual(0);
+      expect(empty.imageWidth).assertEqual(0);
+      expect(empty.imageHeight).assertEqual(0);
+      expect(gestureRunner.seenImageUris.join(',')).assertEqual(
+        'fixtures/gesture/four.jpg,fixtures/gesture/solid_gray.png'
+      );
+      loop.stop();
     });
 
     it('liveRuntimeLoopSkipsReentryAndCancelsOnStop', 0, async () => {
