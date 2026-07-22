@@ -1,4 +1,3 @@
-import { application } from '@kit.AbilityKit';
 import { image } from '@kit.ImageKit';
 import { resourceManager } from '@kit.LocalizationKit';
 import { abilityDelegatorRegistry } from '@kit.TestKit';
@@ -13,8 +12,10 @@ import {
 import { gestureInputFromRgba } from '../../../main/ets/services/ai/HmsGesturePreprocessor';
 import {
   HmsGestureOutputTensor,
-  HmsGestureOutputs
+  HmsGestureOutputs,
+  decodeHmsGestureOutputs
 } from '../../../main/ets/services/ai/HmsGestureYoloDecoder';
+import { AndroidGestureModelDetection } from '../../../main/ets/services/ai/GestureService';
 
 interface ExpectedGestureTensor {
   readonly name: string;
@@ -27,12 +28,21 @@ const expectedGestureTensors: Array<ExpectedGestureTensor> = [
   { name: 'layer113-conv-hand', shape: [1, 60, 28, 28] }
 ];
 
-async function loadOpenPalmGestureInput(manager: resourceManager.ResourceManager): Promise<Float32Array> {
+interface GestureFixtureInput {
+  readonly input: Float32Array;
+  readonly width: number;
+  readonly height: number;
+}
+
+async function loadGestureInput(
+  manager: resourceManager.ResourceManager,
+  fixturePath: string
+): Promise<GestureFixtureInput> {
   let encoded: Uint8Array;
   try {
-    encoded = await manager.getRawFileContent('fixtures/gesture/open_palm.png');
+    encoded = await manager.getRawFileContent(fixturePath);
   } catch (_) {
-    throw new Error('Unable to load open-palm gesture fixture.');
+    throw new Error(`Unable to load gesture fixture ${fixturePath}.`);
   }
   const encodedBuffer = new ArrayBuffer(encoded.byteLength);
   new Uint8Array(encodedBuffer).set(encoded);
@@ -47,7 +57,11 @@ async function loadOpenPalmGestureInput(manager: resourceManager.ResourceManager
       const height = imageInfo.size.height;
       const rgbaBuffer = new ArrayBuffer(width * height * 4);
       await pixelMap.readPixelsToBuffer(rgbaBuffer);
-      return gestureInputFromRgba(new Uint8Array(rgbaBuffer), width, height);
+      return {
+        input: gestureInputFromRgba(new Uint8Array(rgbaBuffer), width, height),
+        width: width,
+        height: height
+      };
     } finally {
       await pixelMap.release();
     }
@@ -85,20 +99,12 @@ function assertExactFiniteOutputs(first: HmsGestureOutputs, second: HmsGestureOu
 
 export default function gestureNativeTest() {
   describe('GestureNativeTest', () => {
-    it('loadsRealModelAndProducesDeterministicFiniteOutputs', 0, async () => {
-      const appContext = abilityDelegatorRegistry.getAbilityDelegator().getAppContext();
-      let mainResourceManager: resourceManager.ResourceManager;
-      try {
-        mainResourceManager = (await application.createModuleContext(appContext, 'entry')).resourceManager;
-      } catch (error) {
-        throw new Error(`Unable to create entry module context. Cause: ${JSON.stringify(error)}`);
-      }
-      let testResourceManager: resourceManager.ResourceManager;
-      try {
-        testResourceManager = (await application.createModuleContext(appContext, 'entry_test')).resourceManager;
-      } catch (error) {
-        throw new Error(`Unable to create entry_test module context. Cause: ${JSON.stringify(error)}`);
-      }
+    it('detectsLicensedFourFixtureAndRejectsSolidGrayOnApi24', 0, async () => {
+      const applicationContext = abilityDelegatorRegistry.getAbilityDelegator()
+        .getAppContext()
+        .getApplicationContext();
+      const mainResourceManager = applicationContext.createModuleContext('entry').resourceManager;
+      const testResourceManager = applicationContext.createModuleContext('entry_test').resourceManager;
       const modelBytes = await mainResourceManager.getRawFileContent(hmsGestureModelRawfilePath);
       const session: HmsGestureNativeSession = await createHarmonyHmsGestureNativeSession();
       try {
@@ -106,14 +112,55 @@ export default function gestureNativeTest() {
         expect(modelInfo.inputName).assertEqual('data');
         expect(modelInfo.inputShape.join(',')).assertEqual('1,3,224,224');
 
-        const input = await loadOpenPalmGestureInput(testResourceManager);
-        expect(input.length).assertEqual(1 * 3 * 224 * 224);
-        const firstOutputs = await session.predict(input);
-        const secondOutputs = await session.predict(input);
+        const positive = await loadGestureInput(testResourceManager, 'fixtures/gesture/four.jpg');
+        expect(positive.input.length).assertEqual(1 * 3 * 224 * 224);
+        const backing = new Float32Array(positive.input.length + 2);
+        backing.set(positive.input, 1);
+        const positiveView = backing.subarray(1, positive.input.length + 1);
+        const firstOutputs = await session.predict(positiveView);
+        const secondOutputs = await session.predict(positiveView);
         assertExactFiniteOutputs(firstOutputs, secondOutputs);
+
+        const detections = decodeHmsGestureOutputs(firstOutputs, positive.width, positive.height, 0.6);
+        const four = detections.find((detection: AndroidGestureModelDetection) => detection.category === 3);
+        expect(four !== undefined).assertTrue();
+        const iou = rectangleIou(four!, 242.214, 182.637, 41.648, 59.506);
+        console.info(`gesture-four-score=${four!.score} iou=${iou} rect=${JSON.stringify(four!.rect)}`);
+        expect(four!.score >= 0.85).assertTrue();
+        expect(iou >= 0.9).assertTrue();
+
+        const negative = await loadGestureInput(testResourceManager, 'fixtures/gesture/solid_gray.png');
+        const negativeOutputs = await session.predict(negative.input);
+        const negativeDetections = decodeHmsGestureOutputs(
+          negativeOutputs,
+          negative.width,
+          negative.height,
+          0.6
+        );
+        console.info(`gesture-solid-gray-count=${negativeDetections.length}`);
+        expect(negativeDetections.length).assertEqual(0);
       } finally {
         session.release();
       }
     });
   });
+}
+
+function rectangleIou(
+  detection: AndroidGestureModelDetection,
+  left: number,
+  top: number,
+  width: number,
+  height: number
+): number {
+  const right = left + width;
+  const bottom = top + height;
+  const actual = detection.rect!;
+  const actualRight = actual.left + actual.width;
+  const actualBottom = actual.top + actual.height;
+  const intersectionWidth = Math.max(0, Math.min(actualRight, right) - Math.max(actual.left, left));
+  const intersectionHeight = Math.max(0, Math.min(actualBottom, bottom) - Math.max(actual.top, top));
+  const intersection = intersectionWidth * intersectionHeight;
+  const union = actual.width * actual.height + width * height - intersection;
+  return union > 0 ? intersection / union : 0;
 }

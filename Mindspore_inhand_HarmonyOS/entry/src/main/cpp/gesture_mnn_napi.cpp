@@ -271,22 +271,34 @@ napi_value PredictImpl(napi_env env, napi_callback_info callbackInfo)
     napi_value argument = nullptr;
     bool isTypedArray = false;
     napi_typedarray_type type;
-    size_t length = 0;
+    size_t reportedLength = 0;
     void* data = nullptr;
+    napi_value backing = nullptr;
+    size_t byteOffset = 0;
+    napi_value lengthValue = nullptr;
+    uint32_t visibleLength = 0;
+    void* backingData = nullptr;
+    size_t backingBytes = 0;
     if (napi_get_cb_info(env, callbackInfo, &argc, &argument, nullptr, nullptr) != napi_ok || argc != 1 ||
         napi_is_typedarray(env, argument, &isTypedArray) != napi_ok || !isTypedArray ||
-        napi_get_typedarray_info(env, argument, &type, &length, &data, nullptr, nullptr) != napi_ok ||
+        napi_get_typedarray_info(env, argument, &type, &reportedLength, &data, &backing, &byteOffset) != napi_ok ||
+        napi_get_named_property(env, argument, "length", &lengthValue) != napi_ok ||
+        napi_get_value_uint32(env, lengthValue, &visibleLength) != napi_ok ||
+        napi_get_arraybuffer_info(env, backing, &backingData, &backingBytes) != napi_ok ||
         type != napi_float32_array) {
         return RejectBeforeQueue(env, deferred, promise, "predict expects one Float32Array.");
     }
-    if (length != kInputElementCount) {
+    // ponytail: API24 reports typed-array metadata in bytes; validate the JS view and its backing store.
+    if (visibleLength != kInputElementCount ||
+        (reportedLength != visibleLength && reportedLength != visibleLength * sizeof(float)) ||
+        byteOffset > backingBytes || visibleLength > (backingBytes - byteOffset) / sizeof(float) || data == nullptr) {
         return RejectBeforeQueue(env, deferred, promise, "Gesture input must contain exactly 150528 float32 values.");
     }
 
     auto work = std::make_unique<PredictWork>();
     work->deferred = deferred;
     const float* values = static_cast<const float*>(data);
-    work->input.assign(values, values + length);
+    work->input.assign(values, values + kInputElementCount);
     napi_value resourceName = String(env, "gesture_mnn_predict");
     napi_status status = napi_create_async_work(env, nullptr, resourceName, ExecutePredict, CompletePredict, work.get(),
                                                 &work->work);

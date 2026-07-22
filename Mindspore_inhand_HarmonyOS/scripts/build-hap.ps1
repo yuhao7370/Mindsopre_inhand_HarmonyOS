@@ -60,6 +60,8 @@ $env:PATH = (Join-Path $devEcoRoot 'jbr\bin') + ';' + $env:PATH
 & (Join-Path $PSScriptRoot 'test-style-transfer-model-pair-publisher.ps1')
 & (Join-Path $PSScriptRoot 'check-object-detection-fixture-license.ps1')
 & (Join-Path $PSScriptRoot 'test-object-detection-fixture-license-guard.ps1')
+& (Join-Path $PSScriptRoot 'check-gesture-fixtures.ps1')
+& (Join-Path $PSScriptRoot 'test-gesture-fixtures-guard.ps1')
 & (Join-Path $PSScriptRoot 'check-object-detection-native-safety.ps1')
 & (Join-Path $PSScriptRoot 'verify-segmentation-model.ps1')
 & (Join-Path $PSScriptRoot 'check-segmentation-save-readiness.ps1')
