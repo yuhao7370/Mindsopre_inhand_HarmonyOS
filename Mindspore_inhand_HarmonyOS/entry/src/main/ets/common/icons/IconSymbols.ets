@@ -72,31 +72,31 @@ export function iconLabel(token: string): string {
 export function iconMediaName(token: string): string {
   switch (token) {
     case 'people':
-      return 'btn_posenet';
+      return 'feature_posenet';
     case 'image':
-      return 'btn_segment';
+      return 'feature_segmentation';
     case 'grid':
-      return 'btn_classification';
+      return 'feature_classification';
     case 'hand':
-      return 'btn_gesture_recognition';
+      return 'feature_gesture';
     case 'dance':
-      return 'btn_scene';
+      return 'feature_dance';
     case 'poetry':
-      return 'btn_intelligent_poetry';
+      return 'feature_poetry';
     case 'text':
-      return 'btn_text_extraction';
+      return 'feature_text_extraction';
     case 'translate':
-      return 'btn_text_translation';
+      return 'feature_translation';
     case 'scene':
-      return 'btn_scene';
+      return 'feature_scene';
     case 'photo':
-      return 'btn_test';
+      return 'feature_object_photo';
     case 'camera':
-      return 'btn_video';
+      return 'feature_object_camera';
     case 'style':
-      return 'btn_style';
+      return 'feature_style_transfer';
     case 'model':
-      return 'btn_test';
+      return 'feature_custom_model';
     case 'share':
       return 'me_share';
     case 'qr':
@@ -121,31 +121,31 @@ export function iconMediaName(token: string): string {
 export function iconMediaResource(token: string): Resource | undefined {
   switch (token) {
     case 'people':
-      return $r('app.media.btn_posenet');
+      return $r('app.media.feature_posenet');
     case 'image':
-      return $r('app.media.btn_segment');
+      return $r('app.media.feature_segmentation');
     case 'grid':
-      return $r('app.media.btn_classification');
+      return $r('app.media.feature_classification');
     case 'hand':
-      return $r('app.media.btn_gesture_recognition');
+      return $r('app.media.feature_gesture');
     case 'dance':
-      return $r('app.media.btn_scene');
+      return $r('app.media.feature_dance');
     case 'poetry':
-      return $r('app.media.btn_intelligent_poetry');
+      return $r('app.media.feature_poetry');
     case 'text':
-      return $r('app.media.btn_text_extraction');
+      return $r('app.media.feature_text_extraction');
     case 'translate':
-      return $r('app.media.btn_text_translation');
+      return $r('app.media.feature_translation');
     case 'scene':
-      return $r('app.media.btn_scene');
+      return $r('app.media.feature_scene');
     case 'photo':
-      return $r('app.media.btn_test');
+      return $r('app.media.feature_object_photo');
     case 'camera':
-      return $r('app.media.btn_video');
+      return $r('app.media.feature_object_camera');
     case 'style':
-      return $r('app.media.btn_style');
+      return $r('app.media.feature_style_transfer');
     case 'model':
-      return $r('app.media.btn_test');
+      return $r('app.media.feature_custom_model');
     case 'share':
       return $r('app.media.me_share');
     case 'qr':

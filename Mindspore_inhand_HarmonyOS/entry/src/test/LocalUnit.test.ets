@@ -2496,35 +2496,43 @@ export default function localUnitTest() {
         .map((section) => section.items.length)
         .reduce((sum, count) => sum + count, 0);
       const scene = allExperienceFeatures.find((item: FeatureItem) => item.id === 'scene');
+      const custom = allExperienceFeatures.find((item: FeatureItem) => item.id === 'custom');
       const visibleSceneCount = visibleExperienceSections
         .map((section) => section.items.filter((item: FeatureItem) => item.id === 'scene').length)
         .reduce((sum, count) => sum + count, 0);
-      expect(visibleCount).assertEqual(10);
+      expect(visibleCount).assertEqual(9);
       expect(allExperienceFeatures.length).assertEqual(13);
       expect(scene === undefined).assertFalse();
       expect(scene?.visibleByDefault).assertFalse();
+      expect(custom?.visibleByDefault).assertFalse();
       expect(visibleSceneCount).assertEqual(0);
     });
 
-    it('mapsExperienceFeatureIconsToAndroidDrawableMedia', 0, () => {
+    it('mapsExperienceFeaturesToGeneratedMedia', 0, () => {
       const missingIconFeatures = allExperienceFeatures
         .filter((item: FeatureItem) => iconMediaName(item.icon).length === 0)
         .map((item: FeatureItem) => item.id)
         .join(',');
+      const featureIconNames = allExperienceFeatures
+        .map((item: FeatureItem) => iconMediaName(item.icon));
+      const duplicateIconNames = featureIconNames.filter((name: string, index: number) => {
+        return featureIconNames.indexOf(name) !== index;
+      });
       expect(missingIconFeatures).assertEqual('');
-      expect(iconMediaName('people')).assertEqual('btn_posenet');
-      expect(iconMediaName('image')).assertEqual('btn_segment');
-      expect(iconMediaName('grid')).assertEqual('btn_classification');
-      expect(iconMediaName('hand')).assertEqual('btn_gesture_recognition');
-      expect(iconMediaName('dance')).assertEqual('btn_scene');
-      expect(iconMediaName('poetry')).assertEqual('btn_intelligent_poetry');
-      expect(iconMediaName('text')).assertEqual('btn_text_extraction');
-      expect(iconMediaName('translate')).assertEqual('btn_text_translation');
-      expect(iconMediaName('scene')).assertEqual('btn_scene');
-      expect(iconMediaName('photo')).assertEqual('btn_test');
-      expect(iconMediaName('camera')).assertEqual('btn_video');
-      expect(iconMediaName('style')).assertEqual('btn_style');
-      expect(iconMediaName('model')).assertEqual('btn_test');
+      expect(duplicateIconNames.join(',')).assertEqual('');
+      expect(iconMediaName('people')).assertEqual('feature_posenet');
+      expect(iconMediaName('image')).assertEqual('feature_segmentation');
+      expect(iconMediaName('grid')).assertEqual('feature_classification');
+      expect(iconMediaName('hand')).assertEqual('feature_gesture');
+      expect(iconMediaName('dance')).assertEqual('feature_dance');
+      expect(iconMediaName('poetry')).assertEqual('feature_poetry');
+      expect(iconMediaName('text')).assertEqual('feature_text_extraction');
+      expect(iconMediaName('translate')).assertEqual('feature_translation');
+      expect(iconMediaName('scene')).assertEqual('feature_scene');
+      expect(iconMediaName('photo')).assertEqual('feature_object_photo');
+      expect(iconMediaName('camera')).assertEqual('feature_object_camera');
+      expect(iconMediaName('style')).assertEqual('feature_style_transfer');
+      expect(iconMediaName('model')).assertEqual('feature_custom_model');
     });
 
     it('definesCollegeAndMeRows', 0, () => {
