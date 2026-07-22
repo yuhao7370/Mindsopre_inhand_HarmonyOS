@@ -2,343 +2,294 @@
   "archive": {
     "cacheKey": "ARCHIVE_SHA256",
     "file": "translation-models.tar.xz",
-    "sha256": "aecc2672dbf648f766456e86559da8858f2c1444a4e693398300dd4982a4a417",
-    "size": 24999896
+    "maxArchiveBytes": 159383552,
+    "maxTarBytes": 218103808,
+    "sha256": "d2ea08df3c6633b2d9ebce11a11e75ce70245ef85dee67235d749dd49ab01e00",
+    "size": 151835260,
+    "tarSha256": "867be1dff1c384204bacbc164b731222c63a0fc566709742d3db6d4b32bfe17b",
+    "tarSize": 204933120
   },
-  "graphs": [
-    {
-      "file": "encoder.ms",
-      "inputs": [
-        {
-          "dtype": "INT32",
-          "name": "input_ids",
-          "shape": [
-            1,
-            128
-          ]
+  "directions": {
+    "en": {
+      "generation": {
+        "numBeams": 1,
+        "sourceMaxTokens": 128,
+        "sourcePrefix": "",
+        "sourcePrefixTokenId": -1,
+        "strategy": "greedy",
+        "targetMaxTokens": 32
+      },
+      "graphBytes": 37363640,
+      "graphs": {
+        "decoderFull": {
+          "file": "zh-en/decoder_full.ms",
+          "inputs": [
+            {
+              "dtype": "INT32",
+              "name": "decoder_input_ids",
+              "shape": [
+                1,
+                32
+              ]
+            },
+            {
+              "dtype": "INT32",
+              "name": "decoder_attention_mask",
+              "shape": [
+                1,
+                32
+              ]
+            },
+            {
+              "dtype": "FLOAT32",
+              "name": "encoder_hidden_states",
+              "shape": [
+                1,
+                128,
+                256
+              ]
+            },
+            {
+              "dtype": "INT32",
+              "name": "encoder_attention_mask",
+              "shape": [
+                1,
+                128
+              ]
+            }
+          ],
+          "outputs": [
+            {
+              "dtype": "FLOAT32",
+              "name": "logits",
+              "shape": [
+                1,
+                32,
+                32001
+              ]
+            }
+          ],
+          "sha256": "8dc03af96ac9f7bf9efb37ffcc42a0034f5305810a0059cd7c3cb66e48a3550d",
+          "size": 21247904
         },
-        {
-          "dtype": "INT32",
-          "name": "attention_mask",
-          "shape": [
-            1,
-            128
-          ]
+        "encoder": {
+          "file": "zh-en/encoder.ms",
+          "inputs": [
+            {
+              "dtype": "INT32",
+              "name": "input_ids",
+              "shape": [
+                1,
+                128
+              ]
+            },
+            {
+              "dtype": "INT32",
+              "name": "attention_mask",
+              "shape": [
+                1,
+                128
+              ]
+            }
+          ],
+          "outputs": [
+            {
+              "dtype": "FLOAT32",
+              "name": "last_hidden_state",
+              "shape": [
+                1,
+                128,
+                256
+              ]
+            }
+          ],
+          "sha256": "86a9272199af2b3699a3d873b69e5741de3e26da545de06180902df071ff91bb",
+          "size": 16115736
         }
-      ],
-      "outputs": [
-        {
-          "dtype": "FLOAT32",
-          "name": "last_hidden_state",
-          "shape": [
-            1,
-            128,
-            256
-          ]
+      },
+      "maxGraphBytes": 37748736,
+      "repository": "Helsinki-NLP/opus-mt_tiny_zho-eng",
+      "revision": "4ee3a9342aae4ca6fbae82c930b5dccff5dd68dd",
+      "sourceLanguage": "zh",
+      "targetLanguage": "en",
+      "tokenizers": {
+        "source": {
+          "decodeVocabularySize": 32001,
+          "file": "zh-en/tokenizer.ttok",
+          "modelSha256": "e5528a5c3685d08f8868902d31febeb763eea8519f9997f43b05964b02554640",
+          "pieceCount": 32000,
+          "sha256": "aeea44e624acfcdb7e1008e4699df68109b78745bc3c9cabf643fa2cb9ea151a",
+          "size": 6997099,
+          "specialTokens": {
+            "eos": "</s>",
+            "pad": "<pad>",
+            "unk": "<unk>"
+          },
+          "vocabularySha256": "13690d04e27310a43f0d879dfd38823c317e9ac69f436754baffbb0da6fc9dbe"
+        },
+        "target": {
+          "decodeVocabularySize": 32001,
+          "file": "zh-en/tokenizer.ttok",
+          "modelSha256": "e5528a5c3685d08f8868902d31febeb763eea8519f9997f43b05964b02554640",
+          "pieceCount": 32000,
+          "sha256": "aeea44e624acfcdb7e1008e4699df68109b78745bc3c9cabf643fa2cb9ea151a",
+          "size": 6997099,
+          "specialTokens": {
+            "eos": "</s>",
+            "pad": "<pad>",
+            "unk": "<unk>"
+          },
+          "vocabularySha256": "13690d04e27310a43f0d879dfd38823c317e9ac69f436754baffbb0da6fc9dbe"
         }
-      ],
-      "sha256": "e4bd063268c093e39b6782f01c34fa176fba699cee99f1a0678d5ee39cb8e8c2",
-      "size": 16038472
+      },
+      "vocabulary": {
+        "decoderStart": 32000,
+        "eos": 0,
+        "pad": 32000,
+        "size": 32001,
+        "unk": 1
+      }
     },
-    {
-      "file": "decoder_prefill.ms",
-      "inputs": [
-        {
-          "dtype": "INT32",
-          "name": "decoder_input_ids",
-          "shape": [
-            1,
-            1
-          ]
+    "zh": {
+      "generation": {
+        "numBeams": 4,
+        "sourceMaxTokens": 128,
+        "sourcePrefix": ">>cmn_Hans<< ",
+        "sourcePrefixTokenId": 5,
+        "strategy": "beam",
+        "targetMaxTokens": 32
+      },
+      "graphBytes": 152333536,
+      "graphs": {
+        "decoderFull": {
+          "file": "en-zh/decoder_full.ms",
+          "inputs": [
+            {
+              "dtype": "INT32",
+              "name": "decoder_input_ids",
+              "shape": [
+                1,
+                32
+              ]
+            },
+            {
+              "dtype": "INT32",
+              "name": "decoder_attention_mask",
+              "shape": [
+                1,
+                32
+              ]
+            },
+            {
+              "dtype": "FLOAT32",
+              "name": "encoder_hidden_states",
+              "shape": [
+                1,
+                128,
+                512
+              ]
+            },
+            {
+              "dtype": "INT32",
+              "name": "encoder_attention_mask",
+              "shape": [
+                1,
+                128
+              ]
+            }
+          ],
+          "outputs": [
+            {
+              "dtype": "FLOAT32",
+              "name": "logits",
+              "shape": [
+                1,
+                32,
+                65001
+              ]
+            }
+          ],
+          "sha256": "5046af7b4311c14676d099e6cd01839f9c3b910d437184017797e972e559e66e",
+          "size": 97121896
         },
-        {
-          "dtype": "FLOAT32",
-          "name": "encoder_hidden_states",
-          "shape": [
-            1,
-            128,
-            256
-          ]
-        },
-        {
-          "dtype": "INT32",
-          "name": "encoder_attention_mask",
-          "shape": [
-            1,
-            128
-          ]
+        "encoder": {
+          "file": "en-zh/encoder.ms",
+          "inputs": [
+            {
+              "dtype": "INT32",
+              "name": "input_ids",
+              "shape": [
+                1,
+                128
+              ]
+            },
+            {
+              "dtype": "INT32",
+              "name": "attention_mask",
+              "shape": [
+                1,
+                128
+              ]
+            }
+          ],
+          "outputs": [
+            {
+              "dtype": "FLOAT32",
+              "name": "last_hidden_state",
+              "shape": [
+                1,
+                128,
+                512
+              ]
+            }
+          ],
+          "sha256": "4a1eae7e4b3600801b88df822bd42f786e9e34f715d12d0bac6454683599c5ee",
+          "size": 55211640
         }
-      ],
-      "outputs": [
-        {
-          "dtype": "FLOAT32",
-          "name": "logits",
-          "shape": [
-            1,
-            32003
-          ]
+      },
+      "maxGraphBytes": 154140672,
+      "repository": "Helsinki-NLP/opus-mt-en-zh",
+      "revision": "408d9bc410a388e1d9aef112a2daba955b945255",
+      "sourceLanguage": "en",
+      "targetLanguage": "zh",
+      "tokenizers": {
+        "source": {
+          "decodeVocabularySize": 0,
+          "file": "en-zh/source.ttok",
+          "modelSha256": "5775ddc9e3ff2fae91554da56468ad35ff56edaba870fea74447bc7234bfdaa8",
+          "pieceCount": 32000,
+          "sha256": "7b756617e38743f0544a31f622e4d67ed992c784905a742e895515e4e0fb5bbd",
+          "size": 6505151,
+          "specialTokens": {
+            "eos": "</s>",
+            "pad": "<pad>",
+            "unk": "<unk>"
+          },
+          "vocabularySha256": "f1832ca38f7aa158b9a944ff583e4901e6b37d9d4ad9241f03838e636e9cfb03"
         },
-        {
-          "dtype": "FLOAT32",
-          "name": "self_key_0",
-          "shape": [
-            1,
-            8,
-            1,
-            32
-          ]
-        },
-        {
-          "dtype": "FLOAT32",
-          "name": "self_value_0",
-          "shape": [
-            1,
-            8,
-            1,
-            32
-          ]
-        },
-        {
-          "dtype": "FLOAT32",
-          "name": "cross_key_0",
-          "shape": [
-            1,
-            8,
-            128,
-            32
-          ]
-        },
-        {
-          "dtype": "FLOAT32",
-          "name": "cross_value_0",
-          "shape": [
-            1,
-            8,
-            128,
-            32
-          ]
-        },
-        {
-          "dtype": "FLOAT32",
-          "name": "self_key_1",
-          "shape": [
-            1,
-            8,
-            1,
-            32
-          ]
-        },
-        {
-          "dtype": "FLOAT32",
-          "name": "self_value_1",
-          "shape": [
-            1,
-            8,
-            1,
-            32
-          ]
-        },
-        {
-          "dtype": "FLOAT32",
-          "name": "cross_key_1",
-          "shape": [
-            1,
-            8,
-            128,
-            32
-          ]
-        },
-        {
-          "dtype": "FLOAT32",
-          "name": "cross_value_1",
-          "shape": [
-            1,
-            8,
-            128,
-            32
-          ]
+        "target": {
+          "decodeVocabularySize": 65001,
+          "file": "en-zh/target.ttok",
+          "modelSha256": "81dc94efa84e4025ef38d25d5d07429fe41e3eb29d44003f1db6fe98487b0052",
+          "pieceCount": 0,
+          "sha256": "e49d670ca70e0644d25006f4734493f8a46d780dbd503bcd6ece164e99d6594d",
+          "size": 1726006,
+          "specialTokens": {
+            "eos": "</s>",
+            "pad": "<pad>",
+            "unk": "<unk>"
+          },
+          "vocabularySha256": "f1832ca38f7aa158b9a944ff583e4901e6b37d9d4ad9241f03838e636e9cfb03"
         }
-      ],
-      "sha256": "0927edbe925264a51db1d5c189978910e20d49566033d172c1cc7291b8b3124f",
-      "size": 21139792
-    },
-    {
-      "file": "decoder_step.ms",
-      "inputs": [
-        {
-          "dtype": "INT32",
-          "name": "decoder_input_ids",
-          "shape": [
-            1,
-            1
-          ]
-        },
-        {
-          "dtype": "INT32",
-          "name": "position_id",
-          "shape": [
-            1
-          ]
-        },
-        {
-          "dtype": "INT32",
-          "name": "self_attention_mask",
-          "shape": [
-            1,
-            128
-          ]
-        },
-        {
-          "dtype": "INT32",
-          "name": "cross_attention_mask",
-          "shape": [
-            1,
-            128
-          ]
-        },
-        {
-          "dtype": "FLOAT32",
-          "name": "past_key_0",
-          "shape": [
-            1,
-            8,
-            127,
-            32
-          ]
-        },
-        {
-          "dtype": "FLOAT32",
-          "name": "past_value_0",
-          "shape": [
-            1,
-            8,
-            127,
-            32
-          ]
-        },
-        {
-          "dtype": "FLOAT32",
-          "name": "cross_key_0",
-          "shape": [
-            1,
-            8,
-            128,
-            32
-          ]
-        },
-        {
-          "dtype": "FLOAT32",
-          "name": "cross_value_0",
-          "shape": [
-            1,
-            8,
-            128,
-            32
-          ]
-        },
-        {
-          "dtype": "FLOAT32",
-          "name": "past_key_1",
-          "shape": [
-            1,
-            8,
-            127,
-            32
-          ]
-        },
-        {
-          "dtype": "FLOAT32",
-          "name": "past_value_1",
-          "shape": [
-            1,
-            8,
-            127,
-            32
-          ]
-        },
-        {
-          "dtype": "FLOAT32",
-          "name": "cross_key_1",
-          "shape": [
-            1,
-            8,
-            128,
-            32
-          ]
-        },
-        {
-          "dtype": "FLOAT32",
-          "name": "cross_value_1",
-          "shape": [
-            1,
-            8,
-            128,
-            32
-          ]
-        }
-      ],
-      "outputs": [
-        {
-          "dtype": "FLOAT32",
-          "name": "logits",
-          "shape": [
-            1,
-            32003
-          ]
-        },
-        {
-          "dtype": "FLOAT32",
-          "name": "new_key_0",
-          "shape": [
-            1,
-            8,
-            1,
-            32
-          ]
-        },
-        {
-          "dtype": "FLOAT32",
-          "name": "new_value_0",
-          "shape": [
-            1,
-            8,
-            1,
-            32
-          ]
-        },
-        {
-          "dtype": "FLOAT32",
-          "name": "new_key_1",
-          "shape": [
-            1,
-            8,
-            1,
-            32
-          ]
-        },
-        {
-          "dtype": "FLOAT32",
-          "name": "new_value_1",
-          "shape": [
-            1,
-            8,
-            1,
-            32
-          ]
-        }
-      ],
-      "sha256": "2fa18380d5a2e1480382e7d2fd72c02f9c844085767e605533526f1a5657a7e1",
-      "size": 20915064
+      },
+      "vocabulary": {
+        "decoderStart": 65000,
+        "eos": 0,
+        "pad": 65000,
+        "size": 65001,
+        "unk": 1
+      }
     }
-  ],
-  "schemaVersion": 1,
-  "vocabulary": {
-    "decoderStart": 32000,
-    "eos": 0,
-    "pad": 32000,
-    "size": 32003,
-    "toChinese": 32002,
-    "toEnglish": 32001,
-    "unk": 1
-  }
+  },
+  "schemaVersion": 2
 }

@@ -59,8 +59,8 @@
                                   },
                       "napi":  {
                                    "path":  "entry/libs/x86_64/libtranslation_archive.so",
-                                   "size":  250768,
-                                   "sha256":  "B351173BD5F1940BA5C7DA74E71CB21B8DD24671247C9FD95956D393FB2EB53A",
+                                   "size":  252464,
+                                   "sha256":  "47A5B6D3CAC30D74896D6C6F18C70D4AFF6E3DDC54EFA8FEC90A76C7483603A5",
                                    "elfClass":  "ELF64",
                                    "elfMachine":  "Advanced Micro Devices X86-64",
                                    "dynamicDependencies":  [
@@ -73,6 +73,6 @@
                   },
     "license":  {
                     "path":  "third_party/xz/COPYING",
-                      "sha256":  "1D2D9338D5C0620E34ADE2153730EFF686D07F02A42F889A33D659A30C41EAC1"
+                    "sha256":  "1D2D9338D5C0620E34ADE2153730EFF686D07F02A42F889A33D659A30C41EAC1"
                 }
 }

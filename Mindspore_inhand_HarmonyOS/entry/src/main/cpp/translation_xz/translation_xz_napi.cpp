@@ -106,8 +106,8 @@ TranslationArchiveRequest ParseRequest(napi_env env, napi_callback_info info)
     bool isArray = false;
     Check(env, napi_is_array(env, members, &isArray), "inspect members");
     uint32_t length = 0;
-    if (!isArray || napi_get_array_length(env, members, &length) != napi_ok || length != 3) {
-        throw std::invalid_argument("members must contain exactly three entries.");
+    if (!isArray || napi_get_array_length(env, members, &length) != napi_ok || length != 7) {
+        throw std::invalid_argument("members must contain exactly seven entries.");
     }
     request.members.reserve(length);
     for (uint32_t index = 0; index < length; ++index) {

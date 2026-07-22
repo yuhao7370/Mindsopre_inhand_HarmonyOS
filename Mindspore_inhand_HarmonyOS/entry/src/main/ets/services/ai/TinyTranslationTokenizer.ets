@@ -1,5 +1,6 @@
 const TOKENIZER_TABLE_VERSION = 'TTOK1';
 const TOKENIZER_TEST_TABLE_VERSION = 'TTOK1_TEST';
+const TOKENIZER_V2_TABLE_VERSION = 'TTOK2';
 const PINNED_MODEL_SHA256 = 'e5528a5c3685d08f8868902d31febeb763eea8519f9997f43b05964b02554640';
 
 export const TRANSLATION_EOS_ID: number = 0;
@@ -41,6 +42,15 @@ interface RuntimePiece {
   readonly text: string;
 }
 
+export interface TranslationTokenizerContract {
+  readonly modelSha256: string;
+  readonly vocabularySha256: string;
+  readonly vocabularySize: number;
+  readonly pieceCount: number;
+  readonly decodeVocabularySize: number;
+  readonly unknownId: number;
+}
+
 interface EncodedPieces {
   readonly normalized: string;
   readonly pieces: Array<string>;
@@ -62,16 +72,22 @@ class TranslationTokenizerRuntime {
   private readonly normalizationByFirstSymbol: Map<string, Array<NormalizationRule>>;
   private readonly normalPiecesByFirstSymbol: Map<string, Array<RuntimePiece>>;
   private readonly piecesById: Map<number, RuntimePiece>;
+  private readonly decodeTextById: Map<number, string>;
+  readonly vocabularySize: number;
 
   constructor(
     minimumScore: number,
     normalizationRules: Array<NormalizationRule>,
-    pieces: Array<RuntimePiece>
+    pieces: Array<RuntimePiece>,
+    decodeTextById?: Map<number, string>,
+    vocabularySize: number = 32001
   ) {
     this.minimumScore = minimumScore;
     this.normalizationByFirstSymbol = new Map<string, Array<NormalizationRule>>();
     this.normalPiecesByFirstSymbol = new Map<string, Array<RuntimePiece>>();
     this.piecesById = new Map<number, RuntimePiece>();
+    this.decodeTextById = decodeTextById ?? new Map<number, string>();
+    this.vocabularySize = vocabularySize;
     for (let index = 0; index < normalizationRules.length; index++) {
       const rule = normalizationRules[index];
       const first = firstUnicodeSymbol(rule.source);
@@ -258,7 +274,8 @@ class TranslationTokenizerRuntime {
       if (id === TRANSLATION_EOS_ID) {
         break;
       }
-      if (id === TRANSLATION_PAD_ID || id === TRANSLATION_TO_ENGLISH_ID || id === TRANSLATION_TO_CHINESE_ID) {
+      if (this.decodeTextById.size === 0 &&
+        (id === TRANSLATION_PAD_ID || id === TRANSLATION_TO_ENGLISH_ID || id === TRANSLATION_TO_CHINESE_ID)) {
         continue;
       }
       if (id === TRANSLATION_UNK_ID) {
@@ -266,17 +283,21 @@ class TranslationTokenizerRuntime {
         emittedPiece = true;
         continue;
       }
+      const vocabularyText = this.decodeTextById.get(id);
       const piece = this.piecesById.get(id);
-      if (piece === undefined) {
+      const text = vocabularyText ?? piece?.text;
+      if (text === undefined) {
         throw new Error(`Tokenizer piece ID ${id} is absent`);
       }
-      if (piece.type === CONTROL_PIECE_TYPE) {
+      if (piece !== undefined && piece.type === CONTROL_PIECE_TYPE) {
         continue;
       }
-      if (!emittedPiece && piece.text.startsWith(SENTENCEPIECE_SPACE)) {
+      if (text === '<pad>') continue;
+      if (text.startsWith('>>') && text.endsWith('<<')) continue;
+      if (!emittedPiece && text.startsWith(SENTENCEPIECE_SPACE)) {
         removeLeadingDummySpace = true;
       }
-      encoded += piece.text;
+      encoded += text;
       emittedPiece = true;
     }
     let decoded = encoded.split(SENTENCEPIECE_SPACE).join(' ');
@@ -288,6 +309,25 @@ class TranslationTokenizerRuntime {
 }
 
 let configuredRuntime: TranslationTokenizerRuntime | undefined = undefined;
+let configuredSourceRuntime: TranslationTokenizerRuntime | undefined = undefined;
+let configuredTargetRuntime: TranslationTokenizerRuntime | undefined = undefined;
+
+export function configureTranslationTokenizers(
+  sourceTable: string,
+  targetTable: string,
+  sourceContract: TranslationTokenizerContract,
+  targetContract: TranslationTokenizerContract
+): void {
+  configuredSourceRuntime = parseRuntimeTableV2(sourceTable, sourceContract, true, sourceTable === targetTable);
+  configuredTargetRuntime = sourceTable === targetTable ? configuredSourceRuntime :
+    parseRuntimeTableV2(targetTable, targetContract, false, true);
+}
+
+export function configureTranslationTokenizersForTests(sourceTable: string, targetTable: string): void {
+  const source = parseRuntimeTableV2ForTests(sourceTable, true);
+  configuredSourceRuntime = source;
+  configuredTargetRuntime = sourceTable === targetTable ? source : parseRuntimeTableV2ForTests(targetTable, false);
+}
 
 export function configureTranslationTokenizer(runtimeTable: string): void {
   configuredRuntime = parseRuntimeTable(runtimeTable, false);
@@ -299,6 +339,47 @@ export function configureTranslationTokenizerForTests(runtimeTable: string): voi
 
 export function resetTranslationTokenizerForTests(): void {
   configuredRuntime = undefined;
+  configuredSourceRuntime = undefined;
+  configuredTargetRuntime = undefined;
+}
+
+export function encodeTranslationTextForDirection(
+  text: string,
+  _sourcePrefix: string,
+  sourcePrefixTokenId: number,
+  padId: number,
+  eosId: number
+): Array<TranslationChunk> {
+  const runtime = requireSourceRuntime();
+  const chunks: Array<TranslationChunk> = [];
+  const runs = splitPreservedNewlines(text);
+  let leadingSeparator = '';
+  for (let runIndex = 0; runIndex < runs.length; runIndex++) {
+    const run = runs[runIndex];
+    if (run.separator.length > 0) {
+      if (chunks.length > 0) appendSeparatorAfterV2(chunks, run.separator, padId, eosId);
+      else leadingSeparator += run.separator;
+    }
+    if (run.content.length === 0) continue;
+    const encodings = splitContentForDirection(runtime, run.content, sourcePrefixTokenId);
+    for (let index = 0; index < encodings.length; index++) {
+      const item = encodings[index];
+      chunks.push(createDirectionChunk(item.sourceText, item.encoded, sourcePrefixTokenId,
+        padId, eosId, leadingSeparator, ''));
+      leadingSeparator = '';
+    }
+  }
+  return chunks;
+}
+
+export function decodeTranslationTokensForDirection(ids: Array<number>, eosId: number, padId: number): string {
+  const runtime = requireTargetRuntime();
+  const filtered: Array<number> = [];
+  for (let index = 0; index < ids.length; index++) {
+    if (ids[index] === eosId) break;
+    if (ids[index] !== padId) filtered.push(ids[index]);
+  }
+  return runtime.decode(filtered);
 }
 
 export function encodeTranslationText(text: string, targetLanguage: string): Array<TranslationChunk> {
@@ -500,6 +581,188 @@ function appendSeparatorAfter(chunks: Array<TranslationChunk>, separator: string
   );
 }
 
+function splitContentForDirection(
+  runtime: TranslationTokenizerRuntime,
+  content: string,
+  sourcePrefixTokenId: number
+): Array<SourceEncoding> {
+  const capacity = TRANSLATION_MAX_TOKENS - 1 - (sourcePrefixTokenId >= 0 ? 1 : 0);
+  const chunks: Array<SourceEncoding> = [];
+  let remaining = content;
+  while (remaining.length > 0) {
+    const whole = runtime.encode(remaining);
+    if (whole.pieceIds.length <= capacity) {
+      if (whole.pieceIds.length > 0) chunks.push({ sourceText: remaining, encoded: whole });
+      break;
+    }
+    let cut = 0;
+    const groups: Array<string> = ['\u3002\uFF01\uFF1F\uFF1B', '.?!;', ' \t'];
+    for (let index = 0; index < groups.length && cut === 0; index++) {
+      cut = lastFittingDirectionCut(runtime, remaining, groups[index], capacity, true);
+    }
+    if (cut === 0) cut = lastFittingDirectionCut(runtime, remaining, '', capacity, false);
+    if (cut === 0) throw new Error('Tokenizer cannot split source within 128 tokens');
+    const sourceText = remaining.substring(0, cut);
+    chunks.push({ sourceText: sourceText, encoded: runtime.encode(sourceText) });
+    remaining = remaining.substring(cut);
+  }
+  return chunks;
+}
+
+function lastFittingDirectionCut(
+  runtime: TranslationTokenizerRuntime,
+  text: string,
+  boundaries: string,
+  capacity: number,
+  filtered: boolean
+): number {
+  const cuts: Array<number> = [];
+  for (let index = 0; index < text.length;) {
+    const length = unicodeSymbolLengthAt(text, index);
+    const symbol = text.substring(index, index + length);
+    index += length;
+    if (!filtered || boundaries.indexOf(symbol) >= 0) cuts.push(index);
+  }
+  for (let index = cuts.length - 1; index >= 0; index--) {
+    const count = runtime.encode(text.substring(0, cuts[index])).pieceIds.length;
+    if (count > 0 && count <= capacity) return cuts[index];
+  }
+  return 0;
+}
+
+function createDirectionChunk(
+  sourceText: string,
+  encoded: EncodedPieces,
+  sourcePrefixTokenId: number,
+  padId: number,
+  eosId: number,
+  separatorBefore: string,
+  separatorAfter: string
+): TranslationChunk {
+  const ids = encoded.pieceIds;
+  const inputIds: Array<number> = [];
+  if (sourcePrefixTokenId >= 0) inputIds.push(sourcePrefixTokenId);
+  inputIds.push(...ids);
+  const attentionMask = new Array<number>(inputIds.length).fill(1);
+  inputIds.push(eosId);
+  attentionMask.push(1);
+  while (inputIds.length < TRANSLATION_MAX_TOKENS) {
+    inputIds.push(padId);
+    attentionMask.push(0);
+  }
+  return { sourceText: sourceText, normalized: encoded.normalized,
+    pieces: encoded.pieces, pieceIds: ids,
+    inputIds: inputIds, attentionMask: attentionMask,
+    separatorBefore: separatorBefore, separatorAfter: separatorAfter };
+}
+
+function appendSeparatorAfterV2(
+  chunks: Array<TranslationChunk>,
+  separator: string,
+  _padId: number,
+  _eosId: number
+): void {
+  const index = chunks.length - 1;
+  const last = chunks[index];
+  chunks[index] = { sourceText: last.sourceText, normalized: last.normalized,
+    pieces: last.pieces, pieceIds: last.pieceIds, inputIds: last.inputIds,
+    attentionMask: last.attentionMask, separatorBefore: last.separatorBefore,
+    separatorAfter: last.separatorAfter + separator };
+}
+
+function parseRuntimeTableV2ForTests(runtimeTable: string, requirePieces: boolean): TranslationTokenizerRuntime {
+  const header = runtimeTable.split('\n')[0].split('\t');
+  if (header.length !== 11 || header[0] !== TOKENIZER_V2_TABLE_VERSION) {
+    throw new Error('Tokenizer TTOK2 header is invalid');
+  }
+  return parseRuntimeTableV2(runtimeTable, {
+    modelSha256: header[1], vocabularySha256: header[2],
+    vocabularySize: parseDecimalInteger(header[3], 'vocabulary size'),
+    pieceCount: parseDecimalInteger(header[4], 'piece count'),
+    decodeVocabularySize: parseDecimalInteger(header[5], 'decode vocabulary size'),
+    unknownId: parseDecimalInteger(header[6], 'unknown ID')
+  }, requirePieces, !requirePieces || parseDecimalInteger(header[5], 'decode vocabulary size') > 0);
+}
+
+function parseRuntimeTableV2(
+  runtimeTable: string,
+  contract: TranslationTokenizerContract,
+  requirePieces: boolean,
+  requireVocabulary: boolean
+): TranslationTokenizerRuntime {
+  const lines = runtimeTable.split('\n');
+  const header = lines[0].split('\t');
+  if (header.length !== 11 || header[0] !== TOKENIZER_V2_TABLE_VERSION ||
+    header[1] !== contract.modelSha256 || header[2] !== contract.vocabularySha256) {
+    throw new Error('Tokenizer TTOK2 identity differs from manifest');
+  }
+  const vocabularySize = parseDecimalInteger(header[3], 'vocabulary size');
+  const pieceCount = parseDecimalInteger(header[4], 'piece count');
+  const decodeSize = parseDecimalInteger(header[5], 'decode vocabulary size');
+  const unknownId = parseDecimalInteger(header[6], 'unknown ID');
+  const minimumScore = Number(header[7]);
+  if (vocabularySize !== contract.vocabularySize || pieceCount !== contract.pieceCount ||
+    decodeSize !== contract.decodeVocabularySize || unknownId !== contract.unknownId ||
+    unknownId !== TRANSLATION_UNK_ID || !Number.isFinite(minimumScore) ||
+    header[8] !== '1' || header[9] !== '1' || header[10] !== '1' ||
+    (requirePieces && pieceCount === 0) || (requireVocabulary && decodeSize === 0)) {
+    throw new Error('Tokenizer TTOK2 contract differs from manifest');
+  }
+  const rules: Array<NormalizationRule> = [];
+  const ruleSources = new Set<string>();
+  const pieces: Array<RuntimePiece> = [];
+  const pieceTexts = new Set<string>();
+  const vocabulary = new Map<number, string>();
+  const vocabularyTexts = new Set<string>();
+  for (let lineIndex = 1; lineIndex < lines.length; lineIndex++) {
+    if (lines[lineIndex].length === 0) continue;
+    const fields = lines[lineIndex].split('\t');
+    if (fields[0] === 'N' && fields.length === 3) {
+      const source = decodeCodepoints(fields[1]);
+      const target = decodeCodepoints(fields[2]);
+      if (pieceCount === 0 || source.length === 0 || ruleSources.has(source)) {
+        throw new Error('Tokenizer TTOK2 normalization rule is invalid');
+      }
+      ruleSources.add(source); rules.push({ source: source, target: target }); continue;
+    }
+    if (fields[0] === 'P' && fields.length === 5) {
+      const id = parseDecimalInteger(fields[1], 'piece ID');
+      const score = Number(fields[2]);
+      const type = parseDecimalInteger(fields[3], 'piece type');
+      const text = decodeCodepoints(fields[4]);
+      if (id < 0 || id >= vocabularySize || !Number.isFinite(score) || text.length === 0 ||
+        pieceTexts.has(text) || (type !== NORMAL_PIECE_TYPE && type !== UNKNOWN_PIECE_TYPE &&
+        type !== CONTROL_PIECE_TYPE)) throw new Error('Tokenizer TTOK2 piece is invalid');
+      pieceTexts.add(text); pieces.push({ id: id, score: score, type: type, text: text }); continue;
+    }
+    if (fields[0] === 'V' && fields.length === 3) {
+      const id = parseDecimalInteger(fields[1], 'decode ID');
+      const text = decodeCodepoints(fields[2]);
+      if (id < 0 || id >= decodeSize || vocabulary.has(id) || vocabularyTexts.has(text) || text.length === 0) {
+        throw new Error('Tokenizer TTOK2 decode vocabulary is invalid');
+      }
+      vocabulary.set(id, text); vocabularyTexts.add(text); continue;
+    }
+    throw new Error(`Tokenizer TTOK2 line ${lineIndex + 1} is invalid`);
+  }
+  if (pieces.length !== pieceCount || vocabulary.size !== decodeSize) {
+    throw new Error('Tokenizer TTOK2 table row count differs from its header');
+  }
+  if (pieceCount > 0) {
+    let eosValid = false; let unknownValid = false;
+    for (let index = 0; index < pieces.length; index++) {
+      eosValid = eosValid || (pieces[index].id === 0 && pieces[index].type === CONTROL_PIECE_TYPE && pieces[index].text === '</s>');
+      unknownValid = unknownValid || (pieces[index].id === 1 && pieces[index].type === UNKNOWN_PIECE_TYPE && pieces[index].text === '<unk>');
+    }
+    if (!eosValid || !unknownValid || rules.length === 0) throw new Error('Tokenizer TTOK2 source specials are invalid');
+  }
+  if (decodeSize > 0 && (vocabulary.get(0) !== '</s>' || vocabulary.get(1) !== '<unk>' ||
+    vocabulary.get(vocabularySize - 1) !== '<pad>')) {
+    throw new Error('Tokenizer TTOK2 target specials are invalid');
+  }
+  return new TranslationTokenizerRuntime(minimumScore, rules, pieces, vocabulary, vocabularySize);
+}
+
 function parseRuntimeTable(runtimeTable: string, testProfile: boolean): TranslationTokenizerRuntime {
   const lines = runtimeTable.split('\n');
   if (lines.length < 3) {
@@ -690,4 +953,14 @@ function requireRuntime(): TranslationTokenizerRuntime {
     throw new Error('Translation tokenizer is not configured');
   }
   return configuredRuntime;
+}
+
+function requireSourceRuntime(): TranslationTokenizerRuntime {
+  if (configuredSourceRuntime === undefined) throw new Error('Translation source tokenizer is not configured');
+  return configuredSourceRuntime;
+}
+
+function requireTargetRuntime(): TranslationTokenizerRuntime {
+  if (configuredTargetRuntime === undefined) throw new Error('Translation target tokenizer is not configured');
+  return configuredTargetRuntime;
 }

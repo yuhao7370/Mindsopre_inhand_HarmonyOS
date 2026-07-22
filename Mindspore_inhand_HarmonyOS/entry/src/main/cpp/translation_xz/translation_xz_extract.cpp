@@ -20,8 +20,8 @@
 #include <unistd.h>
 
 namespace {
-constexpr uint64_t kMaxCompressedBytes = 32 * 1024 * 1024;
-constexpr uint64_t kMaxOutputBytes = 60 * 1024 * 1024;
+constexpr uint64_t kMaxCompressedBytes = 152 * 1024 * 1024;
+constexpr uint64_t kMaxOutputBytes = 208 * 1024 * 1024;
 constexpr uint64_t kLzmaMemoryLimit = 68 * 1024 * 1024;
 constexpr bool FitsOutputAddition(uint64_t accumulated, uint64_t member) noexcept
 {
@@ -37,9 +37,16 @@ static_assert(FitsOutputAddition(0, 1) && FitsOutputAddition(1, 1) &&
 static_assert(!FitsOutputAddition(kMaxOutputBytes, 1));
 constexpr size_t kTarBlockSize = 512;
 constexpr size_t kIoBufferSize = 64 * 1024;
-constexpr std::array<const char*, 3> kAllowedMembers = {
-    "encoder.ms", "decoder_prefill.ms", "decoder_step.ms"
+constexpr std::array<const char*, 7> kAllowedMembers = {
+    "zh-en/encoder.ms",
+    "zh-en/decoder_full.ms",
+    "zh-en/tokenizer.ttok",
+    "en-zh/encoder.ms",
+    "en-zh/decoder_full.ms",
+    "en-zh/source.ttok",
+    "en-zh/target.ttok"
 };
+constexpr std::array<const char*, 2> kAllowedDirectories = {"zh-en", "en-zh"};
 std::atomic<uint64_t> g_partialCounter{0};
 
 std::string ErrnoMessage(const std::string& action)
@@ -274,6 +281,13 @@ private:
         }
 
         const std::filesystem::path output = directory_ / name;
+        const std::filesystem::path parent = output.parent_path();
+        std::error_code error;
+        std::filesystem::create_directories(parent, error);
+        const auto parentStatus = std::filesystem::symlink_status(parent, error);
+        if (error || !std::filesystem::is_directory(parentStatus) || std::filesystem::is_symlink(parentStatus)) {
+            throw std::runtime_error("Cannot create safe translation member directory.");
+        }
         outputFd_ = open(output.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC | O_NOFOLLOW, 0600);
         if (outputFd_ < 0) { throw std::runtime_error(ErrnoMessage("Cannot create extracted model")); }
         memberDigest_ = std::make_unique<Sha256>();
@@ -343,13 +357,27 @@ bool VerifyCache(const std::filesystem::path& directory, const std::vector<Trans
     const auto status = std::filesystem::symlink_status(directory, error);
     if (error || !std::filesystem::is_directory(status) || std::filesystem::is_symlink(status)) { return false; }
     size_t count = 0;
-    for (const auto& entry : std::filesystem::directory_iterator(directory)) {
-        ++count;
+    std::filesystem::recursive_directory_iterator iterator(directory, error);
+    const std::filesystem::recursive_directory_iterator end;
+    if (error) { return false; }
+    for (; iterator != end; iterator.increment(error)) {
+        if (error) { return false; }
+        const auto& entry = *iterator;
         const auto entryStatus = entry.symlink_status(error);
-        if (error || !entry.is_regular_file(error) || error || std::filesystem::is_symlink(entryStatus)) { return false; }
-        const std::string name = entry.path().filename().string();
+        if (error || std::filesystem::is_symlink(entryStatus)) { return false; }
+        const std::string name = entry.path().lexically_relative(directory).generic_string();
+        if (std::filesystem::is_directory(entryStatus)) {
+            if (std::find(kAllowedDirectories.begin(), kAllowedDirectories.end(), name) ==
+                kAllowedDirectories.end()) {
+                return false;
+            }
+            continue;
+        }
+        if (!std::filesystem::is_regular_file(entryStatus)) { return false; }
+        ++count;
         if (std::find(kAllowedMembers.begin(), kAllowedMembers.end(), name) == kAllowedMembers.end()) { return false; }
     }
+    if (error) { return false; }
     if (count != expected.size()) { return false; }
     for (const auto& member : expected) {
         const auto path = directory / member.name;
@@ -388,7 +416,9 @@ void ValidateRequest(const TranslationArchiveRequest& request)
         throw std::invalid_argument("Invalid or oversized compressed archive FD range.");
     }
     if (!IsSha256(request.archiveSha256)) { throw std::invalid_argument("archiveSha256 must be 64 hexadecimal characters."); }
-    if (request.members.size() != kAllowedMembers.size()) { throw std::invalid_argument("Exactly three model members are required."); }
+    if (request.members.size() != kAllowedMembers.size()) {
+        throw std::invalid_argument("Exactly seven translation model/tokenizer members are required.");
+    }
     uint64_t memberBytes = 0;
     for (size_t index = 0; index < request.members.size(); ++index) {
         const auto& member = request.members[index];
@@ -441,7 +471,7 @@ void DecodeArchive(const TranslationArchiveRequest& request, const std::filesyst
             stream.avail_out = output.size();
             result = lzma_code(&stream, inputRemaining == 0 ? LZMA_FINISH : LZMA_RUN);
             const size_t produced = output.size() - stream.avail_out;
-            if (outputBytes > kMaxOutputBytes - produced) { throw std::runtime_error("XZ output exceeds 60 MiB."); }
+            if (outputBytes > kMaxOutputBytes - produced) { throw std::runtime_error("XZ output exceeds 208 MiB."); }
             outputBytes += produced;
             tar.Consume(output.data(), produced);
 

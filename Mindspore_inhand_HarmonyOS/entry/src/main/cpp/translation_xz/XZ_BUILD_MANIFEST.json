@@ -59,8 +59,8 @@
                                   },
                       "napi":  {
                                    "path":  "entry/libs/arm64-v8a/libtranslation_archive.so",
-                                   "size":  263576,
-                                   "sha256":  "35DDE52874986EE12CD8A0BC72182DC648457E7EBCFD5A2B05ED6604C7689F2F",
+                                   "size":  265360,
+                                   "sha256":  "3EA2F88B29322AFADA62D25D8D0A01CB00AF998E0A83CCEE2A63EC9C26E94B1B",
                                    "elfClass":  "ELF64",
                                    "elfMachine":  "AArch64",
                                    "dynamicDependencies":  [
@@ -73,6 +73,6 @@
                   },
     "license":  {
                     "path":  "third_party/xz/COPYING",
-                      "sha256":  "1D2D9338D5C0620E34ADE2153730EFF686D07F02A42F889A33D659A30C41EAC1"
+                    "sha256":  "1D2D9338D5C0620E34ADE2153730EFF686D07F02A42F889A33D659A30C41EAC1"
                 }
 }

@@ -5,7 +5,8 @@ param(
   [string]$ExpectedOhosTestResourceRoot = '',
   [string]$ExpectedRawfileRoot = '',
   [string]$ExpectedNativeLibRoot = '',
-  [string]$ExpectedNativeLibRootX86 = ''
+  [string]$ExpectedNativeLibRootX86 = '',
+  [string]$ExpectedTranslationPackageLock = ''
 )
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.IO.Compression
@@ -38,6 +39,112 @@ if (-not $ExpectedNativeLibRoot) {
 if (-not $ExpectedNativeLibRootX86) {
   $ExpectedNativeLibRootX86 = $ExpectedNativeLibRoot
 }
+if (-not $ExpectedTranslationPackageLock) {
+  $ExpectedTranslationPackageLock = Join-Path $projectRoot '..\tools\translation\manifests\open-source-edge-package-lock-v2.json'
+}
+
+function Assert-ExactJsonProperties([object]$Value, [string[]]$Expected, [string]$Label) {
+  if ($null -eq $Value) { throw "$Label is missing from external package lock" }
+  $actual = @($Value.PSObject.Properties.Name | Sort-Object)
+  $wanted = @($Expected | Sort-Object)
+  if (($actual -join "`n") -cne ($wanted -join "`n")) {
+    throw "$Label properties differ from external package lock contract"
+  }
+}
+
+function Assert-TranslationPackageLock([string]$RawfileRoot, [string]$LockPath) {
+  if (-not (Test-Path -LiteralPath $LockPath -PathType Leaf)) {
+    throw "External translation package lock does not exist: $LockPath"
+  }
+  $translationRoot = Join-Path $RawfileRoot 'models\translation'
+  $manifestPath = Join-Path $translationRoot 'manifest.json'
+  $archivePath = Join-Path $translationRoot 'translation-models.tar.xz'
+  $lock = Get-Content -LiteralPath $LockPath -Raw | ConvertFrom-Json
+  $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+  Assert-ExactJsonProperties $lock @('schemaVersion', 'runtimeManifest', 'archive', 'tar', 'members', 'tokenizers') 'package lock'
+  if ($lock.schemaVersion -ne 2) { throw 'External translation package lock schema differs' }
+  Assert-ExactJsonProperties $lock.runtimeManifest @('file', 'size', 'sha256') 'package lock runtimeManifest'
+  Assert-ExactJsonProperties $lock.archive @('file', 'size', 'sha256') 'package lock archive'
+  Assert-ExactJsonProperties $lock.tar @('file', 'size', 'sha256') 'package lock tar'
+  if ($lock.runtimeManifest.file -cne 'manifest.json' -or
+      $lock.archive.file -cne 'translation-models.tar.xz' -or
+      $lock.tar.file -cne 'translation-models.tar') {
+    throw 'External translation package lock filenames differ'
+  }
+  foreach ($record in @(
+    @{ Label = 'runtime manifest'; Path = $manifestPath; Lock = $lock.runtimeManifest },
+    @{ Label = 'archive'; Path = $archivePath; Lock = $lock.archive }
+  )) {
+    $item = Get-Item -LiteralPath $record.Path
+    $hash = (Get-FileHash -LiteralPath $record.Path -Algorithm SHA256).Hash
+    if ($item.Length -ne $record.Lock.size -or $hash -ine $record.Lock.sha256) {
+      throw "Translation $($record.Label) differs from external package lock"
+    }
+  }
+  if ($manifest.archive.size -ne $lock.archive.size -or
+      $manifest.archive.sha256 -ine $lock.archive.sha256 -or
+      $manifest.archive.tarSize -ne $lock.tar.size -or
+      $manifest.archive.tarSha256 -ine $lock.tar.sha256) {
+    throw 'Translation runtime manifest archive contract differs from external package lock'
+  }
+  $descriptors = @(
+    $manifest.directions.en.graphs.encoder,
+    $manifest.directions.en.graphs.decoderFull,
+    $manifest.directions.en.tokenizers.source,
+    $manifest.directions.zh.graphs.encoder,
+    $manifest.directions.zh.graphs.decoderFull,
+    $manifest.directions.zh.tokenizers.source,
+    $manifest.directions.zh.tokenizers.target
+  )
+  $memberNames = @(
+    'zh-en/encoder.ms', 'zh-en/decoder_full.ms', 'zh-en/tokenizer.ttok',
+    'en-zh/encoder.ms', 'en-zh/decoder_full.ms', 'en-zh/source.ttok', 'en-zh/target.ttok'
+  )
+  if (@($lock.members).Count -ne 7) { throw 'External translation package lock member count differs' }
+  for ($index = 0; $index -lt 7; $index++) {
+    $member = $lock.members[$index]
+    Assert-ExactJsonProperties $member @('name', 'size', 'sha256') "package lock member[$index]"
+    if ($member.name -cne $memberNames[$index] -or
+        $member.size -ne $descriptors[$index].size -or
+        $member.sha256 -ine $descriptors[$index].sha256) {
+      throw "Translation member[$index] differs from external package lock"
+    }
+  }
+  Assert-ExactJsonProperties $lock.tokenizers @('zh-en/shared', 'en-zh/source', 'en-zh/target') 'package lock tokenizers'
+  $tokenizerDescriptors = @(
+    @{ Lock = $lock.tokenizers.'zh-en/shared'; Manifest = $manifest.directions.en.tokenizers.source },
+    @{ Lock = $lock.tokenizers.'en-zh/source'; Manifest = $manifest.directions.zh.tokenizers.source },
+    @{ Lock = $lock.tokenizers.'en-zh/target'; Manifest = $manifest.directions.zh.tokenizers.target }
+  )
+  foreach ($pair in $tokenizerDescriptors) {
+    Assert-ExactJsonProperties $pair.Lock @(
+      'file', 'modelSha256', 'vocabularySha256', 'pieceCount',
+      'decodeVocabularySize', 'specialTokens'
+    ) 'package lock tokenizer'
+    $lockJson = $pair.Lock | ConvertTo-Json -Depth 8 -Compress
+    $manifestProjection = [ordered]@{
+      file = $pair.Manifest.file
+      modelSha256 = $pair.Manifest.modelSha256
+      vocabularySha256 = $pair.Manifest.vocabularySha256
+      pieceCount = $pair.Manifest.pieceCount
+      decodeVocabularySize = $pair.Manifest.decodeVocabularySize
+      specialTokens = $pair.Manifest.specialTokens
+    } | ConvertTo-Json -Depth 8 -Compress
+    $lockProjection = [ordered]@{
+      file = $pair.Lock.file
+      modelSha256 = $pair.Lock.modelSha256
+      vocabularySha256 = $pair.Lock.vocabularySha256
+      pieceCount = $pair.Lock.pieceCount
+      decodeVocabularySize = $pair.Lock.decodeVocabularySize
+      specialTokens = $pair.Lock.specialTokens
+    } | ConvertTo-Json -Depth 8 -Compress
+    if ($lockProjection -cne $manifestProjection) {
+      throw 'Translation tokenizer provenance differs from external package lock'
+    }
+  }
+}
+
+Assert-TranslationPackageLock $ExpectedRawfileRoot $ExpectedTranslationPackageLock
 
 function Get-HapEntries([string]$Path) {
   if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
@@ -153,9 +260,6 @@ $resourceEntries = @(
   'resources/rawfile/models/ocr/ppocr_keys_v1.txt',
   'resources/rawfile/models/ocr/NOTICE.md',
   'resources/rawfile/models/translation/translation-models.tar.xz',
-  'resources/rawfile/models/translation/tokenizer.model',
-  'resources/rawfile/models/translation/tokenizer_runtime.json',
-  'resources/rawfile/models/translation/vocab.json',
   'resources/rawfile/models/translation/manifest.json',
   'resources/rawfile/models/translation/SHA256SUMS',
   'resources/rawfile/models/translation/LICENSES.md'

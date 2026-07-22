@@ -49,6 +49,11 @@ function Add-DuplicateHapEntry([string]$Path, [string]$Entry, [string]$Content) 
 function New-FileMap([string[]]$Entries) {
   $files = @{}
   foreach ($entry in $Entries) { $files[$entry] = 'fixture' }
+  if ($null -ne $script:canonicalTranslationFiles) {
+    foreach ($entry in $script:canonicalTranslationFiles.Keys) {
+      if ($files.ContainsKey($entry)) { $files[$entry] = $script:canonicalTranslationFiles[$entry] }
+    }
+  }
   $files['module.json'] = '{}'
   return $files
 }
@@ -74,7 +79,8 @@ function Assert-GuardRejects(
     & $guard -MainHapPath $MainHapPath -OhosTestHapPath $OhosTestHapPath `
       -ExpectedResourceRoot $expectedResourceRoot `
       -ExpectedOhosTestResourceRoot $expectedOhosTestResourceRoot `
-      -ExpectedRawfileRoot $expectedRawfileRoot -ExpectedNativeLibRoot $expectedNativeRoot *> $null
+      -ExpectedRawfileRoot $expectedRawfileRoot -ExpectedNativeLibRoot $expectedNativeRoot `
+      -ExpectedTranslationPackageLock $expectedTranslationPackageLock *> $null
   } catch {
     $rejected = $true
     $message = $_.Exception.Message
@@ -116,9 +122,6 @@ $mainEntries = @(
   'resources/rawfile/models/ocr/ppocr_keys_v1.txt',
   'resources/rawfile/models/ocr/NOTICE.md',
   'resources/rawfile/models/translation/translation-models.tar.xz',
-  'resources/rawfile/models/translation/tokenizer.model',
-  'resources/rawfile/models/translation/tokenizer_runtime.json',
-  'resources/rawfile/models/translation/vocab.json',
   'resources/rawfile/models/translation/manifest.json',
   'resources/rawfile/models/translation/SHA256SUMS',
   'resources/rawfile/models/translation/LICENSES.md',
@@ -190,15 +193,120 @@ try {
   Write-ExpectedFiles $expectedResourceRoot $mainFiles 'resources/'
   Write-ExpectedFiles $expectedOhosTestResourceRoot $testFiles 'resources/'
   Write-ExpectedFiles $expectedNativeRoot $mainFiles 'libs/arm64-v8a/'
+  $translationEntry = 'resources/rawfile/models/translation/translation-models.tar.xz'
+  $translationManifestEntry = 'resources/rawfile/models/translation/manifest.json'
+  $translationArchivePath = Join-Path $expectedRawfileRoot 'models\translation\translation-models.tar.xz'
+  $translationManifestPath = Join-Path $expectedRawfileRoot 'models\translation\manifest.json'
+  $translationManifestTemplatePath = Join-Path $PSScriptRoot '..\entry\src\main\resources\rawfile\models\translation\manifest.json'
+  $translationManifest = Get-Content -LiteralPath $translationManifestTemplatePath -Raw | ConvertFrom-Json
+  $translationManifest.archive.size = (Get-Item -LiteralPath $translationArchivePath).Length
+  $translationManifest.archive.sha256 = (Get-FileHash -LiteralPath $translationArchivePath -Algorithm SHA256).Hash.ToLowerInvariant()
+  $translationManifestText = $translationManifest | ConvertTo-Json -Depth 32 -Compress
+  $mainFiles[$translationManifestEntry] = $translationManifestText
+  $script:canonicalTranslationFiles = @{}
+  $script:canonicalTranslationFiles[$translationEntry] = $mainFiles[$translationEntry]
+  $script:canonicalTranslationFiles[$translationManifestEntry] = $translationManifestText
+  Set-Content -LiteralPath $translationManifestPath -Value $translationManifestText -NoNewline -Encoding utf8
+  $expectedTranslationPackageLock = Join-Path $tempRoot 'translation-package-lock.json'
+  $translationDescriptors = @(
+    $translationManifest.directions.en.graphs.encoder,
+    $translationManifest.directions.en.graphs.decoderFull,
+    $translationManifest.directions.en.tokenizers.source,
+    $translationManifest.directions.zh.graphs.encoder,
+    $translationManifest.directions.zh.graphs.decoderFull,
+    $translationManifest.directions.zh.tokenizers.source,
+    $translationManifest.directions.zh.tokenizers.target
+  )
+  $translationMemberNames = @(
+    'zh-en/encoder.ms', 'zh-en/decoder_full.ms', 'zh-en/tokenizer.ttok',
+    'en-zh/encoder.ms', 'en-zh/decoder_full.ms', 'en-zh/source.ttok', 'en-zh/target.ttok'
+  )
+  $translationMembers = @()
+  for ($memberIndex = 0; $memberIndex -lt 7; $memberIndex++) {
+    $translationMembers += [ordered]@{
+      name = $translationMemberNames[$memberIndex]
+      size = $translationDescriptors[$memberIndex].size
+      sha256 = $translationDescriptors[$memberIndex].sha256
+    }
+  }
+  $translationLock = [ordered]@{
+    schemaVersion = 2
+    runtimeManifest = [ordered]@{
+      file = 'manifest.json'
+      size = (Get-Item -LiteralPath $translationManifestPath).Length
+      sha256 = (Get-FileHash -LiteralPath $translationManifestPath -Algorithm SHA256).Hash.ToLowerInvariant()
+    }
+    archive = [ordered]@{
+      file = 'translation-models.tar.xz'
+      size = $translationManifest.archive.size
+      sha256 = $translationManifest.archive.sha256
+    }
+    tar = [ordered]@{
+      file = 'translation-models.tar'
+      size = $translationManifest.archive.tarSize
+      sha256 = $translationManifest.archive.tarSha256
+    }
+    members = $translationMembers
+    tokenizers = [ordered]@{
+      'zh-en/shared' = [ordered]@{
+        file = $translationManifest.directions.en.tokenizers.source.file
+        modelSha256 = $translationManifest.directions.en.tokenizers.source.modelSha256
+        vocabularySha256 = $translationManifest.directions.en.tokenizers.source.vocabularySha256
+        pieceCount = $translationManifest.directions.en.tokenizers.source.pieceCount
+        decodeVocabularySize = $translationManifest.directions.en.tokenizers.source.decodeVocabularySize
+        specialTokens = $translationManifest.directions.en.tokenizers.source.specialTokens
+      }
+      'en-zh/source' = [ordered]@{
+        file = $translationManifest.directions.zh.tokenizers.source.file
+        modelSha256 = $translationManifest.directions.zh.tokenizers.source.modelSha256
+        vocabularySha256 = $translationManifest.directions.zh.tokenizers.source.vocabularySha256
+        pieceCount = $translationManifest.directions.zh.tokenizers.source.pieceCount
+        decodeVocabularySize = $translationManifest.directions.zh.tokenizers.source.decodeVocabularySize
+        specialTokens = $translationManifest.directions.zh.tokenizers.source.specialTokens
+      }
+      'en-zh/target' = [ordered]@{
+        file = $translationManifest.directions.zh.tokenizers.target.file
+        modelSha256 = $translationManifest.directions.zh.tokenizers.target.modelSha256
+        vocabularySha256 = $translationManifest.directions.zh.tokenizers.target.vocabularySha256
+        pieceCount = $translationManifest.directions.zh.tokenizers.target.pieceCount
+        decodeVocabularySize = $translationManifest.directions.zh.tokenizers.target.decodeVocabularySize
+        specialTokens = $translationManifest.directions.zh.tokenizers.target.specialTokens
+      }
+    }
+  }
+  Set-Content -LiteralPath $expectedTranslationPackageLock `
+    -Value ($translationLock | ConvertTo-Json -Depth 32) -NoNewline -Encoding utf8
   New-HapFixture $mainHap $mainFiles
   New-HapFixture $testHap $testFiles
   $verifiedOutput = & $guard -MainHapPath $mainHap -OhosTestHapPath $testHap `
     -ExpectedResourceRoot $expectedResourceRoot `
     -ExpectedOhosTestResourceRoot $expectedOhosTestResourceRoot `
-    -ExpectedRawfileRoot $expectedRawfileRoot -ExpectedNativeLibRoot $expectedNativeRoot | Out-String
+    -ExpectedRawfileRoot $expectedRawfileRoot -ExpectedNativeLibRoot $expectedNativeRoot `
+    -ExpectedTranslationPackageLock $expectedTranslationPackageLock | Out-String
   if (-not $verifiedOutput.Contains('abis=arm64-v8a,x86_64')) {
     throw 'HAP verifier must report both configured target ABIs.'
   }
+
+  $tamperedTranslationHap = Join-Path $tempRoot 'tampered-translation-package.hap'
+  $tamperedTranslationFiles = @{}
+  foreach ($entry in $mainFiles.Keys) { $tamperedTranslationFiles[$entry] = $mainFiles[$entry] }
+  $tamperedTranslationFiles[$translationEntry] = 'tampered-archive'
+  Set-Content -LiteralPath $translationArchivePath -Value 'tampered-archive' -NoNewline -Encoding utf8
+  $tamperedTranslationManifest = $translationManifestText | ConvertFrom-Json
+  $tamperedTranslationManifest.archive.size = (Get-Item -LiteralPath $translationArchivePath).Length
+  $tamperedTranslationManifest.archive.sha256 = `
+    (Get-FileHash -LiteralPath $translationArchivePath -Algorithm SHA256).Hash.ToLowerInvariant()
+  $tamperedTranslationManifestText = $tamperedTranslationManifest | ConvertTo-Json -Depth 32 -Compress
+  $tamperedTranslationFiles[$translationManifestEntry] = $tamperedTranslationManifestText
+  Set-Content -LiteralPath $translationManifestPath `
+    -Value $tamperedTranslationManifestText -NoNewline -Encoding utf8
+  New-HapFixture $tamperedTranslationHap $tamperedTranslationFiles
+  Assert-GuardRejects 'consistent manifest and archive translation package tamper' `
+    $tamperedTranslationHap $testHap 'differs from external package lock'
+  Set-Content -LiteralPath $translationArchivePath `
+    -Value $mainFiles[$translationEntry] -NoNewline -Encoding utf8
+  Set-Content -LiteralPath $translationManifestPath `
+    -Value $translationManifestText -NoNewline -Encoding utf8
 
   $tamperedModelHap = Join-Path $tempRoot 'tampered-model.hap'
   $tamperedModelFiles = New-FileMap $mainEntries

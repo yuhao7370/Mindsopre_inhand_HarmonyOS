@@ -12,13 +12,24 @@ import re
 import subprocess
 import tarfile
 import tempfile
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Callable, Dict, Iterable, Mapping, Optional, Sequence
 
 
-CANONICAL_MEMBERS = ("encoder.ms", "decoder_prefill.ms", "decoder_step.ms")
+CANONICAL_MEMBERS = (
+    "zh-en/encoder.ms",
+    "zh-en/decoder_full.ms",
+    "zh-en/tokenizer.ttok",
+    "en-zh/encoder.ms",
+    "en-zh/decoder_full.ms",
+    "en-zh/source.ttok",
+    "en-zh/target.ttok",
+)
 XZ_VERSION = "5.8.3"
-MAX_TAR_BYTES = 60 * 1024 * 1024
+# Measured payload is about 195 MiB including both tokenizer tables. These
+# explicit package limits replace the obsolete 32/60 MiB single-model limits.
+MAX_TAR_BYTES = 208 * 1024 * 1024
+MAX_ARCHIVE_BYTES = 152 * 1024 * 1024
 
 
 class ArchiveError(RuntimeError):
@@ -65,12 +76,12 @@ def build_tar(sources: Path | Mapping[str, Path], output: Path) -> dict:
             with source.open("rb") as stream:
                 archive.addfile(info, stream)
             members.append({"name": name, "size": size, "sha256": _sha256(source)})
-    return {"schemaVersion": 1, "members": members}
+    return {"schemaVersion": 2, "members": members}
 
 
 def _validate_manifest(manifest: dict) -> list:
     base_keys = {"schemaVersion", "members"}
-    if set(manifest) not in (base_keys, base_keys | {"tar", "archive"}) or manifest["schemaVersion"] != 1:
+    if set(manifest) not in (base_keys, base_keys | {"tar", "archive"}) or manifest["schemaVersion"] != 2:
         raise ArchiveError("invalid archive manifest schema")
     for artifact_name in ("tar", "archive"):
         if artifact_name in manifest:
@@ -93,6 +104,8 @@ def _validate_manifest(manifest: dict) -> list:
             raise ArchiveError("invalid archive member size")
         if not re.fullmatch(r"[0-9a-fA-F]{64}", item["sha256"]):
             raise ArchiveError("invalid archive member hash")
+    if sum(item["size"] for item in members) > MAX_TAR_BYTES:
+        raise ArchiveError("archive member payload exceeds the 208 MiB measured package limit")
     return members
 
 
@@ -104,7 +117,7 @@ def verify_tar(path: Path, manifest: dict) -> dict:
             raise ArchiveError("TAR size/hash mismatch")
     raw = path.read_bytes()
     if len(raw) > MAX_TAR_BYTES:
-        raise ArchiveError("TAR exceeds 60 MiB")
+        raise ArchiveError("TAR exceeds the 208 MiB measured package limit")
     try:
         with tarfile.open(fileobj=__import__("io").BytesIO(raw), mode="r:") as archive:
             members = archive.getmembers()
@@ -114,7 +127,8 @@ def verify_tar(path: Path, manifest: dict) -> dict:
             for member, wanted in zip(members, expected):
                 if not member.isfile() or member.issym() or member.islnk():
                     raise ArchiveError("TAR allows regular files only")
-                if "/" in member.name or "\\" in member.name or member.name in (".", ".."):
+                parts = PurePosixPath(member.name).parts
+                if "\\" in member.name or any(part in ("", ".", "..") for part in parts):
                     raise ArchiveError("TAR paths are forbidden")
                 if (
                     member.mtime != 0
@@ -187,6 +201,8 @@ def _compress_tar(
 
 
 def _decompress_one_xz(path: Path) -> bytes:
+    if path.stat().st_size > MAX_ARCHIVE_BYTES:
+        raise ArchiveError("XZ archive exceeds the 152 MiB measured package limit")
     payload = path.read_bytes()
     decoder = lzma.LZMADecompressor(format=lzma.FORMAT_XZ)
     try:
@@ -194,7 +210,7 @@ def _decompress_one_xz(path: Path) -> bytes:
     except lzma.LZMAError as error:
         raise ArchiveError(f"invalid XZ stream: {error}") from error
     if len(raw) > MAX_TAR_BYTES:
-        raise ArchiveError("XZ output exceeds 60 MiB")
+        raise ArchiveError("XZ output exceeds the 208 MiB measured package limit")
     if not decoder.eof or decoder.unused_data:
         raise ArchiveError("XZ has trailing or concatenated stream data")
     if decoder.check != lzma.CHECK_CRC64:
@@ -238,9 +254,13 @@ def build_archive(
 
 def _arguments(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--encoder", required=True, type=Path)
-    parser.add_argument("--decoder-prefill", required=True, type=Path)
-    parser.add_argument("--decoder-step", required=True, type=Path)
+    parser.add_argument("--zh-en-encoder", required=True, type=Path)
+    parser.add_argument("--zh-en-decoder-full", required=True, type=Path)
+    parser.add_argument("--zh-en-tokenizer", required=True, type=Path)
+    parser.add_argument("--en-zh-encoder", required=True, type=Path)
+    parser.add_argument("--en-zh-decoder-full", required=True, type=Path)
+    parser.add_argument("--en-zh-source-tokenizer", required=True, type=Path)
+    parser.add_argument("--en-zh-target-tokenizer", required=True, type=Path)
     parser.add_argument("--tar", required=True, type=Path)
     parser.add_argument("--archive", required=True, type=Path)
     parser.add_argument("--xz", required=True, type=Path)
@@ -251,9 +271,13 @@ def _arguments(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
 def main(argv: Optional[Sequence[str]] = None) -> int:
     args = _arguments(argv)
     sources = {
-        "encoder.ms": args.encoder,
-        "decoder_prefill.ms": args.decoder_prefill,
-        "decoder_step.ms": args.decoder_step,
+        "zh-en/encoder.ms": args.zh_en_encoder,
+        "zh-en/decoder_full.ms": args.zh_en_decoder_full,
+        "zh-en/tokenizer.ttok": args.zh_en_tokenizer,
+        "en-zh/encoder.ms": args.en_zh_encoder,
+        "en-zh/decoder_full.ms": args.en_zh_decoder_full,
+        "en-zh/source.ttok": args.en_zh_source_tokenizer,
+        "en-zh/target.ttok": args.en_zh_target_tokenizer,
     }
     manifest = build_archive(sources, args.tar, args.archive, args.xz)
     manifest["tar"] = {"size": args.tar.stat().st_size, "sha256": _sha256(args.tar)}

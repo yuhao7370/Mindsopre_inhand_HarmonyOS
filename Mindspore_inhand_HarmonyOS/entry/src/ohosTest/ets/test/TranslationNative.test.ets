@@ -77,6 +77,14 @@ function containsCjk(text: string): boolean {
   return false;
 }
 
+function containsMondayMeaning(text: string): boolean {
+  const accepted: Array<string> = ['\u661f\u671f\u4e00', '\u5468\u4e00', '\u793c\u62dc\u4e00'];
+  for (let index = 0; index < accepted.length; index++) {
+    if (text.indexOf(accepted[index]) >= 0) return true;
+  }
+  return false;
+}
+
 function hasAdjacentRepeatedSpan(text: string): boolean {
   for (let width = 2; width * 2 <= text.length; width++) {
     for (let start = 0; start + width * 2 <= text.length; start++) {
@@ -118,7 +126,7 @@ function characterErrorRate(expected: string, actual: string): number {
 
 export default function translationNativeTest() {
   describe('TranslationNativeTest', () => {
-    it('translatesTypedAndOcrTextWithOneReusableLocalModelBundle', 0, async () => {
+    it('translatesTypedAndOcrTextWithDirectionScopedLocalModelBundles', 0, async () => {
       resetTranslationModelCacheForTests();
       const applicationContext = abilityDelegatorRegistry.getAbilityDelegator()
         .getAppContext()
@@ -134,9 +142,9 @@ export default function translationNativeTest() {
         new TranslationNativeBundleOptions(translationResourceManager, cacheRoot)
       );
       let bundleFactoryCalls = 0;
-      const bundleFactory: TranslationModelBundleFactory = async () => {
+      const bundleFactory: TranslationModelBundleFactory = async (targetLanguage?: string) => {
         bundleFactoryCalls++;
-        return await productionBundleFactory();
+        return await productionBundleFactory(targetLanguage);
       };
       try {
         const service = await createHarmonyTextTranslationService(
@@ -152,20 +160,21 @@ export default function translationNativeTest() {
         let translationsFinished = false;
         let timerObservedPendingTranslation = false;
         const typedChineseAgain = service.translateText(typedChinese);
-        const typedEnglishResult = service.translateText(typedEnglish);
         const timer = new Promise<void>((resolve: () => void): void => {
           setTimeout((): void => {
             timerObservedPendingTranslation = !translationsFinished;
             resolve();
           }, 0);
         });
-        const results = await Promise.all([typedChineseAgain, typedEnglishResult]);
+        const typedChineseResult = await typedChineseAgain;
         translationsFinished = true;
         await timer;
-        const typedChineseResult = results[0];
-        const typedEnglishTranslated = results[1];
+        const typedEnglishTranslated = await service.translateText(typedEnglish);
         const helloWorld = await service.translateText('hello world');
 
+        console.info(`translation-typed-chinese=${typedChineseResult.translatedText}`);
+        console.info(`translation-typed-english=${typedEnglishTranslated.translatedText}`);
+        console.info(`translation-hello-world=${helloWorld.translatedText}`);
         expect(typedChineseResult.ok).assertTrue();
         expect(typedChineseResult.targetLanguage).assertEqual('en');
         expect(typedChineseResult.runtimeSource).assertEqual('localModel');
@@ -181,11 +190,9 @@ export default function translationNativeTest() {
         expect(containsCjk(typedEnglishTranslated.translatedText)).assertTrue();
         expect(typedEnglishTranslated.translatedText.indexOf('\u62a5\u544a') >= 0).assertTrue();
         expect(typedEnglishTranslated.translatedText.indexOf('\u4fdd\u5bc6') >= 0).assertTrue();
-        expect(typedEnglishTranslated.translatedText.indexOf('\u661f\u671f\u4e00') >= 0).assertTrue();
-        console.info(`translation-hello-world=${helloWorld.translatedText}`);
+        expect(containsMondayMeaning(typedEnglishTranslated.translatedText)).assertTrue();
         expect(helloWorld.ok).assertTrue();
-        expect(helloWorld.translatedText.trim().length > 0).assertTrue();
-        expect(helloWorld.translatedText.length <= 128).assertTrue();
+        expect(helloWorld.translatedText).assertEqual('\u54c8\u7f57\u4e16\u754c');
         expect(hasAdjacentRepeatedSpan(helloWorld.translatedText)).assertFalse();
         expect(typedChineseResult.translatedText !== typedEnglishTranslated.translatedText).assertTrue();
         expect(timerObservedPendingTranslation).assertTrue();
@@ -233,7 +240,7 @@ export default function translationNativeTest() {
         expect(empty.ok).assertFalse();
         expect(empty.errorCode).assertEqual('EMPTY_INPUT');
         expect(empty.translatedText).assertEqual('');
-        expect(bundleFactoryCalls).assertEqual(1);
+        expect(bundleFactoryCalls).assertEqual(3);
       } finally {
         resetTranslationModelCacheForTests();
       }

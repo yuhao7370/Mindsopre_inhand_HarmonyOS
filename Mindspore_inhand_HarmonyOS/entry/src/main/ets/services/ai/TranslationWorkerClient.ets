@@ -1,10 +1,8 @@
 import { worker } from '@kit.ArkTS';
 import {
-  asciiContentToText,
   prepareProductionTranslationModelFiles,
   TranslationProductionBundleOptions
 } from './MindSporeLiteTranslationRunner';
-import { translationTokenizerRuntimeRawfilePath } from './TranslationModelManifest';
 import { TextTranslationResult, TextTranslationRunner } from './TextRecognitionService';
 
 interface TranslationWorkerMessage {
@@ -34,7 +32,6 @@ export interface TranslationWorkerPreparedFiles {
 
 export interface TranslationWorkerClientDependencies {
   prepare: () => Promise<TranslationWorkerPreparedFiles>;
-  getTokenizerRuntime: () => Promise<string>;
   createWorker: () => TranslationWorkerPort;
   requestTimeoutMs?: number;
 }
@@ -51,7 +48,6 @@ interface TranslationWorkerInitializeMessage {
   readonly id: number;
   readonly directory: string;
   readonly manifest: Object;
-  readonly tokenizerRuntime: string;
 }
 
 interface TranslationWorkerTranslateMessage {
@@ -70,21 +66,25 @@ class ProductionTranslationWorkerDependencies implements TranslationWorkerClient
     return await prepareProductionTranslationModelFiles(this.options);
   }
 
-  async getTokenizerRuntime(): Promise<string> {
-    return asciiContentToText(await this.options.resourceManager.getRawFileContent(translationTokenizerRuntimeRawfilePath));
-  }
-
   createWorker(): TranslationWorkerPort {
     return new worker.ThreadWorker('entry/ets/workers/TranslationWorker.ets') as TranslationWorkerPort;
   }
 
-  readonly requestTimeoutMs: number = 30000;
+  readonly requestTimeoutMs: number = 120000;
 }
 
 export class TranslationWorkerClient implements TextTranslationRunner {
   private readonly dependencies: TranslationWorkerClientDependencies;
   private worker?: TranslationWorkerPort;
   private initialization?: Promise<void>;
+  private preparedValue?: TranslationWorkerPreparedFiles;
+  private preparing?: Promise<TranslationWorkerPreparedFiles>;
+  private activeTarget?: string;
+  private tail: Promise<void> = Promise.resolve();
+  private stopEpoch: number = 0;
+  private nextOperationId: number = 1;
+  private activeOperationId: number = 0;
+  private cancelActiveOperation?: () => void;
   private nextId: number = 1;
   private generation: number = 0;
   private readonly pending: Map<number, PendingTranslation> = new Map();
@@ -94,38 +94,89 @@ export class TranslationWorkerClient implements TextTranslationRunner {
   }
 
   async translate(text: string, targetLanguage: string): Promise<TextTranslationResult> {
-    try {
-      await this.ensureInitialized();
-      return await this.request(text, targetLanguage);
-    } catch (_) {
-      return { ok: false, sourceText: text, translatedText: '', targetLanguage: targetLanguage,
-        runtimeSource: 'localModel', errorCode: 'MODEL_EXECUTION_FAILED' };
-    }
+    const requestEpoch = this.stopEpoch;
+    const operation = async (): Promise<TextTranslationResult> =>
+      await this.runOperation(text, targetLanguage, requestEpoch);
+    const result = this.tail.then(operation, operation);
+    this.tail = result.then((): void => {}, (): void => {});
+    return await result;
   }
 
   stop(): Promise<void> { this.terminate(); return Promise.resolve(); }
 
   terminate(): void {
+    this.stopEpoch++;
+    this.replaceCurrentWorker();
+    this.cancelActiveOperation?.();
+  }
+
+  private runOperation(text: string, targetLanguage: string, requestEpoch: number): Promise<TextTranslationResult> {
+    const operationId = this.nextOperationId;
+    this.nextOperationId++;
+    const failure = this.failureResult(text, targetLanguage);
+    return new Promise<TextTranslationResult>((resolve: (result: TextTranslationResult) => void): void => {
+      let settled: boolean = false;
+      let operationPreparing: Promise<TranslationWorkerPreparedFiles> | undefined;
+      const settle = (result: TextTranslationResult): void => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        if (this.activeOperationId === operationId) {
+          this.activeOperationId = 0;
+          this.cancelActiveOperation = undefined;
+        }
+        resolve(result);
+      };
+      const cancel = (): void => {
+        this.clearPreparing(operationPreparing);
+        settle(failure);
+      };
+      const timer = setTimeout((): void => {
+        this.clearPreparing(operationPreparing);
+        this.replaceCurrentWorker();
+        settle(failure);
+      }, this.dependencies.requestTimeoutMs ?? 120000) as number;
+      this.activeOperationId = operationId;
+      this.cancelActiveOperation = cancel;
+      const execution = this.performOperation(text, targetLanguage, requestEpoch);
+      operationPreparing = this.preparing;
+      execution.then(settle, (): void => settle(failure));
+    });
+  }
+
+  private async performOperation(text: string, targetLanguage: string, requestEpoch: number): Promise<TextTranslationResult> {
+    if (requestEpoch !== this.stopEpoch) throw new Error('Translation request was stopped before start.');
+    if (targetLanguage !== 'en' && targetLanguage !== 'zh') throw new Error('Unsupported target.');
+    if (this.activeTarget !== undefined && this.activeTarget !== targetLanguage) this.replaceCurrentWorker();
+    await this.ensureInitialized(targetLanguage);
+    return await this.request(text, targetLanguage);
+  }
+
+  private failureResult(text: string, targetLanguage: string): TextTranslationResult {
+    return { ok: false, sourceText: text, translatedText: '', targetLanguage: targetLanguage,
+      runtimeSource: 'localModel', errorCode: targetLanguage === 'en' || targetLanguage === 'zh' ?
+        'MODEL_EXECUTION_FAILED' : 'UNSUPPORTED_TARGET' };
+  }
+
+  private replaceCurrentWorker(): void {
     const instance = this.worker;
     const generation = this.generation;
     this.failWorker(instance, generation, new Error('Translation worker was terminated.'));
   }
 
-  private async ensureInitialized(): Promise<void> {
+  private async ensureInitialized(targetLanguage: string): Promise<void> {
     if (this.initialization === undefined) {
       this.generation++;
       const generation = this.generation;
-      const initialization = this.startWorker(generation);
+      const initialization = this.startWorker(generation, targetLanguage);
       this.initialization = initialization;
       initialization.catch((error: Error): void => this.failWorker(this.worker, generation, error));
     }
     await this.initialization;
   }
 
-  private async startWorker(generation: number): Promise<void> {
-    const prepared = await this.dependencies.prepare();
-    this.ensureActive(generation);
-    const tokenizerRuntime = await this.dependencies.getTokenizerRuntime();
+  private async startWorker(generation: number, targetLanguage: string): Promise<void> {
+    const prepared = await this.preparedFiles();
     this.ensureActive(generation);
     const instance = this.dependencies.createWorker();
     if (!this.isActive(generation)) {
@@ -143,11 +194,34 @@ export class TranslationWorkerClient implements TextTranslationRunner {
     const id = this.nextRequestId();
     const ready = this.createPending(instance, generation, id, true);
     const message: TranslationWorkerInitializeMessage = {
-      kind: 'initialize', id: id, directory: prepared.directory, manifest: prepared.manifest, tokenizerRuntime: tokenizerRuntime
+      kind: 'initialize', id: id, directory: prepared.directory, manifest: prepared.manifest
     };
     this.post(instance, generation, id, message);
     await ready;
     this.ensureActive(generation);
+    this.activeTarget = targetLanguage;
+  }
+
+  private async preparedFiles(): Promise<TranslationWorkerPreparedFiles> {
+    if (this.preparedValue !== undefined) return this.preparedValue;
+    let attempt = this.preparing;
+    if (attempt === undefined) {
+      attempt = this.dependencies.prepare();
+      this.preparing = attempt;
+      attempt.then((prepared: TranslationWorkerPreparedFiles): void => {
+        if (this.preparing === attempt) {
+          this.preparedValue = prepared;
+          this.preparing = undefined;
+        }
+      }, (): void => {
+        if (this.preparing === attempt) this.preparing = undefined;
+      });
+    }
+    return await attempt;
+  }
+
+  private clearPreparing(attempt: Promise<TranslationWorkerPreparedFiles> | undefined): void {
+    if (attempt !== undefined && this.preparing === attempt) this.preparing = undefined;
   }
 
   private async request(text: string, targetLanguage: string): Promise<TextTranslationResult> {
@@ -165,7 +239,7 @@ export class TranslationWorkerClient implements TextTranslationRunner {
     return new Promise<void | TextTranslationResult>((resolve, reject): void => {
       const timer = setTimeout((): void => {
         if (this.pending.has(id)) this.failWorker(instance, generation, new Error('Translation worker request timed out.'));
-      }, this.dependencies.requestTimeoutMs ?? 30000) as number;
+      }, this.dependencies.requestTimeoutMs ?? 120000) as number;
       this.pending.set(id, isReady ? { resolveReady: (): void => resolve(), reject: reject, timer: timer } :
         { resolveResult: (result: TextTranslationResult): void => resolve(result), reject: reject, timer: timer });
     });
@@ -184,18 +258,26 @@ export class TranslationWorkerClient implements TextTranslationRunner {
     if (pending === undefined) return;
     if (message.kind !== 'ready' && message.kind !== 'result' && message.kind !== 'error') return;
     this.clearPending(message.id);
-    if (!message.ok || message.kind === 'error') { pending.reject(new Error(message.error ?? 'Translation worker failed.')); return; }
+    if (!message.ok || message.kind === 'error') {
+      const error = new Error(message.error ?? 'Translation worker failed.');
+      this.failWorker(instance, generation, error);
+      pending.reject(error);
+      return;
+    }
     if (message.kind === 'ready' && pending.resolveReady !== undefined) { pending.resolveReady(); return; }
     if (message.kind === 'result' && pending.resolveResult !== undefined && isTranslationResult(message.result)) {
       pending.resolveResult(message.result as TextTranslationResult); return;
     }
-    pending.reject(new Error('Translation worker response did not match its request.'));
+    const error = new Error('Translation worker response did not match its request.');
+    this.failWorker(instance, generation, error);
+    pending.reject(error);
   }
 
   private failWorker(instance: TranslationWorkerPort | undefined, generation: number, error: Error): void {
     if (!this.isCurrent(instance, generation)) return;
     this.worker = undefined;
     this.initialization = undefined;
+    this.activeTarget = undefined;
     this.generation++;
     if (instance !== undefined) this.detachAndTerminate(instance);
     this.settleAll(error);

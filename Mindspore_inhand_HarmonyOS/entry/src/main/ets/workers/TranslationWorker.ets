@@ -6,12 +6,11 @@ interface TranslationWorkerRequest {
   readonly id: number;
   readonly directory?: string;
   readonly manifest?: Object;
-  readonly tokenizerRuntime?: string;
   readonly text?: string;
   readonly targetLanguage?: string;
 }
 
-interface TranslationWorkerManifestLike { readonly graphs?: Array<Object>; }
+interface TranslationWorkerManifestLike { readonly schemaVersion?: number; readonly directions?: Object; }
 
 type TranslationWorkerRequestKind = 'initialize' | 'translate';
 
@@ -34,8 +33,7 @@ worker.workerPort.onmessage = (event): void => {
         }
         await runtime.initialize({
           directory: request.directory ?? '',
-          manifest: request.manifest as never,
-          tokenizerRuntime: request.tokenizerRuntime ?? ''
+          manifest: request.manifest as never
         });
         initialized = true;
         initCount++;
@@ -62,8 +60,7 @@ function parseTranslationWorkerRequest(value: Object): TranslationWorkerRequest 
     return undefined;
   }
   if (request.kind === 'initialize') {
-    if (typeof request.directory !== 'string' || !hasTranslationManifestShape(request.manifest) ||
-      typeof request.tokenizerRuntime !== 'string') {
+    if (typeof request.directory !== 'string' || !hasTranslationManifestShape(request.manifest)) {
       return undefined;
     }
     return request;
@@ -77,5 +74,5 @@ function parseTranslationWorkerRequest(value: Object): TranslationWorkerRequest 
 function hasTranslationManifestShape(value: Object | undefined): boolean {
   if (value === undefined || value === null) return false;
   const manifest = value as TranslationWorkerManifestLike;
-  return Array.isArray(manifest.graphs) && manifest.graphs.length === 3;
+  return manifest.schemaVersion === 2 && manifest.directions !== undefined;
 }

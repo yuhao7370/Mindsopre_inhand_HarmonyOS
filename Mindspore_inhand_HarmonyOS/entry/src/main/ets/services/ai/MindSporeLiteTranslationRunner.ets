@@ -2,18 +2,21 @@ import { mindSporeLite } from '@kit.MindSporeLiteKit';
 import { fileIo } from '@kit.CoreFileKit';
 import {
   TranslationGraphManifest,
+  TranslationDirectionManifest,
   TranslationModelManifest,
+  TranslationTokenizerManifest,
   TranslationTensorDataType,
   TranslationTensorManifest,
   parseTranslationModelManifest,
   translationArchiveRawfilePath,
-  translationManifestRawfilePath,
-  translationTokenizerRuntimeRawfilePath
+  translationDirectionForTarget,
+  translationManifestRawfilePath
 } from './TranslationModelManifest';
 import {
-  configureTranslationTokenizer,
-  decodeTranslationTokens,
-  encodeTranslationText,
+  configureTranslationTokenizers,
+  decodeTranslationTokensForDirection,
+  encodeTranslationTextForDirection,
+  TranslationTokenizerContract,
   TranslationChunk
 } from './TinyTranslationTokenizer';
 import {
@@ -27,7 +30,7 @@ import {
   TranslationInputSegment
 } from './TranslationInputPolicy';
 
-export type TranslationGraphName = 'encoder' | 'decoder_prefill' | 'decoder_step';
+export type TranslationGraphName = 'encoder' | 'decoder_full';
 
 export interface TranslationTensor {
   readonly name: string;
@@ -52,12 +55,12 @@ export class TranslationRequestQueue {
 }
 
 export interface TranslationModelBundle {
-  readonly manifest: TranslationModelManifest;
+  readonly direction: TranslationDirectionManifest;
   readonly session: TranslationTensorSession;
   readonly requestQueue: TranslationRequestQueue;
 }
 
-export type TranslationModelBundleFactory = () => Promise<TranslationModelBundle>;
+export type TranslationModelBundleFactory = (targetLanguage?: string) => Promise<TranslationModelBundle>;
 
 export interface MindSporeLiteTranslationRunnerOptions {
   readonly bundleFactory: TranslationModelBundleFactory;
@@ -86,7 +89,7 @@ export interface PreparedTranslationModelFiles {
 }
 
 interface TranslationArchiveMember {
-  readonly name: 'encoder.ms' | 'decoder_prefill.ms' | 'decoder_step.ms';
+  readonly name: string;
   readonly size: number;
   readonly sha256: string;
 }
@@ -106,6 +109,7 @@ interface TranslationArchiveResult {
 }
 
 let cachedBundlePromise: Promise<TranslationModelBundle> | undefined = undefined;
+let cachedBundleTarget: string | undefined = undefined;
 let cacheGeneration: number = 0;
 
 export class MindSporeLiteTranslationRunner implements TextTranslationRunner {
@@ -127,9 +131,7 @@ export class MindSporeLiteTranslationRunner implements TextTranslationRunner {
       return successfulTranslation(text, text, targetLanguage);
     }
     try {
-      // The production bundle loads and validates tokenizer_runtime.json. It must
-      // be ready before the first call to encodeTranslationText().
-      const bundle = await cachedTranslationBundle(this.bundleFactory);
+      const bundle = await cachedTranslationBundle(this.bundleFactory, targetLanguage);
       return await bundle.requestQueue.runExclusive(async (): Promise<TextTranslationResult> => {
         return await runTranslationModelRequest(bundle, text, targetLanguage);
       });
@@ -152,7 +154,10 @@ async function translateInputSegments(
       translatedText += segment.text;
       continue;
     }
-    const chunks = encodeTranslationText(segment.text, targetLanguage);
+    const direction = bundle.direction;
+    const chunks = encodeTranslationTextForDirection(segment.text, direction.generation.sourcePrefix,
+      direction.generation.sourcePrefixTokenId,
+      direction.vocabulary.pad, direction.vocabulary.eos);
     if (chunks.length === 0) {
       return failedTranslation(text, targetLanguage, 'DECODE_FAILED');
     }
@@ -209,31 +214,35 @@ function hasTranslationModelSegment(segments: Array<TranslationInputSegment>): b
 export function productionTranslationModelBundleFactory(
   options: TranslationProductionBundleOptions
 ): TranslationModelBundleFactory {
-  return async (): Promise<TranslationModelBundle> => loadProductionTranslationModelBundle(options);
+  return async (targetLanguage?: string): Promise<TranslationModelBundle> =>
+    loadProductionTranslationModelBundle(options, targetLanguage ?? 'en');
 }
 
 async function loadProductionTranslationModelBundle(
-  options: TranslationProductionBundleOptions
+  options: TranslationProductionBundleOptions,
+  targetLanguage: string
 ): Promise<TranslationModelBundle> {
   const prepared = await prepareProductionTranslationModelFiles(options);
-  const tokenizerContent = await options.resourceManager.getRawFileContent(translationTokenizerRuntimeRawfilePath);
-  configureTranslationTokenizer(asciiContentToText(tokenizerContent));
-  const encoderPath = modelFilePath(prepared.directory, prepared.manifest.graphs[0].file);
-  const prefillPath = modelFilePath(prepared.directory, prepared.manifest.graphs[1].file);
-  const stepPath = modelFilePath(prepared.directory, prepared.manifest.graphs[2].file);
-  const encoderBuffer = await readVerifiedTranslationModel(encoderPath, prepared.manifest.graphs[0]);
+  const direction = translationDirectionForTarget(prepared.manifest, targetLanguage);
+  const sourceTable = await readVerifiedTranslationText(modelFilePath(prepared.directory, direction.tokenizers.source.file),
+    direction.tokenizers.source.size, direction.tokenizers.source.file);
+  const targetTable = direction.tokenizers.target.file === direction.tokenizers.source.file ? sourceTable :
+    await readVerifiedTranslationText(modelFilePath(prepared.directory, direction.tokenizers.target.file),
+      direction.tokenizers.target.size, direction.tokenizers.target.file);
+  configureTranslationTokenizers(sourceTable, targetTable,
+    tokenizerContract(direction, true), tokenizerContract(direction, false));
+  const encoderBuffer = await readVerifiedTranslationModel(
+    modelFilePath(prepared.directory, direction.graphs.encoder.file), direction.graphs.encoder);
   const encoder = await mindSporeLite.loadModelFromBuffer(encoderBuffer, mindSporeLiteCpuContext());
-  const prefillBuffer = await readVerifiedTranslationModel(prefillPath, prepared.manifest.graphs[1]);
-  const prefill = await mindSporeLite.loadModelFromBuffer(prefillBuffer, mindSporeLiteCpuContext());
-  const stepBuffer = await readVerifiedTranslationModel(stepPath, prepared.manifest.graphs[2]);
-  const step = await mindSporeLite.loadModelFromBuffer(stepBuffer, mindSporeLiteCpuContext());
+  const decoderBuffer = await readVerifiedTranslationModel(
+    modelFilePath(prepared.directory, direction.graphs.decoderFull.file), direction.graphs.decoderFull);
+  const decoder = await mindSporeLite.loadModelFromBuffer(decoderBuffer, mindSporeLiteCpuContext());
   return {
-    manifest: prepared.manifest,
+    direction: direction,
     session: new MindSporeLiteTranslationTensorSession(
-      prepared.manifest,
+      direction,
       new TranslationMindSporeModelAdapter(encoder),
-      new TranslationMindSporeModelAdapter(prefill),
-      new TranslationMindSporeModelAdapter(step)
+      new TranslationMindSporeModelAdapter(decoder)
     ),
     requestQueue: new TranslationRequestQueue()
   };
@@ -255,6 +264,21 @@ export async function runTranslationModelRequest(
     return successfulTranslation(text, text, targetLanguage);
   }
   return await translateInputSegments(bundle, segments, text, targetLanguage);
+}
+
+export function translationResultWithoutModel(
+  text: string,
+  targetLanguage: string
+): TextTranslationResult | undefined {
+  if (targetLanguage !== 'en' && targetLanguage !== 'zh') {
+    return failedTranslation(text, targetLanguage, 'UNSUPPORTED_TARGET');
+  }
+  const segments = prepareTranslationInput(text);
+  if (segments.length === 0 || text.trim().length === 0) {
+    return failedTranslation(text, targetLanguage, 'EMPTY_INPUT');
+  }
+  if (!hasTranslationModelSegment(segments)) return successfulTranslation(text, text, targetLanguage);
+  return undefined;
 }
 
 export async function prepareProductionTranslationModelFiles(
@@ -297,6 +321,7 @@ export function resetTranslationModelCacheForTests(): void {
   cacheGeneration++;
   const promise = cachedBundlePromise;
   cachedBundlePromise = undefined;
+  cachedBundleTarget = undefined;
   if (promise !== undefined) {
     promise.then(async (bundle: TranslationModelBundle): Promise<void> => {
       await closeBundle(bundle);
@@ -304,13 +329,22 @@ export function resetTranslationModelCacheForTests(): void {
   }
 }
 
-async function cachedTranslationBundle(factory: TranslationModelBundleFactory): Promise<TranslationModelBundle> {
-  if (cachedBundlePromise !== undefined) {
+async function cachedTranslationBundle(
+  factory: TranslationModelBundleFactory,
+  targetLanguage: string
+): Promise<TranslationModelBundle> {
+  if (cachedBundlePromise !== undefined && cachedBundleTarget === targetLanguage) {
     return cachedBundlePromise;
+  }
+  if (cachedBundlePromise !== undefined) {
+    const old = cachedBundlePromise;
+    cachedBundlePromise = undefined;
+    cachedBundleTarget = undefined;
+    old.then(async (bundle: TranslationModelBundle): Promise<void> => { await closeBundle(bundle); }).catch((): void => {});
   }
   const generation = cacheGeneration;
   let promise: Promise<TranslationModelBundle>;
-  promise = factory().then(async (bundle: TranslationModelBundle): Promise<TranslationModelBundle> => {
+  promise = factory(targetLanguage).then(async (bundle: TranslationModelBundle): Promise<TranslationModelBundle> => {
     if (generation !== cacheGeneration || cachedBundlePromise !== promise) {
       await closeBundle(bundle);
       throw new Error('Translation model load was reset.');
@@ -318,98 +352,191 @@ async function cachedTranslationBundle(factory: TranslationModelBundleFactory): 
     return bundle;
   });
   cachedBundlePromise = promise;
+  cachedBundleTarget = targetLanguage;
   promise.catch((): void => {
     if (generation === cacheGeneration && cachedBundlePromise === promise) {
       cachedBundlePromise = undefined;
+      cachedBundleTarget = undefined;
     }
   });
   return promise;
 }
 
 async function decodeChunk(bundle: TranslationModelBundle, chunk: TranslationChunk): Promise<string> {
-  const manifest = bundle.manifest;
+  const direction = bundle.direction;
   const encoderInputs: Array<TranslationTensor> = [
     intTensor('input_ids', [1, 128], chunk.inputIds),
     intTensor('attention_mask', [1, 128], chunk.attentionMask)
   ];
   const encoderOutputs = requireOutputs(
-    await bundle.session.run('encoder', encoderInputs), manifest.graphs[0], 'encoder'
+    await bundle.session.run('encoder', encoderInputs), direction.graphs.encoder, 'encoder'
   );
   const encoderHidden = encoderOutputs[0];
-  const prefillInputs: Array<TranslationTensor> = [
-    intTensor('decoder_input_ids', [1, 1], [manifest.vocabulary.decoderStart]),
-    namedTensor('encoder_hidden_states', encoderHidden),
-    intTensor('encoder_attention_mask', [1, 128], chunk.attentionMask)
-  ];
-  const prefillOutputs = requireOutputs(
-    await bundle.session.run('decoder_prefill', prefillInputs), manifest.graphs[1], 'decoder_prefill'
-  );
-  const generated: Array<number> = [];
-  let token = stableFiniteArgmax(floatData(prefillOutputs[0]));
-  if (token === manifest.vocabulary.eos) {
-    return '';
-  }
-  generated.push(token);
-
-  const pastKeys: Array<Float32Array> = [new Float32Array(8 * 127 * 32), new Float32Array(8 * 127 * 32)];
-  const pastValues: Array<Float32Array> = [new Float32Array(8 * 127 * 32), new Float32Array(8 * 127 * 32)];
-  scatterCacheSlot(pastKeys[0], floatData(prefillOutputs[1]), 0);
-  scatterCacheSlot(pastValues[0], floatData(prefillOutputs[2]), 0);
-  scatterCacheSlot(pastKeys[1], floatData(prefillOutputs[5]), 0);
-  scatterCacheSlot(pastValues[1], floatData(prefillOutputs[6]), 0);
-  const crossCaches: Array<TranslationTensor> = [
-    prefillOutputs[3], prefillOutputs[4], prefillOutputs[7], prefillOutputs[8]
-  ];
-
-  while (generated.length < 128) {
-    const position = generated.length;
-    const stepInputs = stepInputTensors(token, position, chunk.attentionMask, pastKeys, pastValues, crossCaches);
-    const stepOutputs = requireOutputs(
-      await bundle.session.run('decoder_step', stepInputs), manifest.graphs[2], 'decoder_step'
-    );
-    if (position < 127) {
-      scatterCacheSlot(pastKeys[0], floatData(stepOutputs[1]), position);
-      scatterCacheSlot(pastValues[0], floatData(stepOutputs[2]), position);
-      scatterCacheSlot(pastKeys[1], floatData(stepOutputs[3]), position);
-      scatterCacheSlot(pastValues[1], floatData(stepOutputs[4]), position);
-    }
-    token = stableFiniteArgmax(floatData(stepOutputs[0]));
-    if (token === manifest.vocabulary.eos) {
-      break;
-    }
-    generated.push(token);
-  }
-  return decodeTranslationTokens(generated);
+  const generated = direction.generation.strategy === 'beam' ?
+    await beamDecode(bundle, encoderHidden, chunk.attentionMask) :
+    await greedyDecode(bundle, encoderHidden, chunk.attentionMask);
+  return decodeTranslationTokensForDirection(generated, direction.vocabulary.eos, direction.vocabulary.pad);
 }
 
-function stepInputTensors(
-  token: number,
-  position: number,
+function decoderInputs(
+  direction: TranslationDirectionManifest,
+  prefix: Array<number>,
+  encoderHidden: TranslationTensor,
   encoderAttentionMask: Array<number>,
-  pastKeys: Array<Float32Array>,
-  pastValues: Array<Float32Array>,
-  crossCaches: Array<TranslationTensor>
 ): Array<TranslationTensor> {
-  const selfMask = new Int32Array(128);
-  for (let index = 0; index < position; index++) {
-    selfMask[index] = 1;
-  }
-  // The step graph appends the current key after the fixed 127-slot history.
-  selfMask[127] = 1;
+  const ids = new Array<number>(32).fill(direction.vocabulary.pad);
+  const mask = new Array<number>(32).fill(0);
+  for (let index = 0; index < prefix.length; index++) { ids[index] = prefix[index]; mask[index] = 1; }
   return [
-    intTensor('decoder_input_ids', [1, 1], [token]),
-    intTensor('position_id', [1], [position]),
-    { name: 'self_attention_mask', dtype: 'INT32', shape: [1, 128], data: selfMask },
-    intTensor('cross_attention_mask', [1, 128], encoderAttentionMask),
-    floatTensor('past_key_0', [1, 8, 127, 32], pastKeys[0]),
-    floatTensor('past_value_0', [1, 8, 127, 32], pastValues[0]),
-    namedTensor('cross_key_0', crossCaches[0]),
-    namedTensor('cross_value_0', crossCaches[1]),
-    floatTensor('past_key_1', [1, 8, 127, 32], pastKeys[1]),
-    floatTensor('past_value_1', [1, 8, 127, 32], pastValues[1]),
-    namedTensor('cross_key_1', crossCaches[2]),
-    namedTensor('cross_value_1', crossCaches[3])
+    intTensor('decoder_input_ids', [1, 32], ids),
+    intTensor('decoder_attention_mask', [1, 32], mask),
+    namedTensor('encoder_hidden_states', encoderHidden),
+    intTensor('encoder_attention_mask', [1, 128], encoderAttentionMask)
   ];
+}
+
+async function runFullDecoder(
+  bundle: TranslationModelBundle,
+  prefix: Array<number>,
+  encoderHidden: TranslationTensor,
+  encoderAttentionMask: Array<number>
+): Promise<Float32Array> {
+  const outputs = requireOutputs(await bundle.session.run('decoder_full',
+    decoderInputs(bundle.direction, prefix, encoderHidden, encoderAttentionMask)),
+  bundle.direction.graphs.decoderFull, 'decoder_full');
+  const logits = floatData(outputs[0]);
+  const vocabularySize = bundle.direction.vocabulary.size;
+  const offset = (prefix.length - 1) * vocabularySize;
+  return logits.subarray(offset, offset + vocabularySize);
+}
+
+async function greedyDecode(
+  bundle: TranslationModelBundle,
+  encoderHidden: TranslationTensor,
+  encoderAttentionMask: Array<number>
+): Promise<Array<number>> {
+  const direction = bundle.direction;
+  const prefix: Array<number> = [direction.vocabulary.decoderStart];
+  const generated: Array<number> = [];
+  while (prefix.length < direction.generation.targetMaxTokens) {
+    let token: number;
+    if (prefix.length === direction.generation.targetMaxTokens - 1) token = direction.vocabulary.eos;
+    else token = stableFiniteArgmax(await runFullDecoder(bundle, prefix, encoderHidden, encoderAttentionMask),
+      direction.vocabulary.pad);
+    if (token === direction.vocabulary.eos) break;
+    generated.push(token); prefix.push(token);
+  }
+  return generated;
+}
+
+interface TranslationBeam {
+  readonly tokens: Array<number>;
+  readonly score: number;
+  readonly order: number;
+  readonly normalizationLength: number;
+}
+
+async function beamDecode(
+  bundle: TranslationModelBundle,
+  encoderHidden: TranslationTensor,
+  encoderAttentionMask: Array<number>
+): Promise<Array<number>> {
+  const direction = bundle.direction;
+  const beamCount = direction.generation.numBeams;
+  let beams: Array<TranslationBeam> = [{
+    tokens: [direction.vocabulary.decoderStart], score: 0, order: 0, normalizationLength: 0
+  }];
+  const completed: Array<TranslationBeam> = [];
+  let candidateOrder = 1;
+  while (beams.length > 0 && beams[0].tokens.length < direction.generation.targetMaxTokens) {
+    const candidates: Array<TranslationBeam> = [];
+    const forceEos = beams[0].tokens.length === direction.generation.targetMaxTokens - 1;
+    for (let beamIndex = 0; beamIndex < beams.length; beamIndex++) {
+      if (forceEos) {
+        const tokens = beams[beamIndex].tokens.concat([direction.vocabulary.eos]);
+        candidates.push({ tokens: tokens, score: beams[beamIndex].score, order: candidateOrder++,
+          normalizationLength: tokens.length - 1 });
+        continue;
+      }
+      const logits = await runFullDecoder(bundle, beams[beamIndex].tokens, encoderHidden, encoderAttentionMask);
+      const next = topLogProbabilities(logits, beamCount * 2, direction.vocabulary.pad);
+      for (let rank = 0; rank < next.length; rank++) {
+        const tokens = beams[beamIndex].tokens.concat([next[rank].token]);
+        candidates.push({ tokens: tokens, score: beams[beamIndex].score + next[rank].score,
+          order: candidateOrder++, normalizationLength: tokens.length - 1 });
+      }
+    }
+    candidates.sort((left: TranslationBeam, right: TranslationBeam): number =>
+      right.score === left.score ? left.order - right.order : right.score - left.score);
+    const nextBeams: Array<TranslationBeam> = [];
+    const limit = Math.min(candidates.length, beamCount * 2);
+    for (let rank = 0; rank < limit; rank++) {
+      const candidate = candidates[rank];
+      const token = candidate.tokens[candidate.tokens.length - 1];
+      if (token === direction.vocabulary.eos) {
+        if (rank < beamCount) {
+          completed.push({ tokens: candidate.tokens.slice(0, candidate.tokens.length - 1),
+            score: candidate.score, order: candidate.order,
+            normalizationLength: candidate.normalizationLength });
+          completed.sort(compareCompletedBeams);
+          while (completed.length > beamCount) completed.pop();
+        }
+      } else if (nextBeams.length < beamCount) {
+        nextBeams.push(candidate);
+      }
+    }
+    if (nextBeams.length === 0) break;
+    beams = nextBeams;
+    if (beamSearchDone(completed, candidates[0].score, candidates[0].tokens.length, beamCount)) break;
+  }
+  if (completed.length === 0) completed.push(...beams);
+  completed.sort(compareCompletedBeams);
+  const best = completed[0].tokens.slice(1);
+  return best;
+}
+
+interface TokenScore { readonly token: number; readonly score: number; }
+
+function topLogProbabilities(logits: Float32Array, count: number, excludedToken: number): Array<TokenScore> {
+  let max = Number.NEGATIVE_INFINITY;
+  for (let index = 0; index < logits.length; index++) {
+    if (!Number.isFinite(logits[index])) throw new Error('Decoder logits contain a non-finite value.');
+    if (logits[index] > max) max = logits[index];
+  }
+  let sum = 0;
+  for (let index = 0; index < logits.length; index++) sum += Math.exp(logits[index] - max);
+  const logDenominator = max + Math.log(sum);
+  const best: Array<TokenScore> = [];
+  for (let token = 0; token < logits.length; token++) {
+    if (token === excludedToken) continue;
+    const item: TokenScore = { token: token, score: logits[token] - logDenominator };
+    let position = 0;
+    while (position < best.length && (best[position].score > item.score ||
+      (best[position].score === item.score && best[position].token < token))) position++;
+    if (position < count) { best.splice(position, 0, item); if (best.length > count) best.pop(); }
+  }
+  return best;
+}
+
+function compareCompletedBeams(left: TranslationBeam, right: TranslationBeam): number {
+  const score = normalizedBeamScore(right) - normalizedBeamScore(left);
+  return score === 0 ? left.order - right.order : score;
+}
+
+function normalizedBeamScore(beam: TranslationBeam): number {
+  return beam.score / Math.max(1, beam.normalizationLength);
+}
+
+function beamSearchDone(
+  completed: Array<TranslationBeam>,
+  bestRunningScore: number,
+  length: number,
+  beamCount: number
+): boolean {
+  if (completed.length < beamCount) return false;
+  let worst = Number.POSITIVE_INFINITY;
+  for (let index = 0; index < completed.length; index++) worst = Math.min(worst, normalizedBeamScore(completed[index]));
+  return worst >= bestRunningScore / Math.max(1, length - 1);
 }
 
 function requireOutputs(
@@ -461,47 +588,28 @@ function validateTensor(actual: TranslationTensor, expected: TranslationTensorMa
   }
 }
 
-function stableFiniteArgmax(logits: Float32Array): number {
+function stableFiniteArgmax(logits: Float32Array, excludedToken: number = -1): number {
   if (logits.length === 0) {
     throw new Error('Translation logits are empty.');
   }
-  let bestId = 0;
-  let bestValue = logits[0];
-  if (!Number.isFinite(bestValue)) {
-    throw new Error('Translation logits contain a non-finite value.');
-  }
-  for (let index = 1; index < logits.length; index++) {
+  let bestId = -1;
+  let bestValue = Number.NEGATIVE_INFINITY;
+  for (let index = 0; index < logits.length; index++) {
     const value = logits[index];
     if (!Number.isFinite(value)) {
       throw new Error('Translation logits contain a non-finite value.');
     }
-    if (value > bestValue) {
+    if (index !== excludedToken && value > bestValue) {
       bestValue = value;
       bestId = index;
     }
   }
+  if (bestId < 0) throw new Error('Translation logits contain no selectable token.');
   return bestId;
-}
-
-function scatterCacheSlot(history: Float32Array, slot: Float32Array, position: number): void {
-  if (slot.length !== 8 * 32 || position < 0 || position >= 127) {
-    throw new Error('Translation self cache slot mismatch.');
-  }
-  for (let head = 0; head < 8; head++) {
-    const sourceOffset = head * 32;
-    const destinationOffset = (head * 127 + position) * 32;
-    for (let dimension = 0; dimension < 32; dimension++) {
-      history[destinationOffset + dimension] = slot[sourceOffset + dimension];
-    }
-  }
 }
 
 function intTensor(name: string, shape: Array<number>, values: Array<number>): TranslationTensor {
   return { name: name, dtype: 'INT32', shape: shape, data: new Int32Array(values) };
-}
-
-function floatTensor(name: string, shape: Array<number>, data: Float32Array): TranslationTensor {
-  return { name: name, dtype: 'FLOAT32', shape: shape, data: data };
 }
 
 function namedTensor(name: string, tensor: TranslationTensor): TranslationTensor {
@@ -567,12 +675,11 @@ export interface TranslationMindSporeModel {
 }
 
 export function createMindSporeLiteTranslationTensorSessionForTests(
-  manifest: TranslationModelManifest,
+  direction: TranslationDirectionManifest,
   encoder: TranslationMindSporeModel,
-  prefill: TranslationMindSporeModel,
-  step: TranslationMindSporeModel
+  decoder: TranslationMindSporeModel
 ): TranslationTensorSession {
-  return new MindSporeLiteTranslationTensorSession(manifest, encoder, prefill, step);
+  return new MindSporeLiteTranslationTensorSession(direction, encoder, decoder);
 }
 
 class TranslationMindSporeModelAdapter implements TranslationMindSporeModel {
@@ -592,25 +699,21 @@ class TranslationMindSporeModelAdapter implements TranslationMindSporeModel {
 }
 
 class MindSporeLiteTranslationTensorSession implements TranslationTensorSession {
-  private readonly manifest: TranslationModelManifest;
+  private readonly direction: TranslationDirectionManifest;
   private readonly encoder: TranslationMindSporeModel;
-  private readonly prefill: TranslationMindSporeModel;
-  private readonly step: TranslationMindSporeModel;
+  private readonly decoder: TranslationMindSporeModel;
   private closed: boolean = false;
 
   constructor(
-    manifest: TranslationModelManifest,
+    direction: TranslationDirectionManifest,
     encoder: TranslationMindSporeModel,
-    prefill: TranslationMindSporeModel,
-    step: TranslationMindSporeModel
+    decoder: TranslationMindSporeModel
   ) {
-    this.manifest = manifest;
+    this.direction = direction;
     this.encoder = encoder;
-    this.prefill = prefill;
-    this.step = step;
-    validateModelInputContract(encoder, manifest.graphs[0], 'encoder');
-    validateModelInputContract(prefill, manifest.graphs[1], 'decoder_prefill');
-    validateModelInputContract(step, manifest.graphs[2], 'decoder_step');
+    this.decoder = decoder;
+    validateModelInputContract(encoder, direction.graphs.encoder, 'encoder');
+    validateModelInputContract(decoder, direction.graphs.decoderFull, 'decoder_full');
   }
 
   async run(graph: TranslationGraphName, inputs: Array<TranslationTensor>): Promise<Array<TranslationTensor>> {
@@ -629,23 +732,11 @@ class MindSporeLiteTranslationTensorSession implements TranslationTensorSession 
   }
 
   private modelForGraph(graph: TranslationGraphName): TranslationMindSporeModel {
-    if (graph === 'encoder') {
-      return this.encoder;
-    }
-    if (graph === 'decoder_prefill') {
-      return this.prefill;
-    }
-    return this.step;
+    return graph === 'encoder' ? this.encoder : this.decoder;
   }
 
   private manifestForGraph(graph: TranslationGraphName): TranslationGraphManifest {
-    if (graph === 'encoder') {
-      return this.manifest.graphs[0];
-    }
-    if (graph === 'decoder_prefill') {
-      return this.manifest.graphs[1];
-    }
-    return this.manifest.graphs[2];
+    return graph === 'encoder' ? this.direction.graphs.encoder : this.direction.graphs.decoderFull;
   }
 }
 
@@ -856,11 +947,29 @@ function copyArrayBuffer(source: ArrayBuffer): ArrayBuffer {
 }
 
 function archiveMembers(manifest: TranslationModelManifest): Array<TranslationArchiveMember> {
+  const en = manifest.directions.en;
+  const zh = manifest.directions.zh;
   return [
-    { name: 'encoder.ms', size: manifest.graphs[0].size, sha256: manifest.graphs[0].sha256 },
-    { name: 'decoder_prefill.ms', size: manifest.graphs[1].size, sha256: manifest.graphs[1].sha256 },
-    { name: 'decoder_step.ms', size: manifest.graphs[2].size, sha256: manifest.graphs[2].sha256 }
+    graphArchiveMember(en.graphs.encoder), graphArchiveMember(en.graphs.decoderFull),
+    tokenizerArchiveMember(en.tokenizers.source),
+    graphArchiveMember(zh.graphs.encoder), graphArchiveMember(zh.graphs.decoderFull),
+    tokenizerArchiveMember(zh.tokenizers.source), tokenizerArchiveMember(zh.tokenizers.target)
   ];
+}
+
+function graphArchiveMember(graph: TranslationGraphManifest): TranslationArchiveMember {
+  return { name: graph.file, size: graph.size, sha256: graph.sha256 };
+}
+
+function tokenizerArchiveMember(tokenizer: TranslationTokenizerManifest): TranslationArchiveMember {
+  return { name: tokenizer.file, size: tokenizer.size, sha256: tokenizer.sha256 };
+}
+
+function tokenizerContract(direction: TranslationDirectionManifest, source: boolean): TranslationTokenizerContract {
+  const tokenizer = source ? direction.tokenizers.source : direction.tokenizers.target;
+  return { modelSha256: tokenizer.modelSha256, vocabularySha256: tokenizer.vocabularySha256,
+    vocabularySize: direction.vocabulary.size, pieceCount: tokenizer.pieceCount,
+    decodeVocabularySize: tokenizer.decodeVocabularySize, unknownId: direction.vocabulary.unk };
 }
 
 async function extractTranslationArchive(request: TranslationArchiveRequest): Promise<TranslationArchiveResult> {
@@ -889,6 +998,18 @@ async function readVerifiedTranslationModel(
     if (file !== undefined) {
       await fileIo.close(file);
     }
+  }
+}
+
+async function readVerifiedTranslationText(path: string, size: number, fileName: string): Promise<string> {
+  let file: fileIo.File | undefined = undefined;
+  try {
+    file = await fileIo.open(path, fileIo.OpenMode.READ_ONLY);
+    const stat = await fileIo.stat(file.fd);
+    if (!Number.isInteger(stat.size) || stat.size !== size) throw new Error(`${fileName} size differs from manifest.`);
+    return asciiContentToText(new Uint8Array(await readTranslationModelFully(file.fd, stat.size, fileName)));
+  } finally {
+    if (file !== undefined) await fileIo.close(file);
   }
 }
 

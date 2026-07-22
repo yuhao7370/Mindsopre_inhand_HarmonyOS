@@ -1,0 +1,93 @@
+{
+  "archive": {
+    "file": "translation-models.tar.xz",
+    "sha256": "d2ea08df3c6633b2d9ebce11a11e75ce70245ef85dee67235d749dd49ab01e00",
+    "size": 151835260
+  },
+  "members": [
+    {
+      "name": "zh-en/encoder.ms",
+      "sha256": "86a9272199af2b3699a3d873b69e5741de3e26da545de06180902df071ff91bb",
+      "size": 16115736
+    },
+    {
+      "name": "zh-en/decoder_full.ms",
+      "sha256": "8dc03af96ac9f7bf9efb37ffcc42a0034f5305810a0059cd7c3cb66e48a3550d",
+      "size": 21247904
+    },
+    {
+      "name": "zh-en/tokenizer.ttok",
+      "sha256": "aeea44e624acfcdb7e1008e4699df68109b78745bc3c9cabf643fa2cb9ea151a",
+      "size": 6997099
+    },
+    {
+      "name": "en-zh/encoder.ms",
+      "sha256": "4a1eae7e4b3600801b88df822bd42f786e9e34f715d12d0bac6454683599c5ee",
+      "size": 55211640
+    },
+    {
+      "name": "en-zh/decoder_full.ms",
+      "sha256": "5046af7b4311c14676d099e6cd01839f9c3b910d437184017797e972e559e66e",
+      "size": 97121896
+    },
+    {
+      "name": "en-zh/source.ttok",
+      "sha256": "7b756617e38743f0544a31f622e4d67ed992c784905a742e895515e4e0fb5bbd",
+      "size": 6505151
+    },
+    {
+      "name": "en-zh/target.ttok",
+      "sha256": "e49d670ca70e0644d25006f4734493f8a46d780dbd503bcd6ece164e99d6594d",
+      "size": 1726006
+    }
+  ],
+  "runtimeManifest": {
+    "file": "manifest.json",
+    "sha256": "f42bbf33ebb1cb9891f8ead3fedbaf257757c98f39d9874e816ee355057d86d7",
+    "size": 8140
+  },
+  "schemaVersion": 2,
+  "tar": {
+    "file": "translation-models.tar",
+    "sha256": "867be1dff1c384204bacbc164b731222c63a0fc566709742d3db6d4b32bfe17b",
+    "size": 204933120
+  },
+  "tokenizers": {
+    "en-zh/source": {
+      "decodeVocabularySize": 0,
+      "file": "en-zh/source.ttok",
+      "modelSha256": "5775ddc9e3ff2fae91554da56468ad35ff56edaba870fea74447bc7234bfdaa8",
+      "pieceCount": 32000,
+      "specialTokens": {
+        "eos": "</s>",
+        "pad": "<pad>",
+        "unk": "<unk>"
+      },
+      "vocabularySha256": "f1832ca38f7aa158b9a944ff583e4901e6b37d9d4ad9241f03838e636e9cfb03"
+    },
+    "en-zh/target": {
+      "decodeVocabularySize": 65001,
+      "file": "en-zh/target.ttok",
+      "modelSha256": "81dc94efa84e4025ef38d25d5d07429fe41e3eb29d44003f1db6fe98487b0052",
+      "pieceCount": 0,
+      "specialTokens": {
+        "eos": "</s>",
+        "pad": "<pad>",
+        "unk": "<unk>"
+      },
+      "vocabularySha256": "f1832ca38f7aa158b9a944ff583e4901e6b37d9d4ad9241f03838e636e9cfb03"
+    },
+    "zh-en/shared": {
+      "decodeVocabularySize": 32001,
+      "file": "zh-en/tokenizer.ttok",
+      "modelSha256": "e5528a5c3685d08f8868902d31febeb763eea8519f9997f43b05964b02554640",
+      "pieceCount": 32000,
+      "specialTokens": {
+        "eos": "</s>",
+        "pad": "<pad>",
+        "unk": "<unk>"
+      },
+      "vocabularySha256": "13690d04e27310a43f0d879dfd38823c317e9ac69f436754baffbb0da6fc9dbe"
+    }
+  }
+}
