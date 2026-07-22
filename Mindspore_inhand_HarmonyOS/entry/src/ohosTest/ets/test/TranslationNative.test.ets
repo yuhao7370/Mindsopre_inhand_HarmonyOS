@@ -77,6 +77,17 @@ function containsCjk(text: string): boolean {
   return false;
 }
 
+function hasAdjacentRepeatedSpan(text: string): boolean {
+  for (let width = 2; width * 2 <= text.length; width++) {
+    for (let start = 0; start + width * 2 <= text.length; start++) {
+      if (text.slice(start, start + width) === text.slice(start + width, start + width * 2)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 function containsLatinLetter(text: string): boolean {
   return /[A-Za-z]/.test(text);
 }
@@ -153,6 +164,7 @@ export default function translationNativeTest() {
         await timer;
         const typedChineseResult = results[0];
         const typedEnglishTranslated = results[1];
+        const helloWorld = await service.translateText('hello world');
 
         expect(typedChineseResult.ok).assertTrue();
         expect(typedChineseResult.targetLanguage).assertEqual('en');
@@ -170,6 +182,11 @@ export default function translationNativeTest() {
         expect(typedEnglishTranslated.translatedText.indexOf('\u62a5\u544a') >= 0).assertTrue();
         expect(typedEnglishTranslated.translatedText.indexOf('\u4fdd\u5bc6') >= 0).assertTrue();
         expect(typedEnglishTranslated.translatedText.indexOf('\u661f\u671f\u4e00') >= 0).assertTrue();
+        console.info(`translation-hello-world=${helloWorld.translatedText}`);
+        expect(helloWorld.ok).assertTrue();
+        expect(helloWorld.translatedText.trim().length > 0).assertTrue();
+        expect(helloWorld.translatedText.length <= 128).assertTrue();
+        expect(hasAdjacentRepeatedSpan(helloWorld.translatedText)).assertFalse();
         expect(typedChineseResult.translatedText !== typedEnglishTranslated.translatedText).assertTrue();
         expect(timerObservedPendingTranslation).assertTrue();
 

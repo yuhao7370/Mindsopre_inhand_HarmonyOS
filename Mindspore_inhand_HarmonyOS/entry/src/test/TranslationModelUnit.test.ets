@@ -57,6 +57,13 @@ function assertNumberArrayEqual(actual: Array<number>, expected: Array<number>):
   }
 }
 
+function assertDecoderSelfMask(mask: Array<number>, position: number): void {
+  expect(mask.length).assertEqual(128);
+  for (let index = 0; index < mask.length; index++) {
+    expect(mask[index]).assertEqual(index < position || index === 127 ? 1 : 0);
+  }
+}
+
 function serializedTranslationSegments(segments: Array<TranslationInputSegment>): string {
   const values: Array<string> = [];
   for (let index = 0; index < segments.length; index++) {
@@ -265,6 +272,7 @@ class FakeTranslationSession implements TranslationTensorSession {
   readonly tokens: Array<number>;
   readonly positions: Array<number> = [];
   readonly selfMaskCounts: Array<number> = [];
+  readonly selfMasks: Array<Array<number>> = [];
   readonly seenDecoderTokens: Array<number> = [];
   encoderCalls: number = 0;
   prefillCalls: number = 0;
@@ -337,10 +345,13 @@ class FakeTranslationSession implements TranslationTensorSession {
     this.seenDecoderTokens.push(intData(inputs[0])[0]);
     let maskCount = 0;
     const mask = intData(inputs[2]);
+    const maskValues: Array<number> = [];
     for (let index = 0; index < mask.length; index++) {
       maskCount += mask[index];
+      maskValues.push(mask[index]);
     }
     this.selfMaskCounts.push(maskCount);
+    this.selfMasks.push(maskValues);
     if (this.stepCalls === 1) {
       this.firstPastHeadOneValue = floatData(inputs[4])[(1 * 127) * 32];
     }
@@ -803,6 +814,8 @@ export default function translationModelUnitTest(): void {
       expect(session.stepCalls).assertEqual(2);
       assertNumberArrayEqual(session.positions, [1, 2]);
       assertNumberArrayEqual(session.selfMaskCounts, [2, 3]);
+      assertDecoderSelfMask(session.selfMasks[0], 1);
+      assertDecoderSelfMask(session.selfMasks[1], 2);
       assertNumberArrayEqual(session.seenDecoderTokens, [12249, 192]);
       expect(session.firstPastHeadOneValue).assertEqual(110);
       expect(session.retainedCrossCaches).assertTrue();

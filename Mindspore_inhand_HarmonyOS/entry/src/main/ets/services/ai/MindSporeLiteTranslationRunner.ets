@@ -391,9 +391,11 @@ function stepInputTensors(
   crossCaches: Array<TranslationTensor>
 ): Array<TranslationTensor> {
   const selfMask = new Int32Array(128);
-  for (let index = 0; index <= position; index++) {
+  for (let index = 0; index < position; index++) {
     selfMask[index] = 1;
   }
+  // The step graph appends the current key after the fixed 127-slot history.
+  selfMask[127] = 1;
   return [
     intTensor('decoder_input_ids', [1, 1], [token]),
     intTensor('position_id', [1], [position]),
