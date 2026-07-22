@@ -1,5 +1,6 @@
 $ErrorActionPreference = 'Stop'
 Import-Module (Join-Path $PSScriptRoot 'CoreModelAssetGuard.psm1') -Force
+& (Join-Path $PSScriptRoot 'check-segmentation-fixture-contract.ps1')
 
 function Assert-TextContains([string]$Text, [string]$Marker, [string]$Message) {
   if (-not $Text.Contains($Marker)) { throw "Core model asset guard failed: $Message" }
@@ -217,6 +218,7 @@ $buildAst = Read-CoreGuardPowerShellAst (Join-Path $PSScriptRoot 'build-hap.ps1'
 Assert-CoreGuardExecutableCommand $buildAst "& (Join-Path `$PSScriptRoot 'check-core-model-assets.ps1')" 'build-hap.ps1 must execute the core model asset guard.'
 Assert-CoreGuardExecutableCommand $buildAst "& (Join-Path `$PSScriptRoot 'test-core-model-assets-guard.ps1')" 'build-hap.ps1 must execute core model guard fixtures.'
 Assert-CoreGuardExecutableCommand $buildAst "& (Join-Path `$PSScriptRoot 'ensure-mindspore-models.ps1')" 'build-hap.ps1 must execute verifier-only model ensure wiring.'
+Assert-CoreGuardExecutableCommand $buildAst '& (Join-Path $PSScriptRoot ''check-segmentation-fixture-contract.ps1'')' 'build-hap.ps1 must execute the segmentation fixture guard.'
 Assert-CoreGuardNoDownloaderCommand $buildAst 'normal build'
 
 $hapVerifierAst = Read-CoreGuardPowerShellAst (Join-Path $PSScriptRoot 'verify-ai-runtime-haps.ps1')
@@ -238,6 +240,13 @@ foreach ($entry in @(
   Assert-CoreGuardStringArrayContains $hapFixtureAst 'mainEntries' $entry "HAP fixture is missing $entry."
 }
 Assert-CoreGuardExecutableCommand $hapVerifierAst 'Assert-HapPayloadHashes $MainHapPath $payloads' 'main HAP must reuse exact payload hash verification.'
+foreach ($entry in @(
+  'resources/rawfile/fixtures/segmentation/person.jpg',
+  'resources/rawfile/fixtures/segmentation/person_mask.png'
+)) {
+  Assert-CoreGuardStringArrayContains $hapVerifierAst 'testRequired' $entry ('ohosTest HAP verifier is missing {0}.' -f $entry)
+  Assert-CoreGuardStringArrayContains $hapFixtureAst 'testEntries' $entry ('HAP fixture is missing {0}.' -f $entry)
+}
 Assert-CoreGuardAssignmentLiteral $hapFixtureAst 'tamperedAppModelEntry' 'resources/rawfile/model/nanodet_plus_m_320.mnn' 'HAP fixture must reject a tampered core model.'
 
 $entryBuildProfile = Get-Content -Raw -LiteralPath (Join-Path $projectRoot 'entry/build-profile.json5')

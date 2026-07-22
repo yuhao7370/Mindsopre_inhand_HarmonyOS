@@ -12,9 +12,9 @@ import {
 import { SegmentationResult } from '../../../main/ets/services/ai/SegmentationService';
 import segmentationMnn from 'libsegmentation_mnn.so';
 
-const personFixturePath: string = 'posenet/skeleton_image.JPG';
+const personFixturePath: string = 'fixtures/segmentation/person.jpg';
+const personMaskPath: string = 'fixtures/segmentation/person_mask.png';
 const noPersonFixturePath: string = 'portrait/portrait1.jpg';
-const foregroundChannelThreshold: number = 245;
 const foregroundAlphaThreshold: number = 127;
 const minimumForegroundIou: number = 0.72;
 const segmentationInputFloatCount: number = 196608;
@@ -70,13 +70,11 @@ async function decodedRgba(
   }
 }
 
-function foregroundIou(expectedRgba: Uint8Array, actualForegroundRgba: Uint8Array): number {
+function foregroundIou(expectedMaskRgba: Uint8Array, actualForegroundRgba: Uint8Array): number {
   let intersection: number = 0;
   let union: number = 0;
-  for (let offset = 0; offset + 3 < expectedRgba.length; offset += 4) {
-    const expectedForeground = expectedRgba[offset] < foregroundChannelThreshold ||
-      expectedRgba[offset + 1] < foregroundChannelThreshold ||
-      expectedRgba[offset + 2] < foregroundChannelThreshold;
+  for (let offset = 0; offset + 3 < expectedMaskRgba.length; offset += 4) {
+    const expectedForeground = expectedMaskRgba[offset + 3] > foregroundAlphaThreshold;
     const actualForeground = actualForegroundRgba[offset + 3] > foregroundAlphaThreshold;
     if (expectedForeground && actualForeground) {
       intersection++;
@@ -139,9 +137,10 @@ export default function segmentationNativeTest() {
         .getAppContext()
         .getApplicationContext();
       const mainManager = applicationContext.createModuleContext('entry').resourceManager;
+      const testManager = applicationContext.createModuleContext('entry_test').resourceManager;
       const workflow = workflowForRoute(AppRoute.SEGMENTATION_STILL.name)!;
       const fixturePath = await cacheFixture(
-        mainManager,
+        testManager,
         applicationContext.cacheDir,
         personFixturePath,
         'segmentation-person.JPG'
@@ -157,7 +156,7 @@ export default function segmentationNativeTest() {
       const foreground = new Uint8Array(result.foregroundImageRgba ?? new ArrayBuffer(0));
       expect(width > 0 && height > 0).assertTrue();
       expect(foreground.length).assertEqual(width * height * 4);
-      const expected = await decodedRgba(mainManager, personFixturePath, width, height);
+      const expected = await decodedRgba(testManager, personMaskPath, width, height);
       const iou = foregroundIou(expected, foreground);
       console.info(`segmentation-person-iou=${iou} threshold=${minimumForegroundIou} size=${width}x${height}`);
       expect(iou >= minimumForegroundIou).assertTrue();

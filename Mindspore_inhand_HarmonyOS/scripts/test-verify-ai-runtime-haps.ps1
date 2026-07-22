@@ -144,7 +144,9 @@ $testEntries = @(
   'pack.info',
   'ets/modules.abc',
   'resources/rawfile/fixtures/gesture/open_palm.png',
-  'resources/rawfile/fixtures/posenet/labels.json'
+  'resources/rawfile/fixtures/posenet/labels.json',
+  'resources/rawfile/fixtures/segmentation/person.jpg',
+  'resources/rawfile/fixtures/segmentation/person_mask.png'
 )
 
 New-Item -ItemType Directory -Path $tempRoot | Out-Null
@@ -266,6 +268,24 @@ try {
   $missingEntryFiles['pack.info'] = $missingEntryPack
   New-HapFixture $missingEntryHap $missingEntryFiles
   Assert-GuardRejects 'missing paired entry module' $mainHap $missingEntryHap 'must contain exactly one paired entry module'
+
+  $missingSegmentationMaskHap = Join-Path $tempRoot 'missing-segmentation-mask.hap'
+  $missingSegmentationMaskFiles = New-FileMap @($testEntries | Where-Object {
+    $_ -ne 'resources/rawfile/fixtures/segmentation/person_mask.png'
+  })
+  $missingSegmentationMaskFiles['module.json'] = $testModule
+  $missingSegmentationMaskFiles['pack.info'] = $testPack
+  New-HapFixture $missingSegmentationMaskHap $missingSegmentationMaskFiles
+  Assert-GuardRejects 'missing segmentation mask' $mainHap $missingSegmentationMaskHap `
+    'ohosTest HAP is missing: resources/rawfile/fixtures/segmentation/person_mask.png'
+
+  $leakedSegmentationFixtureHap = Join-Path $tempRoot 'leaked-segmentation-fixture.hap'
+  $leakedSegmentationFixtureFiles = New-FileMap $mainEntries
+  $leakedSegmentationFixtureFiles['module.json'] = $mainModule
+  $leakedSegmentationFixtureFiles['resources/rawfile/fixtures/segmentation/person.jpg'] = 'fixture'
+  New-HapFixture $leakedSegmentationFixtureHap $leakedSegmentationFixtureFiles
+  Assert-GuardRejects 'segmentation fixture in main HAP' $leakedSegmentationFixtureHap $testHap `
+    'Main HAP contains segmentation test fixtures: resources/rawfile/fixtures/segmentation/person.jpg'
 
   $copiedModelHap = Join-Path $tempRoot 'copied-model.hap'
   $copiedModelFiles = New-FileMap $testEntries

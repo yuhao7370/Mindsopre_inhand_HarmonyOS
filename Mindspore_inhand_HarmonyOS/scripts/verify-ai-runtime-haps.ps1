@@ -134,6 +134,12 @@ $nativeEntries = @(
 $mainEntries = @('module.json') + $resourceEntries + $nativeEntries
 $mainHapEntries = @(Get-HapEntries $MainHapPath)
 Assert-ExactEntries $mainHapEntries $mainEntries 'Main HAP'
+$leakedTestFixtures = @($mainHapEntries | Where-Object {
+  $_.StartsWith('resources/rawfile/fixtures/segmentation/')
+})
+if ($leakedTestFixtures.Count -ne 0) {
+  throw ('Main HAP contains segmentation test fixtures: {0}' -f ($leakedTestFixtures -join ', '))
+}
 $mainModule = Read-HapJson $MainHapPath 'module.json'
 if ($mainModule.module.name -ne 'entry') { throw 'Main HAP module name must be entry' }
 $payloads = @(
@@ -162,7 +168,9 @@ if ($OhosTestHapPath) {
     'pack.info',
     'ets/modules.abc',
     'resources/rawfile/fixtures/gesture/open_palm.png',
-    'resources/rawfile/fixtures/posenet/labels.json'
+    'resources/rawfile/fixtures/posenet/labels.json',
+    'resources/rawfile/fixtures/segmentation/person.jpg',
+    'resources/rawfile/fixtures/segmentation/person_mask.png'
   )
   $testHapEntries = @(Get-HapEntries $OhosTestHapPath)
   Assert-ExactEntries $testHapEntries $testRequired 'ohosTest HAP'
