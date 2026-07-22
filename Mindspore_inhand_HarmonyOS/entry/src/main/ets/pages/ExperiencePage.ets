@@ -4,6 +4,9 @@ import { ExperienceHeader } from '../common/components/ExperienceHeader';
 import { FeatureCard } from '../common/components/FeatureCard';
 import { FeatureItem, FeatureSection, visibleExperienceSections } from '../common/data/FeatureCatalog';
 import {
+  experienceContentBottomPaddingVp,
+  experienceContentOverlapVp,
+  experienceContentTopRadiusVp,
   experienceGridColumnGapVp,
   experienceGridHeightVp,
   experienceGridRowGapVp,
@@ -30,31 +33,26 @@ export struct ExperiencePage {
   }
 
   @Builder
-  private dashedDivider() {
-    Row() {
-    }
-    .width('100%')
-    .height(2)
-    .border({
-      width: { top: 2 },
-      color: { top: '#66000000' },
-      style: { top: BorderStyle.Dashed }
-    })
-  }
-
-  @Builder
   private groupTitle(titleKey: AppStringKey, topMargin: number) {
-    Column() {
-      this.dashedDivider()
+    Row() {
+      Row()
+        .layoutWeight(1)
+        .height(1)
+        .backgroundColor('#D9E2F5')
       Text(appString(titleKey))
-        .fontSize(16)
+        .fontSize(15)
         .fontWeight(FontWeight.Bold)
         .fontColor(AppColor.textPrimary)
-        .margin({ top: 8, bottom: 8 })
-      this.dashedDivider()
+        .margin({ left: 14, right: 14 })
+      Row()
+        .layoutWeight(1)
+        .height(1)
+        .backgroundColor('#D9E2F5')
     }
     .width('100%')
-    .alignItems(HorizontalAlign.Center)
+    .height(30)
+    .alignItems(VerticalAlign.Center)
+    .padding({ left: 46, right: 46 })
     .margin({ top: topMargin })
   }
 
@@ -63,22 +61,22 @@ export struct ExperiencePage {
     Row() {
       Column() {
       }
-      .width(3)
-      .height(12)
-      .backgroundColor('#6189FF')
-      .margin({ top: 3 })
+      .width(4)
+      .height(16)
+      .backgroundColor(AppColor.accent)
+      .borderRadius(2)
       Text(appString(titleKey))
-        .fontSize(13)
+        .fontSize(14)
         .fontWeight(FontWeight.Bold)
         .fontColor(AppColor.textPrimary)
-        .margin({ left: 7 })
+        .margin({ left: 8 })
         .maxLines(1)
     }
     .width('100%')
-    .height(15)
+    .height(20)
     .padding({ left: experienceGridSideInsetVp })
-    .alignItems(VerticalAlign.Top)
-    .margin({ top: 20 })
+    .alignItems(VerticalAlign.Center)
+    .margin({ top: 16 })
   }
 
   build() {
@@ -89,7 +87,7 @@ export struct ExperiencePage {
           ForEach(visibleExperienceSections, (section: FeatureSection, sectionIndex: number) => {
             Column() {
               if (section.groupTitleKey !== undefined) {
-                this.groupTitle(section.groupTitleKey, sectionIndex === 0 ? 0 : 24)
+                this.groupTitle(section.groupTitleKey, sectionIndex === 0 ? 0 : 22)
               }
               this.sectionTitle(section.titleKey)
               Grid() {
@@ -108,7 +106,7 @@ export struct ExperiencePage {
               .height(experienceGridHeightVp(section.items.length))
               .width('100%')
               .padding({ left: experienceGridSideInsetVp, right: experienceGridSideInsetVp })
-              .margin({ top: 15 })
+              .margin({ top: 12 })
               .scrollBar(BarState.Off)
               .enableScrollInteraction(false)
             }
@@ -116,15 +114,17 @@ export struct ExperiencePage {
           }, (section: FeatureSection) => section.id)
         }
         .width('100%')
-        .padding({ top: 30, bottom: 30 })
+        .padding({ top: 18, bottom: experienceContentBottomPaddingVp })
       }
       .width('100%')
       .layoutWeight(1)
       .scrollBar(BarState.Off)
       .backgroundColor(Color.White)
+      .borderRadius({ topLeft: experienceContentTopRadiusVp, topRight: experienceContentTopRadiusVp })
+      .margin({ top: -experienceContentOverlapVp })
     }
     .width('100%')
     .height('100%')
-    .backgroundColor(Color.White)
+    .backgroundColor('#EDF3FF')
   }
 }

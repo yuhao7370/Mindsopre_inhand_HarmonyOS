@@ -5,26 +5,34 @@ import { appString } from '../i18n/AppStrings';
 export struct ExperienceHeader {
   build() {
     Stack() {
-      Image($r('app.media.experience_head'))
+      Image($r('app.media.experience_hero_harmony'))
         .width('100%')
         .height('100%')
         .objectFit(ImageFit.Cover)
+      Row()
+        .width('100%')
+        .height('100%')
+        .linearGradient({
+          angle: 90,
+          colors: [['#A81156C9', 0], ['#241B68D9', 0.55], ['#001B68D9', 1]]
+        })
       Column() {
         Text(appString('experience_head_title'))
-          .fontSize(24)
+          .fontSize(28)
           .fontWeight(FontWeight.Bold)
           .fontColor(Color.White)
-          .textAlign(TextAlign.Center)
+          .textAlign(TextAlign.Start)
+          .maxLines(1)
         Text(appString('experience_head_subtitle'))
           .fontSize(13)
-          .fontColor(Color.White)
-          .textAlign(TextAlign.Center)
-          .margin({ top: 22 })
-          .padding({ left: 20, right: 20 })
+          .fontColor('#E6FFFFFF')
+          .textAlign(TextAlign.Start)
+          .maxLines(2)
+          .margin({ top: 10 })
       }
-      .width('100%')
-      .justifyContent(FlexAlign.Start)
-      .padding({ top: 40 })
+      .width('56%')
+      .alignItems(HorizontalAlign.Start)
+      .position({ x: 24, y: 44 })
     }
     .width('100%')
     .height(experienceHeaderHeightVp)

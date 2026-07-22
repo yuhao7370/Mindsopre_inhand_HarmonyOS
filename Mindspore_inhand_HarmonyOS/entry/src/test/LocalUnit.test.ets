@@ -504,6 +504,10 @@ import {
   experienceHeaderHeightVp
 } from '../main/ets/common/data/ExperienceHeaderBranding';
 import {
+  experienceCardRadiusVp,
+  experienceContentBottomPaddingVp,
+  experienceContentOverlapVp,
+  experienceContentTopRadiusVp,
   experienceGridCardHeightVp,
   experienceGridColumnCount,
   experienceGridColumnGapVp,
@@ -2719,23 +2723,27 @@ export default function localUnitTest() {
       expect(splashLogoHeightVp).assertEqual(90);
     });
 
-    it('usesAndroidExperienceHeaderHeight', 0, () => {
-      expect(experienceHeaderHeightVp).assertEqual(160);
+    it('usesImmersiveHarmonyExperienceHeaderHeight', 0, () => {
+      expect(experienceHeaderHeightVp).assertEqual(176);
     });
 
-    it('usesAndroidExperienceTwoColumnGridGeometry', 0, () => {
+    it('usesHarmonyExperienceCardGeometry', 0, () => {
       expect(experienceGridColumnCount).assertEqual(2);
-      expect(experienceGridCardHeightVp).assertEqual(50);
-      expect(experienceGridRowGapVp).assertEqual(17);
-      expect(experienceGridSideInsetVp).assertEqual(18);
-      expect(experienceGridColumnGapVp).assertEqual(8);
+      expect(experienceGridCardHeightVp).assertEqual(72);
+      expect(experienceGridRowGapVp).assertEqual(12);
+      expect(experienceGridSideInsetVp).assertEqual(16);
+      expect(experienceGridColumnGapVp).assertEqual(12);
+      expect(experienceCardRadiusVp).assertEqual(16);
+      expect(experienceContentTopRadiusVp).assertEqual(28);
+      expect(experienceContentOverlapVp).assertEqual(24);
+      expect(experienceContentBottomPaddingVp).assertEqual(28);
       expect(experienceGridHeightVp(-1)).assertEqual(0);
       expect(experienceGridHeightVp(0)).assertEqual(0);
-      expect(experienceGridHeightVp(1)).assertEqual(50);
-      expect(experienceGridHeightVp(2)).assertEqual(50);
-      expect(experienceGridHeightVp(3)).assertEqual(117);
-      expect(experienceGridHeightVp(4)).assertEqual(117);
-      expect(experienceGridHeightVp(5)).assertEqual(184);
+      expect(experienceGridHeightVp(1)).assertEqual(72);
+      expect(experienceGridHeightVp(2)).assertEqual(72);
+      expect(experienceGridHeightVp(3)).assertEqual(156);
+      expect(experienceGridHeightVp(4)).assertEqual(156);
+      expect(experienceGridHeightVp(5)).assertEqual(240);
     });
 
     it('formatsAppVersionNameLikeAndroidPackageInfo', 0, () => {

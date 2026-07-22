@@ -1,5 +1,5 @@
 import { FeatureItem } from '../data/FeatureCatalog';
-import { experienceGridCardHeightVp } from '../data/ExperienceLayoutSpec';
+import { experienceCardRadiusVp, experienceGridCardHeightVp } from '../data/ExperienceLayoutSpec';
 import { iconLabel, iconMediaResource } from '../icons/IconSymbols';
 import { appString } from '../i18n/AppStrings';
 import { AppColor } from '../theme/AppTheme';
@@ -22,22 +22,22 @@ export struct FeatureCard {
   private iconView() {
     if (iconMediaResource(this.item.icon) !== undefined) {
       Image(iconMediaResource(this.item.icon) as Resource)
-        .width(28)
-        .height(22)
+        .width(44)
+        .height(44)
         .objectFit(ImageFit.Contain)
-        .margin({ right: 5 })
+        .margin({ right: 9 })
     } else {
       Text(iconLabel(this.item.icon))
         .fontSize(11)
         .fontWeight(FontWeight.Bold)
         .fontColor(Color.White)
-        .width(28)
-        .height(22)
+        .width(44)
+        .height(44)
         .backgroundColor(AppColor.accent)
-        .borderRadius(11)
+        .borderRadius(22)
         .textAlign(TextAlign.Center)
         .maxLines(1)
-        .margin({ right: 5 })
+        .margin({ right: 9 })
     }
   }
 
@@ -45,11 +45,11 @@ export struct FeatureCard {
     Row() {
       this.iconView()
       Text(appString(this.item.titleKey))
-        .fontSize(12)
-        .fontColor('#333333')
-        .fontWeight(FontWeight.Normal)
+        .fontSize(13)
+        .fontColor(AppColor.textPrimary)
+        .fontWeight(FontWeight.Medium)
         .layoutWeight(1)
-        .maxLines(1)
+        .maxLines(2)
       if (this.item.badge || this.item.badgeKey) {
         Text(this.item.badgeKey ? appString(this.item.badgeKey) : (this.item.badge ?? ''))
           .fontSize(10)
@@ -59,9 +59,10 @@ export struct FeatureCard {
     }
     .width('100%')
     .height(experienceGridCardHeightVp)
-    .padding({ left: 4, right: 4 })
-    .backgroundColor(Color.Transparent)
-    .border({ width: 1, color: '#E6E6E6', radius: 5 })
+    .padding({ left: 12, right: 10 })
+    .backgroundColor(Color.White)
+    .border({ width: 1, color: '#E7ECF6', radius: experienceCardRadiusVp })
+    .shadow({ radius: 10, color: '#100D3B80', offsetX: 0, offsetY: 4 })
     .onClick(() => this.action(this.item))
   }
 }
