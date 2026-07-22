@@ -3,6 +3,7 @@ import { findRouteByName } from '../app/AppRoutes';
 import { ExperienceHeader } from '../common/components/ExperienceHeader';
 import { FeatureCard } from '../common/components/FeatureCard';
 import { FeatureItem, FeatureSection, visibleExperienceSections } from '../common/data/FeatureCatalog';
+import { experienceHeaderHeightVp } from '../common/data/ExperienceHeaderBranding';
 import {
   experienceContentBottomPaddingVp,
   experienceContentOverlapVp,
@@ -80,13 +81,17 @@ export struct ExperiencePage {
   }
 
   build() {
-    Scroll() {
-      Column() {
-        ExperienceHeader()
-        Scroll() {
-          Column() {
-            ForEach(visibleExperienceSections, (section: FeatureSection, sectionIndex: number) => {
-              Column() {
+    Stack({ alignContent: Alignment.Top }) {
+      ExperienceHeader()
+      Scroll() {
+        Column() {
+          Row()
+            .width('100%')
+            .height(experienceHeaderHeightVp)
+          Scroll() {
+            Column() {
+              ForEach(visibleExperienceSections, (section: FeatureSection, sectionIndex: number) => {
+                Column() {
                 if (section.groupTitleKey !== undefined) {
                   this.groupTitle(section.groupTitleKey, sectionIndex === 0 ? 0 : 22)
                 }
@@ -110,31 +115,34 @@ export struct ExperiencePage {
                 .margin({ top: 12 })
                 .scrollBar(BarState.Off)
                 .enableScrollInteraction(false)
-              }
-              .width('100%')
-            }, (section: FeatureSection) => section.id)
+                }
+                .width('100%')
+              }, (section: FeatureSection) => section.id)
+            }
+            .width('100%')
+            .padding({ top: 18, bottom: experienceContentBottomPaddingVp })
           }
           .width('100%')
-          .padding({ top: 18, bottom: experienceContentBottomPaddingVp })
+          .height('100%')
+          .scrollBar(BarState.Off)
+          .edgeEffect(EdgeEffect.None)
+          .nestedScroll({
+            scrollForward: NestedScrollMode.PARENT_FIRST,
+            scrollBackward: NestedScrollMode.SELF_FIRST
+          })
+          .backgroundColor(Color.White)
+          .borderRadius({ topLeft: experienceContentTopRadiusVp, topRight: experienceContentTopRadiusVp })
+          .margin({ top: -experienceContentOverlapVp })
         }
         .width('100%')
-        .height('100%')
-        .scrollBar(BarState.Off)
-        .edgeEffect(EdgeEffect.None)
-        .nestedScroll({
-          scrollForward: NestedScrollMode.PARENT_FIRST,
-          scrollBackward: NestedScrollMode.SELF_FIRST
-        })
-        .backgroundColor(Color.White)
-        .borderRadius({ topLeft: experienceContentTopRadiusVp, topRight: experienceContentTopRadiusVp })
-        .margin({ top: -experienceContentOverlapVp })
       }
       .width('100%')
+      .height('100%')
+      .scrollBar(BarState.Off)
+      .edgeEffect(EdgeEffect.None)
     }
     .width('100%')
     .height('100%')
-    .scrollBar(BarState.Off)
-    .edgeEffect(EdgeEffect.None)
     .backgroundColor('#EDF3FF')
   }
 }
