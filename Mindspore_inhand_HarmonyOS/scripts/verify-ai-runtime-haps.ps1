@@ -1,6 +1,8 @@
 param(
   [Parameter(Mandatory = $true)][string]$MainHapPath,
   [string]$OhosTestHapPath = '',
+  [string]$ExpectedResourceRoot = '',
+  [string]$ExpectedOhosTestResourceRoot = '',
   [string]$ExpectedRawfileRoot = '',
   [string]$ExpectedNativeLibRoot = '',
   [string]$ExpectedNativeLibRootX86 = ''
@@ -20,8 +22,14 @@ if (-not $targetAbis) {
   $targetAbis = @('arm64-v8a')
 }
 
+if (-not $ExpectedResourceRoot) {
+  $ExpectedResourceRoot = Join-Path $PSScriptRoot '..\entry\src\main\resources'
+}
+if (-not $ExpectedOhosTestResourceRoot) {
+  $ExpectedOhosTestResourceRoot = Join-Path $PSScriptRoot '..\entry\src\ohosTest\resources'
+}
 if (-not $ExpectedRawfileRoot) {
-  $ExpectedRawfileRoot = Join-Path $PSScriptRoot '..\entry\src\main\resources\rawfile'
+  $ExpectedRawfileRoot = Join-Path $ExpectedResourceRoot 'rawfile'
 }
 if (-not $ExpectedNativeLibRoot) {
   $ExpectedNativeLibRoot = Join-Path $PSScriptRoot '..\entry\build\default\intermediates\stripped_native_libs\default\arm64-v8a'
@@ -47,8 +55,40 @@ function Read-HapJson([string]$Path, [string]$Entry) {
 }
 
 function Assert-ExactEntries([string[]]$Entries, [string[]]$Required, [string]$Label) {
-  $missing = @($Required | Where-Object { $Entries -notcontains $_ })
+  $requiredNormalized = @($Required | Sort-Object -Unique)
+  $normalized = @(
+    $Entries |
+      ForEach-Object { $_.Replace('\', '/') } |
+      Where-Object { -not $_.EndsWith('/') }
+  )
+  $duplicates = @(
+    $normalized |
+      Group-Object -CaseSensitive |
+      Where-Object { $_.Count -gt 1 } |
+      ForEach-Object { $_.Name } |
+      Sort-Object
+  )
+  if ($duplicates.Count -ne 0) {
+    throw ('{0} has duplicate entries: {1}' -f $Label, ($duplicates -join ', '))
+  }
+  $missing = @($requiredNormalized | Where-Object { $normalized -cnotcontains $_ })
   if ($missing.Count -ne 0) { throw "$Label is missing: $($missing -join ', ')" }
+  $unexpected = @($normalized | Where-Object { $requiredNormalized -cnotcontains $_ } | Sort-Object -Unique)
+  if ($unexpected.Count -ne 0) {
+    throw ('{0} has unexpected entries: {1}' -f $Label, ($unexpected -join ', '))
+  }
+}
+
+function Get-SourceHapEntries([string]$Root, [string]$HapPrefix) {
+  if (-not (Test-Path -LiteralPath $Root -PathType Container)) { return @() }
+  $rootPath = [IO.Path]::GetFullPath($Root)
+  return @(
+    Get-ChildItem -LiteralPath $rootPath -Recurse -File |
+      ForEach-Object {
+        $relative = $_.FullName.Substring($rootPath.Length).TrimStart('\', '/').Replace('\', '/')
+        '{0}/{1}' -f $HapPrefix, $relative
+      }
+  )
 }
 
 function Assert-HapPayloadHashes([string]$Path, [object[]]$Payloads) {
@@ -129,17 +169,25 @@ $nativeEntries = @(
     "libs/$abi/libobject_detection_mnn.so"
     "libs/$abi/libocr_mnn.so"
     "libs/$abi/libstyle_transfer_mnn.so"
+    "libs/$abi/libc++_shared.so"
   }
 )
-$mainEntries = @('module.json') + $resourceEntries + $nativeEntries
+$structuralEntries = @(
+  'module.json',
+  'pack.info',
+  'pkgContextInfo.json',
+  'ets/modules.abc',
+  'ets/sourceMaps.map',
+  'resources.index'
+)
+$mainResourceEntries = @(
+  Get-SourceHapEntries $ExpectedRawfileRoot 'resources/rawfile'
+  Get-SourceHapEntries (Join-Path $ExpectedResourceRoot 'base\media') 'resources/base/media'
+  Get-SourceHapEntries (Join-Path $ExpectedResourceRoot 'base\profile') 'resources/base/profile'
+)
+$mainEntries = @($structuralEntries + $mainResourceEntries + $nativeEntries)
 $mainHapEntries = @(Get-HapEntries $MainHapPath)
 Assert-ExactEntries $mainHapEntries $mainEntries 'Main HAP'
-$leakedTestFixtures = @($mainHapEntries | Where-Object {
-  $_.StartsWith('resources/rawfile/fixtures/segmentation/')
-})
-if ($leakedTestFixtures.Count -ne 0) {
-  throw ('Main HAP contains segmentation test fixtures: {0}' -f ($leakedTestFixtures -join ', '))
-}
 $mainModule = Read-HapJson $MainHapPath 'module.json'
 if ($mainModule.module.name -ne 'entry') { throw 'Main HAP module name must be entry' }
 $payloads = @(
@@ -163,17 +211,40 @@ $payloads = @(
 Assert-HapPayloadHashes $MainHapPath $payloads
 
 if ($OhosTestHapPath) {
+  $ignoreSectionMatch = [regex]::Match(
+    $buildProfile,
+    '\x22ignoreResourcePattern\x22\s*:\s*\[(?<patterns>.*?)\]',
+    [System.Text.RegularExpressions.RegexOptions]::Singleline
+  )
+  if (-not $ignoreSectionMatch.Success) {
+    throw 'Unable to read ohosTest ignoreResourcePattern from build-profile.json5'
+  }
+  $ignorePatterns = @(
+    [regex]::Matches($ignoreSectionMatch.Groups['patterns'].Value, '\x22([^\x22]+)\x22') |
+      ForEach-Object { $_.Groups[1].Value }
+  )
+  $testRawfileEntries = @(
+    Get-SourceHapEntries $ExpectedRawfileRoot 'resources/rawfile'
+    Get-SourceHapEntries (Join-Path $ExpectedOhosTestResourceRoot 'rawfile') 'resources/rawfile'
+  ) | Where-Object {
+    $name = [IO.Path]::GetFileName($_)
+    -not @($ignorePatterns | Where-Object { $name -like $_ }).Count
+  }
   $testRequired = @(
-    'module.json',
-    'pack.info',
-    'ets/modules.abc',
-    'resources/rawfile/fixtures/gesture/open_palm.png',
-    'resources/rawfile/fixtures/posenet/labels.json',
+    'resources/base/profile/test_pages.json',
+    'resources/rawfile/mock/mock-config.json',
     'resources/rawfile/fixtures/segmentation/person.jpg',
     'resources/rawfile/fixtures/segmentation/person_mask.png'
   )
+  $testExpected = @(
+    $structuralEntries
+    Get-SourceHapEntries (Join-Path $ExpectedResourceRoot 'base\media') 'resources/base/media'
+    Get-SourceHapEntries (Join-Path $ExpectedResourceRoot 'base\profile') 'resources/base/profile'
+    $testRequired
+    $testRawfileEntries
+  )
   $testHapEntries = @(Get-HapEntries $OhosTestHapPath)
-  Assert-ExactEntries $testHapEntries $testRequired 'ohosTest HAP'
+  Assert-ExactEntries $testHapEntries $testExpected 'ohosTest HAP'
 
   $copiedModels = @($testHapEntries | Where-Object {
     $_.StartsWith('resources/rawfile/model/') -or $_.StartsWith('resources/rawfile/models/')

@@ -215,10 +215,11 @@ foreach ($contract in $contracts) {
 }
 
 $buildAst = Read-CoreGuardPowerShellAst (Join-Path $PSScriptRoot 'build-hap.ps1')
+$coreAst = Read-CoreGuardPowerShellAst (Join-Path $PSScriptRoot 'check-core-model-assets.ps1')
+Assert-CoreGuardExecutableCommand $coreAst '& (Join-Path $PSScriptRoot ''check-segmentation-fixture-contract.ps1'')' 'core model guard must execute the segmentation fixture guard.'
 Assert-CoreGuardExecutableCommand $buildAst "& (Join-Path `$PSScriptRoot 'check-core-model-assets.ps1')" 'build-hap.ps1 must execute the core model asset guard.'
 Assert-CoreGuardExecutableCommand $buildAst "& (Join-Path `$PSScriptRoot 'test-core-model-assets-guard.ps1')" 'build-hap.ps1 must execute core model guard fixtures.'
 Assert-CoreGuardExecutableCommand $buildAst "& (Join-Path `$PSScriptRoot 'ensure-mindspore-models.ps1')" 'build-hap.ps1 must execute verifier-only model ensure wiring.'
-Assert-CoreGuardExecutableCommand $buildAst '& (Join-Path $PSScriptRoot ''check-segmentation-fixture-contract.ps1'')' 'build-hap.ps1 must execute the segmentation fixture guard.'
 Assert-CoreGuardNoDownloaderCommand $buildAst 'normal build'
 
 $hapVerifierAst = Read-CoreGuardPowerShellAst (Join-Path $PSScriptRoot 'verify-ai-runtime-haps.ps1')

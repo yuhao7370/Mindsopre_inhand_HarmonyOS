@@ -72,6 +72,8 @@ function Assert-GuardRejects(
   $message = ''
   try {
     & $guard -MainHapPath $MainHapPath -OhosTestHapPath $OhosTestHapPath `
+      -ExpectedResourceRoot $expectedResourceRoot `
+      -ExpectedOhosTestResourceRoot $expectedOhosTestResourceRoot `
       -ExpectedRawfileRoot $expectedRawfileRoot -ExpectedNativeLibRoot $expectedNativeRoot *> $null
   } catch {
     $rejected = $true
@@ -86,6 +88,13 @@ function Assert-GuardRejects(
 
 $mainEntries = @(
   'module.json',
+  'pack.info',
+  'pkgContextInfo.json',
+  'ets/modules.abc',
+  'ets/sourceMaps.map',
+  'resources.index',
+  'resources/base/media/icon.png',
+  'resources/base/profile/main_pages.json',
   'resources/rawfile/model/mobilenetv2.ms',
   'resources/rawfile/model/movenet_singlepose_lightning_float16_v4.ms',
   'resources/rawfile/model/resnet18-place365.ms',
@@ -119,7 +128,8 @@ $mainEntries = @(
   'libs/arm64-v8a/libsegmentation_mnn.so',
   'libs/arm64-v8a/libobject_detection_mnn.so',
   'libs/arm64-v8a/libocr_mnn.so',
-  'libs/arm64-v8a/libstyle_transfer_mnn.so'
+  'libs/arm64-v8a/libstyle_transfer_mnn.so',
+  'libs/arm64-v8a/libc++_shared.so'
 )
 $mainModule = @{
   app = @{ bundleName = 'com.yuhaofeng.mih' }
@@ -142,7 +152,14 @@ $testPack = @{
 $testEntries = @(
   'module.json',
   'pack.info',
+  'pkgContextInfo.json',
   'ets/modules.abc',
+  'ets/sourceMaps.map',
+  'resources.index',
+  'resources/base/media/icon.png',
+  'resources/base/profile/main_pages.json',
+  'resources/base/profile/test_pages.json',
+  'resources/rawfile/mock/mock-config.json',
   'resources/rawfile/fixtures/gesture/open_palm.png',
   'resources/rawfile/fixtures/posenet/labels.json',
   'resources/rawfile/fixtures/segmentation/person.jpg',
@@ -158,13 +175,18 @@ try {
   $testFiles = New-FileMap $testEntries
   $testFiles['module.json'] = $testModule
   $testFiles['pack.info'] = $testPack
-  $expectedRawfileRoot = Join-Path $tempRoot 'expected-rawfile'
+  $expectedResourceRoot = Join-Path $tempRoot 'expected-resources'
+  $expectedOhosTestResourceRoot = Join-Path $tempRoot 'expected-test-resources'
+  $expectedRawfileRoot = Join-Path $expectedResourceRoot 'rawfile'
   $expectedNativeRoot = Join-Path $tempRoot 'expected-native'
-  Write-ExpectedFiles $expectedRawfileRoot $mainFiles 'resources/rawfile/'
+  Write-ExpectedFiles $expectedResourceRoot $mainFiles 'resources/'
+  Write-ExpectedFiles $expectedOhosTestResourceRoot $testFiles 'resources/'
   Write-ExpectedFiles $expectedNativeRoot $mainFiles 'libs/arm64-v8a/'
   New-HapFixture $mainHap $mainFiles
   New-HapFixture $testHap $testFiles
   & $guard -MainHapPath $mainHap -OhosTestHapPath $testHap `
+    -ExpectedResourceRoot $expectedResourceRoot `
+    -ExpectedOhosTestResourceRoot $expectedOhosTestResourceRoot `
     -ExpectedRawfileRoot $expectedRawfileRoot -ExpectedNativeLibRoot $expectedNativeRoot
 
   $tamperedModelHap = Join-Path $tempRoot 'tampered-model.hap'
@@ -191,7 +213,7 @@ try {
   Copy-Item -LiteralPath $mainHap -Destination $duplicateModelHap
   Add-DuplicateHapEntry $duplicateModelHap $tamperedModelEntry 'fixturf'
   Assert-GuardRejects 'duplicate model entry' $duplicateModelHap $testHap `
-    "payload entry must appear exactly once: $tamperedModelEntry; found 2"
+    'Main HAP has duplicate entries: resources/rawfile/models/gesture/GestureDetector.ms'
 
   $tamperedLibraryHap = Join-Path $tempRoot 'tampered-library.hap'
   $tamperedLibraryFiles = New-FileMap $mainEntries
@@ -285,7 +307,30 @@ try {
   $leakedSegmentationFixtureFiles['resources/rawfile/fixtures/segmentation/person.jpg'] = 'fixture'
   New-HapFixture $leakedSegmentationFixtureHap $leakedSegmentationFixtureFiles
   Assert-GuardRejects 'segmentation fixture in main HAP' $leakedSegmentationFixtureHap $testHap `
-    'Main HAP contains segmentation test fixtures: resources/rawfile/fixtures/segmentation/person.jpg'
+    'Main HAP has unexpected entries: resources/rawfile/fixtures/segmentation/person.jpg'
+
+  $leakedPoseFixtureHap = Join-Path $tempRoot 'leaked-pose-fixture.hap'
+  $leakedPoseFixtureFiles = New-FileMap $mainEntries
+  $leakedPoseFixtureFiles['module.json'] = $mainModule
+  $leakedPoseFixtureFiles['resources/rawfile/fixtures/posenet/labels.json'] = 'fixture'
+  New-HapFixture $leakedPoseFixtureHap $leakedPoseFixtureFiles
+  Assert-GuardRejects 'non-segmentation fixture in main HAP' $leakedPoseFixtureHap $testHap `
+    'Main HAP has unexpected entries: resources/rawfile/fixtures/posenet/labels.json'
+
+  $extraTestPayloadHap = Join-Path $tempRoot 'extra-test-payload.hap'
+  $extraTestPayloadFiles = New-FileMap $testEntries
+  $extraTestPayloadFiles['module.json'] = $testModule
+  $extraTestPayloadFiles['pack.info'] = $testPack
+  $extraTestPayloadFiles['resources/rawfile/fixtures/unexpected.bin'] = 'fixture'
+  New-HapFixture $extraTestPayloadHap $extraTestPayloadFiles
+  Assert-GuardRejects 'unexpected payload in test HAP' $mainHap $extraTestPayloadHap `
+    'ohosTest HAP has unexpected entries: resources/rawfile/fixtures/unexpected.bin'
+
+  $duplicateTestFixtureHap = Join-Path $tempRoot 'duplicate-test-fixture.hap'
+  Copy-Item -LiteralPath $testHap -Destination $duplicateTestFixtureHap
+  Add-DuplicateHapEntry $duplicateTestFixtureHap 'resources/rawfile/fixtures/segmentation/person.jpg' 'duplicate'
+  Assert-GuardRejects 'duplicate normalized fixture in test HAP' $mainHap $duplicateTestFixtureHap `
+    'ohosTest HAP has duplicate entries: resources/rawfile/fixtures/segmentation/person.jpg'
 
   $copiedModelHap = Join-Path $tempRoot 'copied-model.hap'
   $copiedModelFiles = New-FileMap $testEntries
@@ -293,7 +338,8 @@ try {
   $copiedModelFiles['pack.info'] = $testPack
   $copiedModelFiles['resources/rawfile/models/gesture/GestureDetector.ms'] = 'fixture'
   New-HapFixture $copiedModelHap $copiedModelFiles
-  Assert-GuardRejects 'copied model in test HAP' $mainHap $copiedModelHap 'ohosTest HAP contains copied models'
+  Assert-GuardRejects 'copied model in test HAP' $mainHap $copiedModelHap `
+    'ohosTest HAP has unexpected entries: resources/rawfile/models/gesture/GestureDetector.ms'
 
   $copiedAppModelHap = Join-Path $tempRoot 'copied-app-model.hap'
   $copiedAppModelFiles = New-FileMap $testEntries
@@ -301,7 +347,8 @@ try {
   $copiedAppModelFiles['pack.info'] = $testPack
   $copiedAppModelFiles['resources/rawfile/model/nanodet_plus_m_320.mnn'] = 'fixture'
   New-HapFixture $copiedAppModelHap $copiedAppModelFiles
-  Assert-GuardRejects 'copied app model in test HAP' $mainHap $copiedAppModelHap 'ohosTest HAP contains copied models'
+  Assert-GuardRejects 'copied app model in test HAP' $mainHap $copiedAppModelHap `
+    'ohosTest HAP has unexpected entries: resources/rawfile/model/nanodet_plus_m_320.mnn'
 
   $copiedOcrLibraryHap = Join-Path $tempRoot 'copied-ocr-library.hap'
   $copiedOcrLibraryFiles = New-FileMap $testEntries
@@ -310,7 +357,7 @@ try {
   $copiedOcrLibraryFiles['libs/arm64-v8a/libocr_mnn.so'] = 'fixture'
   New-HapFixture $copiedOcrLibraryHap $copiedOcrLibraryFiles
   Assert-GuardRejects 'copied OCR library in test HAP' $mainHap $copiedOcrLibraryHap `
-    'ohosTest HAP contains copied AI libraries: libs/arm64-v8a/libocr_mnn.so'
+    'ohosTest HAP has unexpected entries: libs/arm64-v8a/libocr_mnn.so'
 
   $copiedObjectDetectionLibraryHap = Join-Path $tempRoot 'copied-object-detection-library.hap'
   $copiedObjectDetectionLibraryFiles = New-FileMap $testEntries
@@ -319,7 +366,7 @@ try {
   $copiedObjectDetectionLibraryFiles['libs/arm64-v8a/libobject_detection_mnn.so'] = 'fixture'
   New-HapFixture $copiedObjectDetectionLibraryHap $copiedObjectDetectionLibraryFiles
   Assert-GuardRejects 'copied object-detection library in test HAP' $mainHap $copiedObjectDetectionLibraryHap `
-    'ohosTest HAP contains copied AI libraries: libs/arm64-v8a/libobject_detection_mnn.so'
+    'ohosTest HAP has unexpected entries: libs/arm64-v8a/libobject_detection_mnn.so'
 
   $copiedStyleTransferLibraryHap = Join-Path $tempRoot 'copied-style-transfer-library.hap'
   $copiedStyleTransferLibraryFiles = New-FileMap $testEntries
@@ -328,7 +375,7 @@ try {
   $copiedStyleTransferLibraryFiles['libs/arm64-v8a/libstyle_transfer_mnn.so'] = 'fixture'
   New-HapFixture $copiedStyleTransferLibraryHap $copiedStyleTransferLibraryFiles
   Assert-GuardRejects 'copied style-transfer library in test HAP' $mainHap $copiedStyleTransferLibraryHap `
-    'ohosTest HAP contains copied AI libraries: libs/arm64-v8a/libstyle_transfer_mnn.so'
+    'ohosTest HAP has unexpected entries: libs/arm64-v8a/libstyle_transfer_mnn.so'
 
   Write-Host 'HAP guard contract tests passed.'
 } finally {
