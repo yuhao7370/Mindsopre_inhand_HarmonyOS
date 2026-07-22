@@ -1,0 +1,78 @@
+{
+    "schemaVersion":  1,
+    "upstream":  {
+                     "url":  "https://github.com/tukaani-project/xz/releases/download/v5.8.3/xz-5.8.3.tar.xz",
+                     "version":  "5.8.3",
+                     "tagCommit":  "4b73f2ec19a99ef465282fbce633e8deb33691b3",
+                     "sourceSha256":  "FFF1FFCF2B0DA84D308A14DE513A1AA23D4E9AA3464D17E64B9714BFDD0BBFB6",
+                     "licenseFile":  "COPYING"
+                 },
+    "toolchain":  {
+                      "sdk":  "6.1.1",
+                      "sdkPackageVersion":  "6.1.1.125",
+                      "apiLevel":  24,
+                      "abi":  "x86_64",
+                      "target":  "x86_64-linux-ohos",
+                      "clangVersion":  "15.0.4",
+                      "llvmCommit":  "99548401bd80576251755b185ab95945e5fe7884",
+                      "cmake":  "cmake version 3.28.2",
+                      "ninja":  "1.12.0",
+                      "jobs":  1
+                  },
+    "build":  {
+                  "cmakeFlags":  {
+                                     "BUILD_SHARED_LIBS":  "OFF",
+                                     "BUILD_TESTING":  "OFF",
+                                     "CMAKE_BUILD_TYPE":  "Release",
+                                     "CMAKE_POSITION_INDEPENDENT_CODE":  "ON",
+                                     "OHOS_ARCH":  "x86_64",
+                                     "OHOS_PLATFORM_LEVEL":  "24",
+                                     "XZ_ARM64_CRC32":  "OFF",
+                                     "XZ_DECODERS":  "lzma1;lzma2",
+                                     "XZ_DOC":  "OFF",
+                                     "XZ_ENCODERS":  "",
+                                     "XZ_LZIP_DECODER":  "OFF",
+                                     "XZ_MICROLZMA_DECODER":  "OFF",
+                                     "XZ_MICROLZMA_ENCODER":  "OFF",
+                                     "XZ_NLS":  "OFF",
+                                     "XZ_SMALL":  "ON",
+                                     "XZ_THREADS":  "no",
+                                     "XZ_TOOL_LZMADEC":  "OFF",
+                                     "XZ_TOOL_LZMAINFO":  "OFF",
+                                     "XZ_TOOL_SCRIPTS":  "OFF",
+                                     "XZ_TOOL_XZ":  "OFF",
+                                     "XZ_TOOL_XZDEC":  "OFF"
+                                 },
+                  "target":  "liblzma",
+                  "wrapperTarget":  "translation_archive"
+              },
+    "artifacts":  {
+                      "liblzma":  {
+                                      "path":  "third_party/xz/lib/x86_64/liblzma.a",
+                                      "size":  152712,
+                                      "sha256":  "3DC0B6EE0C78DCB588270F43EA55CE206ABBF856438C41A16B5AD69DD7BB20D2",
+                                      "elfClass":  "ELF64",
+                                      "elfMachine":  "Advanced Micro Devices X86-64",
+                                      "dynamicDependencies":  [
+
+                                                              ]
+                                  },
+                      "napi":  {
+                                   "path":  "entry/libs/x86_64/libtranslation_archive.so",
+                                   "size":  250768,
+                                   "sha256":  "B351173BD5F1940BA5C7DA74E71CB21B8DD24671247C9FD95956D393FB2EB53A",
+                                   "elfClass":  "ELF64",
+                                   "elfMachine":  "Advanced Micro Devices X86-64",
+                                   "dynamicDependencies":  [
+                                                               "libace_napi.z.so",
+                                                               "libc.so",
+                                                               "libc++_shared.so",
+                                                               "libohcrypto.so"
+                                                           ]
+                               }
+                  },
+    "license":  {
+                    "path":  "third_party/xz/COPYING",
+                      "sha256":  "1D2D9338D5C0620E34ADE2153730EFF686D07F02A42F889A33D659A30C41EAC1"
+                }
+}

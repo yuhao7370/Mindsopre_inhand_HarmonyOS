@@ -1,6 +1,7 @@
 # Preserve pinned upstream bytes; their SHA-256 values are part of the build manifest.
 entry/src/main/cpp/include/MNN/** -text -diff
 entry/src/main/cpp/third_party/MNN/LICENSE.txt -text -diff
+entry/src/main/cpp/translation_xz/third_party/xz/** -text
 
 # Model packages and their manifests are verified byte-for-byte before every HAP build.
 entry/src/main/resources/rawfile/models/gesture/** -text -diff

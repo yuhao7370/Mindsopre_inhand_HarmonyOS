@@ -39,11 +39,29 @@ if (-not $devEcoSdkHome) {
 $env:DEVECO_SDK_HOME = $devEcoSdkHome
 
 & (Join-Path $PSScriptRoot 'build-hap.ps1')
+$readelf = Join-Path $devEcoSdkHome 'native\llvm\bin\llvm-readelf.exe'
 foreach ($abi in $abis) {
   $gestureLibPath = Join-Path $PSScriptRoot "..\entry\build\default\intermediates\stripped_native_libs\default\$abi\libgesture_mnn.so"
   $translationLibPath = Join-Path $PSScriptRoot "..\entry\build\default\intermediates\stripped_native_libs\default\$abi\libtranslation_archive.so"
   & (Join-Path $PSScriptRoot 'verify-gesture-native-contract.ps1') -DevEcoSdkRoot $env:DEVECO_SDK_HOME -LibraryPath $gestureLibPath
   & (Join-Path $PSScriptRoot 'test-translation-xz-native-contract.ps1') -DevEcoSdkRoot $env:DEVECO_SDK_HOME -LibraryPath $translationLibPath
+  $expectedMachine = if ($abi -ceq 'arm64-v8a') { 'AArch64' } else { 'Advanced Micro Devices X86-64' }
+  foreach ($library in @('libgesture_mnn.so', 'libsegmentation_mnn.so', 'libobject_detection_mnn.so', 'libocr_mnn.so', 'libstyle_transfer_mnn.so')) {
+    $path = Join-Path $PSScriptRoot "..\entry\build\default\intermediates\stripped_native_libs\default\$abi\$library"
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Missing stripped $abi runtime: $library" }
+    $elf = & $readelf -h -d $path 2>&1 | Out-String
+    if ($LASTEXITCODE -ne 0) { throw "llvm-readelf failed for ${abi}/${library}:`n$elf" }
+    if ($elf -notmatch '(?m)^\s*Class:\s+ELF64\s*$' -or
+        $elf -notmatch ("(?m)^\s*Machine:\s+" + [regex]::Escape($expectedMachine) + '\s*$')) {
+      throw "Wrong ELF architecture for ${abi}/${library}."
+    }
+    $dependencies = @([regex]::Matches($elf, '\(NEEDED\).*\[([^\]]+)\]') | ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique)
+    $expectedDependencies = @('libMNN.so', 'libace_napi.z.so', 'libc++_shared.so', 'libc.so') | Sort-Object
+    if (($dependencies -join '|') -cne ($expectedDependencies -join '|')) {
+      throw "DT_NEEDED mismatch for ${abi}/${library}: $($dependencies -join ', ')"
+    }
+    if ($elf -notmatch '\((RUNPATH|RPATH)\).*\[\$ORIGIN\]') { throw "Missing `$ORIGIN runpath for ${abi}/${library}." }
+  }
 }
 $devEcoRoot = Split-Path -Parent $env:DEVECO_SDK_HOME
 $hvigor = Join-Path $devEcoRoot 'tools\hvigor\bin\hvigorw.bat'

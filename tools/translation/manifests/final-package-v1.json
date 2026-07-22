@@ -16,8 +16,8 @@
     {
       "path": "libtranslation_archive.so",
       "role": "decompressor",
-      "sha256": "5bfa5b2dafc68fdc0753bb2d606e2bf40b6695d6d76982064da2c39271028764",
-      "size": 263408
+      "sha256": "35dde52874986ee12cd8a0bc72182dc648457e7ebcfd5a2b05ed6604c7689f2f",
+      "size": 263576
     },
     {
       "path": "manifest.json",

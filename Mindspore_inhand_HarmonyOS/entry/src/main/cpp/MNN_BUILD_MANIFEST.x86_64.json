@@ -1,0 +1,93 @@
+{
+    "schemaVersion":  1,
+    "upstream":  {
+                     "repository":  "https://github.com/alibaba/MNN.git",
+                     "commit":  "785907a83194f6607762742adab86240582aa013",
+                     "configureVersion":  "3.6.0",
+                     "license":  "Apache-2.0"
+                 },
+    "toolchain":  {
+                      "devEcoSdk":  "6.1.1",
+                      "sdkPackageVersion":  "6.1.1.125",
+                      "apiLevel":  24,
+                      "clangVersion":  "15.0.4",
+                      "llvmCommit":  "99548401bd80576251755b185ab95945e5fe7884",
+                      "target":  "x86_64-linux-ohos",
+                      "abi":  "x86_64",
+                      "stl":  "c++_shared",
+                      "cmake":  "cmake version 3.28.2",
+                      "ninja":  "1.12.0"
+                  },
+    "build":  {
+                  "generator":  "Ninja",
+                  "target":  "MNN",
+                  "cmakeFlags":  {
+                                     "CMAKE_BUILD_TYPE":  "Release",
+                                     "OHOS_ARCH":  "x86_64",
+                                     "OHOS_PLATFORM_LEVEL":  "24",
+                                     "OHOS_STL":  "c++_shared",
+                                     "MNN_BUILD_SHARED_LIBS":  "ON",
+                                     "MNN_SEP_BUILD":  "OFF",
+                                     "MNN_BUILD_TOOLS":  "OFF",
+                                     "MNN_BUILD_CONVERTER":  "OFF",
+                                     "MNN_BUILD_TRAIN":  "OFF",
+                                     "MNN_BUILD_TEST":  "OFF",
+                                     "MNN_BUILD_BENCHMARK":  "OFF",
+                                     "MNN_BUILD_OPENCV":  "OFF",
+                                     "MNN_BUILD_LLM":  "OFF",
+                                     "MNN_OPENCL":  "OFF",
+                                     "MNN_VULKAN":  "OFF",
+                                     "MNN_ARM82":  "OFF",
+                                     "MNN_SUPPORT_BF16":  "OFF",
+                                     "MNN_USE_LOGCAT":  "OFF",
+                                     "MNN_KLEIDIAI":  "OFF",
+                                     "MNN_BUILD_MINI":  "OFF"
+                                 }
+              },
+    "artifact":  {
+                     "path":  "entry/libs/x86_64/libMNN.so",
+                     "size":  3764064,
+                     "sha256":  "0B59F8E9FFF555C65F9A34CAC055DEF64799BF4B92775D5759CDA1DD942D8978",
+                     "elfClass":  "ELF64",
+                     "elfMachine":  "Advanced Micro Devices X86-64",
+                     "dynamicDependencies":  [
+                                                 "libc.so",
+                                                 "libc++_shared.so"
+                                             ]
+                 },
+    "reference":  {
+                      "size":  3764064,
+                      "sha256":  "0B59F8E9FFF555C65F9A34CAC055DEF64799BF4B92775D5759CDA1DD942D8978"
+                  },
+    "headers":  [
+                    {
+                        "path":  "include/MNN/ErrorCode.hpp",
+                        "sha256":  "2B48A6729CDD63AC5492DC3C91980C024B51A9FF6ACF443ECE4A3F07869A31BD"
+                    },
+                    {
+                        "path":  "include/MNN/HalideRuntime.h",
+                        "sha256":  "B6175B589B327150B53DB01F169FB01726BEC3C4E2FC8B7867BA4118FCB67BCB"
+                    },
+                    {
+                        "path":  "include/MNN/Interpreter.hpp",
+                        "sha256":  "7645554AA5F527D68F238C09FD5370EFE577C88D4CB71FEC52FBBFB3E477A23F"
+                    },
+                    {
+                        "path":  "include/MNN/MNNDefine.h",
+                        "sha256":  "33EBF3D0155451BD1B7D514939A8C85AD1034976E8AFF2907F3B2D8D97BD98A0"
+                    },
+                    {
+                        "path":  "include/MNN/MNNForwardType.h",
+                        "sha256":  "44331B6CB984AB10FEBEDE29069B5745BBE7ACB99099053B80FC4B9B2DFF4ABD"
+                    },
+                    {
+                        "path":  "include/MNN/Tensor.hpp",
+                        "sha256":  "F7FC058B0F6921CD579B3C14CED02404E91A5208E1F47140962273E978548FB0"
+                    }
+                ],
+    "license":  {
+                    "path":  "third_party/MNN/LICENSE.txt",
+                    "sha256":  "B51146F2AB748A8681AA7B603E81D94DD431EA0FB3AF59E10F91CF82E43B9CF9"
+                },
+    "toolchainInputDifference":  null
+}

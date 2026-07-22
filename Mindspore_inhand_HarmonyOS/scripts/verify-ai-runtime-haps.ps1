@@ -276,4 +276,4 @@ if ($OhosTestHapPath) {
 
 $verified = @("main=$MainHapPath")
 if ($OhosTestHapPath) { $verified += "ohosTest=$OhosTestHapPath" }
-Write-Host "Verified AI runtime HAP structure and payload bytes: $($verified -join '; ')"
+Write-Output "Verified AI runtime HAP structure and payload bytes: $($verified -join '; '); abis=$($targetAbis -join ',')"

@@ -68,6 +68,13 @@ $env:PATH = (Join-Path $devEcoRoot 'jbr\bin') + ';' + $env:PATH
 & (Join-Path $PSScriptRoot 'check-segmentation-native-boundary.ps1')
 & (Join-Path $PSScriptRoot 'test-core-model-assets-guard.ps1')
 & (Join-Path $PSScriptRoot 'test-native-abi-matrix.ps1')
+$profile = Get-Content -LiteralPath (Join-Path $PSScriptRoot '..\entry\build-profile.json5') -Raw
+$abiSection = [regex]::Match($profile, '"abiFilters"\s*:\s*\[(?<abis>.*?)\]', [Text.RegularExpressions.RegexOptions]::Singleline)
+$targetAbis = [regex]::Matches($abiSection.Groups['abis'].Value, '"([^"]+)"') | ForEach-Object { $_.Groups[1].Value }
+foreach ($abi in $targetAbis) {
+  & (Join-Path $PSScriptRoot 'build-mnn-ohos.ps1') -Abi $abi -VerifyOnly
+  & (Join-Path $PSScriptRoot 'build-translation-xz-ohos.ps1') -Abi $abi -VerifyOnly
+}
 & (Join-Path $PSScriptRoot 'check-bottom-tab-icons.ps1')
 & (Join-Path $PSScriptRoot 'check-me-row-icons.ps1')
 & (Join-Path $PSScriptRoot 'check-poetry-back-icon.ps1')

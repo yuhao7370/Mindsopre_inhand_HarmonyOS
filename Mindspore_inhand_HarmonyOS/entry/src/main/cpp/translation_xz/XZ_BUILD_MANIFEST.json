@@ -9,8 +9,14 @@
                  },
     "toolchain":  {
                       "sdk":  "6.1.1",
+                      "sdkPackageVersion":  "6.1.1.125",
                       "apiLevel":  24,
                       "abi":  "arm64-v8a",
+                      "target":  "aarch64-linux-ohos",
+                      "clangVersion":  "15.0.4",
+                      "llvmCommit":  "99548401bd80576251755b185ab95945e5fe7884",
+                      "cmake":  "cmake version 3.28.2",
+                      "ninja":  "1.12.0",
                       "jobs":  1
                   },
     "build":  {
@@ -44,12 +50,29 @@
                       "liblzma":  {
                                       "path":  "third_party/xz/lib/arm64-v8a/liblzma.a",
                                       "size":  155728,
-                                      "sha256":  "CDF9871EA661091FD47B20FBA2156C6669BA990928E84C5780847F0EDA7AFAE5"
+                                      "sha256":  "CDF9871EA661091FD47B20FBA2156C6669BA990928E84C5780847F0EDA7AFAE5",
+                                      "elfClass":  "ELF64",
+                                      "elfMachine":  "AArch64",
+                                      "dynamicDependencies":  [
+
+                                                              ]
                                   },
                       "napi":  {
                                    "path":  "entry/libs/arm64-v8a/libtranslation_archive.so",
-                                   "size":  263408,
-                                   "sha256":  "5BFA5B2DAFC68FDC0753BB2D606E2BF40B6695D6D76982064DA2C39271028764"
+                                   "size":  263576,
+                                   "sha256":  "35DDE52874986EE12CD8A0BC72182DC648457E7EBCFD5A2B05ED6604C7689F2F",
+                                   "elfClass":  "ELF64",
+                                   "elfMachine":  "AArch64",
+                                   "dynamicDependencies":  [
+                                                               "libace_napi.z.so",
+                                                               "libc.so",
+                                                               "libc++_shared.so",
+                                                               "libohcrypto.so"
+                                                           ]
                                }
-                  }
+                  },
+    "license":  {
+                    "path":  "third_party/xz/COPYING",
+                      "sha256":  "1D2D9338D5C0620E34ADE2153730EFF686D07F02A42F889A33D659A30C41EAC1"
+                }
 }

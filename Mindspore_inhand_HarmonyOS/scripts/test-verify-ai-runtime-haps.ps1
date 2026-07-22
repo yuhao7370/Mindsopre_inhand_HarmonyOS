@@ -129,7 +129,15 @@ $mainEntries = @(
   'libs/arm64-v8a/libobject_detection_mnn.so',
   'libs/arm64-v8a/libocr_mnn.so',
   'libs/arm64-v8a/libstyle_transfer_mnn.so',
-  'libs/arm64-v8a/libc++_shared.so'
+  'libs/arm64-v8a/libc++_shared.so',
+  'libs/x86_64/libgesture_mnn.so',
+  'libs/x86_64/libMNN.so',
+  'libs/x86_64/libtranslation_archive.so',
+  'libs/x86_64/libsegmentation_mnn.so',
+  'libs/x86_64/libobject_detection_mnn.so',
+  'libs/x86_64/libocr_mnn.so',
+  'libs/x86_64/libstyle_transfer_mnn.so',
+  'libs/x86_64/libc++_shared.so'
 )
 $mainModule = @{
   app = @{ bundleName = 'com.yuhaofeng.mih' }
@@ -184,10 +192,13 @@ try {
   Write-ExpectedFiles $expectedNativeRoot $mainFiles 'libs/arm64-v8a/'
   New-HapFixture $mainHap $mainFiles
   New-HapFixture $testHap $testFiles
-  & $guard -MainHapPath $mainHap -OhosTestHapPath $testHap `
+  $verifiedOutput = & $guard -MainHapPath $mainHap -OhosTestHapPath $testHap `
     -ExpectedResourceRoot $expectedResourceRoot `
     -ExpectedOhosTestResourceRoot $expectedOhosTestResourceRoot `
-    -ExpectedRawfileRoot $expectedRawfileRoot -ExpectedNativeLibRoot $expectedNativeRoot
+    -ExpectedRawfileRoot $expectedRawfileRoot -ExpectedNativeLibRoot $expectedNativeRoot | Out-String
+  if (-not $verifiedOutput.Contains('abis=arm64-v8a,x86_64')) {
+    throw 'HAP verifier must report both configured target ABIs.'
+  }
 
   $tamperedModelHap = Join-Path $tempRoot 'tampered-model.hap'
   $tamperedModelFiles = New-FileMap $mainEntries
@@ -254,6 +265,21 @@ try {
   New-HapFixture $missingStyleTransferHap $missingStyleTransferFiles
   Assert-GuardRejects 'missing style-transfer library payload' $missingStyleTransferHap $testHap `
     'Main HAP is missing: libs/arm64-v8a/libstyle_transfer_mnn.so'
+
+  $missingX86Hap = Join-Path $tempRoot 'missing-x86-library.hap'
+  $missingX86Files = New-FileMap @($mainEntries | Where-Object { $_ -ne 'libs/x86_64/libgesture_mnn.so' })
+  $missingX86Files['module.json'] = $mainModule
+  New-HapFixture $missingX86Hap $missingX86Files
+  Assert-GuardRejects 'missing x86 library payload' $missingX86Hap $testHap `
+    'Main HAP is missing: libs/x86_64/libgesture_mnn.so'
+
+  $unexpectedAbiHap = Join-Path $tempRoot 'unexpected-abi-library.hap'
+  $unexpectedAbiFiles = New-FileMap $mainEntries
+  $unexpectedAbiFiles['module.json'] = $mainModule
+  $unexpectedAbiFiles['libs/riscv64/libgesture_mnn.so'] = 'fixture'
+  New-HapFixture $unexpectedAbiHap $unexpectedAbiFiles
+  Assert-GuardRejects 'unexpected third ABI payload' $unexpectedAbiHap $testHap `
+    'Main HAP has unexpected entries: libs/riscv64/libgesture_mnn.so'
 
   $wrongMainBundleHap = Join-Path $tempRoot 'wrong-main-bundle.hap'
   $wrongMainBundleFiles = New-FileMap $mainEntries

@@ -34,7 +34,7 @@ TRUSTED_XZ_BUILD_MANIFEST = (
     REPOSITORY_ROOT
     / "Mindspore_inhand_HarmonyOS/entry/src/main/cpp/translation_xz/XZ_BUILD_MANIFEST.json"
 )
-TRUSTED_XZ_BUILD_MANIFEST_SHA256 = "43a92bed61c6a690fe4441a26ef76dc34d6c9a642c9a39fbc315e537a325ba0b"
+TRUSTED_XZ_BUILD_MANIFEST_SHA256 = "4db9e60ca8352deae436214998ee190093b1f6656d9f22b289b19dca2fef8d15"
 
 
 class PackageError(RuntimeError):
