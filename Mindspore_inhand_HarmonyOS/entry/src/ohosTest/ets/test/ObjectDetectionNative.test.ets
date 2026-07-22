@@ -3,7 +3,7 @@ import { image } from '@kit.ImageKit';
 import { resourceManager } from '@kit.LocalizationKit';
 import { abilityDelegatorRegistry } from '@kit.TestKit';
 import { describe, it, expect } from '@ohos/hypium';
-import objectDetectionMnn from 'libobject_detection_mnn.so';
+import objectDetectionMnn, { ObjectDetectionModelInfo } from 'libobject_detection_mnn.so';
 import {
   objectDetectionInputFloatCount,
   objectDetectionModelRawfilePath,
@@ -116,14 +116,14 @@ export default function objectDetectionNativeTest() {
       expect(timerTicks > 0).assertTrue();
       expect(await objectDetectionMnn.validateModel(new Uint8Array([1, 2, 3, 4]))).assertFalse();
 
-      const modelInfo = await objectDetectionMnn.loadModel(modelBytes);
+      const modelInfo: ObjectDetectionModelInfo = await objectDetectionMnn.loadModel(modelBytes);
       expect(modelInfo.inputName).assertEqual('data');
       expect(modelInfo.inputShape.join(',')).assertEqual('1,3,320,320');
       expect(modelInfo.outputName).assertEqual('output');
       expect(modelInfo.outputShape.join(',')).assertEqual('1,2125,112');
       try {
         const input = new Float32Array(objectDetectionInputFloatCount);
-        const output = await objectDetectionMnn.predict(input);
+        const output: Float32Array = await objectDetectionMnn.predict(input);
         expect(output.byteLength).assertEqual(objectDetectionOutputFloatCount * 4);
         let finiteAndNonZero: boolean = false;
         let allFinite: boolean = true;
@@ -146,7 +146,7 @@ export default function objectDetectionNativeTest() {
           invalidLoadRejected = true;
         }
         expect(invalidLoadRejected).assertTrue();
-        const outputAfterRejectedLoad = await objectDetectionMnn.predict(input);
+        const outputAfterRejectedLoad: Float32Array = await objectDetectionMnn.predict(input);
         expect(outputAfterRejectedLoad.byteLength).assertEqual(objectDetectionOutputFloatCount * 4);
       } finally {
         objectDetectionMnn.release();
@@ -173,7 +173,7 @@ export default function objectDetectionNativeTest() {
       try {
         let baselineSignature: string = '';
         for (let runIndex: number = 0; runIndex < 3; runIndex++) {
-          const output = await objectDetectionMnn.predict(new Float32Array(input.inputBuffer));
+          const output: Float32Array = await objectDetectionMnn.predict(new Float32Array(input.inputBuffer));
           const detections = decodeNanoDetObjectDetections(output, input.imageWidth, input.imageHeight);
           console.info(`object-detection-dog-run=${runIndex} top=${topDetectionSummary(detections)}`);
           let bestDog: ObjectDetection | undefined = undefined;
@@ -211,7 +211,7 @@ export default function objectDetectionNativeTest() {
       const input = await new HarmonyObjectDetectionInputPreprocessor().createInput(grayPath);
       await objectDetectionMnn.loadModel(await mainManager.getRawFileContent(objectDetectionModelRawfilePath));
       try {
-        const output = await objectDetectionMnn.predict(new Float32Array(input.inputBuffer));
+        const output: Float32Array = await objectDetectionMnn.predict(new Float32Array(input.inputBuffer));
         const detections = decodeNanoDetObjectDetections(output, input.imageWidth, input.imageHeight);
         console.info(`object-detection-gray-count=${detections.length} top=${topDetectionSummary(detections)}`);
         expect(detections.length).assertEqual(0);

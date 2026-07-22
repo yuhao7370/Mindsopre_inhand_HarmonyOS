@@ -98,7 +98,7 @@ export default function segmentationNativeTest() {
       try {
         const backing = new ArrayBuffer(segmentationInputFloatCount * 4 + 8);
         const valid = new Float32Array(backing, 4, segmentationInputFloatCount);
-        const output = await segmentationMnn.predict(valid);
+        const output: ArrayBuffer = await segmentationMnn.predict(valid);
         expect(output.byteLength).assertEqual(256 * 256 * 4);
 
         const aliasBacking = new ArrayBuffer(segmentationInputFloatCount * 4 + 8);

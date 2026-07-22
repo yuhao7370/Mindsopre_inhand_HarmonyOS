@@ -268,7 +268,7 @@ export default function styleTransferNativeTest() {
         predictBytes,
         new Uint8Array([1, 2, 3, 4])
       )).assertFalse();
-      const pairValidationRecovered = await styleTransferMnn.run(
+      const pairValidationRecovered: StyleTransferNativeOutput = await styleTransferMnn.run(
         new Float32Array(style0Input.styleInputBuffer),
         new Float32Array(style0Input.contentInputBuffer)
       );
@@ -282,7 +282,7 @@ export default function styleTransferNativeTest() {
         rejected = true;
       }
       expect(rejected).assertTrue();
-      const nativeRecovered = await styleTransferMnn.run(
+      const nativeRecovered: StyleTransferNativeOutput = await styleTransferMnn.run(
         new Float32Array(style0Input.styleInputBuffer),
         new Float32Array(style0Input.contentInputBuffer)
       );
