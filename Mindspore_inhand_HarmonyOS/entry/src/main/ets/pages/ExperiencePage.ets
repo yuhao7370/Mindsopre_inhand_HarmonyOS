@@ -80,51 +80,61 @@ export struct ExperiencePage {
   }
 
   build() {
-    Column() {
-      ExperienceHeader()
-      Scroll() {
-        Column() {
-          ForEach(visibleExperienceSections, (section: FeatureSection, sectionIndex: number) => {
-            Column() {
-              if (section.groupTitleKey !== undefined) {
-                this.groupTitle(section.groupTitleKey, sectionIndex === 0 ? 0 : 22)
+    Scroll() {
+      Column() {
+        ExperienceHeader()
+        Scroll() {
+          Column() {
+            ForEach(visibleExperienceSections, (section: FeatureSection, sectionIndex: number) => {
+              Column() {
+                if (section.groupTitleKey !== undefined) {
+                  this.groupTitle(section.groupTitleKey, sectionIndex === 0 ? 0 : 22)
+                }
+                this.sectionTitle(section.titleKey)
+                Grid() {
+                  ForEach(section.items, (item: FeatureItem) => {
+                    GridItem() {
+                      FeatureCard({
+                        item: item,
+                        action: (clicked: FeatureItem) => this.openFeature(clicked)
+                      })
+                    }
+                  }, (item: FeatureItem) => item.id)
+                }
+                .columnsTemplate('1fr 1fr')
+                .columnsGap(experienceGridColumnGapVp)
+                .rowsGap(experienceGridRowGapVp)
+                .height(experienceGridHeightVp(section.items.length))
+                .width('100%')
+                .padding({ left: experienceGridSideInsetVp, right: experienceGridSideInsetVp })
+                .margin({ top: 12 })
+                .scrollBar(BarState.Off)
+                .enableScrollInteraction(false)
               }
-              this.sectionTitle(section.titleKey)
-              Grid() {
-                ForEach(section.items, (item: FeatureItem) => {
-                  GridItem() {
-                    FeatureCard({
-                      item: item,
-                      action: (clicked: FeatureItem) => this.openFeature(clicked)
-                    })
-                  }
-                }, (item: FeatureItem) => item.id)
-              }
-              .columnsTemplate('1fr 1fr')
-              .columnsGap(experienceGridColumnGapVp)
-              .rowsGap(experienceGridRowGapVp)
-              .height(experienceGridHeightVp(section.items.length))
               .width('100%')
-              .padding({ left: experienceGridSideInsetVp, right: experienceGridSideInsetVp })
-              .margin({ top: 12 })
-              .scrollBar(BarState.Off)
-              .enableScrollInteraction(false)
-            }
-            .width('100%')
-          }, (section: FeatureSection) => section.id)
+            }, (section: FeatureSection) => section.id)
+          }
+          .width('100%')
+          .padding({ top: 18, bottom: experienceContentBottomPaddingVp })
         }
         .width('100%')
-        .padding({ top: 18, bottom: experienceContentBottomPaddingVp })
+        .height('100%')
+        .scrollBar(BarState.Off)
+        .edgeEffect(EdgeEffect.None)
+        .nestedScroll({
+          scrollForward: NestedScrollMode.PARENT_FIRST,
+          scrollBackward: NestedScrollMode.SELF_FIRST
+        })
+        .backgroundColor(Color.White)
+        .borderRadius({ topLeft: experienceContentTopRadiusVp, topRight: experienceContentTopRadiusVp })
+        .margin({ top: -experienceContentOverlapVp })
       }
       .width('100%')
-      .layoutWeight(1)
-      .scrollBar(BarState.Off)
-      .backgroundColor(Color.White)
-      .borderRadius({ topLeft: experienceContentTopRadiusVp, topRight: experienceContentTopRadiusVp })
-      .margin({ top: -experienceContentOverlapVp })
     }
     .width('100%')
     .height('100%')
+    .scrollBar(BarState.Off)
+    .edgeEffect(EdgeEffect.None)
     .backgroundColor('#EDF3FF')
   }
 }

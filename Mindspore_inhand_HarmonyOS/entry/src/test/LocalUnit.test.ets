@@ -2736,6 +2736,7 @@ export default function localUnitTest() {
       expect(experienceCardRadiusVp).assertEqual(16);
       expect(experienceContentTopRadiusVp).assertEqual(28);
       expect(experienceContentOverlapVp).assertEqual(24);
+      expect(experienceHeaderHeightVp - experienceContentOverlapVp).assertEqual(152);
       expect(experienceContentBottomPaddingVp).assertEqual(28);
       expect(experienceGridHeightVp(-1)).assertEqual(0);
       expect(experienceGridHeightVp(0)).assertEqual(0);
