@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Export fixed Marian encoder/prefill/step ONNX graphs and verify their contract."""
+"""Export fixed Marian ONNX graphs and verify their tensor contracts."""
 
 from __future__ import annotations
 
@@ -8,6 +8,8 @@ import hashlib
 import json
 import math
 import os
+import re
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Optional, Sequence
 
@@ -58,6 +60,351 @@ V5_LOCAL_LEARNING_AUTHORIZATION = {
 
 class ContractError(RuntimeError):
     pass
+
+
+@dataclass(frozen=True)
+class MarianProfile:
+    direction: str
+    repository: str
+    revision: str
+    source_language: str
+    target_language: str
+    weight_file: str
+    files: tuple
+    hidden_size: int
+    encoder_layers: int
+    decoder_layers: int
+    attention_heads: int
+    vocab_size: int
+    max_tokens: int
+    target_max_tokens: int
+    onnx_dtype: str
+    pad_token_id: int
+    decoder_start_token_id: int
+    eos_token_id: int
+    generation_strategy: str
+    num_beams: int
+    source_prefix: str
+
+    @property
+    def head_dim(self) -> int:
+        return self.hidden_size // self.attention_heads
+
+
+_OFFICIAL_DIRECTIONS = {
+    "en-zh": ("Helsinki-NLP/opus-mt-en-zh", "408d9bc410a388e1d9aef112a2daba955b945255"),
+    "zh-en": ("Helsinki-NLP/opus-mt_tiny_zho-eng", "4ee3a9342aae4ca6fbae82c930b5dccff5dd68dd"),
+}
+_OFFICIAL_PROFILE_PINS = {
+    "en-zh": {
+        "sourceLanguage": "en",
+        "targetLanguage": "zh",
+        "weightFile": "pytorch_model.bin",
+        "upstreamBenchmark": {
+            "testSet": "Tatoeba-test.eng.zho",
+            "bleu": 31.4,
+            "chrF": 0.268,
+        },
+        "architecture": {
+            "hiddenSize": 512,
+            "encoderLayers": 6,
+            "decoderLayers": 6,
+            "attentionHeads": 8,
+            "vocabSize": 65001,
+            "maxTokens": 128,
+            "targetMaxTokens": 32,
+            "padTokenId": 65000,
+            "decoderStartTokenId": 65000,
+            "eosTokenId": 0,
+        },
+        "generation": {
+            "strategy": "beam",
+            "numBeams": 4,
+            "sourcePrefix": ">>cmn_Hans<< ",
+        },
+    },
+    "zh-en": {
+        "sourceLanguage": "zh",
+        "targetLanguage": "en",
+        "weightFile": "model.safetensors",
+        "upstreamBenchmark": {
+            "testSet": "Flores+",
+            "bleu": 21.3,
+            "chrF": 50.9,
+            "comet": 0.8116,
+        },
+        "architecture": {
+            "hiddenSize": 256,
+            "encoderLayers": 6,
+            "decoderLayers": 2,
+            "attentionHeads": 8,
+            "vocabSize": 32001,
+            "maxTokens": 128,
+            "targetMaxTokens": 32,
+            "padTokenId": 32000,
+            "decoderStartTokenId": 32000,
+            "eosTokenId": 0,
+        },
+        "generation": {
+            "strategy": "greedy",
+            "numBeams": 1,
+            "sourcePrefix": "",
+        },
+    },
+}
+_OFFICIAL_FILE_PINS = {
+    "en-zh": {
+        "README.md": (2670, "83eee2a6598751f746a057e10d5c9dfd71d6b0cf0146f9e6c1bb3ebd6e90959b"),
+        "config.json": (1403, "bcae8ed74fed77fb51c58462b62397fee6b1a1a34aece79183a0dd02ad329e71"),
+        "generation_config.json": (293, "837839ed0534a27084f9b980fc33f47729052dd89cb26cca7ac830765ed30e49"),
+        "pytorch_model.bin": (312087009, "69a1d6ec829cee349360b3b677ac0aa99a7d88822d1a6578370029efffdca3f5"),
+        "source.spm": (806435, "5775ddc9e3ff2fae91554da56468ad35ff56edaba870fea74447bc7234bfdaa8"),
+        "target.spm": (804600, "81dc94efa84e4025ef38d25d5d07429fe41e3eb29d44003f1db6fe98487b0052"),
+        "tokenizer_config.json": (44, "5df181fba586b7cb37d429c13c4f96cb43fb11de7bb6489733d9eded32418179"),
+        "vocab.json": (1617791, "f1832ca38f7aa158b9a944ff583e4901e6b37d9d4ad9241f03838e636e9cfb03"),
+    },
+    "zh-en": {
+        "README.md": (2019, "682e703b97f590777420c4ce2c0f11bd42e15139fbeb933ce077506681f36950"),
+        "config.json": (957, "480c811721f0a0dca0aa632ceb566570f06c46d15ad9bbdfcbec58af4734aef0"),
+        "generation_config.json": (270, "68e3e0677a3852008c48716deb2b498ab259eb824f7225c834c967a0eecdaf2c"),
+        "model.safetensors": (50743442, "e285c15744265535ce9cbcbb59e4144e2e7c0e6f113f05ca092f8c41f1f6b28a"),
+        "source.spm": (755175, "e5528a5c3685d08f8868902d31febeb763eea8519f9997f43b05964b02554640"),
+        "target.spm": (755175, "e5528a5c3685d08f8868902d31febeb763eea8519f9997f43b05964b02554640"),
+        "tokenizer_config.json": (1038, "ba6c90b093ea281b23452e63e0601fcd0936d386c8b9ebd949bb239aebe0dd28"),
+        "vocab.json": (776356, "13690d04e27310a43f0d879dfd38823c317e9ac69f436754baffbb0da6fc9dbe"),
+    },
+}
+_OFFICIAL_NOTICE = {
+    "path": "tools/translation/licenses/open-source-edge-models-NOTICE.md",
+    "size": 784,
+    "sha256": "bc8978c92ba18491c0489c5b6b99d19970c4ae7af79f169b459a601d0fb4b824",
+}
+_OFFICIAL_LICENSE_TEXT = {
+    "path": "Mindspore_inhand_HarmonyOS/entry/src/main/resources/rawfile/model/LICENSE-Apache-2.0.txt",
+    "size": 11546,
+    "sha256": "b51146f2ab748a8681aa7b603e81d94dd431ea0fb3af59e10f91cf82e43b9cf9",
+}
+
+
+def validate_official_models_manifest(manifest: object) -> None:
+    if not isinstance(manifest, dict) or manifest.get("schemaVersion") != 2:
+        raise ContractError("official model manifest schema differs")
+    if "productionApproval" in manifest:
+        raise ContractError("official source manifest must not contain local-learning approval")
+    if manifest.get("licenseText") != _OFFICIAL_LICENSE_TEXT:
+        raise ContractError("official Apache license text differs")
+    directions = manifest.get("directions")
+    if not isinstance(directions, dict) or set(directions) != set(_OFFICIAL_DIRECTIONS):
+        raise ContractError("official model directions differ")
+    for direction, (repository, revision) in _OFFICIAL_DIRECTIONS.items():
+        value = directions.get(direction)
+        if not isinstance(value, dict):
+            raise ContractError(f"missing official direction: {direction}")
+        if value.get("repository") != repository or value.get("revision") != revision:
+            raise ContractError(f"unpinned official checkpoint: {direction}")
+        if value.get("license") != "Apache-2.0" or value.get("notice") != _OFFICIAL_NOTICE:
+            raise ContractError(f"missing Apache notice: {direction}")
+        if value.get("direction") != direction:
+            raise ContractError(f"direction metadata differs: {direction}")
+        profile_pin = _OFFICIAL_PROFILE_PINS[direction]
+        for field in (
+            "sourceLanguage", "targetLanguage", "weightFile", "upstreamBenchmark",
+            "architecture", "generation",
+        ):
+            if value.get(field) != profile_pin[field]:
+                raise ContractError(f"official profile {field} differs: {direction}")
+        files = value.get("files")
+        if not isinstance(files, dict) or set(files) != set(_OFFICIAL_FILE_PINS[direction]):
+            raise ContractError(f"checkpoint file pins missing: {direction}")
+        for name, artifact in files.items():
+            if (
+                not isinstance(name, str)
+                or not isinstance(artifact, dict)
+                or not isinstance(artifact.get("size"), int)
+                or artifact["size"] <= 0
+                or not isinstance(artifact.get("sha256"), str)
+                or len(artifact["sha256"]) != 64
+            ):
+                raise ContractError(f"invalid checkpoint artifact pin: {direction}/{name}")
+        for name, (size, sha256) in _OFFICIAL_FILE_PINS[direction].items():
+            if files.get(name) != {"size": size, "sha256": sha256}:
+                raise ContractError(f"checkpoint artifact differs: {direction}/{name}")
+        if value.get("onnxDtype") != "FLOAT32":
+            raise ContractError(f"official ONNX export profile differs: {direction}")
+    rejected = manifest.get("rejectedCandidates")
+    if (
+        not isinstance(rejected, list)
+        or len(rejected) != 1
+        or rejected[0].get("repository") != "DDDSSS/translation_en-zh"
+        or rejected[0].get("productionPromotionAllowed") is not False
+    ):
+        raise ContractError("rejected local-learning source evidence differs")
+
+
+def _profile(direction: str, value: dict) -> MarianProfile:
+    architecture = value["architecture"]
+    generation = value["generation"]
+    profile = MarianProfile(
+        direction=direction,
+        repository=value["repository"],
+        revision=value["revision"],
+        source_language=value["sourceLanguage"],
+        target_language=value["targetLanguage"],
+        weight_file=value["weightFile"],
+        files=tuple(
+            (name, artifact["size"], artifact["sha256"])
+            for name, artifact in sorted(value["files"].items())
+        ),
+        hidden_size=architecture["hiddenSize"],
+        encoder_layers=architecture["encoderLayers"],
+        decoder_layers=architecture["decoderLayers"],
+        attention_heads=architecture["attentionHeads"],
+        vocab_size=architecture["vocabSize"],
+        max_tokens=architecture["maxTokens"],
+        target_max_tokens=architecture["targetMaxTokens"],
+        onnx_dtype=value["onnxDtype"],
+        pad_token_id=architecture["padTokenId"],
+        decoder_start_token_id=architecture["decoderStartTokenId"],
+        eos_token_id=architecture["eosTokenId"],
+        generation_strategy=generation["strategy"],
+        num_beams=generation["numBeams"],
+        source_prefix=generation["sourcePrefix"],
+    )
+    integers = (
+        profile.hidden_size, profile.encoder_layers, profile.decoder_layers, profile.attention_heads,
+        profile.vocab_size, profile.max_tokens, profile.target_max_tokens, profile.pad_token_id,
+        profile.decoder_start_token_id, profile.eos_token_id, profile.num_beams,
+    )
+    if any(isinstance(item, bool) or not isinstance(item, int) for item in integers):
+        raise ContractError(f"non-integer Marian profile value: {direction}")
+    if (
+        profile.hidden_size <= 0
+        or profile.encoder_layers <= 0
+        or profile.decoder_layers <= 0
+        or profile.attention_heads <= 0
+        or profile.hidden_size % profile.attention_heads
+        or profile.max_tokens < 2
+        or profile.target_max_tokens != 32
+        or profile.onnx_dtype != "FLOAT32"
+        or not 0 <= profile.pad_token_id < profile.vocab_size
+        or not 0 <= profile.decoder_start_token_id < profile.vocab_size
+        or not 0 <= profile.eos_token_id < profile.vocab_size
+        or profile.generation_strategy not in {"greedy", "beam"}
+        or profile.num_beams != (1 if profile.generation_strategy == "greedy" else 4)
+    ):
+        raise ContractError(f"invalid Marian profile values: {direction}")
+    return profile
+
+
+def load_official_models_manifest(path: Path) -> Dict[str, MarianProfile]:
+    try:
+        manifest = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ContractError("official model manifest is unreadable") from error
+    validate_official_models_manifest(manifest)
+    repository_root = Path(__file__).resolve().parents[2]
+    for label, artifact in (
+        ("notice", _OFFICIAL_NOTICE), ("license", _OFFICIAL_LICENSE_TEXT),
+    ):
+        artifact_path = repository_root / artifact["path"]
+        if (
+            not artifact_path.is_file()
+            or artifact_path.stat().st_size != artifact["size"]
+            or _sha256_file(artifact_path) != artifact["sha256"]
+        ):
+            raise ContractError(f"official model {label} bytes differ")
+    return {direction: _profile(direction, value) for direction, value in manifest["directions"].items()}
+
+
+def validate_reference_fixture(fixture: object) -> None:
+    if not isinstance(fixture, dict) or fixture.get("schemaVersion") != 1:
+        raise ContractError("reference fixture schema differs")
+    rows = fixture.get("rows")
+    if not isinstance(rows, list) or len(rows) != 8:
+        raise ContractError("reference fixture must contain eight rows")
+    if {row.get("direction") for row in rows if isinstance(row, dict)} != set(_OFFICIAL_DIRECTIONS):
+        raise ContractError("reference fixture directions differ")
+    for row in rows:
+        if not isinstance(row, dict):
+            raise ContractError("reference fixture row must be an object")
+        direction = row.get("direction")
+        output = row.get("upstreamOutput")
+        tokens = row.get("semanticTokens")
+        generation = row.get("generation")
+        if (
+            not isinstance(row.get("source"), str)
+            or not isinstance(row.get("modelInput"), str)
+            or not isinstance(output, str)
+            or not output.strip()
+            or not isinstance(tokens, list)
+            or not tokens
+            or any(not isinstance(token, str) or not token for token in tokens)
+            or not isinstance(generation, dict)
+        ):
+            raise ContractError("reference fixture row is incomplete")
+        normalized = output.casefold()
+        if any(token.casefold() not in normalized for token in tokens):
+            raise ContractError("reference output loses required meaning")
+        has_cjk = bool(re.search(r"[\u3400-\u9fff]", output))
+        if direction == "en-zh":
+            if row.get("targetLanguage") != "zh" or not row["modelInput"].startswith(">>cmn_Hans<< "):
+                raise ContractError("English-to-Chinese reference prefix differs")
+            if generation != {"strategy": "beam", "numBeams": 4} or not has_cjk:
+                raise ContractError("English-to-Chinese reference language/generation differs")
+        elif direction == "zh-en":
+            if row.get("targetLanguage") != "en" or generation != {"strategy": "greedy", "numBeams": 1} or has_cjk:
+                raise ContractError("Chinese-to-English reference language/generation differs")
+        else:
+            raise ContractError("unknown reference direction")
+
+
+def build_graph_contract(profile: MarianProfile, floating: str = "FLOAT") -> dict:
+    if profile.onnx_dtype != "FLOAT32" or floating != "FLOAT":
+        raise ContractError("official graph floating dtype must be FLOAT")
+    integer = "INT32"
+    source_length, target_length, hidden = (
+        profile.max_tokens, profile.target_max_tokens, profile.hidden_size
+    )
+    return {
+        "encoder": {
+            "inputs": {
+                "input_ids": {"dtype": integer, "shape": [1, source_length]},
+                "attention_mask": {"dtype": integer, "shape": [1, source_length]},
+            },
+            "outputs": {
+                "last_hidden_state": {
+                    "dtype": floating, "shape": [1, source_length, hidden]
+                }
+            },
+        },
+        "decoder_full": {
+            "inputs": {
+                "decoder_input_ids": {"dtype": integer, "shape": [1, target_length]},
+                "decoder_attention_mask": {"dtype": integer, "shape": [1, target_length]},
+                "encoder_hidden_states": {
+                    "dtype": floating, "shape": [1, source_length, hidden]
+                },
+                "encoder_attention_mask": {
+                    "dtype": integer, "shape": [1, source_length]
+                },
+            },
+            "outputs": {
+                "logits": {
+                    "dtype": floating,
+                    "shape": [1, target_length, profile.vocab_size],
+                }
+            },
+        },
+    }
+
+
+def _graph_names(profile) -> tuple[str, ...]:
+    """Keep legacy schema-v1 local-learning exports byte-contract compatible."""
+    return (
+        ("encoder", "decoder_full")
+        if isinstance(profile, MarianProfile)
+        else ("encoder", "decoder_prefill", "decoder_step")
+    )
 
 
 def _canonical_json_bytes(value: object) -> bytes:
@@ -424,9 +771,12 @@ def validate_local_learning_authorization(
     return approval
 
 
-def load_profile(contract_path: Path, profile_name: str) -> dict:
+def load_profile(contract_path: Path, profile_name: str):
     try:
         contract = json.loads(Path(contract_path).read_text(encoding="utf-8"))
+        if contract.get("schemaVersion") == 2:
+            validate_official_models_manifest(contract)
+            return _profile(profile_name, contract["directions"][profile_name])
         profile = contract["profiles"][profile_name]
     except (OSError, json.JSONDecodeError, KeyError, TypeError) as error:
         raise ContractError(f"unknown or invalid contract profile: {profile_name}") from error
@@ -526,6 +876,8 @@ def _checkpoint_revision(checkpoint: Path) -> Optional[str]:
     provenance = checkpoint / "base_revision.txt"
     if provenance.is_file():
         return provenance.read_text(encoding="utf-8").strip()
+    if checkpoint.parent.name == "snapshots" and re.fullmatch(r"[0-9a-f]{40}", checkpoint.name):
+        return checkpoint.name
     return None
 
 
@@ -669,7 +1021,7 @@ def _validate_candidate_approval(
 
 def _validate_checkpoint(
     checkpoint: Path,
-    profile: dict,
+    profile,
     profile_name: str,
     training_report_path: Optional[Path] = None,
     quality_gate_report_path: Optional[Path] = None,
@@ -681,6 +1033,49 @@ def _validate_checkpoint(
     budget_supporting_evidence=(),
 ) -> Optional[dict]:
     config_path = checkpoint / "config.json"
+    if isinstance(profile, MarianProfile):
+        if any(path is not None for path in (
+            training_report_path, quality_gate_report_path, local_learning_authorization_path,
+            v5_terminal_path, evaluation_report_path, evaluation_manifest_path, budget_receipt_path,
+        )) or budget_supporting_evidence:
+            raise ContractError("official checkpoint rejects local-learning approval records")
+        for name, size, sha256 in profile.files:
+            path = checkpoint / name
+            if (
+                not path.is_file()
+                or path.stat().st_size != size
+                or _sha256_file(path).lower() != sha256.lower()
+            ):
+                raise ContractError(f"official checkpoint artifact differs: {profile.direction}/{name}")
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+        expected = {
+            "vocab_size": profile.vocab_size,
+            "d_model": profile.hidden_size,
+            "encoder_layers": profile.encoder_layers,
+            "decoder_layers": profile.decoder_layers,
+            "encoder_attention_heads": profile.attention_heads,
+            "decoder_attention_heads": profile.attention_heads,
+            "pad_token_id": profile.pad_token_id,
+            "decoder_start_token_id": profile.decoder_start_token_id,
+            "eos_token_id": profile.eos_token_id,
+        }
+        wrong = {name: (config.get(name), value) for name, value in expected.items() if config.get(name) != value}
+        decoder_vocab = config.get("decoder_vocab_size", config.get("vocab_size"))
+        if decoder_vocab != profile.vocab_size:
+            wrong["decoder_vocab_size"] = (decoder_vocab, profile.vocab_size)
+        if wrong:
+            raise ContractError(f"checkpoint config mismatch for {profile_name}: {wrong}")
+        revision = _checkpoint_revision(checkpoint)
+        if revision != profile.revision:
+            raise ContractError(f"checkpoint revision mismatch: expected {profile.revision}, got {revision}")
+        return {
+            "releaseChannel": "official-open-source",
+            "productionPromotionAllowed": False,
+            "technicalConversionOnly": True,
+            "repository": profile.repository,
+            "revision": profile.revision,
+            "license": "Apache-2.0",
+        }
     if not config_path.is_file() or not (checkpoint / "model.safetensors").is_file():
         raise ContractError("checkpoint must contain config.json and model.safetensors")
     model_sha256 = _sha256_file(checkpoint / "model.safetensors")
@@ -737,7 +1132,7 @@ def _validate_checkpoint(
     return None
 
 
-def download_pinned_checkpoint(download_root: Path) -> Path:
+def download_pinned_checkpoint(download_root: Path, profile: Optional[MarianProfile] = None) -> Path:
     from huggingface_hub import snapshot_download
 
     download_root = Path(download_root).resolve()
@@ -746,11 +1141,11 @@ def download_pinned_checkpoint(download_root: Path) -> Path:
         raise ContractError("checkpoint/cache downloads must stay outside the repository")
     download_root.mkdir(parents=True, exist_ok=True)
     snapshot_download(
-        repo_id=PINNED_REPOSITORY,
-        revision=PINNED_REVISION,
+        repo_id=profile.repository if profile else PINNED_REPOSITORY,
+        revision=profile.revision if profile else PINNED_REVISION,
         local_dir=str(download_root),
         cache_dir=str(download_root / ".hf-cache"),
-        allow_patterns=("config.json", "model.safetensors"),
+        allow_patterns=tuple(name for name, _, _ in profile.files) if profile else ("config.json", "model.safetensors"),
     )
     return download_root
 
@@ -865,7 +1260,41 @@ def _wrappers(torch):
                 outputs.extend((new_key, new_value))
             return (self.finish(hidden), *outputs)
 
-    return Encoder, Prefill, Step
+    class FullDecoder(DecoderBase):
+        """Static no-cache decoder used when Lite changes cached-step semantics."""
+
+        def __init__(self, model, target_length):
+            super().__init__(model)
+            self.target_length = target_length
+            self.register_buffer(
+                "causal_mask", torch.tril(torch.ones((target_length, target_length)))
+            )
+
+        def forward(
+            self, decoder_input_ids, decoder_attention_mask,
+            encoder_hidden_states, encoder_attention_mask,
+        ):
+            positions = torch.arange(
+                self.target_length, dtype=torch.int64, device=decoder_input_ids.device
+            )
+            hidden = self.embed(decoder_input_ids, positions)
+            valid_keys = decoder_attention_mask[:, None, None, :].to(hidden.dtype)
+            causal = self.causal_mask[None, None, :, :].to(hidden.dtype)
+            self_mask = (1.0 - valid_keys * causal) * torch.finfo(hidden.dtype).min
+            cross_mask = additive_mask(encoder_attention_mask, hidden.dtype)
+            for layer in self.decoder.layers:
+                residual = hidden
+                attended, _, _ = attention(layer.self_attn, hidden, hidden, self_mask)
+                hidden = layer.self_attn_layer_norm(residual + attended)
+                residual = hidden
+                attended, _, _ = attention(
+                    layer.encoder_attn, hidden, encoder_hidden_states, cross_mask
+                )
+                hidden = layer.encoder_attn_layer_norm(residual + attended)
+                hidden = feed_forward(layer, hidden)
+            return self.lm_head(hidden) + self.final_logits_bias
+
+    return Encoder, Prefill, Step, FullDecoder
 
 
 def _numpy_outputs(values) -> list:
@@ -927,6 +1356,7 @@ def export_graphs(
     evaluation_manifest_path: Optional[Path] = None,
     budget_receipt_path: Optional[Path] = None,
     budget_supporting_evidence=(),
+    graph_dtype: Optional[str] = None,
 ) -> dict:
     import numpy as np
     import torch
@@ -952,18 +1382,39 @@ def export_graphs(
         raise ContractError("large generated artifacts must be outside the repository")
     output_root.mkdir(parents=True, exist_ok=True)
 
+    official = isinstance(profile, MarianProfile)
+    if graph_dtype is None:
+        graph_dtype = "float32" if official else "float16"
+    if official and graph_dtype != "float32":
+        raise ContractError("official ONNX graphs must use float32")
+    model_dtype = {"float16": torch.float16, "float32": torch.float32}.get(graph_dtype)
+    if model_dtype is None:
+        raise ContractError("graph dtype must be float16 or float32")
+    floating_contract = {"float16": "FLOAT16", "float32": "FLOAT"}[graph_dtype]
     model = MarianMTModel.from_pretrained(
-        str(checkpoint), local_files_only=True, dtype=torch.float16, attn_implementation="eager"
+        str(checkpoint), local_files_only=True, dtype=model_dtype, attn_implementation="eager"
     ).eval()
-    Encoder, Prefill, Step = _wrappers(torch)
-    encoder, prefill, step = Encoder(model), Prefill(model), Step(model)
-    length = profile["maxTokens"]
-    vocab = profile["vocabSize"]
+    Encoder, Prefill, Step, FullDecoder = _wrappers(torch)
+    encoder = Encoder(model)
+    length = profile.max_tokens if official else profile["maxTokens"]
+    vocab = profile.vocab_size if official else profile["vocabSize"]
+    decoder_layers = profile.decoder_layers if official else 2
+    heads = profile.attention_heads if official else 8
+    head_dim = profile.head_dim if official else 32
+    start_token = profile.decoder_start_token_id if official else model.config.decoder_start_token_id
+    graph_contracts = (
+        build_graph_contract(profile, floating=floating_contract)
+        if official
+        else profile["graphs"]
+    )
+    stable_chains = (
+        {"encoder": profile.encoder_layers, "decoder_full": decoder_layers * 2}
+        if official else profile["stableSoftmaxChains"]
+    )
     generator = torch.Generator().manual_seed(20260713)
     input_ids = torch.randint(2, min(vocab - 1, 1000), (1, length), dtype=torch.int32, generator=generator)
     input_ids[:, -1] = 0
     encoder_mask = torch.ones((1, length), dtype=torch.int32)
-    decoder_ids = torch.tensor([[model.config.decoder_start_token_id]], dtype=torch.int32)
 
     graph_inputs = {}
     encoder_outputs = _export_one(
@@ -971,55 +1422,85 @@ def export_graphs(
         ["last_hidden_state"], output_root / "encoder.onnx", PYTORCH_ONNX_MAX_ABS
     )
     hidden = torch.from_numpy(encoder_outputs[0])
-    prefill_names = ["logits"]
-    for layer in range(2):
-        prefill_names.extend((f"self_key_{layer}", f"self_value_{layer}", f"cross_key_{layer}", f"cross_value_{layer}"))
-    prefill_outputs = _export_one(
-        torch, prefill, (decoder_ids, hidden, encoder_mask),
-        ["decoder_input_ids", "encoder_hidden_states", "encoder_attention_mask"], prefill_names,
-        output_root / "decoder_prefill.onnx", DECODER_PYTORCH_ONNX_MAX_ABS
-    )
-    history = []
-    for layer in range(2):
-        past_key = torch.zeros((1, 8, length - 1, 32), dtype=torch.float16)
-        past_value = torch.zeros_like(past_key)
-        past_key[:, :, 0:1, :] = torch.from_numpy(prefill_outputs[1 + layer * 4])
-        past_value[:, :, 0:1, :] = torch.from_numpy(prefill_outputs[2 + layer * 4])
-        history.extend((past_key, past_value, torch.from_numpy(prefill_outputs[3 + layer * 4]), torch.from_numpy(prefill_outputs[4 + layer * 4])))
-    self_mask = torch.zeros((1, length), dtype=torch.int32)
-    self_mask[:, 0] = 1
-    self_mask[:, -1] = 1
-    position = torch.tensor([1], dtype=torch.int32)
-    next_ids = torch.from_numpy(np.argmax(prefill_outputs[0], axis=-1).astype(np.int32)).reshape(1, 1)
-    step_input_names = ["decoder_input_ids", "position_id", "self_attention_mask", "cross_attention_mask"]
-    for layer in range(2):
-        step_input_names.extend((f"past_key_{layer}", f"past_value_{layer}", f"cross_key_{layer}", f"cross_value_{layer}"))
-    step_output_names = ["logits", "new_key_0", "new_value_0", "new_key_1", "new_value_1"]
-    step_inputs = (next_ids, position, self_mask, encoder_mask, *history)
-    _export_one(
-        torch, step, step_inputs, step_input_names, step_output_names,
-        output_root / "decoder_step.onnx", DECODER_PYTORCH_ONNX_MAX_ABS
-    )
+    if official:
+        target_length = profile.target_max_tokens
+        decoder_ids = torch.full(
+            (1, target_length), profile.pad_token_id, dtype=torch.int32
+        )
+        decoder_ids[:, 0] = start_token
+        decoder_mask = torch.zeros((1, target_length), dtype=torch.int32)
+        decoder_mask[:, 0] = 1
+        full_decoder = FullDecoder(model, target_length)
+        _export_one(
+            torch,
+            full_decoder,
+            (decoder_ids, decoder_mask, hidden, encoder_mask),
+            [
+                "decoder_input_ids", "decoder_attention_mask",
+                "encoder_hidden_states", "encoder_attention_mask",
+            ],
+            ["logits"],
+            output_root / "decoder_full.onnx",
+            DECODER_PYTORCH_ONNX_MAX_ABS,
+        )
+    else:
+        decoder_ids = torch.tensor([[start_token]], dtype=torch.int32)
+        prefill, step = Prefill(model), Step(model)
+        prefill_names = list(graph_contracts["decoder_prefill"]["outputs"])
+        prefill_outputs = _export_one(
+            torch, prefill, (decoder_ids, hidden, encoder_mask),
+            ["decoder_input_ids", "encoder_hidden_states", "encoder_attention_mask"],
+            prefill_names, output_root / "decoder_prefill.onnx",
+            DECODER_PYTORCH_ONNX_MAX_ABS,
+        )
+        history = []
+        for layer in range(decoder_layers):
+            past_key = torch.zeros((1, heads, length - 1, head_dim), dtype=model_dtype)
+            past_value = torch.zeros_like(past_key)
+            past_key[:, :, 0:1, :] = torch.from_numpy(prefill_outputs[1 + layer * 4])
+            past_value[:, :, 0:1, :] = torch.from_numpy(prefill_outputs[2 + layer * 4])
+            history.extend((
+                past_key, past_value,
+                torch.from_numpy(prefill_outputs[3 + layer * 4]),
+                torch.from_numpy(prefill_outputs[4 + layer * 4]),
+            ))
+        self_mask = torch.zeros((1, length), dtype=torch.int32)
+        self_mask[:, 0] = 1
+        self_mask[:, -1] = 1
+        position = torch.tensor([1], dtype=torch.int32)
+        next_ids = torch.from_numpy(
+            np.argmax(prefill_outputs[0], axis=-1).astype(np.int32)
+        ).reshape(1, 1)
+        _export_one(
+            torch, step,
+            (next_ids, position, self_mask, encoder_mask, *history),
+            list(graph_contracts["decoder_step"]["inputs"]),
+            list(graph_contracts["decoder_step"]["outputs"]),
+            output_root / "decoder_step.onnx", DECODER_PYTORCH_ONNX_MAX_ABS,
+        )
 
-    for graph_name in ("encoder", "decoder_prefill", "decoder_step"):
+    graph_names = _graph_names(profile)
+    for graph_name in graph_names:
         actual, nodes = _inspect_onnx(output_root / f"{graph_name}.onnx")
-        validate_graph_contract(profile["graphs"][graph_name], actual, graph_name)
-        _validate_stable_softmax(nodes, graph_name, profile["stableSoftmaxChains"][graph_name])
+        validate_graph_contract(graph_contracts[graph_name], actual, graph_name)
+        _validate_stable_softmax(nodes, graph_name, stable_chains[graph_name])
         graph_inputs[graph_name] = actual
     report = {
         "schemaVersion": 1,
         "profile": profile_name,
-        "checkpointRevision": PINNED_REVISION,
+        "checkpointRevision": profile.revision if official else PINNED_REVISION,
+        "direction": profile.direction if official else profile_name,
         "approval": approval,
         "vocabSize": vocab,
         "maxTokens": length,
+        "graphDtype": floating_contract,
         "graphs": graph_inputs,
         "pytorchOnnxMaxAbsLimit": PYTORCH_ONNX_MAX_ABS,
         "decoderPytorchOnnxMaxAbsLimit": DECODER_PYTORCH_ONNX_MAX_ABS,
         "stableSoftmax": ["ReduceMax", "Sub", "Exp", "ReduceSum", "Div"],
         "onnxArtifacts": {
             f"{name}.onnx": _file_artifact(output_root / f"{name}.onnx")
-            for name in ("encoder", "decoder_prefill", "decoder_step")
+            for name in graph_names
         },
     }
     (output_root / "export-report.json").write_bytes(_canonical_json_bytes(report))
@@ -1028,13 +1509,25 @@ def export_graphs(
 
 def inspect_exports(output_root: Path, contract_path: Path, profile_name: str) -> dict:
     profile = load_profile(contract_path, profile_name)
+    official = isinstance(profile, MarianProfile)
+    stable_chains = (
+        {"encoder": profile.encoder_layers, "decoder_full": profile.decoder_layers * 2}
+        if official else profile["stableSoftmaxChains"]
+    )
     inspected = {}
-    for graph_name in ("encoder", "decoder_prefill", "decoder_step"):
+    nodes_by_graph = {}
+    graph_names = _graph_names(profile)
+    for graph_name in graph_names:
         actual, nodes = _inspect_onnx(Path(output_root) / f"{graph_name}.onnx")
-        validate_graph_contract(profile["graphs"][graph_name], actual, graph_name)
-        _validate_stable_softmax(nodes, graph_name, profile["stableSoftmaxChains"][graph_name])
         inspected[graph_name] = actual
-    return {"profile": profile_name, "graphs": inspected}
+        nodes_by_graph[graph_name] = nodes
+    floating = inspected["encoder"]["outputs"]["last_hidden_state"]["dtype"]
+    contracts = build_graph_contract(profile, floating=floating) if official else profile["graphs"]
+    for graph_name in graph_names:
+        actual = inspected[graph_name]
+        validate_graph_contract(contracts[graph_name], actual, graph_name)
+        _validate_stable_softmax(nodes_by_graph[graph_name], graph_name, stable_chains[graph_name])
+    return {"profile": profile_name, "graphDtype": floating, "graphs": inspected}
 
 
 def verify_export_report(output_root: Path, contract_path: Path, profile_name: str) -> dict:
@@ -1042,29 +1535,43 @@ def verify_export_report(output_root: Path, contract_path: Path, profile_name: s
     report_path = output_root / "export-report.json"
     report = _canonical_report(report_path, "export report")
     expected_keys = {
-        "schemaVersion", "profile", "checkpointRevision", "approval", "vocabSize",
+        "schemaVersion", "profile", "direction", "checkpointRevision", "approval", "vocabSize",
         "maxTokens", "graphs", "pytorchOnnxMaxAbsLimit", "decoderPytorchOnnxMaxAbsLimit",
-        "stableSoftmax", "onnxArtifacts",
+        "stableSoftmax", "onnxArtifacts", "graphDtype",
     }
     profile = load_profile(contract_path, profile_name)
+    official = isinstance(profile, MarianProfile)
     inspected = inspect_exports(output_root, contract_path, profile_name)
     expected_artifacts = {
         f"{name}.onnx": _file_artifact(output_root / f"{name}.onnx")
-        for name in ("encoder", "decoder_prefill", "decoder_step")
+        for name in _graph_names(profile)
     }
     if (
         set(report) != expected_keys
         or report.get("schemaVersion") != 1
         or report.get("profile") != profile_name
-        or report.get("checkpointRevision") != PINNED_REVISION
-        or report.get("vocabSize") != profile["vocabSize"]
-        or report.get("maxTokens") != profile["maxTokens"]
+        or report.get("direction") != (profile.direction if official else profile_name)
+        or report.get("checkpointRevision") != (profile.revision if official else PINNED_REVISION)
+        or report.get("vocabSize") != (profile.vocab_size if official else profile["vocabSize"])
+        or report.get("maxTokens") != (profile.max_tokens if official else profile["maxTokens"])
+        or report.get("graphDtype") != inspected["graphDtype"]
         or report.get("graphs") != inspected["graphs"]
         or report.get("onnxArtifacts") != expected_artifacts
     ):
         raise ContractError("export report does not bind the inspected ONNX graphs")
     approval = report.get("approval")
-    if profile_name == "final":
+    if official:
+        if (
+            not isinstance(approval, dict)
+            or approval.get("releaseChannel") != "official-open-source"
+            or approval.get("productionPromotionAllowed") is not False
+            or approval.get("technicalConversionOnly") is not True
+            or approval.get("repository") != profile.repository
+            or approval.get("revision") != profile.revision
+            or approval.get("license") != "Apache-2.0"
+        ):
+            raise ContractError("official export report lacks pinned source provenance")
+    elif profile_name == "final":
         if isinstance(approval, dict) and approval.get("releaseChannel") == "local-learning":
             if not _validate_local_learning_approval_record(approval):
                 raise ContractError("final export report lacks local-learning approval provenance")
@@ -1113,7 +1620,7 @@ def encoder_mindspore_parity(
     import onnxruntime as ort
 
     profile = load_profile(contract_path, profile_name)
-    length = profile["maxTokens"]
+    length = profile.max_tokens if isinstance(profile, MarianProfile) else profile["maxTokens"]
     if isinstance(valid_tokens, bool) or not isinstance(valid_tokens, int) or not 1 <= valid_tokens <= length:
         raise ContractError("encoder valid-token count is outside the fixed contract")
     session = ort.InferenceSession(
@@ -1152,24 +1659,46 @@ def onnx_cache_loop(
     import onnxruntime as ort
 
     profile = load_profile(contract_path, profile_name)
-    length = profile["maxTokens"]
-    if isinstance(steps, bool) or not isinstance(steps, int) or not 1 <= steps < length - 1:
-        raise ContractError("cache-loop steps are outside the fixed cache contract")
+    official = isinstance(profile, MarianProfile)
+    length = profile.max_tokens if official else profile["maxTokens"]
+    hidden_size = profile.hidden_size if official else 256
+    decoder_layers = profile.decoder_layers if official else 2
+    heads = profile.attention_heads if official else 8
+    head_dim = profile.head_dim if official else 32
+    start_token = profile.decoder_start_token_id if official else 32000
+    step_limit = profile.target_max_tokens if official else length - 1
+    if isinstance(steps, bool) or not isinstance(steps, int) or not 1 <= steps < step_limit:
+        raise ContractError("decoder-loop steps are outside the fixed target contract")
     sessions = {
         name: ort.InferenceSession(str(Path(output_root) / f"{name}.onnx"), providers=["CPUExecutionProvider"])
-        for name in ("encoder", "decoder_prefill", "decoder_step")
+        for name in _graph_names(profile)
     }
     input_ids = np.arange(length, dtype=np.int32).reshape(1, length)
     encoder_mask = np.zeros((1, length), dtype=np.int32)
     encoder_mask[:, : length // 2] = 1
     cross_mask = encoder_mask.copy()
     hidden = sessions["encoder"].run(None, {"input_ids": input_ids, "attention_mask": encoder_mask})[0]
+    if official:
+        if binary_fixture_root is not None:
+            raise ContractError("cached-step binary fixtures do not apply to static full decoder")
+        decoder_tokens = [start_token]
+        tokens = []
+        for _ in range(steps):
+            logits = _onnx_full_decoder_logits(
+                sessions["decoder_full"], profile, decoder_tokens, hidden, cross_mask
+            )
+            token = int(np.argmax(logits))
+            tokens.append(token)
+            if token == profile.eos_token_id:
+                break
+            decoder_tokens.append(token)
+        return {"profile": profile_name, "steps": len(tokens), "tokens": tokens}
     if binary_fixture_root is not None:
         fixture = Path(binary_fixture_root)
-        hidden = np.fromfile(fixture / "pre_01_encoder.bin", dtype=np.float32).reshape(1, length, 256).astype(np.float16)
+        hidden = np.fromfile(fixture / "pre_01_encoder.bin", dtype=np.float32).reshape(1, length, hidden_size).astype(np.float16)
         cross_mask = np.fromfile(fixture / "pre_02_mask.bin", dtype=np.int32).reshape(1, length)
     prefill = sessions["decoder_prefill"].run(None, {
-        "decoder_input_ids": np.array([[32000]], dtype=np.int32),
+        "decoder_input_ids": np.array([[start_token]], dtype=np.int32),
         "encoder_hidden_states": hidden,
         "encoder_attention_mask": cross_mask,
     })
@@ -1178,8 +1707,8 @@ def onnx_cache_loop(
     token = int(np.argmax(prefill[0], axis=-1)[0])
     tokens = [token]
     history = []
-    for layer in range(2):
-        past_key = np.zeros((1, 8, length - 1, 32), dtype=prefill[1 + layer * 4].dtype)
+    for layer in range(decoder_layers):
+        past_key = np.zeros((1, heads, length - 1, head_dim), dtype=prefill[1 + layer * 4].dtype)
         past_value = np.zeros_like(past_key)
         past_key[:, :, 0:1, :] = prefill[1 + layer * 4]
         past_value[:, :, 0:1, :] = prefill[2 + layer * 4]
@@ -1189,16 +1718,16 @@ def onnx_cache_loop(
         token = int(np.fromfile(fixture / "step_00_ids.bin", dtype=np.int32)[0])
         tokens = [token]
         history = []
-        for layer in range(2):
+        for layer in range(decoder_layers):
             history.extend((
                 np.fromfile(fixture / f"step_{4 + layer * 4:02d}_past_key_{layer}.bin", dtype=np.float32)
-                .reshape(1, 8, length - 1, 32).astype(np.float16),
+                .reshape(1, heads, length - 1, head_dim).astype(np.float16),
                 np.fromfile(fixture / f"step_{5 + layer * 4:02d}_past_value_{layer}.bin", dtype=np.float32)
-                .reshape(1, 8, length - 1, 32).astype(np.float16),
+                .reshape(1, heads, length - 1, head_dim).astype(np.float16),
                 np.fromfile(fixture / f"step_{6 + layer * 4:02d}_cross_key_{layer}.bin", dtype=np.float32)
-                .reshape(1, 8, length, 32).astype(np.float16),
+                .reshape(1, heads, length, head_dim).astype(np.float16),
                 np.fromfile(fixture / f"step_{7 + layer * 4:02d}_cross_value_{layer}.bin", dtype=np.float32)
-                .reshape(1, 8, length, 32).astype(np.float16),
+                .reshape(1, heads, length, head_dim).astype(np.float16),
             ))
     for position in range(1, steps + 1):
         self_mask = np.zeros((1, length), dtype=np.int32)
@@ -1210,7 +1739,7 @@ def onnx_cache_loop(
             "self_attention_mask": self_mask,
             "cross_attention_mask": cross_mask,
         }
-        for layer in range(2):
+        for layer in range(decoder_layers):
             offset = layer * 4
             feed[f"past_key_{layer}"] = history[offset]
             feed[f"past_value_{layer}"] = history[offset + 1]
@@ -1222,10 +1751,349 @@ def onnx_cache_loop(
         token = int(np.argmax(outputs[0], axis=-1)[0])
         tokens.append(token)
         if position < length - 1:
-            for layer in range(2):
+            for layer in range(decoder_layers):
                 history[layer * 4][:, :, position : position + 1, :] = outputs[1 + layer * 2]
                 history[layer * 4 + 1][:, :, position : position + 1, :] = outputs[2 + layer * 2]
     return {"profile": profile_name, "steps": steps, "tokens": tokens}
+
+
+def _onnx_greedy_tokens(sessions, profile: MarianProfile, input_ids, attention_mask) -> list[int]:
+    import numpy as np
+
+    hidden = sessions["encoder"].run(None, {
+        "input_ids": input_ids.astype(np.int32),
+        "attention_mask": attention_mask.astype(np.int32),
+    })[0]
+    prefill = sessions["decoder_prefill"].run(None, {
+        "decoder_input_ids": np.array([[profile.decoder_start_token_id]], dtype=np.int32),
+        "encoder_hidden_states": hidden,
+        "encoder_attention_mask": attention_mask.astype(np.int32),
+    })
+    token = int(np.argmax(prefill[0], axis=-1)[0])
+    tokens = [token]
+    history = []
+    for layer in range(profile.decoder_layers):
+        past_key = np.zeros(
+            (1, profile.attention_heads, profile.max_tokens - 1, profile.head_dim),
+            dtype=prefill[1 + layer * 4].dtype,
+        )
+        past_value = np.zeros_like(past_key)
+        past_key[:, :, 0:1, :] = prefill[1 + layer * 4]
+        past_value[:, :, 0:1, :] = prefill[2 + layer * 4]
+        history.extend((past_key, past_value, prefill[3 + layer * 4], prefill[4 + layer * 4]))
+    for position in range(1, profile.max_tokens - 1):
+        if token == profile.eos_token_id:
+            break
+        self_mask = np.zeros((1, profile.max_tokens), dtype=np.int32)
+        self_mask[:, :position] = 1
+        self_mask[:, -1] = 1
+        feed = {
+            "decoder_input_ids": np.array([[token]], dtype=np.int32),
+            "position_id": np.array([position], dtype=np.int32),
+            "self_attention_mask": self_mask,
+            "cross_attention_mask": attention_mask.astype(np.int32),
+        }
+        for layer in range(profile.decoder_layers):
+            offset = layer * 4
+            feed[f"past_key_{layer}"] = history[offset]
+            feed[f"past_value_{layer}"] = history[offset + 1]
+            feed[f"cross_key_{layer}"] = history[offset + 2]
+            feed[f"cross_value_{layer}"] = history[offset + 3]
+        outputs = sessions["decoder_step"].run(None, feed)
+        if not all(np.isfinite(value).all() for value in outputs):
+            raise ContractError("ONNX sentence decoder produced non-finite tensors")
+        token = int(np.argmax(outputs[0], axis=-1)[0])
+        tokens.append(token)
+        for layer in range(profile.decoder_layers):
+            history[layer * 4][:, :, position : position + 1, :] = outputs[1 + layer * 2]
+            history[layer * 4 + 1][:, :, position : position + 1, :] = outputs[2 + layer * 2]
+    return tokens
+
+
+def _onnx_full_decoder_logits(session, profile: MarianProfile, decoder_tokens, hidden, attention_mask):
+    import numpy as np
+
+    token_count = len(decoder_tokens)
+    if not 1 <= token_count <= profile.target_max_tokens:
+        raise ContractError("full-decoder token count is outside the fixed target contract")
+    decoder_ids = np.full(
+        (1, profile.target_max_tokens), profile.pad_token_id, dtype=np.int32
+    )
+    decoder_mask = np.zeros((1, profile.target_max_tokens), dtype=np.int32)
+    decoder_ids[0, :token_count] = np.asarray(decoder_tokens, dtype=np.int32)
+    decoder_mask[0, :token_count] = 1
+    logits = session.run(None, {
+        "decoder_input_ids": decoder_ids,
+        "decoder_attention_mask": decoder_mask,
+        "encoder_hidden_states": hidden,
+        "encoder_attention_mask": attention_mask.astype(np.int32),
+    })[0]
+    if not np.isfinite(logits).all():
+        raise ContractError("ONNX full decoder produced non-finite logits")
+    return logits[0, token_count - 1].astype(np.float32)
+
+
+def _onnx_full_greedy_tokens(sessions, profile: MarianProfile, input_ids, attention_mask) -> list[int]:
+    import numpy as np
+
+    hidden = sessions["encoder"].run(None, {
+        "input_ids": input_ids.astype(np.int32),
+        "attention_mask": attention_mask.astype(np.int32),
+    })[0]
+    decoder_tokens = [profile.decoder_start_token_id]
+    generated = []
+    for _ in range(profile.target_max_tokens - 1):
+        logits = _onnx_full_decoder_logits(
+            sessions["decoder_full"], profile, decoder_tokens, hidden, attention_mask
+        )
+        token = int(np.argmax(logits))
+        generated.append(token)
+        if token == profile.eos_token_id:
+            break
+        decoder_tokens.append(token)
+    return generated
+
+
+def _onnx_full_beam_tokens(sessions, profile: MarianProfile, input_ids, attention_mask) -> list[int]:
+    import numpy as np
+    import torch
+    from transformers.generation.beam_search import BeamSearchScorer
+
+    if profile.num_beams != 4:
+        raise ContractError("official beam contract requires four beams")
+    hidden = sessions["encoder"].run(None, {
+        "input_ids": input_ids.astype(np.int32),
+        "attention_mask": attention_mask.astype(np.int32),
+    })[0]
+    decoder_ids = torch.full(
+        (profile.num_beams, 1), profile.decoder_start_token_id, dtype=torch.long
+    )
+    beam_scores = torch.zeros((profile.num_beams,), dtype=torch.float32)
+    beam_scores[1:] = -1e9
+    scorer = BeamSearchScorer(
+        batch_size=1, num_beams=profile.num_beams, device=torch.device("cpu"),
+        length_penalty=1.0, do_early_stopping=False, num_beam_hyps_to_keep=1,
+        max_length=profile.target_max_tokens,
+    )
+    next_tokens = next_indices = None
+    for _ in range(profile.target_max_tokens - 1):
+        logits = np.stack([
+            _onnx_full_decoder_logits(
+                sessions["decoder_full"], profile, row.tolist(), hidden, attention_mask
+            )
+            for row in decoder_ids
+        ])
+        scores = torch.log_softmax(torch.from_numpy(logits), dim=-1)
+        scores[:, profile.pad_token_id] = -torch.inf
+        if decoder_ids.shape[1] == profile.target_max_tokens - 1:
+            forced = torch.full_like(scores, -torch.inf)
+            forced[:, profile.eos_token_id] = 0.0
+            scores = forced
+        scores = scores + beam_scores[:, None]
+        flat = scores.view(1, profile.num_beams * profile.vocab_size)
+        next_scores, next_tokens = torch.topk(
+            flat, 2 * profile.num_beams, dim=1, largest=True, sorted=True
+        )
+        next_indices = torch.div(next_tokens, profile.vocab_size, rounding_mode="floor")
+        next_tokens = next_tokens % profile.vocab_size
+        beam = scorer.process(
+            decoder_ids, next_scores, next_tokens, next_indices,
+            pad_token_id=profile.pad_token_id, eos_token_id=profile.eos_token_id,
+            decoder_prompt_len=1,
+        )
+        beam_scores = beam["next_beam_scores"]
+        beam_tokens = beam["next_beam_tokens"]
+        beam_indices = beam["next_beam_indices"]
+        decoder_ids = torch.cat(
+            (decoder_ids[beam_indices], beam_tokens.unsqueeze(-1)), dim=-1
+        )
+        if scorer.is_done:
+            break
+    finalized = scorer.finalize(
+        decoder_ids, beam_scores, next_tokens, next_indices,
+        max_length=profile.target_max_tokens,
+        pad_token_id=profile.pad_token_id, eos_token_id=profile.eos_token_id,
+        decoder_prompt_len=1,
+    )["sequences"][0].tolist()
+    if finalized and finalized[0] == profile.decoder_start_token_id:
+        finalized = finalized[1:]
+    if profile.eos_token_id in finalized:
+        finalized = finalized[: finalized.index(profile.eos_token_id) + 1]
+    return finalized
+
+
+def _onnx_beam_tokens(sessions, profile: MarianProfile, input_ids, attention_mask) -> list[int]:
+    import numpy as np
+    import torch
+    from transformers.generation.beam_search import BeamSearchScorer
+
+    if profile.num_beams != 4:
+        raise ContractError("official beam contract requires four beams")
+    hidden = sessions["encoder"].run(None, {
+        "input_ids": input_ids.astype(np.int32),
+        "attention_mask": attention_mask.astype(np.int32),
+    })[0]
+    prefill = sessions["decoder_prefill"].run(None, {
+        "decoder_input_ids": np.array([[profile.decoder_start_token_id]], dtype=np.int32),
+        "encoder_hidden_states": hidden,
+        "encoder_attention_mask": attention_mask.astype(np.int32),
+    })
+    base_history = []
+    for layer in range(profile.decoder_layers):
+        past_key = np.zeros(
+            (1, profile.attention_heads, profile.max_tokens - 1, profile.head_dim),
+            dtype=prefill[1 + layer * 4].dtype,
+        )
+        past_value = np.zeros_like(past_key)
+        past_key[:, :, 0:1, :] = prefill[1 + layer * 4]
+        past_value[:, :, 0:1, :] = prefill[2 + layer * 4]
+        base_history.extend((past_key, past_value, prefill[3 + layer * 4], prefill[4 + layer * 4]))
+    histories = [[value.copy() for value in base_history] for _ in range(profile.num_beams)]
+    logits = np.repeat(prefill[0].astype(np.float32), profile.num_beams, axis=0)
+    decoder_ids = torch.full(
+        (profile.num_beams, 1), profile.decoder_start_token_id, dtype=torch.long
+    )
+    beam_scores = torch.zeros((profile.num_beams,), dtype=torch.float32)
+    beam_scores[1:] = -1e9
+    scorer = BeamSearchScorer(
+        batch_size=1, num_beams=profile.num_beams, device=torch.device("cpu"),
+        length_penalty=1.0, do_early_stopping=False, num_beam_hyps_to_keep=1,
+        max_length=profile.max_tokens,
+    )
+    next_tokens = next_indices = None
+    for position in range(1, profile.max_tokens):
+        scores = torch.log_softmax(torch.from_numpy(logits), dim=-1)
+        scores[:, profile.pad_token_id] = -torch.inf
+        if position == profile.max_tokens - 1:
+            forced = torch.full_like(scores, -torch.inf)
+            forced[:, profile.eos_token_id] = 0.0
+            scores = forced
+        else:
+            scores = torch.log_softmax(scores, dim=-1)
+        scores = scores + beam_scores[:, None]
+        flat = scores.view(1, profile.num_beams * profile.vocab_size)
+        next_scores, next_tokens = torch.topk(flat, 2 * profile.num_beams, dim=1, largest=True, sorted=True)
+        next_indices = torch.div(next_tokens, profile.vocab_size, rounding_mode="floor")
+        next_tokens = next_tokens % profile.vocab_size
+        beam = scorer.process(
+            decoder_ids, next_scores, next_tokens, next_indices,
+            pad_token_id=profile.pad_token_id, eos_token_id=profile.eos_token_id,
+            decoder_prompt_len=1,
+        )
+        beam_scores = beam["next_beam_scores"]
+        beam_tokens = beam["next_beam_tokens"]
+        beam_indices = beam["next_beam_indices"]
+        decoder_ids = torch.cat((decoder_ids[beam_indices], beam_tokens.unsqueeze(-1)), dim=-1)
+        histories = [[value.copy() for value in histories[int(index)]] for index in beam_indices]
+        if scorer.is_done:
+            break
+        next_logits = []
+        for beam_index, token in enumerate(beam_tokens.tolist()):
+            self_mask = np.zeros((1, profile.max_tokens), dtype=np.int32)
+            self_mask[:, :position] = 1
+            self_mask[:, -1] = 1
+            history = histories[beam_index]
+            feed = {
+                "decoder_input_ids": np.array([[token]], dtype=np.int32),
+                "position_id": np.array([position], dtype=np.int32),
+                "self_attention_mask": self_mask,
+                "cross_attention_mask": attention_mask.astype(np.int32),
+            }
+            for layer in range(profile.decoder_layers):
+                offset = layer * 4
+                feed[f"past_key_{layer}"] = history[offset]
+                feed[f"past_value_{layer}"] = history[offset + 1]
+                feed[f"cross_key_{layer}"] = history[offset + 2]
+                feed[f"cross_value_{layer}"] = history[offset + 3]
+            outputs = sessions["decoder_step"].run(None, feed)
+            if not all(np.isfinite(value).all() for value in outputs):
+                raise ContractError("ONNX beam decoder produced non-finite tensors")
+            next_logits.append(outputs[0][0].astype(np.float32))
+            for layer in range(profile.decoder_layers):
+                history[layer * 4][:, :, position : position + 1, :] = outputs[1 + layer * 2]
+                history[layer * 4 + 1][:, :, position : position + 1, :] = outputs[2 + layer * 2]
+        logits = np.stack(next_logits, axis=0)
+    finalized = scorer.finalize(
+        decoder_ids, beam_scores, next_tokens, next_indices,
+        max_length=profile.max_tokens, pad_token_id=profile.pad_token_id,
+        eos_token_id=profile.eos_token_id, decoder_prompt_len=1,
+    )["sequences"][0].tolist()
+    if finalized and finalized[0] == profile.decoder_start_token_id:
+        finalized = finalized[1:]
+    if profile.eos_token_id in finalized:
+        finalized = finalized[: finalized.index(profile.eos_token_id) + 1]
+    return finalized
+
+
+def onnx_sentence_parity(
+    checkpoint: Path,
+    output_root: Path,
+    contract_path: Path,
+    profile_name: str,
+    reference_fixture: Path,
+) -> dict:
+    import numpy as np
+    import onnxruntime as ort
+    import torch
+    from transformers import MarianMTModel, MarianTokenizer
+
+    profile = load_profile(contract_path, profile_name)
+    if not isinstance(profile, MarianProfile):
+        raise ContractError("sentence parity requires an official immutable profile")
+    _validate_checkpoint(Path(checkpoint), profile, profile_name)
+    fixture = json.loads(Path(reference_fixture).read_text(encoding="utf-8"))
+    validate_reference_fixture(fixture)
+    rows = [row for row in fixture["rows"] if row["direction"] == profile.direction]
+    tokenizer = MarianTokenizer.from_pretrained(str(checkpoint), local_files_only=True)
+    model = MarianMTModel.from_pretrained(
+        str(checkpoint), local_files_only=True, attn_implementation="eager"
+    ).eval()
+    sessions = {
+        name: ort.InferenceSession(str(Path(output_root) / f"{name}.onnx"), providers=["CPUExecutionProvider"])
+        for name in _graph_names(profile)
+    }
+    results = []
+    for row in rows:
+        encoded = tokenizer(
+            row["modelInput"], max_length=profile.max_tokens, padding="max_length",
+            truncation=True, return_tensors="np",
+        )
+        input_ids = encoded["input_ids"].astype(np.int32)
+        attention_mask = encoded["attention_mask"].astype(np.int32)
+        onnx_tokens = (
+            _onnx_full_beam_tokens(sessions, profile, input_ids, attention_mask)
+            if profile.generation_strategy == "beam"
+            else _onnx_full_greedy_tokens(sessions, profile, input_ids, attention_mask)
+        )
+        with torch.inference_mode():
+            generated = model.generate(
+                input_ids=torch.from_numpy(input_ids).to(torch.int64),
+                attention_mask=torch.from_numpy(attention_mask).to(torch.int64),
+                num_beams=profile.num_beams,
+                do_sample=False,
+                max_new_tokens=profile.target_max_tokens - 1,
+            )[0].tolist()
+        if generated and generated[0] == profile.decoder_start_token_id:
+            generated = generated[1:]
+        if onnx_tokens != generated:
+            raise ContractError(
+                f"sentence token parity differs for {profile.direction}: "
+                f"onnx={onnx_tokens}, pytorch={generated}"
+            )
+        output = tokenizer.decode(onnx_tokens, skip_special_tokens=True)
+        semantic = output.casefold()
+        if any(token.casefold() not in semantic for token in row["semanticTokens"]):
+            raise ContractError(f"sentence output loses required meaning: {row['source']}")
+        results.append({
+            "source": row["source"], "modelInput": row["modelInput"],
+            "tokens": onnx_tokens, "output": output, "tokenAgreement": 1.0,
+        })
+    report = {
+        "schemaVersion": 1, "direction": profile.direction,
+        "strategy": profile.generation_strategy, "numBeams": profile.num_beams, "rows": results,
+    }
+    (Path(output_root) / "sentence-parity.json").write_bytes(_canonical_json_bytes(report))
+    return report
 
 
 def _parse(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
@@ -1234,11 +2102,13 @@ def _parse(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument("--download-root", type=Path)
     parser.add_argument("--output-root", required=True, type=Path)
     parser.add_argument("--contract", required=True, type=Path)
-    parser.add_argument("--profile", choices=("prototype", "final"), required=True)
+    parser.add_argument("--profile", required=True)
     parser.add_argument("--inspect-only", action="store_true")
     parser.add_argument("--verify-export-report", action="store_true")
     parser.add_argument("--cache-loop-only", action="store_true")
     parser.add_argument("--cache-loop-steps", type=int, default=5)
+    parser.add_argument("--sentence-parity", action="store_true")
+    parser.add_argument("--reference-fixture", type=Path)
     parser.add_argument("--binary-fixture-root", type=Path)
     parser.add_argument("--encoder-mindspore-output", type=Path)
     parser.add_argument("--encoder-valid-tokens", type=int)
@@ -1250,12 +2120,19 @@ def _parse(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument("--evaluation-manifest", type=Path)
     parser.add_argument("--budget-receipt", type=Path)
     parser.add_argument("--budget-supporting-evidence", action="append", type=Path, default=[])
+    parser.add_argument("--graph-dtype", choices=("float16", "float32"))
     return parser.parse_args(argv)
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
     args = _parse(argv)
-    if args.encoder_mindspore_output is not None:
+    if args.sentence_parity:
+        if args.checkpoint is None or args.reference_fixture is None:
+            raise ContractError("--sentence-parity requires --checkpoint and --reference-fixture")
+        result = onnx_sentence_parity(
+            args.checkpoint, args.output_root, args.contract, args.profile, args.reference_fixture
+        )
+    elif args.encoder_mindspore_output is not None:
         if args.encoder_valid_tokens is None:
             raise ContractError("--encoder-valid-tokens is required for encoder parity")
         result = encoder_mindspore_parity(
@@ -1282,7 +2159,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         if checkpoint is None:
             if args.download_root is None:
                 raise ContractError("provide --checkpoint or an explicit --download-root")
-            checkpoint = download_pinned_checkpoint(args.download_root)
+            profile = load_profile(args.contract, args.profile)
+            checkpoint = download_pinned_checkpoint(
+                args.download_root, profile if isinstance(profile, MarianProfile) else None
+            )
         result = export_graphs(
             checkpoint,
             args.output_root,
@@ -1296,6 +2176,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             args.evaluation_manifest,
             args.budget_receipt,
             args.budget_supporting_evidence,
+            args.graph_dtype,
         )
     print(json.dumps(result, sort_keys=True))
     return 0

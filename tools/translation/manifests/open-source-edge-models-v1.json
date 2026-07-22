@@ -1,0 +1,99 @@
+{
+  "schemaVersion": 2,
+  "licenseText": {
+    "path": "Mindspore_inhand_HarmonyOS/entry/src/main/resources/rawfile/model/LICENSE-Apache-2.0.txt",
+    "size": 11546,
+    "sha256": "b51146f2ab748a8681aa7b603e81d94dd431ea0fb3af59e10f91cf82e43b9cf9"
+  },
+  "directions": {
+    "en-zh": {
+      "direction": "en-zh",
+      "repository": "Helsinki-NLP/opus-mt-en-zh",
+      "revision": "408d9bc410a388e1d9aef112a2daba955b945255",
+      "sourceLanguage": "en",
+      "targetLanguage": "zh",
+      "onnxDtype": "FLOAT32",
+      "license": "Apache-2.0",
+      "notice": {
+        "path": "tools/translation/licenses/open-source-edge-models-NOTICE.md",
+        "size": 784,
+        "sha256": "bc8978c92ba18491c0489c5b6b99d19970c4ae7af79f169b459a601d0fb4b824"
+      },
+      "weightFile": "pytorch_model.bin",
+      "files": {
+        "README.md": {"size": 2670, "sha256": "83eee2a6598751f746a057e10d5c9dfd71d6b0cf0146f9e6c1bb3ebd6e90959b"},
+        "config.json": {"size": 1403, "sha256": "bcae8ed74fed77fb51c58462b62397fee6b1a1a34aece79183a0dd02ad329e71"},
+        "generation_config.json": {"size": 293, "sha256": "837839ed0534a27084f9b980fc33f47729052dd89cb26cca7ac830765ed30e49"},
+        "pytorch_model.bin": {"size": 312087009, "sha256": "69a1d6ec829cee349360b3b677ac0aa99a7d88822d1a6578370029efffdca3f5"},
+        "source.spm": {"size": 806435, "sha256": "5775ddc9e3ff2fae91554da56468ad35ff56edaba870fea74447bc7234bfdaa8"},
+        "target.spm": {"size": 804600, "sha256": "81dc94efa84e4025ef38d25d5d07429fe41e3eb29d44003f1db6fe98487b0052"},
+        "tokenizer_config.json": {"size": 44, "sha256": "5df181fba586b7cb37d429c13c4f96cb43fb11de7bb6489733d9eded32418179"},
+        "vocab.json": {"size": 1617791, "sha256": "f1832ca38f7aa158b9a944ff583e4901e6b37d9d4ad9241f03838e636e9cfb03"}
+      },
+      "architecture": {
+        "hiddenSize": 512,
+        "encoderLayers": 6,
+        "decoderLayers": 6,
+        "attentionHeads": 8,
+        "vocabSize": 65001,
+        "maxTokens": 128,
+        "targetMaxTokens": 32,
+        "padTokenId": 65000,
+        "decoderStartTokenId": 65000,
+        "eosTokenId": 0
+      },
+      "generation": {"strategy": "beam", "numBeams": 4, "sourcePrefix": ">>cmn_Hans<< "},
+      "upstreamBenchmark": {"testSet": "Tatoeba-test.eng.zho", "bleu": 31.4, "chrF": 0.268}
+    },
+    "zh-en": {
+      "direction": "zh-en",
+      "repository": "Helsinki-NLP/opus-mt_tiny_zho-eng",
+      "revision": "4ee3a9342aae4ca6fbae82c930b5dccff5dd68dd",
+      "sourceLanguage": "zh",
+      "targetLanguage": "en",
+      "onnxDtype": "FLOAT32",
+      "license": "Apache-2.0",
+      "notice": {
+        "path": "tools/translation/licenses/open-source-edge-models-NOTICE.md",
+        "size": 784,
+        "sha256": "bc8978c92ba18491c0489c5b6b99d19970c4ae7af79f169b459a601d0fb4b824"
+      },
+      "weightFile": "model.safetensors",
+      "files": {
+        "README.md": {"size": 2019, "sha256": "682e703b97f590777420c4ce2c0f11bd42e15139fbeb933ce077506681f36950"},
+        "config.json": {"size": 957, "sha256": "480c811721f0a0dca0aa632ceb566570f06c46d15ad9bbdfcbec58af4734aef0"},
+        "generation_config.json": {"size": 270, "sha256": "68e3e0677a3852008c48716deb2b498ab259eb824f7225c834c967a0eecdaf2c"},
+        "model.safetensors": {"size": 50743442, "sha256": "e285c15744265535ce9cbcbb59e4144e2e7c0e6f113f05ca092f8c41f1f6b28a"},
+        "source.spm": {"size": 755175, "sha256": "e5528a5c3685d08f8868902d31febeb763eea8519f9997f43b05964b02554640"},
+        "target.spm": {"size": 755175, "sha256": "e5528a5c3685d08f8868902d31febeb763eea8519f9997f43b05964b02554640"},
+        "tokenizer_config.json": {"size": 1038, "sha256": "ba6c90b093ea281b23452e63e0601fcd0936d386c8b9ebd949bb239aebe0dd28"},
+        "vocab.json": {"size": 776356, "sha256": "13690d04e27310a43f0d879dfd38823c317e9ac69f436754baffbb0da6fc9dbe"}
+      },
+      "architecture": {
+        "hiddenSize": 256,
+        "encoderLayers": 6,
+        "decoderLayers": 2,
+        "attentionHeads": 8,
+        "vocabSize": 32001,
+        "maxTokens": 128,
+        "targetMaxTokens": 32,
+        "padTokenId": 32000,
+        "decoderStartTokenId": 32000,
+        "eosTokenId": 0
+      },
+      "generation": {"strategy": "greedy", "numBeams": 1, "sourcePrefix": ""},
+      "upstreamBenchmark": {"testSet": "Flores+", "bleu": 21.3, "chrF": 50.9, "comet": 0.8116}
+    }
+  },
+  "rejectedCandidates": [
+    {
+      "repository": "DDDSSS/translation_en-zh",
+      "productionPromotionAllowed": false,
+      "reasons": [
+        "training dataset has no license metadata",
+        "exact data generator provenance is unavailable",
+        "inspected training pairs contain incorrect translations"
+      ]
+    }
+  ]
+}

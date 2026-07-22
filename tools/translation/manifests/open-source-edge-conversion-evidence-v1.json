@@ -1,0 +1,132 @@
+{
+  "schemaVersion": 1,
+  "converter": {
+    "version": "2.8.0",
+    "archiveSha256": "657579ba8ad27f0116e32ed49fc12e9b8409b614defa712de1e7e63c4c06336d",
+    "binarySha256": "2e21f91190de81d8fb60514390094afb21282e2060ff24da08f59e2df9125ee5",
+    "quantConfigSha256": "742d8be0f75ac1739ce2edbd985789eee335628e5578b0adb81474619818b2d9"
+  },
+  "policy": {
+    "onnxDtype": "FLOAT32",
+    "mindSporeLiteQuantization": "WEIGHT_QUANT_W8",
+    "selectedDecoder": "static-full-decoder",
+    "targetMaxTokens": 32
+  },
+  "runner": {
+    "source": {
+      "path": "tools/translation/mindspore_lite_full_decoder_loop.cc",
+      "size": 19129,
+      "sha256": "945add25a32f59a04a4b226142a4053054ce7b02c978a02c893e4358d0c66046"
+    },
+    "build": {
+      "platform": "linux-x86_64",
+      "compiler": "g++ (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+      "flags": ["-std=c++17", "-O2", "-Wall", "-Wextra", "-Werror"],
+      "binarySize": 87400,
+      "binarySha256": "6960ea49a08db4f460674290026ddf36b9a034a4ab833a7a344064b2cddd8ef4"
+    },
+    "selfTest": {
+      "exitCode": 0,
+      "receiptEncoding": "UTF-8",
+      "stdout": "self-test passed\n",
+      "receiptSha256": "d557c5b8a87676e45bca4cbaecde8ab1c77d74f125850c78d9f1a25ceb5dfcc4"
+    }
+  },
+  "mindSporeLiteContracts": {
+    "zh-en": {
+      "encoder": {
+        "inputs": {"input_ids": ["INT32", [1, 128]], "attention_mask": ["INT32", [1, 128]]},
+        "outputs": {"last_hidden_state": ["FLOAT32", [1, 128, 256]]}
+      },
+      "decoder_full": {
+        "inputs": {
+          "decoder_input_ids": ["INT32", [1, 32]],
+          "decoder_attention_mask": ["INT32", [1, 32]],
+          "encoder_hidden_states": ["FLOAT32", [1, 128, 256]],
+          "encoder_attention_mask": ["INT32", [1, 128]]
+        },
+        "outputs": {"logits": ["FLOAT32", [1, 32, 32001]]}
+      }
+    },
+    "en-zh": {
+      "encoder": {
+        "inputs": {"input_ids": ["INT32", [1, 128]], "attention_mask": ["INT32", [1, 128]]},
+        "outputs": {"last_hidden_state": ["FLOAT32", [1, 128, 512]]}
+      },
+      "decoder_full": {
+        "inputs": {
+          "decoder_input_ids": ["INT32", [1, 32]],
+          "decoder_attention_mask": ["INT32", [1, 32]],
+          "encoder_hidden_states": ["FLOAT32", [1, 128, 512]],
+          "encoder_attention_mask": ["INT32", [1, 128]]
+        },
+        "outputs": {"logits": ["FLOAT32", [1, 32, 65001]]}
+      }
+    }
+  },
+  "directions": {
+    "zh-en": {
+      "conversionReport": {
+        "schemaVersion": 1,
+        "sha256": "80411326fbb0ef844501d5518f577a7c52c326a38eaf37a133f59fe4e0840064"
+      },
+      "graphs": {
+        "encoder": {
+          "onnx": {"size": 58188119, "sha256": "1597ae69c8841baf57ce5c99c4f6a562341566baf7bf6665f7458f9260bc12c0"},
+          "mindSporeLite": {"size": 16115736, "sha256": "86a9272199af2b3699a3d873b69e5741de3e26da545de06180902df071ff91bb"}
+        },
+        "decoder_full": {
+          "onnx": {"size": 76251021, "sha256": "449c32eb8c8f81d80ea78a742470d458caf0c89315f5255f48f8ccef311e7c95"},
+          "mindSporeLite": {"size": 21247904, "sha256": "8dc03af96ac9f7bf9efb37ffcc42a0034f5305810a0059cd7c3cb66e48a3550d"}
+        }
+      },
+      "sentenceGate": {
+        "strategy": "greedy",
+        "numBeams": 1,
+        "runnerBinarySha256": "6960ea49a08db4f460674290026ddf36b9a034a4ab833a7a344064b2cddd8ef4",
+        "modelGraphSha256": {
+          "encoder": "86a9272199af2b3699a3d873b69e5741de3e26da545de06180902df071ff91bb",
+          "decoderFull": "8dc03af96ac9f7bf9efb37ffcc42a0034f5305810a0059cd7c3cb66e48a3550d"
+        },
+        "rows": [
+          {"tokens": [12249, 2, 5, 192, 4, 0], "output": "Hello, the world.", "inputIdsSha256": "18fa4067aee90b3e6cad1b16869572e96969b5df60c1277e43f9c7fd9b6c8782", "attentionMaskSha256": "cf2c087882a24a288be5d997e75691586f414041345c725dd4b6abc6a9c5708f", "runnerReportSha256": "2b7a192191d88bb7cdeb4c4b693764cf3cbb6dba011bbd6f13ee1cebdbe96248"},
+          {"tokens": [130, 446, 14, 21784, 10, 349, 31, 3852, 28, 6629, 4, 0], "output": "This report is confidential and must be submitted on Monday.", "inputIdsSha256": "46c9ba125d064483757cf8b9b26ec69331c688fa4925d0b355ac88b6a05b4b65", "attentionMaskSha256": "643b4e2fa4fddee0635d92f9ce36f6cf350503ba84554110c449313b524ff136", "runnerReportSha256": "b53feae7007e9e9e637072890ca5a7d276a1560615ea8ac9e279b11fd16170a2"},
+          {"tokens": [1344, 1525, 5, 3304, 10, 899, 5, 5681, 4, 0], "output": "Please close the door and open the window.", "inputIdsSha256": "cd088e05909cfd74eb9ef12cd20914399e5002ee7fd880493dbc22dffd3344b9", "attentionMaskSha256": "508bcba349d4ba2f39c23ec8e1aeed8a5f4fc700ecb2959296bc8ee46bda01dd", "runnerReportSha256": "4ee4f08b7a57df6d6172567f65d5db7cbea97a1462949fe4bf1f8383c56f0f9b"},
+          {"tokens": [25, 5751, 53, 31, 1480, 5463, 4, 0], "output": "The weather will be clear tomorrow.", "inputIdsSha256": "a32c02c178ea01435b3cdd5c40836a966a470f1a2b623078e712695f7f1394fb", "attentionMaskSha256": "83c47f75a359b2820927861139b06a42a89d4073ea58bbae29e091454cb7878f", "runnerReportSha256": "0d4d022e539c32b2c26202dd7c12b131c87a0edc432cd3bd1009f0748f324529"}
+        ]
+      }
+    },
+    "en-zh": {
+      "conversionReport": {
+        "schemaVersion": 1,
+        "sha256": "0b77050018fbc2e10aa053871dfe577fbd8243cfb6b3979c85feb829869023b2"
+      },
+      "graphs": {
+        "encoder": {
+          "onnx": {"size": 209072207, "sha256": "5dc3c72ac20ff29a5e4f60a8c648a616365c9c8c4947a9fd678cb37615f9549e"},
+          "mindSporeLite": {"size": 55211640, "sha256": "4a1eae7e4b3600801b88df822bd42f786e9e34f715d12d0bac6454683599c5ee"}
+        },
+        "decoder_full": {
+          "onnx": {"size": 367525327, "sha256": "ea89d16bd01ca3297698f5afd3c9d9e8d5dfee78375844bab25df8721d424c26"},
+          "mindSporeLite": {"size": 97121896, "sha256": "5046af7b4311c14676d099e6cd01839f9c3b910d437184017797e972e559e66e"}
+        }
+      },
+      "sentenceGate": {
+        "strategy": "beam",
+        "numBeams": 4,
+        "runnerBinarySha256": "6960ea49a08db4f460674290026ddf36b9a034a4ab833a7a344064b2cddd8ef4",
+        "modelGraphSha256": {
+          "encoder": "4a1eae7e4b3600801b88df822bd42f786e9e34f715d12d0bac6454683599c5ee",
+          "decoderFull": "5046af7b4311c14676d099e6cd01839f9c3b910d437184017797e972e559e66e"
+        },
+        "rows": [
+          {"tokens": [7999, 2273, 955, 0], "output": "哈罗世界", "inputIdsSha256": "505567124ff08643386f919db0ef0cc49a7a06d0b1eb24dce625e0f7c109473e", "attentionMaskSha256": "cf2c087882a24a288be5d997e75691586f414041345c725dd4b6abc6a9c5708f", "runnerReportSha256": "98c4211bd21d8cc1342d987ecb170601ab77f531efa257e57e59567a39dfc0d7"},
+          {"tokens": [4683, 72, 8143, 12, 2, 6440, 16723, 693, 10, 0], "output": "报告是保密的,必须在星期一提交。", "inputIdsSha256": "84c57557cb8130b0bd87b983bfe8fd66ac8dc21147d96ef84b24c5d80b02fc87", "attentionMaskSha256": "96856cff6bf890671a8c4737475232ba3de0ad797d92cb876670f03b447874a1", "runnerReportSha256": "354e95075aace90b910813febde17c7c02b8b8d021d0ca2fb42720f2d482d4fb"},
+          {"tokens": [8, 4614, 158, 3019, 10958, 33216, 0], "output": "关上门打开窗户", "inputIdsSha256": "d2448e4881f4612820bc7e2896ccb6fcfeefb3f3b688de08b03854e7669dcf5f", "attentionMaskSha256": "9f30fb90e46df18bfe8fa76cfa66368a719848e4b88606365fdf3c8617413f8b", "runnerReportSha256": "e608fd2c330974caf9d8d4b4601d0c9de233042549684c4bff12fff0f4975bd0"},
+          {"tokens": [12516, 17546, 384, 1002, 51988, 9483, 0], "output": "明天天气会很晴朗", "inputIdsSha256": "7d326a39f4900d506377a876258ddb92fe6fced7322c54ae11baa5f7a243d722", "attentionMaskSha256": "63a08dbbdf5c4768b61c8c44cb9b7b86b35104c12f73cfbf534bed5305a3038a", "runnerReportSha256": "b85a404fc710d8c82d07729b7640998645f01c890a6ef51118dc7d6b946dbe17"}
+        ]
+      }
+    }
+  },
+  "mindSporeLiteTotalBytes": 189697176
+}

@@ -1,0 +1,78 @@
+{
+  "schemaVersion": 1,
+  "capturedWith": "transformers-4.57.1-pytorch-cpu",
+  "rows": [
+    {
+      "direction": "en-zh",
+      "source": "hello world",
+      "modelInput": ">>cmn_Hans<< hello world",
+      "targetLanguage": "zh",
+      "generation": {"strategy": "beam", "numBeams": 4},
+      "semanticTokens": ["哈", "世界"],
+      "upstreamOutput": "哈罗世界"
+    },
+    {
+      "direction": "en-zh",
+      "source": "The report is confidential and must be delivered on Monday.",
+      "modelInput": ">>cmn_Hans<< The report is confidential and must be delivered on Monday.",
+      "targetLanguage": "zh",
+      "generation": {"strategy": "beam", "numBeams": 4},
+      "semanticTokens": ["报告", "保密", "星期一", "提交"],
+      "upstreamOutput": "报告是保密的,必须在星期一提交。"
+    },
+    {
+      "direction": "en-zh",
+      "source": "Close the door and open the window.",
+      "modelInput": ">>cmn_Hans<< Close the door and open the window.",
+      "targetLanguage": "zh",
+      "generation": {"strategy": "beam", "numBeams": 4},
+      "semanticTokens": ["门", "窗户"],
+      "upstreamOutput": "关上门,打开窗户"
+    },
+    {
+      "direction": "en-zh",
+      "source": "The weather will be sunny tomorrow.",
+      "modelInput": ">>cmn_Hans<< The weather will be sunny tomorrow.",
+      "targetLanguage": "zh",
+      "generation": {"strategy": "beam", "numBeams": 4},
+      "semanticTokens": ["明天", "天气", "晴朗"],
+      "upstreamOutput": "明天天气会很晴朗"
+    },
+    {
+      "direction": "zh-en",
+      "source": "你好，世界",
+      "modelInput": "你好，世界",
+      "targetLanguage": "en",
+      "generation": {"strategy": "greedy", "numBeams": 1},
+      "semanticTokens": ["hello", "world"],
+      "upstreamOutput": "Hello, the world."
+    },
+    {
+      "direction": "zh-en",
+      "source": "这份报告是机密的，必须在星期一提交。",
+      "modelInput": "这份报告是机密的，必须在星期一提交。",
+      "targetLanguage": "en",
+      "generation": {"strategy": "greedy", "numBeams": 1},
+      "semanticTokens": ["report", "confidential", "monday", "submitted"],
+      "upstreamOutput": "This report is confidential and must be submitted on Monday."
+    },
+    {
+      "direction": "zh-en",
+      "source": "请关门并打开窗户。",
+      "modelInput": "请关门并打开窗户。",
+      "targetLanguage": "en",
+      "generation": {"strategy": "greedy", "numBeams": 1},
+      "semanticTokens": ["close", "door", "open", "window"],
+      "upstreamOutput": "Please close the door and open the window."
+    },
+    {
+      "direction": "zh-en",
+      "source": "明天天气会晴朗。",
+      "modelInput": "明天天气会晴朗。",
+      "targetLanguage": "en",
+      "generation": {"strategy": "greedy", "numBeams": 1},
+      "semanticTokens": ["weather", "clear", "tomorrow"],
+      "upstreamOutput": "The weather will be clear tomorrow."
+    }
+  ]
+}

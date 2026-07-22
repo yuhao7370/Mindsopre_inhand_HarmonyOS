@@ -2,7 +2,7 @@
 
 > **Execution rule:** use test-first changes, one implementation owner, then a fresh independent review. Do not train a model, call a cloud translator, or add phrase-specific post-processing.
 
-**Goal:** Replace the unapproved locally trained translation checkpoint with pinned open-source edge models, convert them to weight-quantized MindSpore Lite `.ms` graphs, and make both English-to-Chinese and Chinese-to-English work in the production Worker on the API 24 emulator.
+**Goal:** Replace the unapproved locally trained translation checkpoint with pinned open-source edge models, export each direction as a static float32 encoder/full-decoder pair, convert both graphs to weight-quantized MindSpore Lite `.ms`, and make both English-to-Chinese and Chinese-to-English work in the production Worker on the API 24 emulator.
 
 **Selected conversion candidates:**
 
@@ -21,7 +21,7 @@
    - door/window remains complete;
    - weather remains complete;
    - the corresponding Chinese sentences produce meaningful English.
-4. Conversion uses W8 weight quantization and records graph sizes, tensor contracts, parity, and 100-step finite cache evidence.
+4. Each official profile fixes source `maxTokens=128`, target `targetMaxTokens=32`, and ONNX float32 tensors. Conversion uses W8 weight quantization on exactly `encoder` and `decoder_full`, and records graph sizes, tensor contracts, sentence parity, and bounded full-decoder loop evidence.
 5. Translation stays inside the persistent Worker. The UI thread exchanges only transferable request/result data.
 6. The Worker routes by target language and lazily loads only one direction at a time. Switching direction deterministically replaces the Worker so the larger model is not retained beside the other direction.
 7. The final dual-ABI HAP builds, installs, runs both directions on the x86_64 API 24 emulator, and does not regress the other nine routes.
@@ -35,43 +35,45 @@
 2. Add a reference-inference fixture containing source sentences, target language, raw expected semantic tokens, and captured upstream outputs. It must test completeness and language purity without requiring one arbitrary Chinese wording.
 3. Pin the two candidate revisions and artifacts. Record the rejected DDDSSS provenance/quality evidence so it cannot silently replace the approved source later.
 
-## Task 2: Parameterize the Marian exporter
+## Task 2: Parameterize the Marian exporter and select the static graph contract
 
 **Files:** `tools/translation/export_marian_smoke.py` and focused exporter tests.
 
-1. Add RED profiles for 2- and 6-layer decoders and assert exact input/output names and shapes.
-2. Replace fixed layer counts, hidden size, head dimension, vocab size, pad/start IDs, and maximum length with validated immutable profile values.
-3. Keep the existing encoder/prefill/fixed-cache-step architecture. Generate cache tensors and names by the validated decoder layer count.
-4. Export both candidates to isolated external build directories. Verify PyTorch-to-ONNX encoder, prefill, multi-step cache, and greedy sentence parity.
+1. Add RED profiles for 2- and 6-layer decoders and assert the exact two-graph input/output names, shapes, and float32 dtype.
+2. Replace fixed layer counts, hidden size, vocab size, pad/start IDs, source maximum length, and target maximum length with validated immutable profile values.
+3. Export exactly `encoder` and `decoder_full`. The full decoder accepts fixed `[1,32]` decoder IDs/mask plus encoder hidden states/mask and emits `[1,32,vocab]` logits. Preserve the old schema-v1 prefill/step path only for local-learning artifact compatibility.
+4. Export both candidates to isolated external build directories. Verify PyTorch-to-ONNX encoder/full-decoder numerical parity and complete greedy/four-beam sentence parity.
 
 **Stop condition:** if the standard Marian wrappers cannot export either pinned checkpoint without unsupported custom logic or sentence parity, reject the candidate before changing application code.
 
-## Task 3: Convert ONNX graphs to W8 `.ms`
+## Task 3: Convert the static ONNX graph pairs to W8 `.ms`
 
 **Files:** reproducible conversion script/config, conversion manifest/report, package verifier.
 
 1. Pin a MindSpore Lite converter version outside the repository and verify its archive hash.
-2. Convert all six graphs with `WEIGHT_QUANT`, 8 bits, `minWeightSize=0`, `minWeightChannel=0`.
-3. Run `.ms` tensor-contract inspection, PyTorch/ONNX/`.ms` numerical parity, 100-step finite-cache checks, greedy Chinese-to-English parity, and four-beam English-to-Chinese parity.
-4. Measure actual graph, archive, and peak host inference memory. Replace legacy single-model 32/60 MiB limits only with measured, explicit global and per-direction limits.
+2. Convert all four graphs with `WEIGHT_QUANT`, 8 bits, `minWeightSize=0`, `minWeightChannel=0`.
+3. Run `.ms` tensor-contract inspection, bounded full-decoder checks, greedy Chinese-to-English parity, and four-beam English-to-Chinese parity.
+4. Measure and bind actual graph bytes now. Measure the assembled archive in Task 4 and emulator peak RSS/latency in Task 6; replace legacy single-model 32/60 MiB limits only after those package/device measurements exist.
 
-**Stop condition:** reject the pair if the converter fails, token parity falls below the existing 99% cache-loop contract, the archive exceeds the measured HAP budget, or emulator RSS cannot safely hold one active direction.
+**Rejected route and evidence:** W8 `decoder_prefill` + `decoder_step` was rejected after the converted cached-step graph diverged immediately from ONNX (1/101 token agreement in the deterministic loop and unusable real-sentence output). The static `decoder_full` route was selected after the formally exported/converted Chinese-to-English W8 pair matched all four fixed sentences token-for-token through EOS and the English-to-Chinese W8 pair passed all four beam-4 semantic gates. Exact artifact hashes, sizes, tokens, and decoded outputs are bound by `open-source-edge-conversion-evidence-v1.json`.
+
+**Task 3 stop condition:** reject the pair if the verified converter fails or either static W8 direction loses fixed-corpus token/semantic parity. Package-size and emulator-RSS stop conditions remain open until Tasks 4 and 6 respectively; Task 3 is a graph-conversion pass, not final production approval.
 
 ## Task 4: Package two independent tokenizer/model directions
 
 **Files:** translation rawfiles, tokenizer generator/runtime, `TranslationModelManifest.ets`, archive/package scripts and guards.
 
-1. Add manifest schema v2 with exact `en` and `zh` target records. Each record owns its vocabulary, source tokenizer, target tokenizer, three graphs, checksums, architecture, and upstream approval evidence.
+1. Add manifest schema v2 with exact `en` and `zh` target records. Each record owns its vocabulary, source tokenizer, target tokenizer, two graphs, checksums, architecture, and upstream approval evidence.
 2. Generate independent tokenizer runtimes from each candidate's source/target SentencePiece files. Add the upstream-required `>>cmn_Hans<<` source prefix only for English-to-Chinese.
-3. Package the six `.ms` files and two tokenizer pairs into one verified archive. Preserve both arm64-v8a and x86_64 decompressor libraries.
-4. Add corruption, swapped-direction, wrong-vocab, wrong-layer-count, archive traversal, and size-budget tests.
+3. Package the four `.ms` files and two tokenizer pairs into one verified archive. Preserve both arm64-v8a and x86_64 decompressor libraries.
+4. Add corruption, swapped-direction, wrong-vocab, wrong-layer-count, archive traversal, and size-budget tests. Record the actual archive bytes and reject it if it exceeds the measured HAP budget.
 
 ## Task 5: Route and lazily load in the Worker
 
 **Files:** `TranslationWorkerRuntime.ets`, `MindSporeLiteTranslationRunner.ets`, tokenizer/session code, Worker client/service tests.
 
-1. Add RED tests for target-to-direction routing, dynamic 2/6-layer cache binding, repeated requests reusing a direction, and direction switches replacing the Worker.
-2. Make the tensor runner derive cache arrays and bindings from the validated direction manifest. Implement four-beam search only for the manifest direction that requests it; keep the existing greedy path for the tiny model.
+1. Add RED tests for target-to-direction routing, fixed 32-token decoder bindings, repeated requests reusing a direction, and direction switches replacing the Worker.
+2. Make the tensor runner rerun the static full decoder over the bounded prefix. Implement four-beam search only for the manifest direction that requests it; keep the existing greedy path for the tiny model.
 3. Initialize only metadata in the Worker; load the requested direction on first use. On a target-direction switch, terminate and recreate the Worker so model buffers and native models are released together.
 4. Keep FIFO ordering, timeouts, stable errors, and UI-thread isolation unchanged.
 
