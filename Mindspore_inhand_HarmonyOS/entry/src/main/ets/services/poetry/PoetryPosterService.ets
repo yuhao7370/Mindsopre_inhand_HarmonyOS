@@ -14,6 +14,8 @@ export interface PoetryPosterVisualSpec {
   readonly outerPaddingVp: number;
   readonly poemTopMarginVp: number;
   readonly poemTextPaddingVp: number;
+  readonly posterMinHeightVp: number;
+  readonly posterMaxWidthVp: number;
   readonly poemTextFontSizeFp: number;
   readonly logoWidthVp: number;
   readonly logoHeightVp: number;
@@ -26,7 +28,9 @@ export const poetryPosterVisualSpec: PoetryPosterVisualSpec = {
   logoMediaName: 'poem_logo2',
   outerPaddingVp: 20,
   poemTopMarginVp: 20,
-  poemTextPaddingVp: 60,
+  poemTextPaddingVp: 20,
+  posterMinHeightVp: 520,
+  posterMaxWidthVp: 420,
   poemTextFontSizeFp: 15,
   logoWidthVp: 76,
   logoHeightVp: 57,
@@ -39,6 +43,10 @@ export function shouldInstallPoetryJavascriptBridge(routeName: string, url: stri
 
 export function poetryPosterTextFromParam(text: string | undefined): string {
   return text ?? '';
+}
+
+export function shouldStartPoetryPosterAction(actionInFlight: boolean): boolean {
+  return !actionInFlight;
 }
 
 export function poetryPosterImageSharePayload(uri: string, title: string, description: string): ImageSharePayload {

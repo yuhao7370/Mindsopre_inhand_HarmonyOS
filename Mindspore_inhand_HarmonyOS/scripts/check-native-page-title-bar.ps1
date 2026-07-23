@@ -64,7 +64,7 @@ function Assert-IconAction(
   $requiredPatterns = @(
     '\.width\(48\)',
     '\.height\(48\)',
-    'accessibilityText\(appString\(\s*\x27\s*\x27\s*\)\)',
+    'accessibilityText\(\$r\(\s*\x27\s*\x27\s*\)\)',
     ("\.onClick\(\(\)\s*=>\s*this\.{0}\(\)\)" -f [regex]::Escape($CallbackName))
   )
   foreach ($pattern in $requiredPatterns) {
@@ -72,7 +72,7 @@ function Assert-IconAction(
       throw "NativePageTitleBar $SymbolName action is missing contract: $pattern"
     }
   }
-  $literalAccessibilityPattern = ("accessibilityText\(appString\('{0}'\)\)" -f [regex]::Escape($AccessibilityKey))
+  $literalAccessibilityPattern = ("accessibilityText\(\`$r\('app.string.{0}'\)\)" -f [regex]::Escape($AccessibilityKey))
   if ($literalContainer -notmatch $literalAccessibilityPattern) {
     throw "NativePageTitleBar $SymbolName action is missing accessible name: $AccessibilityKey"
   }
@@ -179,6 +179,12 @@ function Assert-QrCodePageNativeShellContract([string]$Source) {
     'QrCodePage is missing build()' `
     'QrCodePage build() is missing an opening brace' `
     'QrCodePage build() is missing a closing brace'
+  $literalBuild = Get-ArkTsMethodSlice `
+    $literalSource `
+    'build\s*\(\s*\)' `
+    'QrCodePage is missing build()' `
+    'QrCodePage build() is missing an opening brace' `
+    'QrCodePage build() is missing a closing brace'
   $sheet = Get-ArkTsMethodSlice `
     $cleanSource `
     'saveActionSheet\s*\(\s*\)' `
@@ -206,6 +212,9 @@ function Assert-QrCodePageNativeShellContract([string]$Source) {
       throw $requirement.Message
     }
   }
+  if ($literalBuild.Text -notmatch 'Image\(\$r\(''app\.media\.my_qr_code''\)\)[\s\S]*?\.accessibilityText\(appString\(this\.titleKey\)\s+as\s+Resource\)') {
+    throw 'QrCodePage QR image must resolve its localized accessible name as Resource'
+  }
   foreach ($requirement in @(
     @{ Pattern = 'SaveButton\s*\('; Message = 'QrCodePage native sheet must use SaveButton' },
     @{ Pattern = '\.enabled\(\s*!this\.saveInFlight\s*\)'; Message = 'QrCodePage SaveButton must disable while saving' }
@@ -216,6 +225,60 @@ function Assert-QrCodePageNativeShellContract([string]$Source) {
   }
   if ($literalSheet.Text -notmatch "appString\('image_save_failed'\)") {
     throw 'QrCodePage native sheet must show save failures'
+  }
+}
+
+function Get-PoetryPosterMethodSlice([string]$Code, [string]$MethodName) {
+  return Get-ArkTsMethodSlice `
+    $Code `
+    ("{0}\s*\(\s*\)" -f [regex]::Escape($MethodName)) `
+    "PoetryPosterPage is missing $MethodName()" `
+    "PoetryPosterPage $MethodName() is missing an opening brace" `
+    "PoetryPosterPage $MethodName() is missing a closing brace"
+}
+
+function Assert-PoetryPosterNativeShellContract([string]$Source) {
+  $cleanSource = Remove-ArkTsCommentsAndTemplateRaw $Source $false
+  $literalSource = Remove-ArkTsCommentsAndTemplateRaw $Source $true
+  $poster = Get-PoetryPosterMethodSlice $cleanSource 'posterCard'
+  $literalPoster = Get-PoetryPosterMethodSlice $literalSource 'posterCard'
+  $pixelMap = Get-PoetryPosterMethodSlice $cleanSource 'posterPixelMap'
+  $saveImage = Get-PoetryPosterMethodSlice $cleanSource 'savePosterImage'
+  $save = Get-PoetryPosterMethodSlice $cleanSource 'savePoster'
+  $share = Get-PoetryPosterMethodSlice $cleanSource 'sharePoster'
+  $build = Get-PoetryPosterMethodSlice $cleanSource 'build'
+  $literalBuild = Get-PoetryPosterMethodSlice $literalSource 'build'
+
+  if ($literalSource -match 'app\.media\.icon_back|app\.media\.back|\.width\(\s*''48%''\s*\)') {
+    throw 'PoetryPosterPage must not use Android back media or two-column actions'
+  }
+  foreach ($requirement in @(
+    @{ Slice = $build.Text; Pattern = 'NativePageTitleBar\s*\('; Message = 'PoetryPosterPage build() must use NativePageTitleBar' },
+    @{ Slice = $build.Text; Pattern = 'router\.back\s*\(\s*\)'; Message = 'PoetryPosterPage title bar must navigate back through router.back()' },
+    @{ Slice = $poster.Text; Pattern = '\.constraintSize\(\{\s*minHeight:\s*poetryPosterVisualSpec\.posterMinHeightVp,\s*maxWidth:\s*poetryPosterVisualSpec\.posterMaxWidthVp\s*\}\)'; Message = 'Poetry poster card must use responsive min height and max width' },
+    @{ Slice = $literalPoster.Text; Pattern = 'backgroundImage\(\$r\(''app\.media\.poem_frame''\)\)\s*\.backgroundImageSize\(ImageSize\.Cover\)'; Message = 'Poem frame must use ImageSize.Cover' },
+    @{ Slice = $literalPoster.Text; Pattern = 'backgroundImage\(\$r\(''app\.media\.poem_bg''\)\)\s*\.backgroundImageSize\(ImageSize\.Cover\)'; Message = 'Poem background must use ImageSize.Cover' },
+    @{ Slice = $poster.Text; Pattern = '\.padding\(poetryPosterVisualSpec\.poemTextPaddingVp\)'; Message = 'Poem text must use visual spec padding' },
+    @{ Slice = $pixelMap.Text; Pattern = 'componentSnapshot\.get\(poetryPosterComponentId,\s*\{\s*waitUntilRenderFinished:\s*true\s*\}\)'; Message = 'Poster snapshot must wait for rendering' },
+    @{ Slice = $saveImage.Text; Pattern = 'withCallerOwnedPixelMap'; Message = 'Poster saving must retain caller-owned pixel map cleanup' },
+    @{ Slice = $save.Text; Pattern = 'shouldStartPoetryPosterAction\(this\.actionInFlight\)'; Message = 'savePoster must gate concurrent actions' },
+    @{ Slice = $save.Text; Pattern = '\.finally\(\(\)\s*=>\s*\{\s*this\.actionInFlight\s*=\s*false;\s*\}\)'; Message = 'savePoster must release its action gate in finally' },
+    @{ Slice = $share.Text; Pattern = 'shouldStartPoetryPosterAction\(this\.actionInFlight\)'; Message = 'sharePoster must gate concurrent actions' },
+    @{ Slice = $share.Text; Pattern = 'return\s+this\.shareSavedPosterImage\('; Message = 'sharePoster must return the system share promise before release' },
+    @{ Slice = $share.Text; Pattern = '\.finally\(\(\)\s*=>\s*\{\s*this\.actionInFlight\s*=\s*false;\s*\}\)'; Message = 'sharePoster must release its action gate in finally' },
+    @{ Slice = $build.Text; Pattern = 'Column\(\{\s*space:\s*AppSpacing\.md\s*\}\)'; Message = 'Poster actions must be a single vertical column' },
+    @{ Slice = $literalBuild.Text; Pattern = 'SaveButton\([\s\S]*?\.width\(''100%''\)\s*\.height\(48\)\s*\.enabled\(!this\.actionInFlight\)'; Message = 'SaveButton must be full-width, 48vp, and disabled in flight' },
+    @{ Slice = $literalBuild.Text; Pattern = 'Button\(appString\(''poem_share_poster''\)\)[\s\S]*?\.width\(''100%''\)\s*\.height\(48\)\s*\.enabled\(!this\.actionInFlight\)'; Message = 'Share button must be full-width, 48vp, and disabled in flight' }
+  )) {
+    if ($requirement.Slice -notmatch $requirement.Pattern) {
+      throw $requirement.Message
+    }
+  }
+  if ($literalPoster.Text -match '\.lineHeight\(28\)|SaveButton\s*\(|Button\s*\(|Text\(appString\(this\.statusKey\)\)') {
+    throw 'Poster snapshot region must exclude fixed line height, actions, and status text'
+  }
+  if (@([regex]::Matches($poster.Text, '\.id\(poetryPosterComponentId\)')).Count -ne 1) {
+    throw 'Poster snapshot region must contain exactly one poetryPosterComponentId'
   }
 }
 
@@ -237,5 +300,10 @@ if ($MyInvocation.InvocationName -ne '.') {
     throw 'Missing QrCodePage.ets'
   }
   Assert-QrCodePageNativeShellContract (Get-Content -Raw -Encoding UTF8 -LiteralPath $qrCodePagePath)
+  $poetryPosterPagePath = Join-Path $root 'entry/src/main/ets/pages/PoetryPosterPage.ets'
+  if (-not (Test-Path -LiteralPath $poetryPosterPagePath -PathType Leaf)) {
+    throw 'Missing PoetryPosterPage.ets'
+  }
+  Assert-PoetryPosterNativeShellContract (Get-Content -Raw -Encoding UTF8 -LiteralPath $poetryPosterPagePath)
   Write-Host 'NativePageTitleBar contract is present'
 }

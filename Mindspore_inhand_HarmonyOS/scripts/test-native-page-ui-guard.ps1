@@ -22,7 +22,7 @@ export struct NativePageTitleBar {
       }
       .width(48)
       .height(48)
-      .accessibilityText(appString('action_back'))
+        .accessibilityText($r('app.string.action_back'))
       .onClick(() => this.onBack())
 
       Text(this.title).maxLines(2)
@@ -35,7 +35,7 @@ export struct NativePageTitleBar {
         }
         .width(48)
         .height(48)
-        .accessibilityText(appString('action_more'))
+        .accessibilityText($r('app.string.action_more'))
         .onClick(() => this.onMore())
       }
     }
@@ -196,6 +196,8 @@ struct QrCodePage {
         onBack: () => router.back(),
         onMore: () => this.applySaveSheetAction('open')
       })
+      Image($r('app.media.my_qr_code'))
+        .accessibilityText(appString(this.titleKey) as Resource)
       Column() {}
         .constraintSize({ maxWidth: 300 })
     }
@@ -226,5 +228,27 @@ Assert-QrCodeRejected 'real title bar removed' ($qrFixture -replace 'NativePageT
 Assert-QrCodeRejected 'more callback removed' ($qrFixture -replace 'onMore:\s*\(\) => this\.applySaveSheetAction\(''open''\)', '')
 Assert-QrCodeRejected 'save enabled binding changed to a constant' ($qrFixture -replace '\.enabled\(!this\.saveInFlight\)', '.enabled(true)')
 Assert-QrCodeRejected 'dismiss reason mapping removed' ($qrFixture -replace 'qrCodeSheetActionForNativeDismiss\(action\.reason === DismissReason\.PRESS_BACK\)', 'false')
+Assert-QrCodeRejected 'QR accessible name resource cast removed' ($qrFixture -replace 'appString\(this\.titleKey\) as Resource', 'appString(this.titleKey)')
+
+function Assert-PoetryPosterRejected([string]$Name, [string]$Source) {
+  try {
+    Assert-PoetryPosterNativeShellContract $Source
+  } catch {
+    Write-Host "Rejected poetry poster mutation: $Name"
+    return
+  }
+  throw "Expected poetry poster mutation to be rejected: $Name"
+}
+
+$root = Split-Path -Parent $PSScriptRoot
+$poetryPosterSourcePath = Join-Path $root 'entry/src/main/ets/pages/PoetryPosterPage.ets'
+$poetryPosterSource = Get-Content -Raw -Encoding UTF8 -LiteralPath $poetryPosterSourcePath
+Assert-PoetryPosterNativeShellContract $poetryPosterSource
+Assert-PoetryPosterRejected 'frame cover changed to fill' ($poetryPosterSource -replace 'backgroundImageSize\(ImageSize\.Cover\)', 'backgroundImageSize(ImageSize.FILL)')
+Assert-PoetryPosterRejected 'snapshot id moved into action area' ($poetryPosterSource -replace '\.id\(poetryPosterComponentId\)', '')
+Assert-PoetryPosterRejected 'save button moved into poster card' ($poetryPosterSource.Replace('posterCard() {', "posterCard() {`n    SaveButton({})"))
+Assert-PoetryPosterRejected 'snapshot wait removed' ($poetryPosterSource -replace 'waitUntilRenderFinished:\s*true', 'waitUntilRenderFinished: false')
+Assert-PoetryPosterRejected 'save finally removed' ([regex]::Replace($poetryPosterSource, '(?s)(private savePoster\(\): void \{.*?\.finally\(\(\) => \{)\s*this\.actionInFlight = false;\s*(\}\))', '$1$2', 1))
+Assert-PoetryPosterRejected 'share finally removed' ([regex]::Replace($poetryPosterSource, '(?s)(private sharePoster\(\): void \{.*?\.finally\(\(\) => \{)\s*this\.actionInFlight = false;\s*(\}\))', '$1$2', 1))
 
 Write-Host 'Native page UI guard mutation tests passed'

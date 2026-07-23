@@ -93,8 +93,10 @@ export type AppStringKey =
   'poem_share_poster' |
   'poem_save_success' |
   'poem_save_failed' |
+  'poem_save_in_progress' |
   'poem_share_done' |
   'poem_share_failed' |
+  'poem_share_in_progress' |
   'poem_ai_credit' |
   'dance_prepare_summary' |
   'dance_reference_video' |
@@ -414,8 +416,10 @@ const APP_STRING_KEYS: AppStringKey[] = [
   'poem_share_poster',
   'poem_save_success',
   'poem_save_failed',
+  'poem_save_in_progress',
   'poem_share_done',
   'poem_share_failed',
+  'poem_share_in_progress',
   'poem_ai_credit',
   'dance_prepare_summary',
   'dance_reference_video',
@@ -833,10 +837,14 @@ export function appString(key: AppStringKey): ResourceStr {
       return $r('app.string.poem_save_success');
     case 'poem_save_failed':
       return $r('app.string.poem_save_failed');
+    case 'poem_save_in_progress':
+      return $r('app.string.poem_save_in_progress');
     case 'poem_share_done':
       return $r('app.string.poem_share_done');
     case 'poem_share_failed':
       return $r('app.string.poem_share_failed');
+    case 'poem_share_in_progress':
+      return $r('app.string.poem_share_in_progress');
     case 'poem_ai_credit':
       return $r('app.string.poem_ai_credit');
     case 'dance_prepare_summary':

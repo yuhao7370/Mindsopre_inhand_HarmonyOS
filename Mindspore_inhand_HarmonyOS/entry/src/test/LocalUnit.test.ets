@@ -705,6 +705,7 @@ import {
   poetryPosterPagePath,
   poetryPosterTextFromParam,
   poetryPosterVisualSpec,
+  shouldStartPoetryPosterAction,
   shouldInstallPoetryJavascriptBridge
 } from '../main/ets/services/poetry/PoetryPosterService';
 
@@ -3231,6 +3232,13 @@ export default function localUnitTest() {
       expect(hasAppStringKey('poem_save_failed')).assertTrue();
       expect(hasAppStringKey('poem_share_failed')).assertTrue();
       expect(hasAppStringKey('poem_ai_credit')).assertTrue();
+      expect(hasAppStringKey('poem_save_in_progress')).assertTrue();
+      expect(hasAppStringKey('poem_share_in_progress')).assertTrue();
+    });
+
+    it('poetryPosterStartsOnlyOneSaveOrShareAction', 0, () => {
+      expect(shouldStartPoetryPosterAction(false)).assertTrue();
+      expect(shouldStartPoetryPosterAction(true)).assertFalse();
     });
 
     it('portsAndroidPoetryPosterVisualAssetsAndLayoutSpec', 0, () => {
@@ -3239,7 +3247,9 @@ export default function localUnitTest() {
       expect(poetryPosterVisualSpec.logoMediaName).assertEqual('poem_logo2');
       expect(poetryPosterVisualSpec.outerPaddingVp).assertEqual(20);
       expect(poetryPosterVisualSpec.poemTopMarginVp).assertEqual(20);
-      expect(poetryPosterVisualSpec.poemTextPaddingVp).assertEqual(60);
+      expect(poetryPosterVisualSpec.poemTextPaddingVp).assertEqual(20);
+      expect(poetryPosterVisualSpec.posterMinHeightVp).assertEqual(520);
+      expect(poetryPosterVisualSpec.posterMaxWidthVp).assertEqual(420);
       expect(poetryPosterVisualSpec.poemTextFontSizeFp).assertEqual(15);
       expect(poetryPosterVisualSpec.logoWidthVp).assertEqual(76);
       expect(poetryPosterVisualSpec.logoHeightVp).assertEqual(57);
