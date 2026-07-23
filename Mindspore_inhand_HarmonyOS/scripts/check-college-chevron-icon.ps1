@@ -28,6 +28,17 @@ function Test-CollegeChevronBinding([string]$Code, [string]$CodeWithLiterals, [i
   return $false
 }
 
+function Test-CollegeTextChevronPlaceholder([string]$Code, [string]$CodeWithLiterals) {
+  $shape = [regex]::new('(?ms)^[\t ]*Text\s*\(\s*(?:''\s*''|"\s*")\s*\)')
+  $literal = '\A[\t ]*Text\s*\(\s*(?:''>''|">")\s*\)'
+  foreach ($match in $shape.Matches($Code)) {
+    if ([regex]::IsMatch($CodeWithLiterals.Substring($match.Index), $literal)) {
+      return $true
+    }
+  }
+  return $false
+}
+
 function Assert-CollegeSourceContract([string]$Source) {
   $normalized = $Source.Replace("`r`n", "`n").Replace("`r", "`n")
   $code = Remove-ArkTsCommentsAndTemplateRaw $normalized
@@ -46,7 +57,7 @@ function Assert-CollegeSourceContract([string]$Source) {
   if (-not (Test-CollegeChevronBinding $entry $entryWithLiterals $title.Index)) {
     throw 'Harmony College entry must render me_go.png after the adapter view title at 6x12vp'
   }
-  if ([regex]::IsMatch($entryWithLiterals, 'Text\s*\(\s*(?:''>''|">")\s*\)')) {
+  if (Test-CollegeTextChevronPlaceholder $entry $entryWithLiterals) {
     throw "Harmony College entry must not use a text '>' chevron placeholder"
   }
 }
