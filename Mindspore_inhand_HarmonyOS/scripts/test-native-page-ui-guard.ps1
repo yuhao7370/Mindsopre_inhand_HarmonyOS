@@ -79,10 +79,32 @@ struct WebPage {
 
   @Builder
   webContent() {
-    Web({ src: this.webUrl, controller: this.webController })
-      .onErrorReceive((event: OnErrorReceiveEvent) => {
-        this.handleWebError(event);
-      })
+    if (this.localRawfile.length > 0) {
+      Web({ src: $rawfile('privacy.html'), controller: this.webController })
+        .onPageBegin(() => {
+          this.loadFailed = false;
+        })
+        .onErrorReceive((event: OnErrorReceiveEvent) => {
+          this.handleWebError(event);
+        })
+    } else if (shouldInstallPoetryJavascriptBridge(this.routeName, this.webUrl)) {
+      Web({ src: this.webUrl, controller: this.webController })
+        .javaScriptProxy({ object: this.poetryBridge })
+        .onPageBegin(() => {
+          this.loadFailed = false;
+        })
+        .onErrorReceive((event: OnErrorReceiveEvent) => {
+          this.handleWebError(event);
+        })
+    } else {
+      Web({ src: this.webUrl, controller: this.webController })
+        .onPageBegin(() => {
+          this.loadFailed = false;
+        })
+        .onErrorReceive((event: OnErrorReceiveEvent) => {
+          this.handleWebError(event);
+        })
+    }
   }
 
   build() {
@@ -117,5 +139,33 @@ Assert-WebRejected 'progress conditionally rendered' $conditionalProgress
 Assert-WebRejected 'main-frame check removed' ($webFixture -replace 'event\.request\.isMainFrame\(\)', 'false')
 Assert-WebRejected 'retry refresh removed' ($webFixture -replace 'this\.webController\.refresh\(\);', '')
 Assert-WebRejected 'commented title bar' ($webFixture -replace 'NativePageTitleBar\([^\n]+\)', '// NativePageTitleBar({ title: appString(this.titleKey), onBack: () => router.back() })')
+$privacyPageBeginMissing = [regex]::Replace(
+  $webFixture,
+  '(?s)(if \(this\.localRawfile\.length > 0\) \{.*?)(\.onPageBegin\(\(\) => \{\s*this\.loadFailed = false;\s*\}\))',
+  '$1',
+  1
+)
+Assert-WebRejected 'privacy branch page begin removed' $privacyPageBeginMissing
+$privacyErrorMissing = [regex]::Replace(
+  $webFixture,
+  '(?s)(if \(this\.localRawfile\.length > 0\) \{.*?)(\.onErrorReceive\(\(event: OnErrorReceiveEvent\) => \{\s*this\.handleWebError\(event\);\s*\}\))',
+  '$1',
+  1
+)
+Assert-WebRejected 'privacy branch error callback removed' $privacyErrorMissing
+$poetryPageBeginMissing = [regex]::Replace(
+  $webFixture,
+  '(?s)(else if \(shouldInstallPoetryJavascriptBridge\(this\.routeName, this\.webUrl\)\) \{.*?)(\.onPageBegin\(\(\) => \{\s*this\.loadFailed = false;\s*\}\))',
+  '$1',
+  1
+)
+Assert-WebRejected 'poetry branch page begin removed' $poetryPageBeginMissing
+$poetryErrorMissing = [regex]::Replace(
+  $webFixture,
+  '(?s)(else if \(shouldInstallPoetryJavascriptBridge\(this\.routeName, this\.webUrl\)\) \{.*?)(\.onErrorReceive\(\(event: OnErrorReceiveEvent\) => \{\s*this\.handleWebError\(event\);\s*\}\))',
+  '$1',
+  1
+)
+Assert-WebRejected 'poetry branch error callback removed' $poetryErrorMissing
 
 Write-Host 'Native page UI guard mutation tests passed'

@@ -142,8 +142,17 @@ function Assert-WebPageNativeShellContract([string]$Source) {
   if ($build.Text -match 'if\s*\(\s*this\.progress\s*>\s*0\s*&&\s*this\.progress\s*<\s*100') {
     throw 'WebPage Progress must not be conditionally rendered'
   }
-  if ($webContent.Text -notmatch '\.onErrorReceive\s*\(') {
-    throw 'WebPage webContent() must handle web errors'
+  $webBranchCount = @([regex]::Matches($webContent.Text, '\bWeb\s*\(')).Count
+  if ($webBranchCount -ne 3) {
+    throw "WebPage webContent() must contain exactly 3 Web branches, found $webBranchCount"
+  }
+  $pageBeginCount = @([regex]::Matches($webContent.Text, '\.onPageBegin\s*\(')).Count
+  if ($pageBeginCount -ne 3) {
+    throw "WebPage webContent() must reset failure state in all 3 Web branches, found $pageBeginCount onPageBegin callbacks"
+  }
+  $errorReceiveCount = @([regex]::Matches($webContent.Text, '\.onErrorReceive\s*\(')).Count
+  if ($errorReceiveCount -ne 3) {
+    throw "WebPage webContent() must handle errors in all 3 Web branches, found $errorReceiveCount onErrorReceive callbacks"
   }
   if ($errorHandler.Text -notmatch 'event\.request\.isMainFrame\s*\(\s*\)') {
     throw 'WebPage must only fail for main-frame errors'
