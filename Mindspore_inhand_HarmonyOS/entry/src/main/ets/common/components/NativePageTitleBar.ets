@@ -1,4 +1,3 @@
-import { appString } from '../i18n/AppStrings';
 import { AppColor } from '../theme/AppTheme';
 
 @Component
