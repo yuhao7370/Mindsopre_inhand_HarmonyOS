@@ -509,14 +509,15 @@ import {
   experienceCardPressedScale,
   experienceCardRadiusVp,
   experienceContentBottomPaddingVp,
-  experienceContentOverlapVp,
-  experienceContentTopRadiusVp,
   experienceGridCardHeightVp,
   experienceGridColumnCount,
   experienceGridColumnGapVp,
   experienceGridHeightVp,
   experienceGridRowGapVp,
-  experienceGridSideInsetVp
+  experienceGridSideInsetVp,
+  experienceStickyTitleHeightVp,
+  experienceStickyTitleThresholdVp,
+  experienceStickyTitleVisible
 } from '../main/ets/common/data/ExperienceLayoutSpec';
 import {
   inputActionForKind,
@@ -2726,8 +2727,13 @@ export default function localUnitTest() {
       expect(splashLogoHeightVp).assertEqual(90);
     });
 
-    it('usesImmersiveHarmonyExperienceHeaderHeight', 0, () => {
-      expect(experienceHeaderHeightVp).assertEqual(176);
+    it('usesCompactHarmonyExperienceHeaderAndStickyTitle', 0, () => {
+      expect(experienceHeaderHeightVp).assertEqual(132);
+      expect(experienceStickyTitleHeightVp).assertEqual(56);
+      expect(experienceStickyTitleThresholdVp).assertEqual(76);
+      expect(experienceStickyTitleVisible(75)).assertFalse();
+      expect(experienceStickyTitleVisible(76)).assertTrue();
+      expect(experienceStickyTitleVisible(132)).assertTrue();
     });
 
     it('usesHarmonyExperienceCardGeometry', 0, () => {
@@ -2740,9 +2746,6 @@ export default function localUnitTest() {
       expect(experienceCardBorderWidthVp).assertEqual(1);
       expect(experienceCardBorderColor).assertEqual('#E8EDF5');
       expect(experienceCardPressedScale).assertEqual(0.98);
-      expect(experienceContentTopRadiusVp).assertEqual(28);
-      expect(experienceContentOverlapVp).assertEqual(24);
-      expect(experienceHeaderHeightVp - experienceContentOverlapVp).assertEqual(152);
       expect(experienceContentBottomPaddingVp).assertEqual(28);
       expect(experienceGridHeightVp(-1)).assertEqual(0);
       expect(experienceGridHeightVp(0)).assertEqual(0);

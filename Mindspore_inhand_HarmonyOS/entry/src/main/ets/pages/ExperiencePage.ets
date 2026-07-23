@@ -3,21 +3,22 @@ import { findRouteByName } from '../app/AppRoutes';
 import { ExperienceHeader } from '../common/components/ExperienceHeader';
 import { FeatureCard } from '../common/components/FeatureCard';
 import { FeatureItem, FeatureSection, visibleExperienceSections } from '../common/data/FeatureCatalog';
-import { experienceHeaderHeightVp } from '../common/data/ExperienceHeaderBranding';
 import {
   experienceContentBottomPaddingVp,
-  experienceContentOverlapVp,
-  experienceContentTopRadiusVp,
   experienceGridColumnGapVp,
   experienceGridHeightVp,
   experienceGridRowGapVp,
-  experienceGridSideInsetVp
+  experienceGridSideInsetVp,
+  experienceStickyTitleHeightVp,
+  experienceStickyTitleVisible
 } from '../common/data/ExperienceLayoutSpec';
 import { appString, AppStringKey } from '../common/i18n/AppStrings';
 import { AppColor } from '../common/theme/AppTheme';
 
 @Component
 export struct ExperiencePage {
+  @State stickyTitleVisible: boolean = false;
+
   private openFeature(item: FeatureItem): void {
     const route = findRouteByName(item.routeName);
     if (!route) {
@@ -35,25 +36,13 @@ export struct ExperiencePage {
 
   @Builder
   private groupTitle(titleKey: AppStringKey, topMargin: number) {
-    Row() {
-      Row()
-        .layoutWeight(1)
-        .height(1)
-        .backgroundColor('#D9E2F5')
-      Text(appString(titleKey))
-        .fontSize(15)
-        .fontWeight(FontWeight.Bold)
-        .fontColor(AppColor.textPrimary)
-        .margin({ left: 14, right: 14 })
-      Row()
-        .layoutWeight(1)
-        .height(1)
-        .backgroundColor('#D9E2F5')
-    }
+    Text(appString(titleKey))
     .width('100%')
     .height(30)
-    .alignItems(VerticalAlign.Center)
-    .padding({ left: 46, right: 46 })
+    .fontSize(17)
+    .fontWeight(FontWeight.Bold)
+    .fontColor(AppColor.textPrimary)
+    .padding({ left: experienceGridSideInsetVp, right: experienceGridSideInsetVp })
     .margin({ top: topMargin })
   }
 
@@ -80,20 +69,32 @@ export struct ExperiencePage {
     .margin({ top: 16 })
   }
 
+  @Builder
+  private stickyTitle() {
+    Row() {
+      Text(appString('experience_head_title'))
+        .fontSize(17)
+        .fontWeight(FontWeight.Bold)
+        .fontColor(AppColor.textPrimary)
+    }
+    .width('100%')
+    .height(experienceStickyTitleHeightVp)
+    .padding({ left: experienceGridSideInsetVp, right: experienceGridSideInsetVp })
+    .alignItems(VerticalAlign.Center)
+    .backgroundColor(Color.White)
+    .border({ width: { bottom: 1 }, color: '#EDF0F5' })
+  }
+
   build() {
     Stack({ alignContent: Alignment.Top }) {
-      ExperienceHeader()
       Scroll() {
         Column() {
-          Row()
-            .width('100%')
-            .height(experienceHeaderHeightVp)
-          Scroll() {
-            Column() {
-              ForEach(visibleExperienceSections, (section: FeatureSection, sectionIndex: number) => {
-                Column() {
+          ExperienceHeader()
+          Column() {
+            ForEach(visibleExperienceSections, (section: FeatureSection, sectionIndex: number) => {
+              Column() {
                 if (section.groupTitleKey !== undefined) {
-                  this.groupTitle(section.groupTitleKey, sectionIndex === 0 ? 0 : 22)
+                  this.groupTitle(section.groupTitleKey, sectionIndex === 0 ? 18 : 22)
                 }
                 this.sectionTitle(section.titleKey)
                 Grid() {
@@ -115,24 +116,13 @@ export struct ExperiencePage {
                 .margin({ top: 12 })
                 .scrollBar(BarState.Off)
                 .enableScrollInteraction(false)
-                }
-                .width('100%')
-              }, (section: FeatureSection) => section.id)
-            }
-            .width('100%')
-            .padding({ top: 18, bottom: experienceContentBottomPaddingVp })
+              }
+              .width('100%')
+            }, (section: FeatureSection) => section.id)
           }
           .width('100%')
-          .height('100%')
-          .scrollBar(BarState.Off)
-          .edgeEffect(EdgeEffect.None)
-          .nestedScroll({
-            scrollForward: NestedScrollMode.PARENT_FIRST,
-            scrollBackward: NestedScrollMode.SELF_FIRST
-          })
+          .padding({ bottom: experienceContentBottomPaddingVp })
           .backgroundColor(Color.White)
-          .borderRadius({ topLeft: experienceContentTopRadiusVp, topRight: experienceContentTopRadiusVp })
-          .margin({ top: -experienceContentOverlapVp })
         }
         .width('100%')
       }
@@ -140,9 +130,19 @@ export struct ExperiencePage {
       .height('100%')
       .scrollBar(BarState.Off)
       .edgeEffect(EdgeEffect.None)
+      .onScroll((_xOffset: number, yOffset: number) => {
+        const visible = experienceStickyTitleVisible(yOffset);
+        if (visible !== this.stickyTitleVisible) {
+          this.stickyTitleVisible = visible;
+        }
+      })
+
+      if (this.stickyTitleVisible) {
+        this.stickyTitle()
+      }
     }
     .width('100%')
     .height('100%')
-    .backgroundColor('#EDF3FF')
+    .backgroundColor(Color.White)
   }
 }
