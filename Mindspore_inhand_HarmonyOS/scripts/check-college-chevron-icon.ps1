@@ -5,38 +5,53 @@ $chevronIcon = Join-Path $root 'entry/src/main/resources/base/media/me_go.png'
 $expectedHash = 'EECDAC679EC9E327F16C350789C201DF9D04442FBAD670E2CA65685E957C37EE'
 
 if (-not (Test-Path -LiteralPath $chevronIcon)) {
-  throw 'Missing Android College row chevron media: me_go.png'
+  throw 'Missing Harmony College entry chevron media: me_go.png'
 }
 
 $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $chevronIcon).Hash
 if ($hash -ne $expectedHash) {
-  throw "Android College row chevron media hash mismatch. Expected $expectedHash, got $hash"
+  throw "Harmony College entry chevron media hash mismatch. Expected $expectedHash, got $hash"
 }
 
 $collegePagePath = Join-Path $root 'entry/src/main/ets/pages/CollegePage.ets'
 $source = (Get-Content -Raw -Encoding UTF8 -LiteralPath $collegePagePath) -replace "`r`n", "`n"
 
-function SourceSlice([string] $text, [string] $startMarker, [string] $endMarker) {
-  $start = $text.IndexOf($startMarker)
+function CollegeEntryCardSlice([string] $text) {
+  $methodMarker = 'private collegeEntryCard(item: CollegeItem)'
+  $start = $text.IndexOf($methodMarker)
   if ($start -lt 0) {
-    throw "Missing source marker: $startMarker"
+    throw "Missing Harmony College entry method: $methodMarker"
   }
-  $end = $text.IndexOf($endMarker, $start + $startMarker.Length)
-  if ($end -lt 0) {
-    throw "Missing source marker after ${startMarker}: $endMarker"
+
+  $openingBrace = $text.IndexOf('{', $start + $methodMarker.Length)
+  if ($openingBrace -lt 0) {
+    throw 'Missing opening brace for Harmony College entry method'
   }
-  return $text.Substring($start, $end - $start)
+
+  $braceDepth = 0
+  for ($index = $openingBrace; $index -lt $text.Length; $index++) {
+    if ($text[$index] -eq '{') {
+      $braceDepth++
+    } elseif ($text[$index] -eq '}') {
+      $braceDepth--
+      if ($braceDepth -eq 0) {
+        return $text.Substring($start, $index - $start + 1)
+      }
+    }
+  }
+
+  throw 'Unclosed Harmony College entry method body'
 }
 
-$actionSlice = SourceSlice $source 'Text(appString(collegeAdapterViewTitleKey))' "if (item.quickActions)"
-if ($actionSlice -notmatch "Image\(\`$r\('app\.media\.me_go'\)\)") {
-  throw 'CollegePage must render the Android me_go.png chevron next to the adapter title'
+$entryCardSlice = CollegeEntryCardSlice $source
+if ($entryCardSlice -notmatch 'Text\s*\(\s*appString\(collegeAdapterViewTitleKey\)\s*\)') {
+  throw 'Harmony College entry must render the adapter view title'
 }
-if ($actionSlice -match "Text\('>'\)") {
-  throw "CollegePage must not use a text '>' placeholder for the row chevron"
+if ($entryCardSlice -notmatch 'Text\s*\(\s*appString\(collegeAdapterViewTitleKey\)\s*\)(?s:.*?)Image\(\$r\(''app\.media\.me_go''\)\)(?s:.*?)\.width\(6\)(?s:.*?)\.height\(12\)') {
+  throw 'Harmony College entry must render me_go.png after the adapter view title at 6x12vp'
 }
-if ($actionSlice -notmatch '\.width\(6\)' -or $actionSlice -notmatch '\.height\(12\)') {
-  throw 'CollegePage Android chevron icon must keep the adapter row 6x12vp visual size'
+if ($entryCardSlice -match "Text\s*\(\s*'>'\s*\)") {
+  throw "Harmony College entry must not use a text '>' chevron placeholder"
 }
 
-Write-Host 'College Android row chevron media wiring is present'
+Write-Host 'Harmony College entry chevron contract is present'
