@@ -1,4 +1,5 @@
 import { MainTab, mainTabIconMediaResource, TabItem } from '../../app/AppState';
+import { bottomTabBarMinHeightVp, bottomTabItemMinHeightVp } from '../data/BottomTabBarLayoutSpec';
 import { appString } from '../i18n/AppStrings';
 import { AppColor } from '../theme/AppTheme';
 
@@ -18,12 +19,11 @@ export struct BottomTabBar {
             .objectFit(ImageFit.Contain)
           Text(appString(tab.titleKey))
             .fontSize(11)
-            .maxLines(1)
             .fontColor(this.selected === tab.id ? AppColor.accent : AppColor.textSecondary)
             .margin({ top: 2 })
         }
         .layoutWeight(1)
-        .height(50)
+        .constraintSize({ minHeight: bottomTabItemMinHeightVp })
         .justifyContent(FlexAlign.Center)
         .backgroundColor(this.selected === tab.id ? '#EEF3FF' : Color.Transparent)
         .borderRadius(18)
@@ -32,7 +32,7 @@ export struct BottomTabBar {
       }, (tab: TabItem) => `${tab.id}`)
     }
     .width('90%')
-    .height(62)
+    .constraintSize({ minHeight: bottomTabBarMinHeightVp })
     .margin({ top: 6, bottom: 8 })
     .borderRadius(31)
     .border({ width: 1, color: '#E7ECF6' })

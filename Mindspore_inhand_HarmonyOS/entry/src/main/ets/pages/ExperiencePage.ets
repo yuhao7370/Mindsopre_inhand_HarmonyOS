@@ -5,10 +5,12 @@ import { FeatureCard } from '../common/components/FeatureCard';
 import { FeatureItem, FeatureSection, visibleExperienceSections } from '../common/data/FeatureCatalog';
 import {
   experienceContentBottomPaddingVp,
+  experienceGroupTitleMinHeightVp,
   experienceGridColumnGapVp,
   experienceGridMinHeightVp,
   experienceGridRowGapVp,
   experienceGridSideInsetVp,
+  experienceSectionTitleMinHeightVp,
   experienceStickyTitleMinHeightVp,
   experienceStickyTitleVisible
 } from '../common/data/ExperienceLayoutSpec';
@@ -39,7 +41,7 @@ export struct ExperiencePage {
   private groupTitle(titleKey: AppStringKey, topMargin: number) {
     Text(appString(titleKey))
     .width('100%')
-    .height(30)
+    .constraintSize({ minHeight: experienceGroupTitleMinHeightVp })
     .fontSize(17)
     .fontWeight(FontWeight.Bold)
     .fontColor(AppColor.textPrimary)
@@ -61,10 +63,10 @@ export struct ExperiencePage {
         .fontWeight(FontWeight.Bold)
         .fontColor(AppColor.textPrimary)
         .margin({ left: 8 })
-        .maxLines(1)
+        .layoutWeight(1)
     }
     .width('100%')
-    .height(20)
+    .constraintSize({ minHeight: experienceSectionTitleMinHeightVp })
     .padding({ left: experienceGridSideInsetVp })
     .alignItems(VerticalAlign.Center)
     .margin({ top: 16 })

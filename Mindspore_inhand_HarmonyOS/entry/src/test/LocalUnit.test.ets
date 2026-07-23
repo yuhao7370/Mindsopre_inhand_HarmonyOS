@@ -501,7 +501,7 @@ import {
   splashLogoWidthVp
 } from '../main/ets/common/data/SplashBranding';
 import {
-  experienceHeaderHeightVp
+  experienceHeaderMinHeightVp
 } from '../main/ets/common/data/ExperienceHeaderBranding';
 import {
   experienceCardBorderColor,
@@ -2728,7 +2728,7 @@ export default function localUnitTest() {
     });
 
     it('usesCompactHarmonyExperienceHeaderAndStickyTitle', 0, () => {
-      expect(experienceHeaderHeightVp).assertEqual(132);
+      expect(experienceHeaderMinHeightVp).assertEqual(132);
       expect(experienceStickyTitleMinHeightVp).assertEqual(56);
       expect(experienceStickyTitleThresholdVp).assertEqual(76);
       expect(experienceStickyTitleVisible(75)).assertFalse();
