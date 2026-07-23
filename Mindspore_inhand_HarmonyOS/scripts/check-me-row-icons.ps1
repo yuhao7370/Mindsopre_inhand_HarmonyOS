@@ -113,11 +113,27 @@ function Get-VersionCardSlice([string]$Code) {
   if (-not $start.Success) {
     throw 'MePage must contain a private versionCard builder'
   }
-  $end = [regex]::new('(?m)^[\t ]*build\s*\(\s*\)\s*\{').Match($Code, $start.Index + $start.Length)
-  if (-not $end.Success) {
-    throw 'MePage versionCard builder must precede build()'
+  $openingBrace = $Code.IndexOf('{', $start.Index + $start.Length)
+  if ($openingBrace -lt 0) {
+    throw 'MePage versionCard builder must have an opening brace'
   }
-  return $Code.Substring($start.Index, $end.Index - $start.Index)
+  $depth = 0
+  for ($index = $openingBrace; $index -lt $Code.Length; $index++) {
+    if ($Code[$index] -eq '{') {
+      $depth++
+    } elseif ($Code[$index] -eq '}') {
+      $depth--
+      if ($depth -eq 0) {
+        $length = $index - $start.Index + 1
+        return [pscustomobject]@{
+          Start = $start.Index
+          Length = $length
+          Text = $Code.Substring($start.Index, $length)
+        }
+      }
+    }
+  }
+  throw 'MePage versionCard builder must have a closing brace'
 }
 
 function Test-VersionImageBinding([string]$Code, [string]$CodeWithLiterals) {
@@ -150,8 +166,9 @@ function Assert-MeSourceContract([string]$Source) {
   $normalized = $Source.Replace("`r`n", "`n").Replace("`r", "`n")
   $code = Remove-ArkTsCommentsAndTemplateRaw $normalized
   $codeWithLiterals = Remove-ArkTsCommentsAndTemplateRaw $normalized $true
-  $builder = Get-VersionCardSlice $code
-  $builderWithLiterals = $codeWithLiterals.Substring($code.IndexOf($builder, [StringComparison]::Ordinal), $builder.Length)
+  $builderSlice = Get-VersionCardSlice $code
+  $builder = $builderSlice.Text
+  $builderWithLiterals = $codeWithLiterals.Substring($builderSlice.Start, $builderSlice.Length)
   if (-not (Test-VersionImageBinding $builder $builderWithLiterals)) {
     throw "MePage versionCard must bind the Harmony flat version icon with `$r('app.media.me_version_v2')"
   }
