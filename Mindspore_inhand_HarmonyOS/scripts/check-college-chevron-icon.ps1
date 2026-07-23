@@ -29,8 +29,8 @@ function Test-CollegeChevronBinding([string]$Code, [string]$CodeWithLiterals, [i
 }
 
 function Test-CollegeTextChevronPlaceholder([string]$Code, [string]$CodeWithLiterals) {
-  $shape = [regex]::new('(?ms)^[\t ]*Text\s*\(\s*(?:''\s*''|"\s*")\s*\)')
-  $literal = '\A[\t ]*Text\s*\(\s*(?:''>''|">")\s*\)'
+  $shape = [regex]::new('(?ms)Text\s*\(\s*(?:''\s*''|"\s*")\s*\)')
+  $literal = '\AText\s*\(\s*(?:''>''|">")\s*\)'
   foreach ($match in $shape.Matches($Code)) {
     if ([regex]::IsMatch($CodeWithLiterals.Substring($match.Index), $literal)) {
       return $true
