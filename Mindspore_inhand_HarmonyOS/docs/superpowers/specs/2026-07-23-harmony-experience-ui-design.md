@@ -1,34 +1,52 @@
-# HarmonyOS Experience UI Redesign
+# HarmonyOS Experience UI Redesign V2
 
-## Goal
+## 目标
 
-Replace the Android-like Experience catalog treatment with the selected C mockup: a blue-violet immersive header, a floating white content surface, rounded two-column feature cards, and a floating bottom navigation treatment. Hide Custom Model from the catalog without deleting its route or runtime.
+将体验中心改为轻量、原生的 HarmonyOS 功能入口页。保留功能卡片和现有圆角悬浮底栏，去掉上一版厚重的顶部叠层、明显卡片阴影和滚动时的圆角形变。
 
-## Scope
+## 已确认的方向
 
-- Keep the nine visible features: PoseNet, Portrait Segmentation, Image Classification, Gesture Recognition, Text Extraction, Text Translation, Object Detection (Photo), Object Detection (Real-time), and Style Transfer.
-- Hide Dance Factory, Intelligent Poetry, Scene Detection, and Custom Model while keeping their routes and implementations ready.
-- Generate one project-owned icon for every catalog feature, including the four hidden entries, plus a HarmonyOS-inspired header illustration.
-- Preserve the existing navigation and feature workflows.
+- 顶部使用紧凑蓝色品牌区，不与白色内容面板重叠。
+- 顶部品牌区随页面自然上滑离场；到达临界点后显示轻量“体验中心”标题栏。
+- 不使用嵌套面板圆角跟随、卡片缩放或其他滚动形变。
+- 功能入口继续使用双列卡片。
+- 卡片为白底、约 15–16vp 圆角、1vp `#E8EDF5` 浅边框，无常驻阴影。
+- 分类标题左对齐，以短蓝色强调条区分层级，不再使用居中标题与长分割线。
+- 底部导航保持现有白色圆角悬浮胶囊和浅蓝选中态。
 
-## Visual System
+## 图标方向
 
-- Blue-to-violet ambient hero with distributed orbit/ring imagery; no HarmonyOS logo or copied trademark.
-- White page surface with a large top radius overlapping the hero.
-- Two-column cards with at least 44 vp touch targets, 16 vp radius, subtle blue-gray border, and distinct pictographic icons.
-- Clear group headings without dashed dividers. Experience and Advanced remain separate, with their technology subsection labels.
-- Bottom navigation remains readable and never covers the final feature row.
+- 采用已选择的 A 方案：圆角细线、纯 2D、蓝色主线配少量青色强调。
+- 禁止渐变、投影、高光、立体透视和外层图标底座。
+- 为全部十三个目录功能生成独立图标资源；四个隐藏功能的图标仅备用。
+- 资源应使用一致画布、留白和视觉线宽，并在 40–48vp 下保持可辨识。
 
-## Behavior and Accessibility
+## 功能范围
 
-- Feature cards remain full-card tap targets and route through the existing `openFeature` path.
-- Text contrast remains at least equivalent to the current primary text colors.
-- Long labels may wrap to two lines; no functional label is truncated into ambiguity.
-- Hidden items remain discoverable through `allExperienceFeatures` for route and regression tests but are absent from `visibleExperienceSections`.
+- 保持九个默认可见入口：PoseNet、人像分割、图像分类、手势识别、文本提取、文本翻译、对象检测（图片）、对象检测（实时）和风格迁移。
+- 舞蹈工厂、智能古诗、场景检测和自定义模型继续隐藏。
+- 隐藏功能保留路由、实现、目录数据和备用图标，不从 `visibleExperienceSections` 渲染。
+- UI 修改不改变 `openFeature` 跳转、推理流程或权限逻辑。
 
-## Verification
+## 组件与数据
 
-- LocalUnit proves nine visible entries, Custom Model hidden, all thirteen features mapped to unique generated media, and the new layout constants.
-- Build the dual-ABI HAP and install it on the API24 emulator.
-- Capture top and scrolled screenshots to confirm icons, hierarchy, scrolling, and bottom-bar clearance.
+- `FeatureCatalog.ets` 继续作为功能标题、图标语义、路由和可见性的唯一数据源。
+- `ExperiencePage.ets` 负责页面滚动状态、分组和网格，不复制目录数据。
+- `FeatureCard` 保持整卡点击，增加浅边框和按压反馈。
+- `ExperienceHeader` 改为紧凑品牌区；吸顶标题栏只显示页面标题。
+- 只有在第二个页面确实复用时才抽取新的通用 UI 组件。
 
+## 可访问性与状态
+
+- 卡片最小触控尺寸 44vp，长标题最多两行并保持语义完整。
+- 正文、辅助文字和边框在白色背景上保持清晰对比度。
+- 选中和按压状态不得只依赖颜色。
+- 内容底部预留足够空间，任何卡片都不得被悬浮导航遮挡。
+- 尊重系统安全区、字体缩放和不同窗口高度。
+
+## 验证
+
+- LocalUnit 验证九个可见入口、四个隐藏入口和十三个图标映射。
+- 构建双 ABI HAP，并在 API 24 模拟器安装运行。
+- 分别截取初始状态和滚动后状态，检查头部离场、轻标题栏吸顶、卡片间距和底栏遮挡。
+- 逐项点击九个可见入口，确认路由与原功能行为不受 UI 重做影响。
