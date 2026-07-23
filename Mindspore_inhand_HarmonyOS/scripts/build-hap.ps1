@@ -76,6 +76,7 @@ foreach ($abi in $targetAbis) {
   & (Join-Path $PSScriptRoot 'build-translation-xz-ohos.ps1') -Abi $abi -VerifyOnly
 }
 & (Join-Path $PSScriptRoot 'check-bottom-tab-icons.ps1')
+& (Join-Path $PSScriptRoot 'test-arkts-image-source-guards.ps1')
 & (Join-Path $PSScriptRoot 'check-me-row-icons.ps1')
 & (Join-Path $PSScriptRoot 'check-poetry-back-icon.ps1')
 & (Join-Path $PSScriptRoot 'check-college-chevron-icon.ps1')

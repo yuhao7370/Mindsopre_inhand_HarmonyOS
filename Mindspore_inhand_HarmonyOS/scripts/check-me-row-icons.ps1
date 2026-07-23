@@ -2,8 +2,8 @@ $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'arkts-source-guard.ps1')
 
 function Test-VersionImageBinding([string]$Code, [string]$CodeWithLiterals) {
-  $shape = [regex]::new('(?ms)^[\t ]*Image\s*\(\s*\$r\s*\(\s*''\s*''\s*\)\s*\)')
-  $literal = '\A[\t ]*Image\s*\(\s*\$r\s*\(\s*''app\.media\.me_version_v2''\s*\)\s*\)'
+  $shape = [regex]::new('(?ms)Image\s*\(\s*\$r\s*\(\s*''\s*''\s*\)\s*\)')
+  $literal = '\AImage\s*\(\s*\$r\s*\(\s*''app\.media\.me_version_v2''\s*\)\s*\)'
   foreach ($match in $shape.Matches($Code)) {
     if ([regex]::IsMatch($CodeWithLiterals.Substring($match.Index), $literal)) {
       return $true
@@ -13,12 +13,12 @@ function Test-VersionImageBinding([string]$Code, [string]$CodeWithLiterals) {
 }
 
 function Test-LegacyMeImageCall([string]$Code, [string]$CodeWithLiterals) {
-  $item = '(?ms)^[\t ]*Image\s*\(\s*iconMediaResource\s*\(\s*item\s*\.\s*icon\s*\)\s*\)'
+  $item = '(?ms)Image\s*\(\s*iconMediaResource\s*\(\s*item\s*\.\s*icon\s*\)\s*\)'
   if ([regex]::IsMatch($Code, $item)) {
     return $true
   }
-  $goShape = [regex]::new('(?ms)^[\t ]*Image\s*\(\s*iconMediaResource\s*\(\s*(?:''\s*''|"\s*")\s*\)\s*\)')
-  $goLiteral = '\A[\t ]*Image\s*\(\s*iconMediaResource\s*\(\s*(?:''go''|"go")\s*\)\s*\)'
+  $goShape = [regex]::new('(?ms)Image\s*\(\s*iconMediaResource\s*\(\s*(?:''\s*''|"\s*")\s*\)\s*\)')
+  $goLiteral = '\AImage\s*\(\s*iconMediaResource\s*\(\s*(?:''go''|"go")\s*\)\s*\)'
   foreach ($match in $goShape.Matches($Code)) {
     if ([regex]::IsMatch($CodeWithLiterals.Substring($match.Index), $goLiteral)) {
       return $true

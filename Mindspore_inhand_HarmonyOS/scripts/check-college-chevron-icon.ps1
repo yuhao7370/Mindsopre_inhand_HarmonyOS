@@ -18,8 +18,8 @@ $collegePagePath = Join-Path $root 'entry/src/main/ets/pages/CollegePage.ets'
 $source = Get-Content -Raw -Encoding UTF8 -LiteralPath $collegePagePath
 
 function Test-CollegeChevronBinding([string]$Code, [string]$CodeWithLiterals, [int]$TitleIndex) {
-  $shape = [regex]::new('(?ms)^[\t ]*Image\s*\(\s*\$r\s*\(\s*''\s*''\s*\)\s*\)\s*\.width\s*\(\s*6\s*\)\s*\.height\s*\(\s*12\s*\)')
-  $literal = '\A[\t ]*Image\s*\(\s*\$r\s*\(\s*''app\.media\.me_go''\s*\)\s*\)\s*\.width\s*\(\s*6\s*\)\s*\.height\s*\(\s*12\s*\)'
+  $shape = [regex]::new('(?ms)Image\s*\(\s*\$r\s*\(\s*''\s*''\s*\)\s*\)\s*\.width\s*\(\s*6\s*\)\s*\.height\s*\(\s*12\s*\)')
+  $literal = '\AImage\s*\(\s*\$r\s*\(\s*''app\.media\.me_go''\s*\)\s*\)\s*\.width\s*\(\s*6\s*\)\s*\.height\s*\(\s*12\s*\)'
   foreach ($match in $shape.Matches($Code)) {
     if ($match.Index -gt $TitleIndex -and [regex]::IsMatch($CodeWithLiterals.Substring($match.Index), $literal)) {
       return $true
