@@ -6,10 +6,10 @@ import { FeatureItem, FeatureSection, visibleExperienceSections } from '../commo
 import {
   experienceContentBottomPaddingVp,
   experienceGridColumnGapVp,
-  experienceGridHeightVp,
+  experienceGridMinHeightVp,
   experienceGridRowGapVp,
   experienceGridSideInsetVp,
-  experienceStickyTitleHeightVp,
+  experienceStickyTitleMinHeightVp,
   experienceStickyTitleVisible
 } from '../common/data/ExperienceLayoutSpec';
 import { appString, AppStringKey } from '../common/i18n/AppStrings';
@@ -79,7 +79,7 @@ export struct ExperiencePage {
         .fontColor(AppColor.textPrimary)
     }
     .width('100%')
-    .height(experienceStickyTitleHeightVp)
+    .constraintSize({ minHeight: experienceStickyTitleMinHeightVp })
     .padding({ left: experienceGridSideInsetVp, right: experienceGridSideInsetVp })
     .alignItems(VerticalAlign.Center)
     .backgroundColor(Color.White)
@@ -111,7 +111,7 @@ export struct ExperiencePage {
                 .columnsTemplate('1fr 1fr')
                 .columnsGap(experienceGridColumnGapVp)
                 .rowsGap(experienceGridRowGapVp)
-                .height(experienceGridHeightVp(section.items.length))
+                .constraintSize({ minHeight: experienceGridMinHeightVp(section.items.length) })
                 .width('100%')
                 .padding({ left: experienceGridSideInsetVp, right: experienceGridSideInsetVp })
                 .margin({ top: 12 })

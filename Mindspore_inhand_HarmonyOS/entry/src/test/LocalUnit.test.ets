@@ -509,13 +509,13 @@ import {
   experienceCardPressedScale,
   experienceCardRadiusVp,
   experienceContentBottomPaddingVp,
-  experienceGridCardHeightVp,
+  experienceGridCardMinHeightVp,
   experienceGridColumnCount,
   experienceGridColumnGapVp,
-  experienceGridHeightVp,
+  experienceGridMinHeightVp,
   experienceGridRowGapVp,
   experienceGridSideInsetVp,
-  experienceStickyTitleHeightVp,
+  experienceStickyTitleMinHeightVp,
   experienceStickyTitleThresholdVp,
   experienceStickyTitleVisible
 } from '../main/ets/common/data/ExperienceLayoutSpec';
@@ -2729,7 +2729,7 @@ export default function localUnitTest() {
 
     it('usesCompactHarmonyExperienceHeaderAndStickyTitle', 0, () => {
       expect(experienceHeaderHeightVp).assertEqual(132);
-      expect(experienceStickyTitleHeightVp).assertEqual(56);
+      expect(experienceStickyTitleMinHeightVp).assertEqual(56);
       expect(experienceStickyTitleThresholdVp).assertEqual(76);
       expect(experienceStickyTitleVisible(75)).assertFalse();
       expect(experienceStickyTitleVisible(76)).assertTrue();
@@ -2738,7 +2738,7 @@ export default function localUnitTest() {
 
     it('usesHarmonyExperienceCardGeometry', 0, () => {
       expect(experienceGridColumnCount).assertEqual(2);
-      expect(experienceGridCardHeightVp).assertEqual(72);
+      expect(experienceGridCardMinHeightVp).assertEqual(72);
       expect(experienceGridRowGapVp).assertEqual(12);
       expect(experienceGridSideInsetVp).assertEqual(16);
       expect(experienceGridColumnGapVp).assertEqual(12);
@@ -2747,13 +2747,13 @@ export default function localUnitTest() {
       expect(experienceCardBorderColor).assertEqual('#E8EDF5');
       expect(experienceCardPressedScale).assertEqual(0.98);
       expect(experienceContentBottomPaddingVp).assertEqual(28);
-      expect(experienceGridHeightVp(-1)).assertEqual(0);
-      expect(experienceGridHeightVp(0)).assertEqual(0);
-      expect(experienceGridHeightVp(1)).assertEqual(72);
-      expect(experienceGridHeightVp(2)).assertEqual(72);
-      expect(experienceGridHeightVp(3)).assertEqual(156);
-      expect(experienceGridHeightVp(4)).assertEqual(156);
-      expect(experienceGridHeightVp(5)).assertEqual(240);
+      expect(experienceGridMinHeightVp(-1)).assertEqual(0);
+      expect(experienceGridMinHeightVp(0)).assertEqual(0);
+      expect(experienceGridMinHeightVp(1)).assertEqual(72);
+      expect(experienceGridMinHeightVp(2)).assertEqual(72);
+      expect(experienceGridMinHeightVp(3)).assertEqual(156);
+      expect(experienceGridMinHeightVp(4)).assertEqual(156);
+      expect(experienceGridMinHeightVp(5)).assertEqual(240);
     });
 
     it('formatsAppVersionNameLikeAndroidPackageInfo', 0, () => {

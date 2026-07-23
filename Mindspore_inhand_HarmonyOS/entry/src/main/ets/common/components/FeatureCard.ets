@@ -4,7 +4,7 @@ import {
   experienceCardBorderWidthVp,
   experienceCardPressedScale,
   experienceCardRadiusVp,
-  experienceGridCardHeightVp
+  experienceGridCardMinHeightVp
 } from '../data/ExperienceLayoutSpec';
 import { iconLabel, iconMediaResource } from '../icons/IconSymbols';
 import { appString } from '../i18n/AppStrings';
@@ -64,7 +64,7 @@ export struct FeatureCard {
       }
     }
     .width('100%')
-    .height(experienceGridCardHeightVp)
+    .constraintSize({ minHeight: experienceGridCardMinHeightVp })
     .padding({ left: 12, right: 10 })
     .backgroundColor(Color.White)
     .border({
