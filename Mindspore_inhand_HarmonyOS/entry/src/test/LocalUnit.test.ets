@@ -643,14 +643,19 @@ import {
   CollegeSummaryDialogSpec,
   collegeSummaryDialogLogoMedia
 } from '../main/ets/common/data/CollegeSummaryDialog';
-import { MeItem, isMeItemUrlNavigable, meItems, visibleMeItems } from '../main/ets/common/data/MeCatalog';
 import {
-  meDividerHeightVp,
-  meRowIconGapVp,
-  meRowIconSizeVp,
-  meRowSideInsetVp,
-  meRowVerticalPaddingVp,
-  meTitleHeightVp
+  MeItem,
+  isMeItemPageNavigable,
+  isMeItemUrlNavigable,
+  meItems,
+  visibleMeItems
+} from '../main/ets/common/data/MeCatalog';
+import {
+  meInfoCardMinHeightVp,
+  meInfoCardRadiusVp,
+  meLogoSizeVp,
+  mePageInsetVp,
+  meTitleMinHeightVp
 } from '../main/ets/common/data/MeLayoutSpec';
 import { AppVersionReader, AppVersionService, formattedAppVersionName } from '../main/ets/services/app/AppVersionService';
 import {
@@ -2559,13 +2564,16 @@ export default function localUnitTest() {
       expect(meItems.find((item: MeItem) => item.id === 'feedback')?.title).assertEqual('Feedback');
     });
 
-    it('usesAndroidMePageGeometry', 0, () => {
-      expect(meTitleHeightVp).assertEqual(56);
-      expect(meDividerHeightVp).assertEqual(1);
-      expect(meRowVerticalPaddingVp).assertEqual(29);
-      expect(meRowSideInsetVp).assertEqual(20);
-      expect(meRowIconSizeVp).assertEqual(14);
-      expect(meRowIconGapVp).assertEqual(15);
+    it('definesHarmonyMeLayoutMinimums', 0, () => {
+      expect(mePageInsetVp).assertEqual(16);
+      expect(meTitleMinHeightVp).assertEqual(72);
+      expect(meInfoCardMinHeightVp).assertEqual(88);
+      expect(meInfoCardRadiusVp).assertEqual(16);
+      expect(meLogoSizeVp).assertEqual(56);
+      expect(visibleMeItems.length).assertEqual(1);
+      expect(visibleMeItems[0].id).assertEqual('version');
+      expect(isMeItemUrlNavigable(visibleMeItems[0])).assertFalse();
+      expect(isMeItemPageNavigable(visibleMeItems[0])).assertFalse();
     });
 
     it('usesAndroidCollegeSummaryDialogTitleKey', 0, () => {

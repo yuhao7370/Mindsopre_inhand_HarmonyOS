@@ -2,15 +2,13 @@ import { common } from '@kit.AbilityKit';
 import router from '@ohos.router';
 import { MeItem, isMeItemPageNavigable, isMeItemUrlNavigable, visibleMeItems } from '../common/data/MeCatalog';
 import {
-  meDividerHeightVp,
-  meRowIconGapVp,
-  meRowIconSizeVp,
-  meRowSideInsetVp,
-  meRowVerticalPaddingVp,
-  meTitleHeightVp
+  meInfoCardMinHeightVp,
+  meInfoCardRadiusVp,
+  meLogoSizeVp,
+  mePageInsetVp,
+  meTitleMinHeightVp
 } from '../common/data/MeLayoutSpec';
 import { webPagePath } from '../common/data/WebDestination';
-import { iconLabel, iconMediaResource } from '../common/icons/IconSymbols';
 import { AppStringKey, appString } from '../common/i18n/AppStrings';
 import { AppColor, AppSpacing } from '../common/theme/AppTheme';
 import { AppVersionService } from '../services/app/AppVersionService';
@@ -85,121 +83,79 @@ export struct MePage {
     this.statusKey = result.messageKey;
   }
 
-  private valueForItem(item: MeItem): string {
-    if (item.id === 'version') {
-      return this.versionLabel;
-    }
-    return '';
-  }
-
   @Builder
-  private meIcon(item: MeItem) {
-    if (iconMediaResource(item.icon) !== undefined) {
-      Image(iconMediaResource(item.icon) as Resource)
-        .width(meRowIconSizeVp)
-        .height(meRowIconSizeVp)
-        .objectFit(ImageFit.Contain)
-        .margin({ right: meRowIconGapVp })
-    } else {
-      Text(iconLabel(item.icon))
-        .fontSize(8)
-        .fontWeight(FontWeight.Bold)
-        .fontColor(Color.White)
-        .width(meRowIconSizeVp)
-        .height(meRowIconSizeVp)
-        .backgroundColor(AppColor.accent)
-        .borderRadius(meRowIconSizeVp / 2)
-        .textAlign(TextAlign.Center)
-        .maxLines(1)
-        .margin({ right: meRowIconGapVp })
-    }
-  }
-
-  @Builder
-  private meChevron() {
-    if (iconMediaResource('go') !== undefined) {
-      Image(iconMediaResource('go') as Resource)
-        .width(7)
-        .height(12)
-        .objectFit(ImageFit.Contain)
-        .margin({ left: AppSpacing.sm })
-    } else {
-      Text('>')
-        .fontSize(14)
-        .fontColor(AppColor.textMuted)
-        .margin({ left: AppSpacing.sm })
-    }
-  }
-
-  @Builder
-  meRow(item: MeItem) {
+  private versionCard(item: MeItem) {
     Row() {
-      this.meIcon(item)
-      Text(appString(item.titleKey))
-        .fontSize(16)
-        .fontWeight(FontWeight.Normal)
-        .fontColor('#333333')
-        .layoutWeight(1)
-        .maxLines(1)
-      Text(this.valueForItem(item))
-        .fontSize(13)
-        .fontColor('#666666')
-      if (isMeItemUrlNavigable(item) || isMeItemPageNavigable(item)) {
-        this.meChevron()
+      Image($r('app.media.me_version_v2'))
+        .width(meLogoSizeVp)
+        .height(meLogoSizeVp)
+        .objectFit(ImageFit.Contain)
+      Column() {
+        Text(appString('EntryAbility_label'))
+          .width('100%')
+          .fontSize(17)
+          .fontWeight(FontWeight.Bold)
+          .fontColor(AppColor.textPrimary)
+          .maxLines(2)
+        Text(appString(item.titleKey))
+          .width('100%')
+          .fontSize(14)
+          .fontColor(AppColor.textSecondary)
+          .margin({ top: 6 })
+        Text(this.versionLabel)
+          .width('100%')
+          .fontSize(13)
+          .fontColor(AppColor.textMuted)
+          .margin({ top: 2 })
       }
+      .layoutWeight(1)
+      .alignItems(HorizontalAlign.Start)
+      .margin({ left: 12 })
     }
     .width('100%')
-    .padding({
-      left: meRowSideInsetVp,
-      right: meRowSideInsetVp,
-      top: meRowVerticalPaddingVp,
-      bottom: meRowVerticalPaddingVp
-    })
-    .onClick(() => this.openItem(item))
+    .constraintSize({ minHeight: meInfoCardMinHeightVp })
+    .padding(14)
+    .alignItems(VerticalAlign.Top)
+    .backgroundColor(Color.White)
+    .border({ width: 1, color: '#E8EDF5', radius: meInfoCardRadiusVp })
   }
 
   build() {
-    Column() {
-      Row() {
+    Scroll() {
+      Column() {
         Text(appString('me_head_title'))
-          .fontSize(17)
+          .width('100%')
+          .fontSize(28)
           .fontWeight(FontWeight.Bold)
-          .fontColor(Color.White)
-          .textAlign(TextAlign.Center)
-      }
-      .width('100%')
-      .height(meTitleHeightVp)
-      .justifyContent(FlexAlign.Center)
-      .linearGradient({
-        angle: 90,
-        colors: [['#59BBE3', 0], ['#6189FF', 1]]
-      })
-      Row() {
-      }
-      .width('100%')
-      .height(meDividerHeightVp)
-      .backgroundColor('#DBDBDB')
-      Scroll() {
-        Column() {
-          ForEach(visibleMeItems, (item: MeItem) => {
-            this.meRow(item)
-          }, (item: MeItem) => item.id)
-          if (this.statusKey !== 'empty') {
-            Text(appString(this.statusKey))
-              .fontSize(13)
-              .fontColor(AppColor.textSecondary)
-              .textAlign(TextAlign.Center)
-              .margin({ top: AppSpacing.md })
+          .fontColor(AppColor.textPrimary)
+          .constraintSize({ minHeight: meTitleMinHeightVp })
+          .padding({ top: 16, bottom: 16 })
+        ForEach(visibleMeItems, (item: MeItem) => {
+          if (item.id === 'version') {
+            this.versionCard(item)
           }
+        }, (item: MeItem) => item.id)
+        if (this.statusKey !== 'empty') {
+          Text(appString(this.statusKey))
+            .width('100%')
+            .fontSize(13)
+            .fontColor(AppColor.textSecondary)
+            .textAlign(TextAlign.Center)
+            .margin({ top: AppSpacing.md })
         }
-        .width('100%')
       }
       .width('100%')
-      .layoutWeight(1)
-      .scrollBar(BarState.Off)
+      .padding({
+        left: mePageInsetVp,
+        right: mePageInsetVp,
+        bottom: 28
+      })
     }
     .width('100%')
     .height('100%')
+    .align(Alignment.TopStart)
+    .scrollBar(BarState.Off)
+    .edgeEffect(EdgeEffect.None)
     .backgroundColor(Color.White)
   }
 }
