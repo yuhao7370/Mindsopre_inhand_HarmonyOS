@@ -33,6 +33,7 @@ $nodeDir = if (Test-Path -LiteralPath (Join-Path $nodeHome 'bin\node.exe')) {
 $env:NODE_HOME = $nodeHome
 $env:PATH = $nodeDir + ';' + $env:PATH
 $env:PATH = (Join-Path $devEcoRoot 'jbr\bin') + ';' + $env:PATH
+& (Join-Path $PSScriptRoot 'test-experience-font-scale-layout-guard.ps1')
 & (Join-Path $PSScriptRoot 'check-experience-font-scale-layout.ps1')
 & (Join-Path $PSScriptRoot 'test-runtime-layout-closure-guard.ps1')
 & (Join-Path $PSScriptRoot 'check-runtime-layout-closure.ps1')
