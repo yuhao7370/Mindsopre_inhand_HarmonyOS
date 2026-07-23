@@ -135,7 +135,7 @@ struct QrCodePage {
             .width('100%')
             .aspectRatio(1)
             .objectFit(ImageFit.Contain)
-            .accessibilityText(appString(this.titleKey))
+            .accessibilityText(appString(this.titleKey) as Resource)
         }
         .width('78%')
         .constraintSize({ maxWidth: 300 })

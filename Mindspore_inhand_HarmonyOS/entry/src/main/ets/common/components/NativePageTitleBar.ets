@@ -18,7 +18,7 @@ export struct NativePageTitleBar {
       .width(48)
       .height(48)
       .justifyContent(FlexAlign.Center)
-      .accessibilityText(appString('action_back'))
+      .accessibilityText($r('app.string.action_back'))
       .accessibilityRole(AccessibilityRoleType.BACK_BUTTON)
       .onClick(() => this.onBack())
 
@@ -38,7 +38,7 @@ export struct NativePageTitleBar {
         .width(48)
         .height(48)
         .justifyContent(FlexAlign.Center)
-        .accessibilityText(appString('action_more'))
+        .accessibilityText($r('app.string.action_more'))
         .accessibilityRole(AccessibilityRoleType.BUTTON)
         .onClick(() => this.onMore())
       } else {
