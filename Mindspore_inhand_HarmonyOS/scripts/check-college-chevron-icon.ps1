@@ -1,4 +1,5 @@
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'arkts-source-guard.ps1')
 
 $root = Split-Path -Parent $PSScriptRoot
 $chevronIcon = Join-Path $root 'entry/src/main/resources/base/media/me_go.png'
@@ -14,44 +15,42 @@ if ($hash -ne $expectedHash) {
 }
 
 $collegePagePath = Join-Path $root 'entry/src/main/ets/pages/CollegePage.ets'
-$source = (Get-Content -Raw -Encoding UTF8 -LiteralPath $collegePagePath) -replace "`r`n", "`n"
+$source = Get-Content -Raw -Encoding UTF8 -LiteralPath $collegePagePath
 
-function CollegeEntryCardSlice([string] $text) {
-  $methodMarker = 'private collegeEntryCard(item: CollegeItem)'
-  $start = $text.IndexOf($methodMarker)
-  if ($start -lt 0) {
-    throw "Missing Harmony College entry method: $methodMarker"
-  }
-
-  $openingBrace = $text.IndexOf('{', $start + $methodMarker.Length)
-  if ($openingBrace -lt 0) {
-    throw 'Missing opening brace for Harmony College entry method'
-  }
-
-  $braceDepth = 0
-  for ($index = $openingBrace; $index -lt $text.Length; $index++) {
-    if ($text[$index] -eq '{') {
-      $braceDepth++
-    } elseif ($text[$index] -eq '}') {
-      $braceDepth--
-      if ($braceDepth -eq 0) {
-        return $text.Substring($start, $index - $start + 1)
-      }
+function Test-CollegeChevronBinding([string]$Code, [string]$CodeWithLiterals, [int]$TitleIndex) {
+  $shape = [regex]::new('(?ms)^[\t ]*Image\s*\(\s*\$r\s*\(\s*''\s*''\s*\)\s*\)\s*\.width\s*\(\s*6\s*\)\s*\.height\s*\(\s*12\s*\)')
+  $literal = '\A[\t ]*Image\s*\(\s*\$r\s*\(\s*''app\.media\.me_go''\s*\)\s*\)\s*\.width\s*\(\s*6\s*\)\s*\.height\s*\(\s*12\s*\)'
+  foreach ($match in $shape.Matches($Code)) {
+    if ($match.Index -gt $TitleIndex -and [regex]::IsMatch($CodeWithLiterals.Substring($match.Index), $literal)) {
+      return $true
     }
   }
-
-  throw 'Unclosed Harmony College entry method body'
+  return $false
 }
 
-$entryCardSlice = CollegeEntryCardSlice $source
-if ($entryCardSlice -notmatch 'Text\s*\(\s*appString\(collegeAdapterViewTitleKey\)\s*\)') {
-  throw 'Harmony College entry must render the adapter view title'
+function Assert-CollegeSourceContract([string]$Source) {
+  $normalized = $Source.Replace("`r`n", "`n").Replace("`r", "`n")
+  $code = Remove-ArkTsCommentsAndTemplateRaw $normalized
+  $codeWithLiterals = Remove-ArkTsCommentsAndTemplateRaw $normalized $true
+  $entrySlice = Get-ArkTsMethodSlice $code `
+    '(?m)^[\t ]*private\s+collegeEntryCard\s*\(\s*item\s*:\s*CollegeItem\s*\)' `
+    'Missing Harmony College entry method: private collegeEntryCard(item: CollegeItem)' `
+    'Missing opening brace for Harmony College entry method' `
+    'Unclosed Harmony College entry method body'
+  $entry = $entrySlice.Text
+  $entryWithLiterals = $codeWithLiterals.Substring($entrySlice.Start, $entrySlice.Length)
+  $title = [regex]::Match($entry, 'Text\s*\(\s*appString\s*\(\s*collegeAdapterViewTitleKey\s*\)\s*\)')
+  if (-not $title.Success) {
+    throw 'Harmony College entry must render the adapter view title'
+  }
+  if (-not (Test-CollegeChevronBinding $entry $entryWithLiterals $title.Index)) {
+    throw 'Harmony College entry must render me_go.png after the adapter view title at 6x12vp'
+  }
+  if ([regex]::IsMatch($entryWithLiterals, 'Text\s*\(\s*(?:''>''|">")\s*\)')) {
+    throw "Harmony College entry must not use a text '>' chevron placeholder"
+  }
 }
-if ($entryCardSlice -notmatch 'Text\s*\(\s*appString\(collegeAdapterViewTitleKey\)\s*\)(?s:.*?)Image\(\$r\(''app\.media\.me_go''\)\)(?s:.*?)\.width\(6\)(?s:.*?)\.height\(12\)') {
-  throw 'Harmony College entry must render me_go.png after the adapter view title at 6x12vp'
-}
-if ($entryCardSlice -match "Text\s*\(\s*'>'\s*\)") {
-  throw "Harmony College entry must not use a text '>' chevron placeholder"
-}
+
+Assert-CollegeSourceContract $source
 
 Write-Host 'Harmony College entry chevron contract is present'
