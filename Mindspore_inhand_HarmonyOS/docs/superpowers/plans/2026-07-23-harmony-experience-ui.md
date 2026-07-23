@@ -173,7 +173,8 @@ Expected: `validated 13 flat feature icons`.
 $deveco = 'F:\Program Files\Huawei\DevEco Studio'
 $env:DEVECO_SDK_HOME = Join-Path $deveco 'sdk'
 $env:PATH = (Join-Path $deveco 'tools\node') + ';' + (Join-Path $deveco 'jbr\bin') + ';' + $env:PATH
-& (Join-Path $deveco 'tools\hvigor\bin\hvigorw.bat') test --no-daemon 2>&1 |
+$hvigor = Join-Path $deveco 'tools\hvigor\bin\hvigorw.bat'
+& cmd.exe /d /c "`"$hvigor`" test --no-daemon 2>&1" |
   Tee-Object -FilePath '.superpowers/experience-icons-localunit.log'
 if ($LASTEXITCODE -ne 0) { throw 'Hvigor LocalUnit failed' }
 if (Select-String -Path '.superpowers/experience-icons-localunit.log' -Pattern 'AssertException|FAILED|ERROR') {
@@ -228,7 +229,8 @@ expect(experienceCardPressedScale).assertEqual(0.98);
 $deveco = 'F:\Program Files\Huawei\DevEco Studio'
 $env:DEVECO_SDK_HOME = Join-Path $deveco 'sdk'
 $env:PATH = (Join-Path $deveco 'tools\node') + ';' + (Join-Path $deveco 'jbr\bin') + ';' + $env:PATH
-& (Join-Path $deveco 'tools\hvigor\bin\hvigorw.bat') test --no-daemon
+$hvigor = Join-Path $deveco 'tools\hvigor\bin\hvigorw.bat'
+& cmd.exe /d /c "`"$hvigor`" test --no-daemon 2>&1"
 ```
 
 Expected: compile failure because the three new exports do not exist.
@@ -536,7 +538,8 @@ This removes both nested scrolling and the rounded overlapping content surface. 
 $deveco = 'F:\Program Files\Huawei\DevEco Studio'
 $env:DEVECO_SDK_HOME = Join-Path $deveco 'sdk'
 $env:PATH = (Join-Path $deveco 'tools\node') + ';' + (Join-Path $deveco 'jbr\bin') + ';' + $env:PATH
-& (Join-Path $deveco 'tools\hvigor\bin\hvigorw.bat') test --no-daemon 2>&1 |
+$hvigor = Join-Path $deveco 'tools\hvigor\bin\hvigorw.bat'
+& cmd.exe /d /c "`"$hvigor`" test --no-daemon 2>&1" |
   Tee-Object -FilePath '.superpowers/experience-v2-localunit.log'
 if ($LASTEXITCODE -ne 0) { throw 'Hvigor LocalUnit failed' }
 if (Select-String -Path '.superpowers/experience-v2-localunit.log' -Pattern 'AssertException|FAILED|ERROR') {
