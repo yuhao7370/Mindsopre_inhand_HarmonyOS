@@ -18,6 +18,7 @@ import { AppColor } from '../common/theme/AppTheme';
 @Component
 export struct ExperiencePage {
   @State stickyTitleVisible: boolean = false;
+  private scrollController: Scroller = new Scroller();
 
   private openFeature(item: FeatureItem): void {
     const route = findRouteByName(item.routeName);
@@ -87,7 +88,7 @@ export struct ExperiencePage {
 
   build() {
     Stack({ alignContent: Alignment.Top }) {
-      Scroll() {
+      Scroll(this.scrollController) {
         Column() {
           ExperienceHeader()
           Column() {
@@ -130,8 +131,8 @@ export struct ExperiencePage {
       .height('100%')
       .scrollBar(BarState.Off)
       .edgeEffect(EdgeEffect.None)
-      .onScroll((_xOffset: number, yOffset: number) => {
-        const visible = experienceStickyTitleVisible(yOffset);
+      .onScroll(() => {
+        const visible = experienceStickyTitleVisible(this.scrollController.currentOffset().yOffset);
         if (visible !== this.stickyTitleVisible) {
           this.stickyTitleVisible = visible;
         }
