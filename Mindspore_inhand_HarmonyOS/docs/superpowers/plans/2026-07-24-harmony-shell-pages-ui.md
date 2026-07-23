@@ -28,6 +28,7 @@
 - Create: `scripts/test-native-page-ui-guard.ps1`
 - Modify: `entry/src/main/ets/common/i18n/AppStrings.ets`
 - Modify: `entry/src/main/resources/base/element/string.json`
+- Modify: `entry/src/main/resources/en_US/element/string.json`
 - Modify: `entry/src/main/resources/zh_CN/element/string.json`
 - Modify: `scripts/build-hap.ps1`
 - Modify: `scripts/check-toolbar-back-icon.ps1`
@@ -85,11 +86,13 @@ Expected: 非零退出，消息包含 `Missing NativePageTitleBar.ets`。
 
 - [ ] **Step 3: 增加文案和最小标题栏**
 
-在两份 `string.json` 增加：
+在 base/zh_CN 增加：
 
 ```json
 { "name": "action_more", "value": "更多" }
 ```
+
+en_US 使用 `{ "name": "action_more", "value": "More" }`。
 
 在 `AppStrings.ets` 的 union、key array 和 switch 中加入 `action_more`。
 
@@ -177,6 +180,7 @@ git add -- `
   entry/src/main/ets/common/components/NativePageTitleBar.ets `
   entry/src/main/ets/common/i18n/AppStrings.ets `
   entry/src/main/resources/base/element/string.json `
+  entry/src/main/resources/en_US/element/string.json `
   entry/src/main/resources/zh_CN/element/string.json `
   scripts/build-hap.ps1 `
   scripts/check-native-page-title-bar.ps1 `
@@ -195,6 +199,7 @@ git commit -m "feat(ui): add native page title bar"
 - Modify: `entry/src/main/ets/pages/WebPage.ets`
 - Modify: `entry/src/main/ets/common/i18n/AppStrings.ets`
 - Modify: `entry/src/main/resources/base/element/string.json`
+- Modify: `entry/src/main/resources/en_US/element/string.json`
 - Modify: `entry/src/main/resources/zh_CN/element/string.json`
 - Modify: `entry/src/test/LocalUnit.test.ets`
 - Modify: `scripts/check-native-page-title-bar.ps1`
@@ -252,6 +257,8 @@ export function webPageFailedAfterRequest(currentFailed: boolean, isMainFrame: b
 { "name": "web_load_failed", "value": "页面加载失败" },
 { "name": "web_retry", "value": "重试" }
 ```
+
+en_US 对应 `Page failed to load`、`Retry`；三份 locale 同步后再更新 `AppStrings.ets`。
 
 并同步 `AppStrings.ets`。
 
@@ -340,6 +347,7 @@ git add -- `
   entry/src/main/ets/pages/WebPage.ets `
   entry/src/main/ets/common/i18n/AppStrings.ets `
   entry/src/main/resources/base/element/string.json `
+  entry/src/main/resources/en_US/element/string.json `
   entry/src/main/resources/zh_CN/element/string.json `
   entry/src/test/LocalUnit.test.ets `
   scripts/check-native-page-title-bar.ps1 `
@@ -356,6 +364,7 @@ git commit -m "feat(ui): redesign native web page"
 - Modify: `entry/src/main/ets/features/qrcode/QrCodeActionSheetState.ets`
 - Modify: `entry/src/main/ets/common/i18n/AppStrings.ets`
 - Modify: `entry/src/main/resources/base/element/string.json`
+- Modify: `entry/src/main/resources/en_US/element/string.json`
 - Modify: `entry/src/main/resources/zh_CN/element/string.json`
 - Modify: `entry/src/test/LocalUnit.test.ets`
 - Modify: `scripts/check-native-page-title-bar.ps1`
@@ -415,11 +424,13 @@ Expected: guard 因 QR 仍使用旧标题栏和自绘 sheet 失败；LocalUnit �
 
 - [ ] **Step 3: 增加进行中文案**
 
-两份 `string.json` 和 `AppStrings.ets` 增加：
+base/zh_CN 和 `AppStrings.ets` 增加：
 
 ```json
 { "name": "qr_save_in_progress", "value": "正在保存二维码…" }
 ```
+
+en_US 使用 `Saving QR code…`。
 
 在 `QrCodeActionSheetState.ets` 增加：
 
@@ -509,6 +520,7 @@ git add -- `
   entry/src/main/ets/features/qrcode/QrCodeActionSheetState.ets `
   entry/src/main/ets/common/i18n/AppStrings.ets `
   entry/src/main/resources/base/element/string.json `
+  entry/src/main/resources/en_US/element/string.json `
   entry/src/main/resources/zh_CN/element/string.json `
   entry/src/test/LocalUnit.test.ets `
   scripts/check-native-page-title-bar.ps1 `
@@ -525,6 +537,7 @@ git commit -m "feat(ui): redesign native qr code page"
 - Modify: `entry/src/main/ets/services/poetry/PoetryPosterService.ets`
 - Modify: `entry/src/main/ets/common/i18n/AppStrings.ets`
 - Modify: `entry/src/main/resources/base/element/string.json`
+- Modify: `entry/src/main/resources/en_US/element/string.json`
 - Modify: `entry/src/main/resources/zh_CN/element/string.json`
 - Modify: `entry/src/test/LocalUnit.test.ets`
 - Modify: `scripts/check-native-page-title-bar.ps1`
@@ -616,6 +629,8 @@ export function shouldStartPoetryPosterAction(actionInFlight: boolean): boolean 
 { "name": "poem_share_in_progress", "value": "正在准备分享…" }
 ```
 
+en_US 对应 `Saving poster…`、`Preparing share…`。
+
 - [ ] **Step 4: 改造海报布局和操作状态**
 
 页面增加：
@@ -675,6 +690,7 @@ git add -- `
   entry/src/main/ets/services/poetry/PoetryPosterService.ets `
   entry/src/main/ets/common/i18n/AppStrings.ets `
   entry/src/main/resources/base/element/string.json `
+  entry/src/main/resources/en_US/element/string.json `
   entry/src/main/resources/zh_CN/element/string.json `
   entry/src/test/LocalUnit.test.ets `
   scripts/check-native-page-title-bar.ps1 `
