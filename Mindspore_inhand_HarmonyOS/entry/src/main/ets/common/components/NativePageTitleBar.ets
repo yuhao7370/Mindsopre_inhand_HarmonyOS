@@ -3,7 +3,7 @@ import { AppColor } from '../theme/AppTheme';
 
 @Component
 export struct NativePageTitleBar {
-  title: string = '';
+  title: ResourceStr = '';
   showMore: boolean = false;
   onBack: () => void = () => {};
   onMore: () => void = () => {};
