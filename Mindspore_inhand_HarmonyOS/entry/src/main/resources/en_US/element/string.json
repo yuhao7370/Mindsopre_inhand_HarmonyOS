@@ -28,6 +28,7 @@
     { "name": "mindspore_college_title", "value": "MindSpore College" },
     { "name": "account_title", "value": "Account" },
     { "name": "action_back", "value": "Back" },
+    { "name": "action_more", "value": "More" },
     { "name": "app_cancel", "value": "Cancel" },
     { "name": "image_save_success", "value": "Save Success" },
     { "name": "image_save_failed", "value": "Save Failed" },

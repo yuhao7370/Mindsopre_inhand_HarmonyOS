@@ -28,6 +28,7 @@
     { "name": "mindspore_college_title", "value": "MindSpore 学院" },
     { "name": "account_title", "value": "账号" },
     { "name": "action_back", "value": "返回" },
+    { "name": "action_more", "value": "更多" },
     { "name": "app_cancel", "value": "取消" },
     { "name": "image_save_success", "value": "保存成功" },
     { "name": "image_save_failed", "value": "保存失败" },

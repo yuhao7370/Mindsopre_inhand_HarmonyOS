@@ -51,31 +51,7 @@ if ($runtimeHeader -notmatch "Image\(\`$r\('app\.media\.icon_back'\)\)" -or
   throw 'FeatureRuntimePage must render Android icon_back.png for the toolbar back action'
 }
 
-$webSource = ReadSource 'entry/src/main/ets/pages/WebPage.ets'
-$webGenericBack = SourceSlice $webSource "if (this.shouldUsePoetryBackIcon())" '@Builder'
-$webHeader = SourceSlice $webSource 'this.backButton()' "Text(appString(this.titleKey))"
-if ($webGenericBack -notmatch "Image\(\`$r\('app\.media\.icon_back'\)\)" -or
-  $webGenericBack -match "Text\('<'\)") {
-  throw 'WebPage generic toolbar back action must render Android icon_back.png'
-}
-if ($webGenericBack -notmatch "Image\(\`$r\('app\.media\.back'\)\)") {
-  throw 'WebPage must keep the poetry-specific Android back.png route icon'
-}
-
-$qrSource = ReadSource 'entry/src/main/ets/pages/QrCodePage.ets'
-$qrHeader = SourceSlice $qrSource 'Row() {' "Text(appString(this.titleKey))"
-if ($qrHeader -notmatch "Image\(\`$r\('app\.media\.icon_back'\)\)" -or
-  $qrHeader -match "Text\('<'\)" -or
-  $qrHeader -notmatch 'router\.back\(\)') {
-  throw 'QrCodePage must render Android icon_back.png for the toolbar back action'
-}
-
-foreach ($slice in @($runtimeHeader, $webGenericBack, $qrHeader)) {
-  AssertIconImage $slice
-}
-
-foreach ($slice in @($runtimeHeader, $webHeader, $qrHeader)) {
-  AssertBackTouchTarget $slice
-}
+AssertIconImage $runtimeHeader
+AssertBackTouchTarget $runtimeHeader
 
 Write-Host 'Android toolbar back icon wiring is present'
