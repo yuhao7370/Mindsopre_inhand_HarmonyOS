@@ -6,6 +6,7 @@ import request from '@ohos.request';
 import { AppRoute, findRouteByName } from '../main/ets/app/AppRoutes';
 import { MainTab, mainTabs } from '../main/ets/app/AppState';
 import { hasAppStringKey } from '../main/ets/common/i18n/AppStrings';
+import { webPageFailedAfterRequest } from '../main/ets/features/web/WebPageLoadState';
 import { iconLabel, iconMediaName } from '../main/ets/common/icons/IconSymbols';
 import {
   AiRunResult,
@@ -3130,6 +3131,12 @@ export default function localUnitTest() {
       const collegeDestination = webDestinationForUrl(collegeMainCloudUrl, 'me_official_title');
       expect(collegeDestination.titleKey).assertEqual('title_college_one_hour');
       expect(collegeDestination.url).assertEqual(collegeMainCloudUrl);
+    });
+
+    it('webPageOnlyTreatsMainDocumentErrorsAsPageFailure', 0, () => {
+      expect(webPageFailedAfterRequest(false, false)).assertFalse();
+      expect(webPageFailedAfterRequest(false, true)).assertTrue();
+      expect(webPageFailedAfterRequest(true, false)).assertTrue();
     });
 
     it('mapsAndroidWebViewToolbarTitlesForCollegeAndMeUrls', 0, () => {

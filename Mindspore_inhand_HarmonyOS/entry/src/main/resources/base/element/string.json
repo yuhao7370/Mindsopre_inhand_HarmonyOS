@@ -76,6 +76,8 @@
     { "name": "me_up_title", "value": "一键点赞" },
     { "name": "me_official_title", "value": "官方网站" },
     { "name": "me_official_code_title", "value": "官方代码仓" },
+    { "name": "web_load_failed", "value": "页面加载失败" },
+    { "name": "web_retry", "value": "重试" },
     { "name": "me_qa_title", "value": "问题反馈" },
     { "name": "me_agree", "value": "同意" },
     { "name": "me_disagree_and_exit", "value": "不同意并退出" },

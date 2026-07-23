@@ -105,6 +105,55 @@ function Assert-NativePageTitleBarContract([string]$Source) {
   Assert-IconAction $build.Text $literalBuild 'more' 'action_more' 'onMore'
 }
 
+function Get-WebPageMethodSlice([string]$Code, [string]$MethodName) {
+  return Get-ArkTsMethodSlice `
+    $Code `
+    ("{0}\s*\(\s*\)" -f [regex]::Escape($MethodName)) `
+    "WebPage is missing $MethodName()" `
+    "WebPage $MethodName() is missing an opening brace" `
+    "WebPage $MethodName() is missing a closing brace"
+}
+
+function Assert-WebPageNativeShellContract([string]$Source) {
+  $cleanSource = Remove-ArkTsCommentsAndTemplateRaw $Source $false
+  if ($cleanSource -match 'app\.media\.icon_back|app\.media\.back') {
+    throw 'WebPage must not use Android back media'
+  }
+
+  $build = Get-WebPageMethodSlice $cleanSource 'build'
+  $webContent = Get-WebPageMethodSlice $cleanSource 'webContent'
+  $errorHandler = Get-ArkTsMethodSlice `
+    $cleanSource `
+    'handleWebError\s*\(' `
+    'WebPage is missing handleWebError()' `
+    'WebPage handleWebError() is missing an opening brace' `
+    'WebPage handleWebError() is missing a closing brace'
+
+  foreach ($requirement in @(
+    @{ Pattern = 'NativePageTitleBar\s*\('; Message = 'WebPage build() must use NativePageTitleBar' },
+    @{ Pattern = 'router\.back\s*\(\s*\)'; Message = 'WebPage build() must navigate back through router.back()' },
+    @{ Pattern = 'Progress\s*\(\s*\{'; Message = 'WebPage build() must always include Progress' },
+    @{ Pattern = '\.opacity\(this\.progress\s*>\s*0\s*&&\s*this\.progress\s*<\s*100\s*&&\s*!this\.loadFailed\s*\?\s*1\s*:\s*0\)'; Message = 'WebPage Progress must hide with opacity instead of a conditional branch' }
+  )) {
+    if ($build.Text -notmatch $requirement.Pattern) {
+      throw $requirement.Message
+    }
+  }
+  if ($build.Text -match 'if\s*\(\s*this\.progress\s*>\s*0\s*&&\s*this\.progress\s*<\s*100') {
+    throw 'WebPage Progress must not be conditionally rendered'
+  }
+  if ($webContent.Text -notmatch '\.onErrorReceive\s*\(') {
+    throw 'WebPage webContent() must handle web errors'
+  }
+  if ($errorHandler.Text -notmatch 'event\.request\.isMainFrame\s*\(\s*\)') {
+    throw 'WebPage must only fail for main-frame errors'
+  }
+  $retry = Get-WebPageMethodSlice $cleanSource 'retryWebPage'
+  if ($retry.Text -notmatch 'this\.webController\.refresh\s*\(\s*\)') {
+    throw 'WebPage retryWebPage() must refresh the web controller'
+  }
+}
+
 if ($MyInvocation.InvocationName -ne '.') {
   $root = Split-Path -Parent $PSScriptRoot
   $sourcePath = Join-Path $root 'entry/src/main/ets/common/components/NativePageTitleBar.ets'
@@ -113,5 +162,10 @@ if ($MyInvocation.InvocationName -ne '.') {
   }
   $source = Get-Content -Raw -Encoding UTF8 -LiteralPath $sourcePath
   Assert-NativePageTitleBarContract $source
+  $webPagePath = Join-Path $root 'entry/src/main/ets/pages/WebPage.ets'
+  if (-not (Test-Path -LiteralPath $webPagePath -PathType Leaf)) {
+    throw 'Missing WebPage.ets'
+  }
+  Assert-WebPageNativeShellContract (Get-Content -Raw -Encoding UTF8 -LiteralPath $webPagePath)
   Write-Host 'NativePageTitleBar contract is present'
 }

@@ -76,6 +76,8 @@
     { "name": "me_up_title", "value": "Like" },
     { "name": "me_official_title", "value": "Official Website" },
     { "name": "me_official_code_title", "value": "Official Code" },
+    { "name": "web_load_failed", "value": "Page failed to load" },
+    { "name": "web_retry", "value": "Retry" },
     { "name": "me_qa_title", "value": "Feedback" },
     { "name": "me_agree", "value": "Agree" },
     { "name": "me_disagree_and_exit", "value": "Disagree and Exit" },

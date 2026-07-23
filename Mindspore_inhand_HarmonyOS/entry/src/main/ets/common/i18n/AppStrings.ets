@@ -75,6 +75,8 @@ export type AppStringKey =
   'me_up_title' |
   'me_official_title' |
   'me_official_code_title' |
+  'web_load_failed' |
+  'web_retry' |
   'me_qa_title' |
   'me_agree' |
   'me_disagree_and_exit' |
@@ -393,6 +395,8 @@ const APP_STRING_KEYS: AppStringKey[] = [
   'me_up_title',
   'me_official_title',
   'me_official_code_title',
+  'web_load_failed',
+  'web_retry',
   'me_qa_title',
   'me_agree',
   'me_disagree_and_exit',
@@ -791,6 +795,10 @@ export function appString(key: AppStringKey): ResourceStr {
       return $r('app.string.me_official_title');
     case 'me_official_code_title':
       return $r('app.string.me_official_code_title');
+    case 'web_load_failed':
+      return $r('app.string.web_load_failed');
+    case 'web_retry':
+      return $r('app.string.web_retry');
     case 'me_qa_title':
       return $r('app.string.me_qa_title');
     case 'me_agree':
