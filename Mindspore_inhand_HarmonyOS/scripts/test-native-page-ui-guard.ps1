@@ -245,7 +245,12 @@ $poetryPosterSourcePath = Join-Path $root 'entry/src/main/ets/pages/PoetryPoster
 $poetryPosterSource = Get-Content -Raw -Encoding UTF8 -LiteralPath $poetryPosterSourcePath
 Assert-PoetryPosterNativeShellContract $poetryPosterSource
 Assert-PoetryPosterRejected 'frame cover changed to fill' ($poetryPosterSource -replace 'backgroundImageSize\(ImageSize\.Cover\)', 'backgroundImageSize(ImageSize.FILL)')
-Assert-PoetryPosterRejected 'snapshot id moved into action area' ($poetryPosterSource -replace '\.id\(poetryPosterComponentId\)', '')
+$posterIdActionChainPattern = '(?m)^(\s{10}\})(\r?\n)(\s{10}\.width\(''100%''\))'
+$posterIdActionChainReplacement = '$1$2          .id(poetryPosterComponentId)$2$3'
+$posterIdMovedToActions = ($poetryPosterSource -replace '\.id\(poetryPosterComponentId\)\r?\n', '') -replace $posterIdActionChainPattern, $posterIdActionChainReplacement
+$posterIdDuplicatedInActions = $poetryPosterSource -replace $posterIdActionChainPattern, $posterIdActionChainReplacement
+Assert-PoetryPosterRejected 'snapshot id moved into action area' $posterIdMovedToActions
+Assert-PoetryPosterRejected 'snapshot id duplicated in action area' $posterIdDuplicatedInActions
 Assert-PoetryPosterRejected 'save button moved into poster card' ($poetryPosterSource.Replace('posterCard() {', "posterCard() {`n    SaveButton({})"))
 Assert-PoetryPosterRejected 'snapshot wait removed' ($poetryPosterSource -replace 'waitUntilRenderFinished:\s*true', 'waitUntilRenderFinished: false')
 Assert-PoetryPosterRejected 'save finally removed' ([regex]::Replace($poetryPosterSource, '(?s)(private savePoster\(\): void \{.*?\.finally\(\(\) => \{)\s*this\.actionInFlight = false;\s*(\}\))', '$1$2', 1))

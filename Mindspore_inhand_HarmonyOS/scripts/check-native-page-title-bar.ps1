@@ -277,6 +277,9 @@ function Assert-PoetryPosterNativeShellContract([string]$Source) {
   if ($literalPoster.Text -match '\.lineHeight\(28\)|SaveButton\s*\(|Button\s*\(|Text\(appString\(this\.statusKey\)\)') {
     throw 'Poster snapshot region must exclude fixed line height, actions, and status text'
   }
+  if (@([regex]::Matches($cleanSource, '\.id\(poetryPosterComponentId\)')).Count -ne 1) {
+    throw 'PoetryPosterPage must contain exactly one poetryPosterComponentId outside comments and string literals'
+  }
   if (@([regex]::Matches($poster.Text, '\.id\(poetryPosterComponentId\)')).Count -ne 1) {
     throw 'Poster snapshot region must contain exactly one poetryPosterComponentId'
   }
