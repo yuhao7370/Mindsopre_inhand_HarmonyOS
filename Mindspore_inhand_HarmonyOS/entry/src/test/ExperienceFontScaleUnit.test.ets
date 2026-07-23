@@ -8,7 +8,9 @@ import {
   experienceGroupTitleMinHeightVp,
   experienceSectionTitleMinHeightVp,
   experienceStickyTitleMinHeightVp,
-  experienceStickyTitleThresholdVp
+  experienceStickyTitleThresholdForMeasuredHeightsVp,
+  experienceStickyTitleThresholdVp,
+  experienceStickyTitleVisible
 } from '../main/ets/common/data/ExperienceLayoutSpec';
 
 export default function experienceFontScaleUnitTest(): void {
@@ -21,6 +23,13 @@ export default function experienceFontScaleUnitTest(): void {
       expect(experienceStickyTitleThresholdVp).assertEqual(76);
       expect(bottomTabItemMinHeightVp).assertEqual(50);
       expect(bottomTabBarMinHeightVp).assertEqual(62);
+    });
+
+    it('derivesStickyTransitionFromMeasuredHeaderAndStickyHeights', 0, () => {
+      expect(experienceStickyTitleThresholdForMeasuredHeightsVp(132, 56)).assertEqual(76);
+      expect(experienceStickyTitleThresholdForMeasuredHeightsVp(470, 63)).assertEqual(407);
+      expect(experienceStickyTitleVisible(406, 407)).assertFalse();
+      expect(experienceStickyTitleVisible(407, 407)).assertTrue();
     });
   });
 }

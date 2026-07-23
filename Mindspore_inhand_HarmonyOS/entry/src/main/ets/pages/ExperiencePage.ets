@@ -1,6 +1,7 @@
 import router from '@ohos.router';
 import { findRouteByName } from '../app/AppRoutes';
 import { ExperienceHeader } from '../common/components/ExperienceHeader';
+import { experienceHeaderMinHeightVp } from '../common/data/ExperienceHeaderBranding';
 import { FeatureCard } from '../common/components/FeatureCard';
 import { FeatureItem, FeatureSection, visibleExperienceSections } from '../common/data/FeatureCatalog';
 import {
@@ -12,6 +13,7 @@ import {
   experienceGridSideInsetVp,
   experienceSectionTitleMinHeightVp,
   experienceStickyTitleMinHeightVp,
+  experienceStickyTitleThresholdForMeasuredHeightsVp,
   experienceStickyTitleVisible
 } from '../common/data/ExperienceLayoutSpec';
 import { appString, AppStringKey } from '../common/i18n/AppStrings';
@@ -20,7 +22,46 @@ import { AppColor } from '../common/theme/AppTheme';
 @Component
 export struct ExperiencePage {
   @State stickyTitleVisible: boolean = false;
+  @State headerHeightVp: number = experienceHeaderMinHeightVp;
+  @State stickyTitleHeightVp: number = experienceStickyTitleMinHeightVp;
   private scrollController: Scroller = new Scroller();
+
+  private stickyTitleThresholdVp(): number {
+    return experienceStickyTitleThresholdForMeasuredHeightsVp(
+      this.headerHeightVp,
+      this.stickyTitleHeightVp
+    );
+  }
+
+  private updateStickyTitleVisibility(): void {
+    const visible = experienceStickyTitleVisible(
+      this.scrollController.currentOffset().yOffset,
+      this.stickyTitleThresholdVp()
+    );
+    if (visible !== this.stickyTitleVisible) {
+      this.stickyTitleVisible = visible;
+    }
+  }
+
+  private updateHeaderHeight(currentArea: Area): void {
+    const measuredHeightVp = Number(currentArea.height);
+    if (!Number.isFinite(measuredHeightVp) || measuredHeightVp <= 0 ||
+      Math.abs(measuredHeightVp - this.headerHeightVp) < 0.01) {
+      return;
+    }
+    this.headerHeightVp = measuredHeightVp;
+    this.updateStickyTitleVisibility();
+  }
+
+  private updateStickyTitleHeight(currentArea: Area): void {
+    const measuredHeightVp = Number(currentArea.height);
+    if (!Number.isFinite(measuredHeightVp) || measuredHeightVp <= 0 ||
+      Math.abs(measuredHeightVp - this.stickyTitleHeightVp) < 0.01) {
+      return;
+    }
+    this.stickyTitleHeightVp = measuredHeightVp;
+    this.updateStickyTitleVisibility();
+  }
 
   private openFeature(item: FeatureItem): void {
     const route = findRouteByName(item.routeName);
@@ -86,13 +127,22 @@ export struct ExperiencePage {
     .alignItems(VerticalAlign.Center)
     .backgroundColor(Color.White)
     .border({ width: { bottom: 1 }, color: '#EDF0F5' })
+    .onAreaChange((_previousArea: Area, currentArea: Area) => {
+      this.updateStickyTitleHeight(currentArea);
+    })
   }
 
   build() {
     Stack({ alignContent: Alignment.Top }) {
       Scroll(this.scrollController) {
         Column() {
-          ExperienceHeader()
+          Column() {
+            ExperienceHeader()
+          }
+          .width('100%')
+          .onAreaChange((_previousArea: Area, currentArea: Area) => {
+            this.updateHeaderHeight(currentArea);
+          })
           Column() {
             ForEach(visibleExperienceSections, (section: FeatureSection, sectionIndex: number) => {
               Column() {
@@ -134,10 +184,7 @@ export struct ExperiencePage {
       .scrollBar(BarState.Off)
       .edgeEffect(EdgeEffect.None)
       .onScroll(() => {
-        const visible = experienceStickyTitleVisible(this.scrollController.currentOffset().yOffset);
-        if (visible !== this.stickyTitleVisible) {
-          this.stickyTitleVisible = visible;
-        }
+        this.updateStickyTitleVisibility();
       })
 
       if (this.stickyTitleVisible) {

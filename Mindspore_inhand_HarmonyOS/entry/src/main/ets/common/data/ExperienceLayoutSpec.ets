@@ -16,8 +16,18 @@ export const experienceStickyTitleMinHeightVp: number = 56;
 export const experienceStickyTitleThresholdVp: number =
   experienceHeaderMinHeightVp - experienceStickyTitleMinHeightVp;
 
-export function experienceStickyTitleVisible(scrollOffsetVp: number): boolean {
-  return scrollOffsetVp >= experienceStickyTitleThresholdVp;
+export function experienceStickyTitleThresholdForMeasuredHeightsVp(
+  headerHeightVp: number,
+  stickyTitleHeightVp: number
+): number {
+  return Math.max(0, headerHeightVp - Math.max(stickyTitleHeightVp, experienceStickyTitleMinHeightVp));
+}
+
+export function experienceStickyTitleVisible(
+  scrollOffsetVp: number,
+  thresholdVp: number = experienceStickyTitleThresholdVp
+): boolean {
+  return scrollOffsetVp >= thresholdVp;
 }
 
 export function experienceGridMinHeightVp(itemCount: number): number {
