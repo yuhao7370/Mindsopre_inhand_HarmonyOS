@@ -1,5 +1,11 @@
 import { FeatureItem } from '../data/FeatureCatalog';
-import { experienceCardRadiusVp, experienceGridCardHeightVp } from '../data/ExperienceLayoutSpec';
+import {
+  experienceCardBorderColor,
+  experienceCardBorderWidthVp,
+  experienceCardPressedScale,
+  experienceCardRadiusVp,
+  experienceGridCardHeightVp
+} from '../data/ExperienceLayoutSpec';
 import { iconLabel, iconMediaResource } from '../icons/IconSymbols';
 import { appString } from '../i18n/AppStrings';
 import { AppColor } from '../theme/AppTheme';
@@ -61,8 +67,15 @@ export struct FeatureCard {
     .height(experienceGridCardHeightVp)
     .padding({ left: 12, right: 10 })
     .backgroundColor(Color.White)
-    .border({ width: 1, color: '#E7ECF6', radius: experienceCardRadiusVp })
-    .shadow({ radius: 10, color: '#100D3B80', offsetX: 0, offsetY: 4 })
+    .border({
+      width: experienceCardBorderWidthVp,
+      color: experienceCardBorderColor,
+      radius: experienceCardRadiusVp
+    })
+    .clickEffect({
+      level: ClickEffectLevel.LIGHT,
+      scale: experienceCardPressedScale
+    })
     .onClick(() => this.action(this.item))
   }
 }

@@ -504,6 +504,9 @@ import {
   experienceHeaderHeightVp
 } from '../main/ets/common/data/ExperienceHeaderBranding';
 import {
+  experienceCardBorderColor,
+  experienceCardBorderWidthVp,
+  experienceCardPressedScale,
   experienceCardRadiusVp,
   experienceContentBottomPaddingVp,
   experienceContentOverlapVp,
@@ -2734,6 +2737,9 @@ export default function localUnitTest() {
       expect(experienceGridSideInsetVp).assertEqual(16);
       expect(experienceGridColumnGapVp).assertEqual(12);
       expect(experienceCardRadiusVp).assertEqual(16);
+      expect(experienceCardBorderWidthVp).assertEqual(1);
+      expect(experienceCardBorderColor).assertEqual('#E8EDF5');
+      expect(experienceCardPressedScale).assertEqual(0.98);
       expect(experienceContentTopRadiusVp).assertEqual(28);
       expect(experienceContentOverlapVp).assertEqual(24);
       expect(experienceHeaderHeightVp - experienceContentOverlapVp).assertEqual(152);
