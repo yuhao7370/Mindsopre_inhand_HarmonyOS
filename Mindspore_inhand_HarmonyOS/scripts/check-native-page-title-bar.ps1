@@ -163,6 +163,62 @@ function Assert-WebPageNativeShellContract([string]$Source) {
   }
 }
 
+function Assert-QrCodePageNativeShellContract([string]$Source) {
+  $cleanSource = Remove-ArkTsCommentsAndTemplateRaw $Source $false
+  $literalSource = Remove-ArkTsCommentsAndTemplateRaw $Source $true
+  if ($cleanSource -match 'app\.media\.icon_back|#66000000') {
+    throw 'QrCodePage must not use Android back media or a custom full-screen scrim'
+  }
+  if ($cleanSource -match "Text\s*\(\s*'[^']*'\s*\)") {
+    throw 'QrCodePage must not use hard-coded Text literals'
+  }
+
+  $build = Get-ArkTsMethodSlice `
+    $cleanSource `
+    'build\s*\(\s*\)' `
+    'QrCodePage is missing build()' `
+    'QrCodePage build() is missing an opening brace' `
+    'QrCodePage build() is missing a closing brace'
+  $sheet = Get-ArkTsMethodSlice `
+    $cleanSource `
+    'saveActionSheet\s*\(\s*\)' `
+    'QrCodePage is missing saveActionSheet()' `
+    'QrCodePage saveActionSheet() is missing an opening brace' `
+    'QrCodePage saveActionSheet() is missing a closing brace'
+  $literalSheet = Get-ArkTsMethodSlice `
+    $literalSource `
+    'saveActionSheet\s*\(\s*\)' `
+    'QrCodePage is missing saveActionSheet()' `
+    'QrCodePage saveActionSheet() is missing an opening brace' `
+    'QrCodePage saveActionSheet() is missing a closing brace'
+
+  foreach ($requirement in @(
+    @{ Pattern = 'NativePageTitleBar\s*\('; Message = 'QrCodePage build() must use NativePageTitleBar' },
+    @{ Pattern = 'showMore\s*:\s*true'; Message = 'QrCodePage title bar must expose the more action' },
+    @{ Pattern = 'onMore\s*:'; Message = 'QrCodePage title bar must expose the more callback' },
+    @{ Pattern = '\.bindSheet\s*\('; Message = 'QrCodePage must use a native bindSheet' },
+    @{ Pattern = 'SheetSize\.FIT_CONTENT'; Message = 'QrCodePage native sheet must fit its content' },
+    @{ Pattern = 'qrCodeSheetActionForNativeDismiss\s*\('; Message = 'QrCodePage native dismisses must map to existing reducer actions' },
+    @{ Pattern = 'DismissReason\.PRESS_BACK'; Message = 'QrCodePage must map the native back dismiss reason' },
+    @{ Pattern = '\.constraintSize\(\{\s*maxWidth:\s*300'; Message = 'QrCodePage QR card must cap its width at 300vp' }
+  )) {
+    if ($build.Text -notmatch $requirement.Pattern) {
+      throw $requirement.Message
+    }
+  }
+  foreach ($requirement in @(
+    @{ Pattern = 'SaveButton\s*\('; Message = 'QrCodePage native sheet must use SaveButton' },
+    @{ Pattern = '\.enabled\(\s*!this\.saveInFlight\s*\)'; Message = 'QrCodePage SaveButton must disable while saving' }
+  )) {
+    if ($sheet.Text -notmatch $requirement.Pattern) {
+      throw $requirement.Message
+    }
+  }
+  if ($literalSheet.Text -notmatch "appString\('image_save_failed'\)") {
+    throw 'QrCodePage native sheet must show save failures'
+  }
+}
+
 if ($MyInvocation.InvocationName -ne '.') {
   $root = Split-Path -Parent $PSScriptRoot
   $sourcePath = Join-Path $root 'entry/src/main/ets/common/components/NativePageTitleBar.ets'
@@ -176,5 +232,10 @@ if ($MyInvocation.InvocationName -ne '.') {
     throw 'Missing WebPage.ets'
   }
   Assert-WebPageNativeShellContract (Get-Content -Raw -Encoding UTF8 -LiteralPath $webPagePath)
+  $qrCodePagePath = Join-Path $root 'entry/src/main/ets/pages/QrCodePage.ets'
+  if (-not (Test-Path -LiteralPath $qrCodePagePath -PathType Leaf)) {
+    throw 'Missing QrCodePage.ets'
+  }
+  Assert-QrCodePageNativeShellContract (Get-Content -Raw -Encoding UTF8 -LiteralPath $qrCodePagePath)
   Write-Host 'NativePageTitleBar contract is present'
 }

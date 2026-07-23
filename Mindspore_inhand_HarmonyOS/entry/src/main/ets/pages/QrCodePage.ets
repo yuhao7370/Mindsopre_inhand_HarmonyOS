@@ -1,9 +1,11 @@
 import { common } from '@kit.AbilityKit';
 import router from '@ohos.router';
+import { NativePageTitleBar } from '../common/components/NativePageTitleBar';
 import { AppStringKey, appString } from '../common/i18n/AppStrings';
 import { AppColor, AppSpacing } from '../common/theme/AppTheme';
 import {
   QrCodeSaveSheetAction,
+  qrCodeSheetActionForNativeDismiss,
   qrCodeSaveSheetVisibleAfterAction,
   shouldStartQrCodeSave
 } from '../features/qrcode/QrCodeActionSheetState';
@@ -29,14 +31,6 @@ struct QrCodePage {
   aboutToAppear() {
     const params = router.getParams() as QrCodePageParams;
     this.titleKey = params?.titleKey ?? 'me_my_qr_code';
-  }
-
-  onBackPress(): boolean {
-    if (!this.showSaveSheet) {
-      return false;
-    }
-    this.applySaveSheetAction('back');
-    return true;
   }
 
   private uiAbilityContext(): common.UIAbilityContext | undefined {
@@ -88,115 +82,86 @@ struct QrCodePage {
   @Builder
   saveActionSheet() {
     Column() {
-      Blank()
-        .layoutWeight(1)
-        .onClick(() => this.applySaveSheetAction('backdrop'))
-      Column() {
-        Row() {
-          SaveButton({
-            icon: SaveIconStyle.FULL_FILLED,
-            text: SaveDescription.SAVE_IMAGE,
-            buttonType: ButtonType.Capsule
-          })
-            .height(40)
-            .onClick((_event: ClickEvent, result: SaveButtonOnClickResult) => {
-              if (result === SaveButtonOnClickResult.SUCCESS) {
-                this.saveFromSheet();
-                return;
-              }
-              this.statusKey = 'image_save_failed';
-              this.applySaveSheetAction('saveFailed');
-            })
-        }
+      SaveButton({
+        icon: SaveIconStyle.FULL_FILLED,
+        text: SaveDescription.SAVE_IMAGE,
+        buttonType: ButtonType.Capsule
+      })
         .width('100%')
-        .height(56)
-        .justifyContent(FlexAlign.Center)
+        .height(48)
+        .enabled(!this.saveInFlight)
+        .onClick((_event: ClickEvent, result: SaveButtonOnClickResult) => {
+          if (result === SaveButtonOnClickResult.SUCCESS) {
+            this.saveFromSheet();
+            return;
+          }
+          this.statusKey = 'image_save_failed';
+          this.applySaveSheetAction('saveFailed');
+        })
 
-        Column()
-          .width('100%')
-          .height(1)
-          .backgroundColor(AppColor.divider)
-
-        Text(appString('app_cancel'))
-          .width('100%')
-          .height(56)
-          .fontSize(15)
-          .fontColor(AppColor.textPrimary)
+      if (this.saveInFlight) {
+        Text(appString('qr_save_in_progress'))
+          .fontSize(14)
+          .fontColor(AppColor.textSecondary)
           .textAlign(TextAlign.Center)
-          .onClick(() => this.applySaveSheetAction('cancel'))
+      } else if (this.statusKey === 'image_save_failed') {
+        Text(appString('image_save_failed'))
+          .fontSize(14)
+          .fontColor(AppColor.textSecondary)
+          .textAlign(TextAlign.Center)
       }
-      .width('100%')
-      .backgroundColor(AppColor.cardBackground)
+
+      Button(appString('app_cancel'))
+        .width('100%')
+        .height(48)
+        .onClick(() => this.applySaveSheetAction('cancel'))
     }
     .width('100%')
-    .height('100%')
-    .backgroundColor('#66000000')
+    .padding(AppSpacing.md)
   }
 
   build() {
-    Stack() {
-      Column() {
-        Row() {
-          Row() {
-            Image($r('app.media.icon_back'))
-              .width(11)
-              .height(22)
-              .objectFit(ImageFit.Contain)
-          }
-            .width(40)
-            .height(40)
-            .justifyContent(FlexAlign.Center)
-            .alignItems(VerticalAlign.Center)
-            .onClick(() => router.back())
-          Text(appString(this.titleKey))
-            .fontSize(20)
-            .fontWeight(FontWeight.Bold)
-            .fontColor(AppColor.textPrimary)
-            .layoutWeight(1)
-            .maxLines(1)
-            .textOverflow({ overflow: TextOverflow.Ellipsis })
-          Text('...')
-            .fontSize(20)
-            .fontColor(AppColor.textPrimary)
-            .fontWeight(FontWeight.Bold)
-            .width(44)
-            .height(40)
-            .textAlign(TextAlign.Center)
-            .onClick(() => this.applySaveSheetAction('open'))
-        }
-        .width('100%')
-        .height(56)
-        .padding({ left: AppSpacing.md, right: AppSpacing.md })
-        .backgroundColor(AppColor.cardBackground)
+    Column() {
+      NativePageTitleBar({
+        title: appString(this.titleKey),
+        showMore: true,
+        onBack: () => router.back(),
+        onMore: () => this.applySaveSheetAction('open')
+      })
 
+      Column() {
         Column() {
           Image($r('app.media.my_qr_code'))
-            .width('78%')
+            .width('100%')
             .aspectRatio(1)
             .objectFit(ImageFit.Contain)
-
-          if (this.statusKey !== 'empty') {
-            Text(appString(this.statusKey))
-              .fontSize(14)
-              .fontColor(AppColor.textSecondary)
-              .textAlign(TextAlign.Center)
-              .margin({ top: AppSpacing.md })
-              .padding({ left: AppSpacing.lg, right: AppSpacing.lg })
-          }
+            .accessibilityText(appString(this.titleKey))
         }
-        .width('100%')
-        .layoutWeight(1)
-        .justifyContent(FlexAlign.Center)
+        .width('78%')
+        .constraintSize({ maxWidth: 300 })
+        .padding(16)
+        .backgroundColor(AppColor.cardBackground)
+        .border({ width: 1, color: '#E8EDF5', radius: 12 })
       }
       .width('100%')
-      .height('100%')
-
-      if (this.showSaveSheet) {
-        this.saveActionSheet()
-      }
+      .layoutWeight(1)
+      .justifyContent(FlexAlign.Center)
     }
     .width('100%')
     .height('100%')
     .backgroundColor(AppColor.pageBackground)
+    .bindSheet(this.showSaveSheet, this.saveActionSheet(), {
+      height: SheetSize.FIT_CONTENT,
+      showClose: false,
+      onWillDismiss: (action: DismissSheetAction) => {
+        this.applySaveSheetAction(
+          qrCodeSheetActionForNativeDismiss(action.reason === DismissReason.PRESS_BACK)
+        );
+        action.dismiss();
+      },
+      onDisappear: () => {
+        this.showSaveSheet = false;
+      }
+    })
   }
 }

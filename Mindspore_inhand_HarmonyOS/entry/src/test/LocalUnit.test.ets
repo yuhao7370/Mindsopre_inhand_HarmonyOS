@@ -677,6 +677,7 @@ import {
   QrCodeSaveService
 } from '../main/ets/services/media/QrCodeSaveService';
 import {
+  qrCodeSheetActionForNativeDismiss,
   qrCodeSaveSheetVisibleAfterAction,
   shouldStartQrCodeSave
 } from '../main/ets/features/qrcode/QrCodeActionSheetState';
@@ -2969,6 +2970,11 @@ export default function localUnitTest() {
       expect(qrCodeSaveSheetVisibleAfterAction(false, 'saveFailed')).assertFalse();
       expect(qrCodeSaveSheetVisibleAfterAction(true, 'backdrop')).assertFalse();
       expect(qrCodeSaveSheetVisibleAfterAction(true, 'back')).assertFalse();
+    });
+
+    it('qrCodeMapsNativeSheetDismissReasonsToExistingReducerActions', 0, () => {
+      expect(qrCodeSheetActionForNativeDismiss(true)).assertEqual('back');
+      expect(qrCodeSheetActionForNativeDismiss(false)).assertEqual('backdrop');
     });
 
     it('qrCodeSaveStartsOnlyWhenNoSaveIsAlreadyInFlight', 0, () => {

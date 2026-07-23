@@ -168,4 +168,63 @@ $poetryErrorMissing = [regex]::Replace(
 )
 Assert-WebRejected 'poetry branch error callback removed' $poetryErrorMissing
 
+$qrFixture = @'
+@Component
+struct QrCodePage {
+  @State showSaveSheet: boolean = false;
+  @State saveInFlight: boolean = false;
+  @State statusKey: AppStringKey = 'empty';
+
+  private applySaveSheetAction(_action: QrCodeSaveSheetAction): void {}
+
+  @Builder
+  saveActionSheet() {
+    Column() {
+      SaveButton({ icon: SaveIconStyle.FULL_FILLED })
+        .enabled(!this.saveInFlight)
+      if (this.statusKey === 'image_save_failed') {
+        Text(appString('image_save_failed'))
+      }
+    }
+  }
+
+  build() {
+    Column() {
+      NativePageTitleBar({
+        title: appString(this.titleKey),
+        showMore: true,
+        onBack: () => router.back(),
+        onMore: () => this.applySaveSheetAction('open')
+      })
+      Column() {}
+        .constraintSize({ maxWidth: 300 })
+    }
+    .bindSheet(this.showSaveSheet, this.saveActionSheet(), {
+      height: SheetSize.FIT_CONTENT,
+      onWillDismiss: (action: DismissSheetAction) => {
+        this.applySaveSheetAction(
+          qrCodeSheetActionForNativeDismiss(action.reason === DismissReason.PRESS_BACK)
+        );
+      }
+    })
+  }
+}
+'@
+
+function Assert-QrCodeRejected([string]$Name, [string]$Source) {
+  try {
+    Assert-QrCodePageNativeShellContract $Source
+  } catch {
+    Write-Host "Rejected QrCodePage mutation: $Name"
+    return
+  }
+  throw "Expected QR mutation to be rejected: $Name"
+}
+
+Assert-QrCodePageNativeShellContract $qrFixture
+Assert-QrCodeRejected 'real title bar removed' ($qrFixture -replace 'NativePageTitleBar', 'LegacyTitleBar')
+Assert-QrCodeRejected 'more callback removed' ($qrFixture -replace 'onMore:\s*\(\) => this\.applySaveSheetAction\(''open''\)', '')
+Assert-QrCodeRejected 'save enabled binding changed to a constant' ($qrFixture -replace '\.enabled\(!this\.saveInFlight\)', '.enabled(true)')
+Assert-QrCodeRejected 'dismiss reason mapping removed' ($qrFixture -replace 'qrCodeSheetActionForNativeDismiss\(action\.reason === DismissReason\.PRESS_BACK\)', 'false')
+
 Write-Host 'Native page UI guard mutation tests passed'

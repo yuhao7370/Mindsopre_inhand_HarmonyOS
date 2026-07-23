@@ -31,6 +31,7 @@ export type AppStringKey =
   'app_cancel' |
   'image_save_success' |
   'image_save_failed' |
+  'qr_save_in_progress' |
   'confirm' |
   'dialog_btn_confirm' |
   'title_button_text_angle' |
@@ -351,6 +352,7 @@ const APP_STRING_KEYS: AppStringKey[] = [
   'app_cancel',
   'image_save_success',
   'image_save_failed',
+  'qr_save_in_progress',
   'confirm',
   'dialog_btn_confirm',
   'title_button_text_angle',
@@ -707,6 +709,8 @@ export function appString(key: AppStringKey): ResourceStr {
       return $r('app.string.image_save_success');
     case 'image_save_failed':
       return $r('app.string.image_save_failed');
+    case 'qr_save_in_progress':
+      return $r('app.string.qr_save_in_progress');
     case 'confirm':
       return $r('app.string.confirm');
     case 'dialog_btn_confirm':

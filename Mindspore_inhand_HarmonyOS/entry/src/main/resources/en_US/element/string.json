@@ -32,6 +32,7 @@
     { "name": "app_cancel", "value": "Cancel" },
     { "name": "image_save_success", "value": "Save Success" },
     { "name": "image_save_failed", "value": "Save Failed" },
+    { "name": "qr_save_in_progress", "value": "Saving QR code…" },
     { "name": "confirm", "value": "OK" },
     { "name": "dialog_btn_confirm", "value": "OK" },
     { "name": "title_button_text_angle", "value": "HOT" },
