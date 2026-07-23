@@ -18,7 +18,7 @@ $collegePagePath = Join-Path $root 'entry/src/main/ets/pages/CollegePage.ets'
 $source = Get-Content -Raw -Encoding UTF8 -LiteralPath $collegePagePath
 
 function Test-CollegeChevronBinding([string]$Code, [string]$CodeWithLiterals, [int]$TitleIndex) {
-  $shape = [regex]::new('(?ms)Image\s*\(\s*\$r\s*\(\s*''\s*''\s*\)\s*\)\s*\.width\s*\(\s*6\s*\)\s*\.height\s*\(\s*12\s*\)')
+  $shape = [regex]::new('(?ms)(?<![\p{L}\p{Nd}_$])Image\s*\(\s*\$r\s*\(\s*''\s*''\s*\)\s*\)\s*\.width\s*\(\s*6\s*\)\s*\.height\s*\(\s*12\s*\)')
   $literal = '\AImage\s*\(\s*\$r\s*\(\s*''app\.media\.me_go''\s*\)\s*\)\s*\.width\s*\(\s*6\s*\)\s*\.height\s*\(\s*12\s*\)'
   foreach ($match in $shape.Matches($Code)) {
     if ($match.Index -gt $TitleIndex -and [regex]::IsMatch($CodeWithLiterals.Substring($match.Index), $literal)) {
@@ -29,7 +29,7 @@ function Test-CollegeChevronBinding([string]$Code, [string]$CodeWithLiterals, [i
 }
 
 function Test-CollegeTextChevronPlaceholder([string]$Code, [string]$CodeWithLiterals) {
-  $shape = [regex]::new('(?ms)Text\s*\(\s*(?:''\s*''|"\s*")\s*\)')
+  $shape = [regex]::new('(?ms)(?<![\p{L}\p{Nd}_$])Text\s*\(\s*(?:''\s*''|"\s*")\s*\)')
   $literal = '\AText\s*\(\s*(?:''>''|">")\s*\)'
   foreach ($match in $shape.Matches($Code)) {
     if ([regex]::IsMatch($CodeWithLiterals.Substring($match.Index), $literal)) {
@@ -50,7 +50,7 @@ function Assert-CollegeSourceContract([string]$Source) {
     'Unclosed Harmony College entry method body'
   $entry = $entrySlice.Text
   $entryWithLiterals = $codeWithLiterals.Substring($entrySlice.Start, $entrySlice.Length)
-  $title = [regex]::Match($entry, 'Text\s*\(\s*appString\s*\(\s*collegeAdapterViewTitleKey\s*\)\s*\)')
+  $title = [regex]::Match($entry, '(?<![\p{L}\p{Nd}_$])Text\s*\(\s*appString\s*\(\s*collegeAdapterViewTitleKey\s*\)\s*\)')
   if (-not $title.Success) {
     throw 'Harmony College entry must render the adapter view title'
   }

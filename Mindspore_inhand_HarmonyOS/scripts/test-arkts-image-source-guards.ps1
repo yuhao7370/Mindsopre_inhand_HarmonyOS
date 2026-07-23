@@ -87,6 +87,10 @@ $meAcceptCases = [ordered]@{
 
     Text(`Image(iconMediaResource(item.icon)) Image(iconMediaResource('go'))`)
 '@
+  'Me ignores prefixed FakeImage legacy item.icon call' = $meValidLineStart + @'
+
+    FakeImage(iconMediaResource(item.icon))
+'@
   'Me method slicing ignores comment and string braces' = $meValidLineStart + @'
 
     // }
@@ -168,6 +172,10 @@ $meRejectCases = [ordered]@{
   'Me rejects approved image only in template raw text' = @'
 
     Text(`Image($r('app.media.me_version_v2'))`)
+'@
+  'Me rejects approved version resource only in prefixed FakeImage' = @'
+
+    FakeImage($r('app.media.me_version_v2'))
 '@
   'Me rejects approved image only in sibling method' = @'
 
@@ -290,6 +298,10 @@ $collegeAcceptCases = [ordered]@{
 
     Text(`Row() { Text('>') } Row() { Text(">") }`)
 '@
+  'College ignores prefixed FakeText placeholder call' = $collegeValidLineStart + @'
+
+    FakeText('>')
+'@
   'College method slicing ignores comment and string braces' = $collegeValidLineStart + @'
 
     // }
@@ -339,9 +351,18 @@ $collegeRejectCases = [ordered]@{
 
     Text(`Image($r('app.media.me_go')).width(6).height(12)`)
 '@
+  'College rejects approved resource only in prefixed FakeImage' = $collegeTitle + @'
+
+    FakeImage($r('app.media.me_go')).width(6).height(12)
+'@
   'College rejects title only in ordinary string' = @'
 
     Text('Text(appString(collegeAdapterViewTitleKey))')
+    Image($r('app.media.me_go')).width(6).height(12)
+'@
+  'College rejects title only in prefixed FakeText' = @'
+
+    FakeText(appString(collegeAdapterViewTitleKey))
     Image($r('app.media.me_go')).width(6).height(12)
 '@
   'College rejects line-start single-quoted Text placeholder' = $collegeValidLineStart + @'
