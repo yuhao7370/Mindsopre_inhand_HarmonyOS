@@ -140,6 +140,7 @@ export type AppStringKey =
   'feature_runtime_pose_detect_android' |
   'feature_runtime_pose_detect_success_android' |
   'feature_runtime_pose_detect_failed_android' |
+  'feature_runtime_gesture_detect_android' |
   'feature_runtime_gesture_runner_unavailable' |
   'feature_runtime_gesture_done' |
   'feature_runtime_gesture_failed' |
@@ -464,6 +465,7 @@ const APP_STRING_KEYS: AppStringKey[] = [
   'feature_runtime_pose_detect_android',
   'feature_runtime_pose_detect_success_android',
   'feature_runtime_pose_detect_failed_android',
+  'feature_runtime_gesture_detect_android',
   'feature_runtime_gesture_runner_unavailable',
   'feature_runtime_gesture_done',
   'feature_runtime_gesture_failed',
@@ -933,6 +935,8 @@ export function appString(key: AppStringKey): ResourceStr {
       return $r('app.string.feature_runtime_pose_detect_success_android');
     case 'feature_runtime_pose_detect_failed_android':
       return $r('app.string.feature_runtime_pose_detect_failed_android');
+    case 'feature_runtime_gesture_detect_android':
+      return $r('app.string.feature_runtime_gesture_detect_android');
     case 'feature_runtime_gesture_runner_unavailable':
       return $r('app.string.feature_runtime_gesture_runner_unavailable');
     case 'feature_runtime_gesture_done':

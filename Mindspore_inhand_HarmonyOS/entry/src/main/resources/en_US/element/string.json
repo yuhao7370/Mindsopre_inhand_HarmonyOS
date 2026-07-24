@@ -141,6 +141,7 @@
     { "name": "feature_runtime_pose_detect_android", "value": "detect" },
     { "name": "feature_runtime_pose_detect_success_android", "value": "Detection succeeded" },
     { "name": "feature_runtime_pose_detect_failed_android", "value": "Detection failed" },
+    { "name": "feature_runtime_gesture_detect_android", "value": "Recognize" },
     { "name": "feature_runtime_gesture_runner_unavailable", "value": "Gesture recognition is unavailable in the current runtime. Reopen the feature page or try again later." },
     { "name": "feature_runtime_gesture_done", "value": "Gesture recognition completed." },
     { "name": "feature_runtime_gesture_failed", "value": "No gesture was detected. Try another image." },

@@ -141,6 +141,7 @@
     { "name": "feature_runtime_pose_detect_android", "value": "检测" },
     { "name": "feature_runtime_pose_detect_success_android", "value": "检测成功" },
     { "name": "feature_runtime_pose_detect_failed_android", "value": "检测失败" },
+    { "name": "feature_runtime_gesture_detect_android", "value": "识别" },
     { "name": "feature_runtime_gesture_runner_unavailable", "value": "当前环境无法执行手势识别。请重新进入功能页或稍后重试。" },
     { "name": "feature_runtime_gesture_done", "value": "手势识别已完成。" },
     { "name": "feature_runtime_gesture_failed", "value": "未检测到手势，请换一张图片再试。" },

@@ -260,6 +260,11 @@ interface FeatureRuntimeParams {
   routeName?: string;
 }
 
+interface GestureStillLabelPosition {
+  readonly left: number;
+  readonly top: number;
+}
+
 const runtimeLogDomain: number = 0x0000;
 const liveObjectDetectionLogTag: string = 'ObjectDetectionLive';
 
@@ -356,6 +361,8 @@ struct FeatureRuntimePage {
   @State gestureDetections: Array<GestureDetection> = [];
   @State gestureImageWidth: number = 0;
   @State gestureImageHeight: number = 0;
+  @State gestureStillOverlayWidthVp: number = 0;
+  @State gestureStillOverlayHeightVp: number = 0;
   @State sceneOverlayRows: Array<SceneDetectionOverlayRow> = [];
   @State helpUrl: string = '';
   @State helpContentKey: AppStringKey | undefined = undefined;
@@ -2602,6 +2609,65 @@ struct FeatureRuntimePage {
     return this.gestureImageWidth / this.gestureImageHeight;
   }
 
+  private gestureStillPreviewWidthPercent(): number {
+    const sourceAspect = this.gestureAspectRatio();
+    const cardAspect = 4 / 3;
+    return sourceAspect >= cardAspect ? 100 : sourceAspect / cardAspect * 100;
+  }
+
+  private gestureStillPreviewHeightPercent(): number {
+    const sourceAspect = this.gestureAspectRatio();
+    const cardAspect = 4 / 3;
+    return sourceAspect >= cardAspect ? cardAspect / sourceAspect * 100 : 100;
+  }
+
+  private gestureStillLabelPosition(gesture: GestureDetection): GestureStillLabelPosition {
+    const box = this.gestureBoxStyle(gesture);
+    const overlayWidth = this.gestureStillOverlayWidthVp;
+    const overlayHeight = this.gestureStillOverlayHeightVp;
+    if (overlayWidth <= 0 || overlayHeight <= 0) {
+      return {
+        left: Math.max(0, box.left),
+        top: Math.max(0, box.top)
+      };
+    }
+    const labelWidth = 88;
+    const labelHeight = 24;
+    const gap = 4;
+    const boxLeft = box.left * overlayWidth / 100;
+    const boxTop = box.top * overlayHeight / 100;
+    const boxWidth = box.width * overlayWidth / 100;
+    const boxHeight = box.height * overlayHeight / 100;
+    const boxRight = boxLeft + boxWidth;
+    const boxBottom = boxTop + boxHeight;
+    let labelLeft = boxLeft;
+    let labelTop = boxTop;
+    const canPlaceRight = boxRight + gap + labelWidth <= overlayWidth;
+    const canPlaceBelow = boxBottom + gap + labelHeight <= overlayHeight;
+    if (canPlaceRight) {
+      labelLeft = boxRight + gap;
+      labelTop = boxTop + (boxHeight - labelHeight) / 2;
+    } else if (canPlaceBelow) {
+      labelLeft = boxLeft + (boxWidth - labelWidth) / 2;
+      labelTop = boxBottom + gap;
+    } else if (boxLeft >= labelWidth + gap) {
+      labelLeft = boxLeft - labelWidth - gap;
+      labelTop = boxTop + (boxHeight - labelHeight) / 2;
+    } else if (boxTop >= labelHeight + gap) {
+      labelLeft = boxLeft + (boxWidth - labelWidth) / 2;
+      labelTop = boxTop - labelHeight - gap;
+    } else {
+      labelLeft = boxLeft + (boxWidth - labelWidth) / 2;
+      labelTop = boxBottom + gap;
+    }
+    labelLeft = Math.min(Math.max(labelLeft, 0), Math.max(0, overlayWidth - labelWidth));
+    labelTop = Math.min(Math.max(labelTop, 0), Math.max(0, overlayHeight - labelHeight));
+    return {
+      left: labelLeft * 100 / overlayWidth,
+      top: labelTop * 100 / overlayHeight
+    };
+  }
+
   private objectDetectionLabel(detection: ObjectDetection, index: number): string {
     return objectDetectionOverlayLabel(detection, index);
   }
@@ -3003,6 +3069,46 @@ struct FeatureRuntimePage {
     }
     .width('100%')
     .margin({ top: AppSpacing.sm })
+  }
+
+  @Builder
+  gestureStillBox(gesture: GestureDetection) {
+    Stack({ alignContent: Alignment.TopStart }) {
+      Row() {
+      }
+      .width(this.percentLength(this.gestureBoxStyle(gesture).width))
+      .height(this.percentLength(this.gestureBoxStyle(gesture).height))
+      .border({ width: 2, color: AppColor.accent, radius: 2 })
+      .position({
+        x: this.percentLength(this.gestureBoxStyle(gesture).left),
+        y: this.percentLength(this.gestureBoxStyle(gesture).top)
+      })
+
+      Row({ space: 4 }) {
+        Text(this.gestureLabelResource(gesture))
+          .fontSize(10)
+          .fontColor(Color.White)
+          .fontWeight(FontWeight.Medium)
+          .maxFontScale(1.2)
+          .maxLines(1)
+          .layoutWeight(1)
+        Text(this.gestureScoreLabel(gesture))
+          .fontSize(10)
+          .fontColor(Color.White)
+          .maxFontScale(1.2)
+          .maxLines(1)
+      }
+      .width(88)
+      .height(24)
+      .padding({ left: 6, right: 6 })
+      .backgroundColor(AppColor.accent)
+      .position({
+        x: this.percentLength(this.gestureStillLabelPosition(gesture).left),
+        y: this.percentLength(this.gestureStillLabelPosition(gesture).top)
+      })
+    }
+    .width('100%')
+    .height('100%')
   }
 
   @Builder
@@ -4372,13 +4478,19 @@ struct FeatureRuntimePage {
             .height('100%')
             .objectFit(ImageFit.Fill)
           ForEach(this.visibleGestureDetections(), (gesture: GestureDetection) => {
-            this.gestureBox(gesture)
+            this.gestureStillBox(gesture)
           }, (gesture: GestureDetection) =>
             `${gesture.category}-${gesture.score}-${gesture.rect?.left}-${gesture.rect?.top}`)
         }
-        .width('100%')
-        .aspectRatio(this.gestureAspectRatio())
+        .width(this.percentLength(this.gestureStillPreviewWidthPercent()))
+        .height(this.percentLength(this.gestureStillPreviewHeightPercent()))
         .clip(true)
+        .onAreaChange((_previousArea: Area, currentArea: Area) => {
+          const width = Number(currentArea.width);
+          const height = Number(currentArea.height);
+          this.gestureStillOverlayWidthVp = Number.isFinite(width) && width > 0 ? width : 0;
+          this.gestureStillOverlayHeightVp = Number.isFinite(height) && height > 0 ? height : 0;
+        })
       } else if (this.imageInputUri.length > 0) {
         Image(this.imageInputUri)
           .width('100%')
@@ -4387,85 +4499,142 @@ struct FeatureRuntimePage {
       } else {
         Column() {
           Image($r('app.media.icon_style'))
-            .width(69.33)
-            .height(56.33)
+            .width(64)
+            .height(52)
             .objectFit(ImageFit.Contain)
           Text(appString('workflow_summary_gesture_still_android_prompt'))
-            .fontSize(16)
-            .fontColor('#666666')
+            .fontSize(14)
+            .fontColor(AppColor.textSecondary)
+            .maxFontScale(1.6)
             .textAlign(TextAlign.Center)
-            .margin({ top: 10 })
+            .margin({ top: AppSpacing.sm })
         }
+        .padding(AppSpacing.md)
         .alignItems(HorizontalAlign.Center)
       }
     }
     .width('100%')
-    .layoutWeight(9)
-    .padding(50)
+    .height('100%')
     .clip(true)
-    .backgroundColor('#E6E6E6')
+    .backgroundColor(AppColor.cardBackground)
   }
 
   @Builder
   gestureStillAndroidLayout() {
-    Stack({ alignContent: Alignment.TopStart }) {
-      Column() {
-        this.runtimeActionToolbar(false)
-        Row() {
+    Column() {
+      this.runtimeActionToolbar(false)
+      Scroll() {
+        Column({ space: AppSpacing.md }) {
+          Stack({ alignContent: Alignment.Center }) {
+            this.gestureStillAndroidPreview()
+          }
+          .width('100%')
+          .aspectRatio(4 / 3)
+          .constraintSize({ minHeight: 220, maxHeight: 420 })
+          .clip(true)
+          .backgroundColor(AppColor.cardBackground)
+          .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
+          Row({ space: AppSpacing.sm }) {
+            if (this.workflowRunning) {
+              LoadingProgress()
+                .width(24)
+                .height(24)
+            }
+            Text(appString(this.statusKey))
+              .fontSize(14)
+              .fontColor(AppColor.textSecondary)
+              .maxFontScale(1.6)
+              .layoutWeight(1)
+          }
+          .width('100%')
+          .constraintSize({ minHeight: 48 })
+          .padding(AppSpacing.md)
+          .alignItems(VerticalAlign.Center)
+          .backgroundColor(AppColor.cardBackground)
+          .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
+          Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.SpaceBetween }) {
+            Button(appString('feature_input_photo_android'), { type: ButtonType.Normal })
+              .width('calc(50% - 4vp)')
+              .constraintSize({ minHeight: 48 })
+              .maxFontScale(1.6)
+              .fontColor(AppColor.accent)
+              .backgroundColor(AppColor.cardBackground)
+              .border({ width: 1, color: AppColor.divider, radius: AppRadius.button })
+              .margin({ bottom: AppSpacing.sm })
+              .enabled(!this.workflowRunning)
+              .onClick(() => this.prepareInput('photo'))
+            Button(appString('feature_input_camera_android'), { type: ButtonType.Normal })
+              .width('calc(50% - 4vp)')
+              .constraintSize({ minHeight: 48 })
+              .maxFontScale(1.6)
+              .fontColor(AppColor.accent)
+              .backgroundColor(AppColor.cardBackground)
+              .border({ width: 1, color: AppColor.divider, radius: AppRadius.button })
+              .margin({ bottom: AppSpacing.sm })
+              .enabled(!this.workflowRunning)
+              .onClick(() => this.prepareInput('camera'))
+            Button(appString('feature_runtime_go_live_android_hms'), { type: ButtonType.Normal })
+              .width('calc(50% - 4vp)')
+              .constraintSize({ minHeight: 48 })
+              .maxFontScale(1.6)
+              .fontColor(AppColor.accent)
+              .backgroundColor(AppColor.cardBackground)
+              .border({ width: 1, color: AppColor.divider, radius: AppRadius.button })
+              .margin({ bottom: AppSpacing.sm })
+              .enabled(!this.workflowRunning)
+              .onClick(() => this.openLinkedLiveRoute())
+            Button(appString(this.statusKey === 'feature_runtime_gesture_failed' ||
+              this.statusKey === 'feature_runtime_run_failed' ?
+              'web_retry' : 'feature_runtime_gesture_detect_android'))
+              .width('calc(50% - 4vp)')
+              .constraintSize({ minHeight: 48 })
+              .maxFontScale(1.6)
+              .fontColor(Color.White)
+              .backgroundColor(AppColor.accent)
+              .borderRadius(AppRadius.button)
+              .margin({ bottom: AppSpacing.sm })
+              .enabled(this.runActionEnabled())
+              .onClick(() => this.runPrimaryAction())
+          }
+          .width('100%')
+          if (this.resultRows.length > 0) {
+            Column({ space: AppSpacing.sm }) {
+              Text(appString(workflowResultTitleKey(workflowForRoute(this.routeName))))
+                .fontSize(16)
+                .fontWeight(FontWeight.Medium)
+                .fontColor(AppColor.textPrimary)
+                .maxFontScale(1.6)
+                .width('100%')
+              ForEach(this.resultRows, (row: AiRunResultRow) => {
+                Text() {
+                  Span(appString(row.labelKey))
+                  Span(appString('feature_runtime_result_separator'))
+                  Span(this.resultRowValue(row))
+                }
+                .fontSize(14)
+                .fontColor(AppColor.textSecondary)
+                .maxFontScale(1.6)
+                .width('100%')
+              }, (row: AiRunResultRow, index: number) => `${index}-${row.labelKey}-${row.value}`)
+            }
+            .width('100%')
+            .padding(AppSpacing.md)
+            .alignItems(HorizontalAlign.Start)
+            .backgroundColor(AppColor.cardBackground)
+            .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
+          }
         }
         .width('100%')
-        .height(1)
-        .backgroundColor('#E4E4E4')
-        Row() {
-        }
-        .width('100%')
-        .height(1)
-        .backgroundColor('#E4E4E4')
-        this.gestureStillAndroidPreview()
-        Row() {
-          Button(appString('feature_input_photo_android'), { type: ButtonType.Normal })
-            .layoutWeight(1)
-            .height(37)
-            .margin({ left: 20, right: 5 })
-            .fontSize(14)
-            .fontWeight(FontWeight.Normal)
-            .fontColor('#666666')
-            .backgroundColor('#F4F3F8')
-            .borderRadius(5)
-            .onClick(() => this.prepareInput('photo'))
-          Button(appString('feature_input_camera_android'), { type: ButtonType.Normal })
-            .layoutWeight(1)
-            .height(37)
-            .margin({ left: 5, right: 5 })
-            .fontSize(14)
-            .fontWeight(FontWeight.Normal)
-            .fontColor('#666666')
-            .backgroundColor('#F4F3F8')
-            .borderRadius(5)
-            .onClick(() => this.prepareInput('camera'))
-          Button(appString('feature_runtime_go_live_android_hms'), { type: ButtonType.Normal })
-            .layoutWeight(1)
-            .height(37)
-            .margin({ left: 5, right: 5 })
-            .fontSize(14)
-            .fontWeight(FontWeight.Normal)
-            .fontColor('#666666')
-            .backgroundColor('#F4F3F8')
-            .borderRadius(5)
-            .onClick(() => this.openLinkedLiveRoute())
-        }
-        .width('100%')
-        .layoutWeight(1)
-        .margin({ top: 14 })
-        .alignItems(VerticalAlign.Center)
+        .padding({ left: AppSpacing.page, right: AppSpacing.page, top: AppSpacing.md, bottom: AppSpacing.xl })
       }
       .width('100%')
-      .height('100%')
-      .backgroundColor(Color.White)
+      .layoutWeight(1)
+      .align(Alignment.TopStart)
+      .scrollBar(BarState.Auto)
     }
     .width('100%')
     .height('100%')
-    .backgroundColor(Color.White)
+    .backgroundColor(AppColor.pageBackground)
   }
 
   @Builder
