@@ -3,6 +3,7 @@ import { deviceInfo } from '@kit.BasicServicesKit';
 import { picker } from '@kit.CoreFileKit';
 import { camera, cameraPicker } from '@kit.CameraKit';
 import { photoAccessHelper } from '@kit.MediaLibraryKit';
+import { AppRoute } from '../../app/AppRoutes';
 import { FeatureInputKind, FeatureWorkflow } from '../../features/runtime/FeatureWorkflowCatalog';
 
 export type RuntimeInputAction =
@@ -24,6 +25,17 @@ export const modelFileSuffixFilters: Array<string> = ['.ms'];
 export function isApi24EmulatorCameraPickerUnsupported(hardwareModel: string): boolean {
   const normalized = hardwareModel.toUpperCase();
   return normalized.indexOf('PHEMU') >= 0 || normalized === 'EMULATOR';
+}
+
+export function shouldUseInlineCameraFallback(
+  workflow: FeatureWorkflow | undefined,
+  inputKind: FeatureInputKind,
+  result: PickResult
+): boolean {
+  return workflow?.routeName === AppRoute.SCENE_STILL.name &&
+    inputKind === 'camera' &&
+    !result.ok &&
+    result.failure === 'cameraUnavailable';
 }
 
 export function inputActionForKind(kind: FeatureInputKind): RuntimeInputAction {

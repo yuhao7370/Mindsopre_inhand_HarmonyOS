@@ -106,6 +106,8 @@ $sceneService = Remove-ArkTsCommentsAndTemplateRaw (Get-NormalizedText (Join-Pat
 $aiService = Remove-ArkTsCommentsAndTemplateRaw (Get-NormalizedText (Join-Path $SourceRoot 'entry\src\main\ets\services\ai\AiService.ets'))
 $buildScriptPath = Join-Path $SourceRoot 'scripts\build-hap.ps1'
 $buildScript = Get-NormalizedText $buildScriptPath
+Assert-CodeLine $page '@State liveCameraInputSelected: boolean = false;' `
+  'inline camera selection must be reactive so the XComponent is mounted.'
 
 $selector = Get-TextSection $catalog 'export function usesAndroidStillSceneLayout' `
   'export function stillSceneResultToastKey' 'exact still-scene selector'
@@ -126,14 +128,12 @@ Assert-CodeLine $toastPolicy "'feature_runtime_scene_failed' : undefined;" `
   'empty results must use the existing failure Toast.'
 Assert-Excludes $toastPolicy "resultCode === 'SCENE_DETECTION_RUNTIME_FAILED'" 'runtime failure must not map to a Toast'
 
-$builder = Get-TextSection $page '  stillSceneAndroidLayout() {' `
-  "`n`n  @Builder`n  portraitSegmentationAndroidLayout()" 'dedicated still-scene builder'
+$preview = Get-TextSection $page '  stillScenePreviewContent() {' `
+  "`n`n  @Builder`n  stillSceneAndroidLayout()" 'still-scene preview builder'
 foreach ($line in @(
-  'this.runtimeActionToolbar(false)',
-  'Scroll() {',
-  'Column({ space: AppSpacing.md }) {',
-  'Stack({ alignContent: Alignment.Center }) {',
-  'if (this.imageInputUri.length > 0) {',
+  'if (this.liveCameraInputSelected || this.liveCameraActive) {',
+  'this.liveCameraSurfaceContent()',
+  '} else if (this.imageInputUri.length > 0) {',
   'Image(this.imageInputUri)',
   '.objectFit(ImageFit.Contain)',
   "Image(`$r('app.media.icon_style'))",
@@ -141,7 +141,18 @@ foreach ($line in @(
   '.height(56)',
   "Text(appString('workflow_summary_scene_still_android_prompt'))",
   '.fontSize(16)',
-  '.maxFontScale(1.6)',
+  '.maxFontScale(1.6)'
+)) { Assert-CodeLine $preview $line "preview builder is missing executable line: $line." }
+Assert-Excludes $preview '.objectFit(ImageFit.Fill)' 'ordinary scene input must preserve aspect ratio with Contain.'
+
+$builder = Get-TextSection $page '  stillSceneAndroidLayout() {' `
+  "`n`n  @Builder`n  portraitSegmentationAndroidLayout()" 'dedicated still-scene builder'
+foreach ($line in @(
+  'this.runtimeActionToolbar(false)',
+  'Scroll() {',
+  'Column({ space: AppSpacing.md }) {',
+  'Stack({ alignContent: Alignment.Center }) {',
+  'this.stillScenePreviewContent()',
   '.aspectRatio(4 / 3)',
   '.constraintSize({ minHeight: 220, maxHeight: 420 })',
   '.backgroundColor(AppColor.cardBackground)',
@@ -178,7 +189,6 @@ foreach ($line in @(
   '.backgroundColor(AppColor.pageBackground)'
 )) { Assert-CodeLine $builder $line "dedicated builder is missing executable line: $line." }
 Assert-CodeLineCount $builder 'Scroll() {' 1 'still scene must expose exactly one top-level content scroll.'
-Assert-Excludes $builder '.objectFit(ImageFit.Fill)' 'ordinary scene input must preserve aspect ratio with Contain.'
 Assert-Excludes $builder '.height(376)' 'preview must not retain the fixed Android height.'
 Assert-Excludes $builder '.height(37)' 'actions must not retain the undersized Android height.'
 Assert-Excludes $builder ".backgroundColor('#E6E6E6')" 'preview must use the shared Harmony theme.'
@@ -220,6 +230,12 @@ $pickController = Get-TextSection $page '  private async prepareInputAsync(' `
   "`n`n  private async cacheAndApplyPickedModelFile" 'shared async input controller'
 Assert-CodeLine $pickController 'if (!shouldAllowRuntimeInputChange(workflow, inputKind, this.workflowRunning)) {' `
   'photo/camera input controller must enforce the pure running policy before its first await.'
+Assert-CodeLine $pickController 'if (shouldUseInlineCameraFallback(workflow, inputKind, result)) {' `
+  'unsupported native capture must enter the inline camera fallback.'
+Assert-CodeLine $pickController 'this.liveCameraInputSelected = true;' `
+  'inline camera fallback must select the live surface before rendering it.'
+Assert-CodeLine $pickController 'this.startLiveCameraPreview();' `
+  'an already loaded inline surface must restart without waiting for onLoad.'
 $pickResult = Get-TextSection $page '  private applyPickResult(' "`n`n  private aiRunInputs" 'accepted-input state flow'
 Assert-CodeLine $pickResult 'if (!shouldPreserveRuntimeResultAfterInputReady(workflow, inputKind)) {' `
   'accepted photo/camera input must preserve prior still-scene rows through the pure policy.'

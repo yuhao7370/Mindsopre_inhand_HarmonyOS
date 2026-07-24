@@ -139,7 +139,12 @@ import {
   runtimePermissionRunActionForWorkflow
 } from '../services/permissions/PermissionService';
 import { ClipboardService, CopyTextResult } from '../services/clipboard/ClipboardService';
-import { PickerService, PickResult, runtimeInputActionForWorkflowInput } from '../services/picker/PickerService';
+import {
+  PickerService,
+  PickResult,
+  runtimeInputActionForWorkflowInput,
+  shouldUseInlineCameraFallback
+} from '../services/picker/PickerService';
 import {
   CachedModelFileInputState,
   ModelFileCacheResult,
@@ -363,7 +368,7 @@ struct FeatureRuntimePage {
   private liveCameraController: XComponentController = new XComponentController();
   private liveCameraService: LiveCameraPreviewService | undefined = undefined;
   private liveCameraStopTask: Promise<void> | undefined = undefined;
-  private liveCameraInputSelected: boolean = false;
+  @State liveCameraInputSelected: boolean = false;
   private liveCameraPreviewRequestId: number = 0;
   private liveRuntimeGeneration: number = 0;
   private liveObjectDetectionFrameId: number = 0;
@@ -525,6 +530,14 @@ struct FeatureRuntimePage {
     if (inputKind === 'camera') {
       const result = await pickerService.captureImage();
       if (!isInputPreparationRequestCurrent(requestId, this.inputPreparationRequestId)) {
+        return;
+      }
+      if (shouldUseInlineCameraFallback(workflow, inputKind, result)) {
+        this.liveCameraInputSelected = true;
+        this.statusKey = 'feature_runtime_status_preparing';
+        if (this.liveCameraSurfaceId.length > 0) {
+          this.startLiveCameraPreview();
+        }
         return;
       }
       this.applyPickResult(result, 'feature_runtime_image_ready', inputKind, true, initialPick);
@@ -3442,34 +3455,41 @@ struct FeatureRuntimePage {
   }
 
   @Builder
+  stillScenePreviewContent() {
+    if (this.liveCameraInputSelected || this.liveCameraActive) {
+      this.liveCameraSurfaceContent()
+    } else if (this.imageInputUri.length > 0) {
+      Image(this.imageInputUri)
+        .width('100%')
+        .height('100%')
+        .objectFit(ImageFit.Contain)
+    } else {
+      Column({ space: AppSpacing.sm }) {
+        Image($r('app.media.icon_style'))
+          .width(56)
+          .height(56)
+          .objectFit(ImageFit.Contain)
+        Text(appString('workflow_summary_scene_still_android_prompt'))
+          .fontSize(16)
+          .fontColor(AppColor.textSecondary)
+          .textAlign(TextAlign.Center)
+          .maxFontScale(1.6)
+          .width('100%')
+      }
+      .width('100%')
+      .padding(AppSpacing.lg)
+      .alignItems(HorizontalAlign.Center)
+    }
+  }
+
+  @Builder
   stillSceneAndroidLayout() {
     Column() {
       this.runtimeActionToolbar(false)
       Scroll() {
         Column({ space: AppSpacing.md }) {
           Stack({ alignContent: Alignment.Center }) {
-            if (this.imageInputUri.length > 0) {
-              Image(this.imageInputUri)
-                .width('100%')
-                .height('100%')
-                .objectFit(ImageFit.Contain)
-            } else {
-              Column({ space: AppSpacing.sm }) {
-                Image($r('app.media.icon_style'))
-                  .width(56)
-                  .height(56)
-                  .objectFit(ImageFit.Contain)
-                Text(appString('workflow_summary_scene_still_android_prompt'))
-                  .fontSize(16)
-                  .fontColor(AppColor.textSecondary)
-                  .textAlign(TextAlign.Center)
-                  .maxFontScale(1.6)
-                  .width('100%')
-              }
-              .width('100%')
-              .padding(AppSpacing.lg)
-              .alignItems(HorizontalAlign.Center)
-            }
+            this.stillScenePreviewContent()
           }
           .width('100%')
           .aspectRatio(4 / 3)

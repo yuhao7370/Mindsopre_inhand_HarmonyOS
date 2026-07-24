@@ -115,6 +115,8 @@ export function sceneDetectionOverlayRows(result: SceneDetectionResult): Array<S
 '@
 
   Write-FixtureFile $Root 'entry\src\main\ets\pages\FeatureRuntimePage.ets' @'
+  @State liveCameraInputSelected: boolean = false;
+
   private prepareInput(inputKind: FeatureInputKind): void {
     const requestId = ++this.inputPreparationRequestId;
     this.prepareInputAsync(inputKind, false, requestId);
@@ -123,6 +125,15 @@ export function sceneDetectionOverlayRows(result: SceneDetectionResult): Array<S
   private async prepareInputAsync(inputKind: FeatureInputKind, initialPick: boolean, requestId: number): Promise<void> {
     const workflow = workflowForRoute(this.routeName);
     if (!shouldAllowRuntimeInputChange(workflow, inputKind, this.workflowRunning)) {
+      return;
+    }
+    const result: PickResult = await pickerService.captureImage();
+    if (shouldUseInlineCameraFallback(workflow, inputKind, result)) {
+      this.liveCameraInputSelected = true;
+      this.statusKey = 'feature_runtime_status_preparing';
+      if (this.liveCameraSurfaceId.length > 0) {
+        this.startLiveCameraPreview();
+      }
       return;
     }
   }
@@ -199,34 +210,41 @@ export function sceneDetectionOverlayRows(result: SceneDetectionResult): Array<S
   }
 
   @Builder
+  stillScenePreviewContent() {
+    if (this.liveCameraInputSelected || this.liveCameraActive) {
+      this.liveCameraSurfaceContent()
+    } else if (this.imageInputUri.length > 0) {
+      Image(this.imageInputUri)
+        .width('100%')
+        .height('100%')
+        .objectFit(ImageFit.Contain)
+    } else {
+      Column({ space: AppSpacing.sm }) {
+        Image($r('app.media.icon_style'))
+          .width(56)
+          .height(56)
+          .objectFit(ImageFit.Contain)
+        Text(appString('workflow_summary_scene_still_android_prompt'))
+          .fontSize(16)
+          .fontColor(AppColor.textSecondary)
+          .textAlign(TextAlign.Center)
+          .maxFontScale(1.6)
+          .width('100%')
+      }
+      .width('100%')
+      .padding(AppSpacing.lg)
+      .alignItems(HorizontalAlign.Center)
+    }
+  }
+
+  @Builder
   stillSceneAndroidLayout() {
     Column() {
       this.runtimeActionToolbar(false)
       Scroll() {
         Column({ space: AppSpacing.md }) {
           Stack({ alignContent: Alignment.Center }) {
-            if (this.imageInputUri.length > 0) {
-              Image(this.imageInputUri)
-                .width('100%')
-                .height('100%')
-                .objectFit(ImageFit.Contain)
-            } else {
-              Column({ space: AppSpacing.sm }) {
-                Image($r('app.media.icon_style'))
-                  .width(56)
-                  .height(56)
-                  .objectFit(ImageFit.Contain)
-                Text(appString('workflow_summary_scene_still_android_prompt'))
-                  .fontSize(16)
-                  .fontColor(AppColor.textSecondary)
-                  .textAlign(TextAlign.Center)
-                  .maxFontScale(1.6)
-                  .width('100%')
-              }
-              .width('100%')
-              .padding(AppSpacing.lg)
-              .alignItems(HorizontalAlign.Center)
-            }
+            this.stillScenePreviewContent()
           }
           .width('100%')
           .aspectRatio(4 / 3)
@@ -398,8 +416,20 @@ try {
     'this.runtimeActionToolbar(false)' `
     '// this.runtimeActionToolbar(false)'
   Assert-MutationRejected $validRoot 'restore-fill-preview' $pagePath `
-    "Image(this.imageInputUri)`n                .width('100%')`n                .height('100%')`n                .objectFit(ImageFit.Contain)" `
-    "Image(this.imageInputUri)`n                .width('100%')`n                .height('100%')`n                .objectFit(ImageFit.Fill)"
+    "Image(this.imageInputUri)`n        .width('100%')`n        .height('100%')`n        .objectFit(ImageFit.Contain)" `
+    "Image(this.imageInputUri)`n        .width('100%')`n        .height('100%')`n        .objectFit(ImageFit.Fill)"
+  Assert-MutationRejected $validRoot 'remove-inline-camera-surface' $pagePath `
+    'this.liveCameraSurfaceContent()' `
+    'this.stillScenePreviewContent()'
+  Assert-MutationRejected $validRoot 'remove-inline-camera-fallback' $pagePath `
+    'if (shouldUseInlineCameraFallback(workflow, inputKind, result)) {' `
+    'if (false) {'
+  Assert-MutationRejected $validRoot 'remove-inline-camera-selection' $pagePath `
+    'this.liveCameraInputSelected = true;' `
+    'this.liveCameraInputSelected = false;'
+  Assert-MutationRejected $validRoot 'make-inline-camera-selection-nonreactive' $pagePath `
+    '@State liveCameraInputSelected: boolean = false;' `
+    'private liveCameraInputSelected: boolean = false;'
   Assert-MutationRejected $validRoot 'restore-fixed-preview-height' $pagePath `
     '.constraintSize({ minHeight: 220, maxHeight: 420 })' `
     '.height(376)'

@@ -506,11 +506,13 @@ import {
   experienceStickyTitleVisible
 } from '../main/ets/common/data/ExperienceLayoutSpec';
 import {
+  PickResult,
   inputActionForKind,
   isApi24EmulatorCameraPickerUnsupported,
   modelFileSuffixFilters,
   runtimeInputActionForWorkflowInput,
-  runtimeInputActionsForWorkflow
+  runtimeInputActionsForWorkflow,
+  shouldUseInlineCameraFallback
 } from '../main/ets/services/picker/PickerService';
 import {
   BasicModelFileCompatibilityChecker,
@@ -9684,6 +9686,19 @@ export default function localUnitTest() {
       expect(isApi24EmulatorCameraPickerUnsupported('emulator')).assertTrue();
       expect(isApi24EmulatorCameraPickerUnsupported('LNA-AL00')).assertFalse();
       expect(isApi24EmulatorCameraPickerUnsupported('')).assertFalse();
+    });
+
+    it('stillSceneUsesInlineCameraWhenNativeCaptureIsUnavailable', 0, () => {
+      const stillScene = workflowForRoute(AppRoute.SCENE_STILL.name);
+      const liveScene = workflowForRoute(AppRoute.SCENE_LIVE.name);
+      const unavailable: PickResult = { ok: false, uri: '', failure: 'cameraUnavailable' };
+      const cancelled: PickResult = { ok: false, uri: '' };
+
+      expect(shouldUseInlineCameraFallback(stillScene, 'camera', unavailable)).assertTrue();
+      expect(shouldUseInlineCameraFallback(stillScene, 'photo', unavailable)).assertFalse();
+      expect(shouldUseInlineCameraFallback(stillScene, 'camera', cancelled)).assertFalse();
+      expect(shouldUseInlineCameraFallback(liveScene, 'camera', unavailable)).assertFalse();
+      expect(shouldUseInlineCameraFallback(undefined, 'camera', unavailable)).assertFalse();
     });
 
     it('autoRunsTextImageInputsAfterAndroidImageInputReadyOnly', 0, () => {
