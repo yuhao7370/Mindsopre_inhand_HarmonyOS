@@ -107,7 +107,7 @@ function New-ValidFixture([string]$Root) {
       .width('100%')
       .height('100%')
       .backgroundColor('#66000000')
-      .hitTestBehavior(HitTestMode.Block)
+      .hitTestBehavior(HitTestMode.Default)
     }
   }
 
@@ -282,6 +282,9 @@ try {
   Assert-Rejected $valid 'scrim-string-decoy' `
     "      .backgroundColor('#66000000')" `
     "      .backgroundColor(Color.Transparent)`n      .accessibilityDescription(`".backgroundColor('#66000000')`")"
+  Assert-Rejected $valid 'recovery-blocks-child-actions' `
+    '      .hitTestBehavior(HitTestMode.Default)' `
+    '      .hitTestBehavior(HitTestMode.Block)'
   Assert-Rejected $valid 'swap-recovery-handlers' `
     'this.retryRuntimePermission()' `
     'this.openRuntimePermissionSettings()'

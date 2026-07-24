@@ -54,7 +54,8 @@ Assert-Contains $switch 'this\.switchLiveCamera\(\)' 'shared camera switch must 
 
 $recovery = Get-Builder 'runtimePermissionRecoveryOverlay() {' 'portraitSegmentationToolbar() {'
 Assert-Contains $recovery "(?m)^[\t ]*\.backgroundColor\('#66000000'\)[\t ]*$" 'permission recovery must include a full-screen scrim.'
-Assert-Contains $recovery '\.hitTestBehavior\(HitTestMode\.Block\)' 'permission recovery must block underlying hit targets.'
+Assert-Contains $recovery '\.hitTestBehavior\(HitTestMode\.Default\)' 'permission recovery must keep child actions interactive while blocking underlying sibling targets.'
+Assert-NotContains $recovery '\.hitTestBehavior\(HitTestMode\.Block\)' 'permission recovery must not block its own child actions.'
 Assert-Contains $recovery 'Scroll\(\)\s*\{' 'permission recovery card must be scrollable/content-driven.'
 Assert-Contains $recovery "Button\(appString\('splash_permission_retry'\)\)[\s\S]*?\.constraintSize\(\{\s*minHeight:\s*48\s*\}\)[\s\S]*?this\.retryRuntimePermission\(\)" 'Retry must remain the primary 48vp action with its handler.'
 Assert-Contains $recovery "Button\(appString\('app_permission_by_hand'\),\s*\{\s*type:\s*ButtonType\.Normal\s*\}\)[\s\S]*?\.constraintSize\(\{\s*minHeight:\s*48\s*\}\)[\s\S]*?this\.openRuntimePermissionSettings\(\)" 'Settings must remain the secondary 48vp action with its handler.'
