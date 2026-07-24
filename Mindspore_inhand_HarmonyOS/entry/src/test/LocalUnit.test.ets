@@ -10890,11 +10890,11 @@ export default function localUnitTest() {
       expect(rejected.messageKey).assertEqual('feature_runtime_live_frame_failed');
     });
 
-    it('capturesLiveFrameOnlyWhenLiveCameraIsTheActiveImageSource', 0, () => {
+    it('capturesLiveFrameWheneverLiveCameraIsSelectedEvenBeforePreviewActivation', 0, () => {
       expect(shouldCaptureLiveFrameImage(false, '', false)).assertFalse();
       expect(shouldCaptureLiveFrameImage(false, '/cache/selected.jpg', true)).assertFalse();
       expect(shouldCaptureLiveFrameImage(true, '', false)).assertTrue();
-      expect(shouldCaptureLiveFrameImage(true, '/cache/selected.jpg', false)).assertFalse();
+      expect(shouldCaptureLiveFrameImage(true, '/cache/selected.jpg', false)).assertTrue();
       expect(shouldCaptureLiveFrameImage(true, '/cache/previous.jpg', true)).assertTrue();
     });
 
