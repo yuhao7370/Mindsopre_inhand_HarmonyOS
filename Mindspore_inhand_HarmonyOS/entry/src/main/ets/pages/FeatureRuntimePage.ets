@@ -2093,7 +2093,8 @@ struct FeatureRuntimePage {
   }
 
   private saveStillSegmentationResultImage(): void {
-    if (this.workflowRunning) {
+    if (!compositeSegmentationSaveReady(this.workflowRunning,
+      this.segmentationForegroundPixelMap !== undefined, this.resultImageSaveInFlight)) {
       return;
     }
     this.saveStillSegmentationResultImageAsync().catch(() => {
@@ -2103,7 +2104,8 @@ struct FeatureRuntimePage {
   }
 
   private async saveStillSegmentationResultImageAsync(): Promise<void> {
-    if (this.workflowRunning || this.segmentationForegroundPixelMap === undefined) {
+    if (!compositeSegmentationSaveReady(this.workflowRunning,
+      this.segmentationForegroundPixelMap !== undefined, this.resultImageSaveInFlight)) {
       return;
     }
     await this.saveResultPixelMapAsync(this.segmentationForegroundPixelMap);
@@ -4238,80 +4240,120 @@ struct FeatureRuntimePage {
   }
 
   @Builder
-  stillSegmentationAndroidLayout() {
-    Stack({ alignContent: Alignment.TopStart }) {
-      Column() {
-        this.runtimeActionToolbar(false)
-        Row() {
+  stillSegmentationAndroidPreview() {
+    Stack({ alignContent: Alignment.Center }) {
+      if (this.segmentationForegroundPixelMap !== undefined) {
+        Image(this.segmentationForegroundPixelMap)
+          .width('100%')
+          .height('100%')
+          .objectFit(ImageFit.Contain)
+      } else if (this.imageInputUri.length > 0) {
+        Image(this.imageInputUri)
+          .width('100%')
+          .height('100%')
+          .objectFit(ImageFit.Contain)
+      } else {
+        Column({ space: AppSpacing.sm }) {
+          Image($r('app.media.feature_segmentation'))
+            .width(56)
+            .height(56)
+            .objectFit(ImageFit.Contain)
+          Text(appString('workflow_summary_segmentation'))
+            .fontSize(16)
+            .fontColor(AppColor.textSecondary)
+            .maxFontScale(1.6)
+            .textAlign(TextAlign.Center)
+            .width('100%')
         }
-        .width('100%')
-        .height(1)
-        .backgroundColor('#E4E4E4')
-        Column() {
+        .padding(AppSpacing.lg)
+        .alignItems(HorizontalAlign.Center)
+      }
+    }
+    .width('100%')
+    .height('100%')
+    .clip(true)
+    .backgroundColor(AppColor.cardBackground)
+  }
+
+  @Builder
+  stillSegmentationAndroidLayout() {
+    Column() {
+      this.runtimeActionToolbar(false)
+      Scroll() {
+        Column({ space: AppSpacing.md }) {
           Stack({ alignContent: Alignment.Center }) {
-            if (this.imageInputUri.length > 0) {
-              Image(this.imageInputUri)
+            this.stillSegmentationAndroidPreview()
+          }
+          .width('100%')
+          .aspectRatio(4 / 3)
+          .constraintSize({ minHeight: 220, maxHeight: 420 })
+          .clip(true)
+          .backgroundColor(AppColor.cardBackground)
+          .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
+          Column({ space: AppSpacing.sm }) {
+            Row({ space: AppSpacing.sm }) {
+              if (this.workflowRunning || this.resultImageSaveInFlight) {
+                LoadingProgress()
+                  .width(24)
+                  .height(24)
+              }
+              Text(appString(this.resultImageSaveInFlight ? 'feature_runtime_save_image' : this.statusKey))
+                .fontSize(14)
+                .fontColor(AppColor.textSecondary)
+                .maxFontScale(1.6)
+                .maxLines(3)
+                .layoutWeight(1)
+            }
+            .width('100%')
+            .constraintSize({ minHeight: 48 })
+            .alignItems(VerticalAlign.Center)
+            if (!this.workflowRunning && !this.resultImageSaveInFlight &&
+              (this.statusKey === 'feature_runtime_segmentation_failed' ||
+                this.statusKey === 'feature_runtime_run_failed')) {
+              Button(appString('web_retry'), { type: ButtonType.Normal })
                 .width('100%')
-                .height('100%')
-                .objectFit(ImageFit.Contain)
-            } else {
-              Image($r('app.media.icon_default'))
-                .width('100%')
-                .height('100%')
-                .objectFit(ImageFit.Contain)
+                .constraintSize({ minHeight: 48 })
+                .maxFontScale(1.6)
+                .fontColor(Color.White)
+                .backgroundColor(AppColor.accent)
+                .borderRadius(AppRadius.button)
+                .onClick(() => this.runPrimaryAction())
             }
           }
           .width('100%')
-          .layoutWeight(4)
-          Stack({ alignContent: Alignment.Center }) {
-            if (this.segmentationForegroundPixelMap !== undefined) {
-              Image(this.segmentationForegroundPixelMap)
-                .width('100%')
-                .height('100%')
-                .objectFit(ImageFit.Contain)
-            } else {
-              Image($r('app.media.icon_default'))
-                .width('100%')
-                .height('100%')
-                .objectFit(ImageFit.Contain)
-            }
-          }
-          .width('100%')
-          .layoutWeight(4)
-          .margin({ top: 20 })
-          Row() {
+          .padding(AppSpacing.md)
+          .backgroundColor(AppColor.cardBackground)
+          .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
+          Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.SpaceBetween }) {
             Button(appString(workflowInputLabelKey(workflowForRoute(this.routeName), 'photo')), { type: ButtonType.Normal })
-              .layoutWeight(1)
-              .height(37)
-              .margin({ left: 20, right: 5 })
-              .fontSize(14)
-              .fontWeight(FontWeight.Normal)
-              .fontColor('#666666')
-              .backgroundColor('#F4F3F8')
-              .borderRadius(5)
-              .enabled(!this.workflowRunning)
+              .width('calc(50% - 4vp)')
+              .constraintSize({ minHeight: 48 })
+              .maxFontScale(1.6)
+              .fontColor(AppColor.accent)
+              .backgroundColor(AppColor.cardBackground)
+              .border({ width: 1, color: AppColor.divider, radius: AppRadius.button })
+              .margin({ bottom: AppSpacing.sm })
+              .enabled(!this.workflowRunning && !this.resultImageSaveInFlight)
               .onClick(() => this.prepareInput('photo'))
             Button(appString(workflowInputLabelKey(workflowForRoute(this.routeName), 'camera')), { type: ButtonType.Normal })
-              .layoutWeight(1)
-              .height(37)
-              .margin({ left: 5, right: 5 })
-              .fontSize(14)
-              .fontWeight(FontWeight.Normal)
-              .fontColor('#666666')
-              .backgroundColor('#F4F3F8')
-              .borderRadius(5)
-              .enabled(!this.workflowRunning)
+              .width('calc(50% - 4vp)')
+              .constraintSize({ minHeight: 48 })
+              .maxFontScale(1.6)
+              .fontColor(AppColor.accent)
+              .backgroundColor(AppColor.cardBackground)
+              .border({ width: 1, color: AppColor.divider, radius: AppRadius.button })
+              .margin({ bottom: AppSpacing.sm })
+              .enabled(!this.workflowRunning && !this.resultImageSaveInFlight)
               .onClick(() => this.prepareInput('camera'))
             Button(appString(workflowGoLiveLabelKey(workflowForRoute(this.routeName))), { type: ButtonType.Normal })
-              .layoutWeight(1)
-              .height(37)
-              .margin({ left: 5, right: 5 })
-              .fontSize(14)
-              .fontWeight(FontWeight.Normal)
-              .fontColor('#666666')
-              .backgroundColor('#F4F3F8')
-              .borderRadius(5)
-              .enabled(!this.workflowRunning)
+              .width('calc(50% - 4vp)')
+              .constraintSize({ minHeight: 48 })
+              .maxFontScale(1.6)
+              .fontColor(AppColor.accent)
+              .backgroundColor(AppColor.cardBackground)
+              .border({ width: 1, color: AppColor.divider, radius: AppRadius.button })
+              .margin({ bottom: AppSpacing.sm })
+              .enabled(!this.workflowRunning && !this.resultImageSaveInFlight)
               .onClick(() => {
                 this.openStillSegmentationLiveRoute()
               })
@@ -4319,17 +4361,18 @@ struct FeatureRuntimePage {
               SaveButton({
                 icon: SaveIconStyle.FULL_FILLED,
                 text: SaveDescription.SAVE_IMAGE,
-                buttonType: ButtonType.Capsule
+                buttonType: ButtonType.Normal
               })
                 .width('100%')
-                .height(37)
-                .fontSize(14)
-                .fontColor('#666666')
-                .backgroundColor('#F4F3F8')
-                .enabled(!this.workflowRunning && this.segmentationForegroundPixelMap !== undefined &&
-                  !this.resultImageSaveInFlight)
+                .constraintSize({ minHeight: 48 })
+                .maxFontScale(1.6)
+                .fontColor(AppColor.accent)
+                .backgroundColor(AppColor.cardBackground)
+                .enabled(compositeSegmentationSaveReady(this.workflowRunning,
+                  this.segmentationForegroundPixelMap !== undefined, this.resultImageSaveInFlight))
                 .onClick((_event: ClickEvent, result: SaveButtonOnClickResult) => {
-                  if (this.workflowRunning) {
+                  if (!compositeSegmentationSaveReady(this.workflowRunning,
+                    this.segmentationForegroundPixelMap !== undefined, this.resultImageSaveInFlight)) {
                     return;
                   }
                   if (result === SaveButtonOnClickResult.SUCCESS) {
@@ -4340,26 +4383,24 @@ struct FeatureRuntimePage {
                   this.showRuntimeToast(this.statusKey);
                 })
             }
-            .layoutWeight(1)
-            .height(37)
-            .margin({ left: 5, right: 20 })
+            .width('calc(50% - 4vp)')
+            .backgroundColor(AppColor.cardBackground)
+            .border({ width: 1, color: AppColor.divider, radius: AppRadius.button })
+            .margin({ bottom: AppSpacing.sm })
           }
           .width('100%')
-          .layoutWeight(1)
-          .margin({ top: 14 })
-          .alignItems(VerticalAlign.Top)
         }
         .width('100%')
-        .layoutWeight(1)
-        .backgroundColor(Color.Black)
+        .padding({ left: AppSpacing.page, right: AppSpacing.page, top: AppSpacing.md, bottom: AppSpacing.xl })
       }
       .width('100%')
-      .height('100%')
-      .backgroundColor(Color.White)
+      .layoutWeight(1)
+      .align(Alignment.TopStart)
+      .scrollBar(BarState.Auto)
     }
     .width('100%')
     .height('100%')
-    .backgroundColor(Color.White)
+    .backgroundColor(AppColor.pageBackground)
   }
 
   @Builder

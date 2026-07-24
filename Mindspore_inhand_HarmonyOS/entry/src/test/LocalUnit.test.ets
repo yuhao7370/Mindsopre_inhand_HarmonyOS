@@ -4329,6 +4329,25 @@ export default function localUnitTest() {
       expect(objectPhotoState.selectedInputSummary).assertEqual('file://album/old-content.jpg');
       expect(objectPhotoState.imageInputUri).assertEqual('file://album/old-image.jpg');
       expect(objectPhotoState.modelInputUri).assertEqual('file://model/custom.ms');
+
+      const stillSegmentationPhotoState: FeatureRuntimePickedInputState =
+        runtimePickedInputStateAfterCancelledPick(
+          AppRoute.SEGMENTATION_STILL.name,
+          'photo',
+          state
+        );
+      expect(stillSegmentationPhotoState).assertEqual(state);
+      expect(stillSegmentationPhotoState.selectedInputSummary).assertEqual('file://album/old-content.jpg');
+      expect(stillSegmentationPhotoState.imageInputUri).assertEqual('file://album/old-image.jpg');
+
+      const stillSegmentationCameraState: FeatureRuntimePickedInputState =
+        runtimePickedInputStateAfterCancelledPick(
+          AppRoute.SEGMENTATION_STILL.name,
+          'camera',
+          state
+        );
+      expect(stillSegmentationCameraState).assertEqual(state);
+      expect(stillSegmentationCameraState.imageInputUri).assertEqual('file://album/old-image.jpg');
     });
 
     it('preservesPreviousModelOverrideWhenPickedModelCacheFails', 0, () => {
@@ -5624,14 +5643,14 @@ export default function localUnitTest() {
       expect(marker.y.toFixed(1)).assertEqual('87.5');
     });
 
-    it('gatesPortraitCompositeSaveForCurrentReadyIdleResult', 0, () => {
+    it('gatesSegmentationSaveForCurrentReadyIdleResult', 0, () => {
       expect(compositeSegmentationSaveReady(false, true, false)).assertTrue();
       expect(compositeSegmentationSaveReady(true, true, false)).assertFalse();
       expect(compositeSegmentationSaveReady(false, false, false)).assertFalse();
       expect(compositeSegmentationSaveReady(false, true, true)).assertFalse();
     });
 
-    it('rejectsPortraitCompositeDoubleClickAfterFirstSaveOwnsTheGate', 0, () => {
+    it('rejectsSegmentationDoubleClickAfterFirstSaveOwnsTheGate', 0, () => {
       let saveInFlight: boolean = false;
       const firstClickAccepted = compositeSegmentationSaveReady(false, true, saveInFlight);
       if (firstClickAccepted) {
