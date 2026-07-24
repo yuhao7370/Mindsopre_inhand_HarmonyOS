@@ -7,6 +7,7 @@ export interface AppColorTheme {
   readonly textPrimary: string;
   readonly textSecondary: string;
   readonly textMuted: string;
+  readonly textAccent: string;
   readonly divider: string;
   readonly accent: string;
   readonly danger: string;
@@ -36,6 +37,7 @@ export const AppColor: AppColorTheme = {
   textPrimary: '#303133',
   textSecondary: '#606266',
   textMuted: '#A0A3AA',
+  textAccent: '#0B3A82',
   divider: '#E5E6EB',
   accent: '#6681FF',
   danger: '#F53F3F'

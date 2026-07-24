@@ -85,46 +85,46 @@ export struct SplashPage {
   @Builder
   privacyDialog() {
     Column() {
-      Column() {
+      Scroll() {
+        Column() {
         Text(appString('me_user_agreements'))
           .fontSize(18)
           .fontWeight(FontWeight.Bold)
           .fontColor(AppColor.textPrimary)
           .width('100%')
           .textAlign(TextAlign.Center)
-        Scroll() {
-          Text(appString('me_privacy'))
-            .fontSize(13)
-            .fontColor(AppColor.textSecondary)
-            .lineHeight(20)
-            .width('100%')
-        }
-        .height(180)
-        .margin({ top: AppSpacing.md })
-        Text(appString('me_user_agreement'))
+        Text(appString('me_privacy'))
           .fontSize(13)
-          .fontColor(AppColor.accent)
-          .textAlign(TextAlign.Center)
-          .margin({ top: AppSpacing.sm })
+          .fontColor(AppColor.textSecondary)
+          .lineHeight(20)
+          .width('100%')
+          .margin({ top: AppSpacing.md })
+        Button(appString('me_user_agreement'), { type: ButtonType.Normal })
+          .constraintSize({ minHeight: 48 })
+          .fontSize(13)
+          .fontColor(AppColor.textAccent)
+          .width('100%')
+          .accessibilityText(appString('me_user_agreement') as Resource)
           .onClick(() => this.openPrivacyPolicy())
-        Row() {
-          Button(appString('me_disagree_and_exit'))
-            .height(38)
-            .layoutWeight(1)
-            .margin({ right: AppSpacing.sm })
-            .onClick(() => this.declinePrivacy())
-          Button(appString('me_agree'))
-            .height(38)
-            .layoutWeight(1)
-            .onClick(() => this.acceptPrivacy())
+        Button(appString('me_disagree_and_exit'), { type: ButtonType.Normal })
+          .constraintSize({ minHeight: 48 })
+          .width('100%')
+          .margin({ top: AppSpacing.md })
+          .onClick(() => this.declinePrivacy())
+        Button(appString('me_agree'))
+          .constraintSize({ minHeight: 48 })
+          .width('100%')
+          .margin({ top: AppSpacing.sm })
+          .onClick(() => this.acceptPrivacy())
         }
         .width('100%')
-        .margin({ top: AppSpacing.lg })
+        .padding(AppSpacing.lg)
       }
       .width('86%')
-      .padding(AppSpacing.lg)
+      .height('82%')
       .backgroundColor(AppColor.cardBackground)
       .borderRadius(AppRadius.sheet)
+      .accessibilityGroup(true)
     }
     .width('100%')
     .height('100%')
@@ -157,6 +157,7 @@ export struct SplashPage {
       .width('100%')
       .height('100%')
       .backgroundColor(AppColor.pageBackground)
+      .accessibilityLevel(this.showPrivacyDialog ? 'no-hide-descendants' : 'auto')
       if (this.showPrivacyDialog) {
         this.privacyDialog()
       }

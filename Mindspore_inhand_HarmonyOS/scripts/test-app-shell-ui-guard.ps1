@@ -2,28 +2,56 @@ function Test-AppShellUiGuard {
   param(
     [string]$Permission,
     [string]$Splash,
-    [string]$Dance
+    [string]$Dance,
+    [string]$AppTheme = $script:appTheme
   )
 
-  if ($Permission -match 'requestStartup|startupPermissionNames') {
+  try {
+    if ($Permission -match 'requestStartup|startupPermissionNames') { return $false }
+    if ($Splash -match 'PermissionService|showPermissionDialog|permissionDialog|requestPermissionsFromUser|abilityAccessCtrl|ohos\.permission\.CAMERA|ohos\.permission\.READ_IMAGEVIDEO') { return $false }
+    if ($Splash -notmatch 'aboutToAppear\(\)\s*\{\s*const service = this\.privacyConsentService\(\);\s*if \(service !== undefined && service\.hasAcceptedPrivacy\(\)\) \{\s*this\.onFinished\(\);\s*return;\s*\}\s*this\.showPrivacyDialog = true;\s*\}') { return $false }
+    if ($Splash -match 'countdownTimer|countdownValue|startCountdown|countdownButton|setInterval') { return $false }
+    if ($Splash -notmatch 'private\s+acceptPrivacy\(\):\s*void\s*\{\s*const service = this\.privacyConsentService\(\);\s*if \(service !== undefined\) \{\s*service\.acceptPrivacy\(\);\s*\}\s*this\.showPrivacyDialog = false;\s*this\.finishSplash\(\);\s*\}') { return $false }
+    if ($Permission -notmatch 'async\s+requestCamera\([^)]*\)[\s\S]*?\{\s*return\s+this\.requestPermissionNames\(context,\s*\[\s*cameraPermissionName\s*\]\);\s*\}') { return $false }
+    if ($Dance -notmatch 'new PermissionService\(\)\.requestCamera\(context\)') { return $false }
+    if ($Splash -match '\.height\(180\)|\.height\(38\)') { return $false }
+    $privacyDialog = Get-BracedBody $Splash 'privacyDialog()'
+    if ([regex]::Matches($privacyDialog, 'Scroll\(\)').Count -ne 1) { return $false }
+    $consentScroll = Get-BracedBody $privacyDialog 'Scroll()'
+    @('me_user_agreements', 'me_privacy', 'me_user_agreement', 'me_disagree_and_exit', 'me_agree') | ForEach-Object {
+      if ($consentScroll -notmatch [regex]::Escape($_)) { throw "Consent Scroll is missing: $_" }
+    }
+    if ($consentScroll.IndexOf('me_user_agreements') -gt $consentScroll.IndexOf('me_agree')) { return $false }
+    @('me_user_agreement', 'me_disagree_and_exit', 'me_agree') | ForEach-Object {
+      $actionPattern = "Button\(appString\('$($_)'\)(?:,\s*\{[^}]*\})?\)(?:(?!Button\()[\s\S])*?\.constraintSize\(\{\s*minHeight:\s*48\s*\}"
+      if ($consentScroll -notmatch $actionPattern) { throw "Consent action must be at least 48vp: $_" }
+    }
+    $build = Get-BracedBody $Splash 'build()'
+    $brandBackgroundPattern = "Column\(\)\s*\{[\s\S]*?\}\s*\.width\('100%'\)\s*\.height\('100%'\)\s*\.backgroundColor\(AppColor\.pageBackground\)\s*\.accessibilityLevel\(this\.showPrivacyDialog\s*\?\s*'no-hide-descendants'\s*:\s*'auto'\)"
+    if ($build -notmatch $brandBackgroundPattern) { return $false }
+    if ($build -match "Column\(\)\s*\{[\s\S]*?\}\s*\.width\('100%'\)\s*\.height\('100%'\)\s*\.backgroundColor\(AppColor\.pageBackground\)\s*\.accessibilityLevel\('no-hide-descendants'\)") { return $false }
+    return $AppTheme -match 'readonly\s+textAccent:\s*string' -and
+      $AppTheme -match "cardBackground:\s*'#FFFFFF'" -and
+      $AppTheme -match "textAccent:\s*'#0B3A82'"
+  } catch {
     return $false
   }
-  if ($Splash -match 'PermissionService|showPermissionDialog|permissionDialog|requestPermissionsFromUser|abilityAccessCtrl|ohos\.permission\.CAMERA|ohos\.permission\.READ_IMAGEVIDEO') {
-    return $false
+}
+
+function Get-BracedBody([string]$source, [string]$marker) {
+  $markerIndex = $source.IndexOf($marker, [System.StringComparison]::Ordinal)
+  if ($markerIndex -lt 0) { throw "Missing marker: $marker" }
+  $openIndex = $source.IndexOf('{', $markerIndex)
+  if ($openIndex -lt 0) { throw "Missing block after: $marker" }
+  $depth = 0
+  for ($index = $openIndex; $index -lt $source.Length; $index += 1) {
+    if ($source[$index] -eq '{') { $depth += 1 }
+    if ($source[$index] -eq '}') {
+      $depth -= 1
+      if ($depth -eq 0) { return $source.Substring($openIndex + 1, $index - $openIndex - 1) }
+    }
   }
-  if ($Splash -notmatch 'aboutToAppear\(\)\s*\{\s*const service = this\.privacyConsentService\(\);\s*if \(service !== undefined && service\.hasAcceptedPrivacy\(\)\) \{\s*this\.onFinished\(\);\s*return;\s*\}\s*this\.showPrivacyDialog = true;\s*\}') {
-    return $false
-  }
-  if ($Splash -match 'countdownTimer|countdownValue|startCountdown|countdownButton|setInterval') {
-    return $false
-  }
-  if ($Splash -notmatch 'private\s+acceptPrivacy\(\):\s*void\s*\{\s*const service = this\.privacyConsentService\(\);\s*if \(service !== undefined\) \{\s*service\.acceptPrivacy\(\);\s*\}\s*this\.showPrivacyDialog = false;\s*this\.finishSplash\(\);\s*\}') {
-    return $false
-  }
-  if ($Permission -notmatch 'async\s+requestCamera\([^)]*\)[\s\S]*?\{\s*return\s+this\.requestPermissionNames\(context,\s*\[\s*cameraPermissionName\s*\]\);\s*\}') {
-    return $false
-  }
-  return $Dance -match 'new PermissionService\(\)\.requestCamera\(context\)'
+  throw "Unclosed block after: $marker"
 }
 
 function Assert-RejectedMutation {
@@ -31,18 +59,32 @@ function Assert-RejectedMutation {
     [string]$Name,
     [string]$Permission,
     [string]$Splash,
-    [string]$Dance
+    [string]$Dance,
+    [string]$AppTheme = $script:appTheme
   )
 
-  if (Test-AppShellUiGuard $Permission $Splash $Dance) {
+  if (Test-AppShellUiGuard $Permission $Splash $Dance $AppTheme) {
     throw "Guard accepted mutation: $Name"
   }
+}
+
+function Assert-BalancedBraces {
+  param([string]$Name, [string]$Source)
+
+  $depth = 0
+  foreach ($character in $Source.ToCharArray()) {
+    if ($character -eq '{') { $depth += 1 }
+    if ($character -eq '}') { $depth -= 1 }
+    if ($depth -lt 0) { throw "Mutation has unbalanced braces: $Name" }
+  }
+  if ($depth -ne 0) { throw "Mutation has unbalanced braces: $Name" }
 }
 
 $root = Split-Path -Parent $PSScriptRoot
 $permission = Get-Content (Join-Path $root 'entry/src/main/ets/services/permissions/PermissionService.ets') -Raw
 $splash = Get-Content (Join-Path $root 'entry/src/main/ets/pages/SplashPage.ets') -Raw
 $dance = Get-Content (Join-Path $root 'entry/src/main/ets/pages/DancePage.ets') -Raw
+$script:appTheme = Get-Content (Join-Path $root 'entry/src/main/ets/common/theme/AppTheme.ets') -Raw
 
 if (-not (Test-AppShellUiGuard $permission $splash $dance)) {
   throw 'Guard fixture must pass.'
@@ -60,3 +102,23 @@ Assert-RejectedMutation 'stored consent no longer finishes immediately' $permiss
 Assert-RejectedMutation 'countdown interval restored' $permission ($splash + "`nsetInterval(() => {}, 1000);") $dance
 Assert-RejectedMutation 'first consent no longer persists before finishing' $permission ($splash -replace 'service\.acceptPrivacy\(\);', '') $dance
 Assert-RejectedMutation 'Dance camera request removed' $permission $splash ($dance -replace 'requestCamera', 'request')
+Assert-RejectedMutation 'shared consent Scroll removed' $permission ($splash -replace 'Scroll\(\)', 'Column()') $dance
+$secondConsentScroll = $splash -replace "\.accessibilityGroup\(true\)", ".accessibilityGroup(true)`n      Scroll() {`n        Text(appString('me_privacy'))`n      }`n      .width('86%')`n      .height('82%')"
+Assert-BalancedBraces 'second consent Scroll added' $secondConsentScroll
+Assert-RejectedMutation 'second consent Scroll added' $permission $secondConsentScroll $dance
+$agreeButtonPattern = "(?s)\s*Button\(appString\('me_agree'\)\)\s*\.constraintSize\(\{ minHeight: 48 \}\)\s*\.width\('100%'\)\s*\.margin\(\{ top: AppSpacing\.sm \}\)\s*\.onClick\(\(\) => this\.acceptPrivacy\(\)\)"
+$agreeButton = [regex]::Match($splash, $agreeButtonPattern).Value
+if ([string]::IsNullOrWhiteSpace($agreeButton)) { throw 'Agree mutation fixture could not find the complete action.' }
+$agreeOutsideConsentScroll = [regex]::Replace($splash, $agreeButtonPattern, '', 1)
+$agreeOutsideConsentScroll = $agreeOutsideConsentScroll -replace '(\.accessibilityGroup\(true\))', ('$1' + $agreeButton)
+Assert-BalancedBraces 'agree action moved outside consent Scroll' $agreeOutsideConsentScroll
+Assert-RejectedMutation 'agree action moved outside consent Scroll' $permission $agreeOutsideConsentScroll $dance
+@('me_user_agreement', 'me_disagree_and_exit', 'me_agree') | ForEach-Object {
+  $actionPattern = "(?s)(Button\(appString\('$($_)'\).*?)\.constraintSize\(\{ minHeight: 48 \}\)"
+  Assert-RejectedMutation "consent action minimum height removed: $_" $permission ($splash -replace $actionPattern, '$1') $dance
+}
+Assert-RejectedMutation 'consent background accessibility hiding made unconditional' $permission ($splash -replace "this\.showPrivacyDialog \? 'no-hide-descendants' : 'auto'", "'no-hide-descendants'") $dance
+$wrongScopeAccessibility = $splash -replace "\.accessibilityLevel\(this\.showPrivacyDialog \? 'no-hide-descendants' : 'auto'\)", ''
+$wrongScopeAccessibility = $wrongScopeAccessibility -replace '(\.accessibilityGroup\(true\))', "`$1`n      .accessibilityLevel(this.showPrivacyDialog ? 'no-hide-descendants' : 'auto')"
+Assert-RejectedMutation 'consent background accessibility hiding moved to card' $permission $wrongScopeAccessibility $dance
+Assert-RejectedMutation 'text accent contrast lowered' $permission $splash $dance ($script:appTheme -replace "textAccent:\s*'#0B3A82'", "textAccent: '#FFFFFF'")
