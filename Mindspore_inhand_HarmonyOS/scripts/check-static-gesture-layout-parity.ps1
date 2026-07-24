@@ -182,14 +182,21 @@ Require-Line $selector 'return usesAndroidGestureStillLayout(workflow) && !resul
   'the failure Toast policy must remain scoped to failed static gesture results'
 
 $geometry = Section $page '  private gestureAspectRatio(): number {' `
-  "`n`n  private objectDetectionLabel(" 'static gesture contained preview geometry'
+  "`n`n  private objectPhotoLabelPosition(" 'static gesture contained preview geometry'
 foreach ($line in @(
   'private gestureStillPreviewWidthPercent(): number {',
   'const sourceAspect = this.gestureAspectRatio();',
   'const cardAspect = 4 / 3;',
   'return sourceAspect >= cardAspect ? 100 : sourceAspect / cardAspect * 100;',
   'private gestureStillPreviewHeightPercent(): number {',
-  'return sourceAspect >= cardAspect ? cardAspect / sourceAspect * 100 : 100;',
+  'return sourceAspect >= cardAspect ? cardAspect / sourceAspect * 100 : 100;'
+)) {
+  Require-Line $geometry $line "contained preview geometry is missing executable line: $line"
+}
+
+$labelGeometry = Section $page '  private gestureStillLabelPosition(' `
+  "`n`n  private objectDetectionLabel(" 'static gesture label geometry'
+foreach ($line in @(
   'private gestureStillLabelPosition(gesture: GestureDetection): GestureStillLabelPosition {',
   'const labelWidth = 88;',
   'const labelHeight = 24;',
@@ -202,7 +209,7 @@ foreach ($line in @(
   '} else if (boxTop >= labelHeight + gap) {',
   'labelTop = boxBottom + gap;'
 )) {
-  Require-Line $geometry $line "contained preview geometry is missing executable line: $line"
+  Require-Line $labelGeometry $line "static gesture label geometry is missing executable line: $line"
 }
 
 $preview = Section $page '  gestureStillAndroidPreview() {' `

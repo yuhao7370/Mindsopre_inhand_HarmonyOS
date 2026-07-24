@@ -169,19 +169,19 @@ try {
     'this.gestureStillBox(gesture)' `
     'this.gestureBox(gesture)'
   Assert-RejectedInSection 'force-label-right-overflow' $page `
-    '  private gestureAspectRatio(): number {' "`n`n  private objectDetectionLabel(" `
+    '  private gestureStillLabelPosition(' "`n`n  private objectDetectionLabel(" `
     'const canPlaceRight = boxRight + gap + labelWidth <= overlayWidth;' `
     'const canPlaceRight = true;'
   Assert-RejectedInSection 'remove-left-edge-fallback' $page `
-    '  private gestureAspectRatio(): number {' "`n`n  private objectDetectionLabel(" `
+    '  private gestureStillLabelPosition(' "`n`n  private objectDetectionLabel(" `
     '} else if (boxLeft >= labelWidth + gap) {' `
     '} else if (false) {'
   Assert-RejectedInSection 'remove-below-hand-fallback' $page `
-    '  private gestureAspectRatio(): number {' "`n`n  private objectDetectionLabel(" `
+    '  private gestureStillLabelPosition(' "`n`n  private objectDetectionLabel(" `
     '} else if (canPlaceBelow) {' `
     '} else if (false) {'
   Assert-RejectedInSection 'remove-top-edge-fallback' $page `
-    '  private gestureAspectRatio(): number {' "`n`n  private objectDetectionLabel(" `
+    '  private gestureStillLabelPosition(' "`n`n  private objectDetectionLabel(" `
     '} else if (boxTop >= labelHeight + gap) {' `
     '} else if (false) {'
   Assert-RejectedInSection 'remove-overlay-measurement' $page $previewStart $previewEnd `

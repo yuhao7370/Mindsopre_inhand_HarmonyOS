@@ -754,6 +754,7 @@ export function shouldClearRuntimeResultAtWorkflowStart(workflow: FeatureWorkflo
   return !shouldShowLiveClassificationCameraOverlay(workflow) &&
     !shouldShowLiveObjectDetectionCameraOverlay(workflow) &&
     workflow?.routeName !== AppRoute.PORTRAIT_SEGMENTATION.name &&
+    !usesAndroidObjectPhotoLayout(workflow) &&
     !usesAndroidStyleTransferLayout(workflow) &&
     !usesAndroidStillSegmentationLayout(workflow) &&
     !usesAndroidStillSceneLayout(workflow);
@@ -810,6 +811,7 @@ export function shouldPreserveRuntimeResultAfterInputReady(
   inputKind: FeatureInputKind
 ): boolean {
   return (workflow?.routeName === AppRoute.PORTRAIT_SEGMENTATION.name && inputKind === 'backgroundImage') ||
+    (usesAndroidObjectPhotoLayout(workflow) && (inputKind === 'photo' || inputKind === 'modelFile')) ||
     (usesAndroidCustomModelLayout(workflow) &&
       (inputKind === 'modelFile' || inputKind === 'photo' || inputKind === 'camera')) ||
     (usesAndroidStyleTransferLayout(workflow) &&
@@ -823,7 +825,7 @@ export function shouldPreserveRuntimeTextResultOnAiResult(
   workflow: FeatureWorkflow | undefined,
   resultOk: boolean
 ): boolean {
-  return usesAndroidStillSceneLayout(workflow) && !resultOk;
+  return (usesAndroidStillSceneLayout(workflow) || usesAndroidObjectPhotoLayout(workflow)) && !resultOk;
 }
 
 export function shouldPreserveRuntimeVisualResultOnAiResult(
@@ -832,6 +834,9 @@ export function shouldPreserveRuntimeVisualResultOnAiResult(
   dataKind: string
 ): boolean {
   if (shouldShowLiveObjectDetectionCameraOverlay(workflow)) {
+    return !resultOk || dataKind === 'objectDetections';
+  }
+  if (usesAndroidObjectPhotoLayout(workflow)) {
     return !resultOk || dataKind === 'objectDetections';
   }
   if (usesAndroidStyleTransferLayout(workflow)) {

@@ -4320,6 +4320,15 @@ export default function localUnitTest() {
       );
       expect(modelState.modelInputUri).assertEqual('file://model/custom.ms');
       expect(modelState.imageInputUri).assertEqual('file://album/old-image.jpg');
+
+      const objectPhotoState: FeatureRuntimePickedInputState = runtimePickedInputStateAfterCancelledPick(
+        AppRoute.OBJECT_PHOTO.name,
+        'photo',
+        state
+      );
+      expect(objectPhotoState.selectedInputSummary).assertEqual('file://album/old-content.jpg');
+      expect(objectPhotoState.imageInputUri).assertEqual('file://album/old-image.jpg');
+      expect(objectPhotoState.modelInputUri).assertEqual('file://model/custom.ms');
     });
 
     it('preservesPreviousModelOverrideWhenPickedModelCacheFails', 0, () => {
@@ -10183,7 +10192,7 @@ export default function localUnitTest() {
       expect(stillSceneResultToastKey(undefined, 'SCENE_DETECTION_FAILED')).assertUndefined();
     });
 
-    it('preservesTextOnlyForFailedStillSceneResults', 0, () => {
+    it('preservesRowsForFailedStillSceneAndObjectPhotoResults', 0, () => {
       const stillScene = workflowForRoute(AppRoute.SCENE_STILL.name);
       const liveScene = workflowForRoute(AppRoute.SCENE_LIVE.name);
       const stillSegmentation = workflowForRoute(AppRoute.SEGMENTATION_STILL.name);
@@ -10195,7 +10204,8 @@ export default function localUnitTest() {
       expect(shouldPreserveRuntimeTextResultOnAiResult(liveScene, false)).assertFalse();
       expect(shouldPreserveRuntimeTextResultOnAiResult(stillSegmentation, false)).assertFalse();
       expect(shouldPreserveRuntimeTextResultOnAiResult(styleTransfer, false)).assertFalse();
-      expect(shouldPreserveRuntimeTextResultOnAiResult(objectPhoto, false)).assertFalse();
+      expect(shouldPreserveRuntimeTextResultOnAiResult(objectPhoto, false)).assertTrue();
+      expect(shouldPreserveRuntimeTextResultOnAiResult(objectPhoto, true)).assertFalse();
       expect(shouldPreserveRuntimeTextResultOnAiResult(undefined, false)).assertFalse();
     });
 
@@ -10204,6 +10214,7 @@ export default function localUnitTest() {
       const liveScene = workflowForRoute(AppRoute.SCENE_LIVE.name);
       const stillSegmentation = workflowForRoute(AppRoute.SEGMENTATION_STILL.name);
       const styleTransfer = workflowForRoute(AppRoute.STYLE_TRANSFER.name);
+      const objectPhoto = workflowForRoute(AppRoute.OBJECT_PHOTO.name);
 
       expect(shouldPreserveRuntimeResultAfterInputReady(stillScene, 'photo')).assertTrue();
       expect(shouldPreserveRuntimeResultAfterInputReady(stillScene, 'camera')).assertTrue();
@@ -10211,7 +10222,11 @@ export default function localUnitTest() {
       expect(shouldPreserveRuntimeResultAfterInputReady(liveScene, 'photo')).assertFalse();
       expect(shouldPreserveRuntimeResultAfterInputReady(stillSegmentation, 'photo')).assertTrue();
       expect(shouldPreserveRuntimeResultAfterInputReady(styleTransfer, 'contentImage')).assertTrue();
+      expect(shouldPreserveRuntimeResultAfterInputReady(objectPhoto, 'photo')).assertTrue();
+      expect(shouldPreserveRuntimeResultAfterInputReady(objectPhoto, 'modelFile')).assertTrue();
+      expect(shouldPreserveRuntimeResultAfterInputReady(objectPhoto, 'camera')).assertFalse();
       expect(shouldClearRuntimeResultAtWorkflowStart(stillScene)).assertFalse();
+      expect(shouldClearRuntimeResultAtWorkflowStart(objectPhoto)).assertFalse();
       expect(shouldClearRuntimeResultAtWorkflowStart(liveScene)).assertTrue();
 
       expect(shouldAllowRuntimeInputChange(stillScene, 'photo', true)).assertFalse();
@@ -10345,7 +10360,10 @@ export default function localUnitTest() {
       expect(shouldPreserveRuntimeVisualResultOnAiResult(styleTransfer, false, 'styleTransfer')).assertTrue();
       expect(shouldPreserveRuntimeVisualResultOnAiResult(styleTransfer, true, 'styleTransfer')).assertTrue();
       expect(shouldPreserveRuntimeVisualResultOnAiResult(styleTransfer, true, 'classification')).assertFalse();
-      expect(shouldPreserveRuntimeVisualResultOnAiResult(objectPhoto, false, 'styleTransfer')).assertFalse();
+      expect(shouldPreserveRuntimeVisualResultOnAiResult(objectPhoto, false, '')).assertTrue();
+      expect(shouldPreserveRuntimeVisualResultOnAiResult(objectPhoto, false, 'styleTransfer')).assertTrue();
+      expect(shouldPreserveRuntimeVisualResultOnAiResult(objectPhoto, true, 'objectDetections')).assertTrue();
+      expect(shouldPreserveRuntimeVisualResultOnAiResult(objectPhoto, true, 'styleTransfer')).assertFalse();
       expect(shouldPreserveRuntimeVisualResultOnAiResult(undefined, false, '')).assertFalse();
     });
 
@@ -10706,6 +10724,7 @@ export default function localUnitTest() {
       expect(shouldLeaveRuntimeAfterCancelledInitialPick(objectPhoto, 'photo', true)).assertTrue();
       expect(shouldLeaveRuntimeAfterCancelledInitialPick(objectPhoto, 'photo', false)).assertFalse();
       expect(shouldLeaveRuntimeAfterCancelledInitialPick(objectPhoto, 'modelFile', true)).assertFalse();
+      expect(shouldLeaveRuntimeAfterCancelledInitialPick(objectPhoto, 'modelFile', false)).assertFalse();
       expect(cancelledPickStatusKeyForWorkflow(objectPhoto, 'photo', true)).assertEqual('feature_runtime_image_invalid');
       expect(cancelledPickToastStatusKeyForWorkflow(objectPhoto, 'photo', true))
         .assertEqual('feature_runtime_image_invalid');

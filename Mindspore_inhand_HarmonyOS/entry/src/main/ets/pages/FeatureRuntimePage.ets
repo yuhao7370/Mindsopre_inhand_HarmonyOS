@@ -260,6 +260,11 @@ interface FeatureRuntimeParams {
   routeName?: string;
 }
 
+interface ObjectPhotoLabelPosition {
+  readonly left: number;
+  readonly top: number;
+}
+
 interface GestureStillLabelPosition {
   readonly left: number;
   readonly top: number;
@@ -340,6 +345,8 @@ struct FeatureRuntimePage {
   @State objectDetections: Array<ObjectDetection> = [];
   @State objectDetectionImageWidth: number = 0;
   @State objectDetectionImageHeight: number = 0;
+  @State objectPhotoOverlayWidthVp: number = 0;
+  @State objectPhotoOverlayHeightVp: number = 0;
   @State liveObjectDetectionOverlayWidthVp: number = 0;
   @State liveObjectDetectionOverlayHeightVp: number = 0;
   @State liveCameraPreviewRotationDegrees: number = 0;
@@ -2602,6 +2609,18 @@ struct FeatureRuntimePage {
     return this.objectDetectionImageWidth / this.objectDetectionImageHeight;
   }
 
+  private objectPhotoPreviewWidthPercent(): number {
+    const sourceAspect = this.objectDetectionAspectRatio();
+    const cardAspect = 4 / 3;
+    return sourceAspect >= cardAspect ? 100 : sourceAspect / cardAspect * 100;
+  }
+
+  private objectPhotoPreviewHeightPercent(): number {
+    const sourceAspect = this.objectDetectionAspectRatio();
+    const cardAspect = 4 / 3;
+    return sourceAspect >= cardAspect ? cardAspect / sourceAspect * 100 : 100;
+  }
+
   private gestureAspectRatio(): number {
     if (this.gestureImageWidth <= 0 || this.gestureImageHeight <= 0) {
       return 1;
@@ -2619,6 +2638,53 @@ struct FeatureRuntimePage {
     const sourceAspect = this.gestureAspectRatio();
     const cardAspect = 4 / 3;
     return sourceAspect >= cardAspect ? cardAspect / sourceAspect * 100 : 100;
+  }
+
+  private objectPhotoLabelPosition(detection: ObjectDetection): ObjectPhotoLabelPosition {
+    const box = this.objectDetectionBoxStyle(detection);
+    const overlayWidth = this.objectPhotoOverlayWidthVp;
+    const overlayHeight = this.objectPhotoOverlayHeightVp;
+    if (overlayWidth <= 0 || overlayHeight <= 0) {
+      return {
+        left: Math.max(0, box.left),
+        top: Math.max(0, box.top)
+      };
+    }
+    const labelWidth = 112;
+    const labelHeight = 24;
+    const gap = 4;
+    const boxLeft = box.left * overlayWidth / 100;
+    const boxTop = box.top * overlayHeight / 100;
+    const boxWidth = box.width * overlayWidth / 100;
+    const boxHeight = box.height * overlayHeight / 100;
+    const boxRight = boxLeft + boxWidth;
+    const boxBottom = boxTop + boxHeight;
+    let labelLeft = boxLeft;
+    let labelTop = boxTop;
+    const canPlaceRight = boxRight + gap + labelWidth <= overlayWidth;
+    const canPlaceBelow = boxBottom + gap + labelHeight <= overlayHeight;
+    if (canPlaceRight) {
+      labelLeft = boxRight + gap;
+      labelTop = boxTop + (boxHeight - labelHeight) / 2;
+    } else if (canPlaceBelow) {
+      labelLeft = boxLeft + (boxWidth - labelWidth) / 2;
+      labelTop = boxBottom + gap;
+    } else if (boxLeft >= labelWidth + gap) {
+      labelLeft = boxLeft - labelWidth - gap;
+      labelTop = boxTop + (boxHeight - labelHeight) / 2;
+    } else if (boxTop >= labelHeight + gap) {
+      labelLeft = boxLeft + (boxWidth - labelWidth) / 2;
+      labelTop = boxTop - labelHeight - gap;
+    } else {
+      labelLeft = boxLeft + (boxWidth - labelWidth) / 2;
+      labelTop = boxBottom + gap;
+    }
+    labelLeft = Math.min(Math.max(labelLeft, 0), Math.max(0, overlayWidth - labelWidth));
+    labelTop = Math.min(Math.max(labelTop, 0), Math.max(0, overlayHeight - labelHeight));
+    return {
+      left: labelLeft * 100 / overlayWidth,
+      top: labelTop * 100 / overlayHeight
+    };
   }
 
   private gestureStillLabelPosition(gesture: GestureDetection): GestureStillLabelPosition {
@@ -3136,6 +3202,38 @@ struct FeatureRuntimePage {
       x: this.percentLength(this.gestureBoxStyle(gesture).left),
       y: this.percentLength(this.gestureBoxStyle(gesture).top)
     })
+  }
+
+  @Builder
+  objectPhotoDetectionBox(detection: ObjectDetection, index: number) {
+    Stack({ alignContent: Alignment.TopStart }) {
+      Column() {
+      }
+      .width(this.percentLength(this.objectDetectionBoxStyle(detection).width))
+      .height(this.percentLength(this.objectDetectionBoxStyle(detection).height))
+      .border({ width: 2, color: objectDetectionOverlayColor(index), radius: 2 })
+      .position({
+        x: this.percentLength(this.objectDetectionBoxStyle(detection).left),
+        y: this.percentLength(this.objectDetectionBoxStyle(detection).top)
+      })
+      Text(this.objectDetectionLabel(detection, index))
+        .fontSize(10)
+        .fontColor(objectDetectionOverlayTextColor(index))
+        .fontWeight(FontWeight.Medium)
+        .maxFontScale(1.2)
+        .maxLines(1)
+        .textOverflow({ overflow: TextOverflow.Ellipsis })
+        .width(112)
+        .height(24)
+        .padding({ left: 6, right: 6 })
+        .backgroundColor(objectDetectionOverlayColor(index))
+        .position({
+          x: this.percentLength(this.objectPhotoLabelPosition(detection).left),
+          y: this.percentLength(this.objectPhotoLabelPosition(detection).top)
+        })
+    }
+    .width('100%')
+    .height('100%')
   }
 
   @Builder
@@ -3836,51 +3934,153 @@ struct FeatureRuntimePage {
   }
 
   @Builder
-  objectPhotoAndroidLayout() {
-    Column() {
-      this.runtimeActionToolbar(true)
-      Stack({ alignContent: Alignment.Center }) {
-        if (this.objectDetectionImageUri.length > 0 && this.objectDetections.length > 0) {
-          Stack({ alignContent: Alignment.TopStart }) {
-            Image(this.objectDetectionImageUri)
-              .orientation(this.objectDetectionImageOrientation)
-              .width('100%')
-              .height('100%')
-              .objectFit(ImageFit.Fill)
-            ForEach(this.objectDetections, (detection: ObjectDetection, index: number) => {
-              this.objectDetectionBox(detection, index)
-            }, (detection: ObjectDetection) => `${detection.imageId}-${detection.labelId}-${detection.score}`)
-          }
-          .width('100%')
-          .aspectRatio(this.objectDetectionAspectRatio())
-          .clip(true)
-        } else if (this.imageInputUri.length > 0) {
-          Image(this.imageInputUri)
+  objectPhotoAndroidPreview() {
+    Stack({ alignContent: Alignment.Center }) {
+      if (this.objectDetectionImageUri.length > 0 && this.objectDetections.length > 0) {
+        Stack({ alignContent: Alignment.TopStart }) {
+          Image(this.objectDetectionImageUri)
+            .orientation(this.objectDetectionImageOrientation)
             .width('100%')
             .height('100%')
+            .objectFit(ImageFit.Fill)
+          ForEach(this.objectDetections, (detection: ObjectDetection, index: number) => {
+            this.objectPhotoDetectionBox(detection, index)
+          }, (detection: ObjectDetection) => `${detection.imageId}-${detection.labelId}-${detection.score}`)
+        }
+        .width(this.percentLength(this.objectPhotoPreviewWidthPercent()))
+        .height(this.percentLength(this.objectPhotoPreviewHeightPercent()))
+        .clip(true)
+        .onAreaChange((_previousArea: Area, currentArea: Area) => {
+          const width = Number(currentArea.width);
+          const height = Number(currentArea.height);
+          this.objectPhotoOverlayWidthVp = Number.isFinite(width) && width > 0 ? width : 0;
+          this.objectPhotoOverlayHeightVp = Number.isFinite(height) && height > 0 ? height : 0;
+        })
+      } else if (this.imageInputUri.length > 0) {
+        Image(this.imageInputUri)
+          .width('100%')
+          .height('100%')
+          .objectFit(ImageFit.Contain)
+      } else {
+        Column({ space: AppSpacing.sm }) {
+          Image($r('app.media.icon_style'))
+            .width(56)
+            .height(56)
             .objectFit(ImageFit.Contain)
+          Text(appString('feature_runtime_help_object_photo'))
+            .fontSize(14)
+            .fontColor(AppColor.textSecondary)
+            .maxFontScale(1.6)
+            .textAlign(TextAlign.Center)
+            .width('100%')
         }
-        Column() {
-          Button(appString(workflowInputLabelKey(workflowForRoute(this.routeName), 'modelFile')), { type: ButtonType.Normal })
-            .fontSize(16)
-            .fontColor(Color.White)
-            .backgroundColor('#33B5E5')
-            .enabled(!this.workflowRunning)
-            .onClick(() => this.prepareInput('modelFile'))
-        }
-        .width('100%')
-        .height('100%')
-        .padding({ right: 16, bottom: 16 })
-        .justifyContent(FlexAlign.End)
-        .alignItems(HorizontalAlign.End)
+        .padding(AppSpacing.md)
+        .alignItems(HorizontalAlign.Center)
       }
-      .width('100%')
-      .layoutWeight(1)
-      .backgroundColor(Color.White)
     }
     .width('100%')
     .height('100%')
-    .backgroundColor(Color.White)
+    .clip(true)
+    .backgroundColor(AppColor.cardBackground)
+  }
+
+  @Builder
+  objectPhotoAndroidLayout() {
+    Column() {
+      this.runtimeActionToolbar(true)
+      Scroll() {
+        Column({ space: AppSpacing.md }) {
+          Stack({ alignContent: Alignment.Center }) {
+            this.objectPhotoAndroidPreview()
+          }
+          .width('100%')
+          .aspectRatio(4 / 3)
+          .constraintSize({ minHeight: 220, maxHeight: 420 })
+          .clip(true)
+          .backgroundColor(AppColor.cardBackground)
+          .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
+          Row({ space: AppSpacing.sm }) {
+            if (this.workflowRunning) {
+              LoadingProgress()
+                .width(24)
+                .height(24)
+            }
+            Text(appString(this.statusKey))
+              .fontSize(14)
+              .fontColor(AppColor.textSecondary)
+              .maxFontScale(1.6)
+              .maxLines(3)
+              .layoutWeight(1)
+          }
+          .width('100%')
+          .constraintSize({ minHeight: 48 })
+          .padding(AppSpacing.md)
+          .alignItems(VerticalAlign.Center)
+          .backgroundColor(AppColor.cardBackground)
+          .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
+          Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.SpaceBetween }) {
+            Button(appString(workflowInputLabelKey(workflowForRoute(this.routeName), 'photo')), { type: ButtonType.Normal })
+              .width('calc(50% - 4vp)')
+              .constraintSize({ minHeight: 48 })
+              .maxFontScale(1.6)
+              .fontColor(AppColor.accent)
+              .backgroundColor(AppColor.cardBackground)
+              .border({ width: 1, color: AppColor.divider, radius: AppRadius.button })
+              .margin({ bottom: AppSpacing.sm })
+              .enabled(!this.workflowRunning)
+              .onClick(() => this.prepareInput('photo'))
+            Button(appString(this.statusKey === 'feature_runtime_object_detection_failed' ||
+              this.statusKey === 'feature_runtime_run_failed' ?
+              'web_retry' : this.runActionKey))
+              .width('calc(50% - 4vp)')
+              .constraintSize({ minHeight: 48 })
+              .maxFontScale(1.6)
+              .fontColor(Color.White)
+              .backgroundColor(AppColor.accent)
+              .borderRadius(AppRadius.button)
+              .margin({ bottom: AppSpacing.sm })
+              .enabled(this.runActionEnabled())
+              .onClick(() => this.runPrimaryAction())
+          }
+          .width('100%')
+          if (this.resultRows.length > 0) {
+            Column({ space: AppSpacing.sm }) {
+              Text(appString(workflowResultTitleKey(workflowForRoute(this.routeName))))
+                .fontSize(16)
+                .fontWeight(FontWeight.Medium)
+                .fontColor(AppColor.textPrimary)
+                .maxFontScale(1.6)
+                .width('100%')
+              ForEach(this.resultRows, (row: AiRunResultRow) => {
+                Text() {
+                  Span(appString(row.labelKey))
+                  Span(appString('feature_runtime_result_separator'))
+                  Span(this.resultRowValue(row))
+                }
+                .fontSize(14)
+                .fontColor(AppColor.textSecondary)
+                .maxFontScale(1.6)
+                .width('100%')
+              }, (row: AiRunResultRow, index: number) => `${index}-${row.labelKey}-${row.value}`)
+            }
+            .width('100%')
+            .padding(AppSpacing.md)
+            .alignItems(HorizontalAlign.Start)
+            .backgroundColor(AppColor.cardBackground)
+            .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
+          }
+        }
+        .width('100%')
+        .padding({ left: AppSpacing.page, right: AppSpacing.page, top: AppSpacing.md, bottom: AppSpacing.xl })
+      }
+      .width('100%')
+      .layoutWeight(1)
+      .align(Alignment.TopStart)
+      .scrollBar(BarState.Auto)
+    }
+    .width('100%')
+    .height('100%')
+    .backgroundColor(AppColor.pageBackground)
   }
 
   @Builder
