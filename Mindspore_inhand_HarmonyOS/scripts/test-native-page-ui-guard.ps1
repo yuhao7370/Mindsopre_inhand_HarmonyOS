@@ -299,6 +299,8 @@ $poetryPosterSourcePath = Join-Path $root 'entry/src/main/ets/pages/PoetryPoster
 $poetryPosterSource = Get-Content -Raw -Encoding UTF8 -LiteralPath $poetryPosterSourcePath
 Assert-PoetryPosterNativeShellContract $poetryPosterSource
 Assert-PoetryPosterRejected 'frame cover changed to fill' ($poetryPosterSource -replace 'backgroundImageSize\(ImageSize\.Cover\)', 'backgroundImageSize(ImageSize.FILL)')
+Assert-PoetryPosterRejected 'poster poem text scale cap removed' ($poetryPosterSource -replace '\.maxFontScale\(poetryPosterVisualSpec\.poemTextMaxFontScale\)', '')
+Assert-PoetryPosterRejected 'poster poem text accessibility removed' ($poetryPosterSource -replace '\.accessibilityText\(this\.poemText\)', '')
 $posterIdActionChainPattern = '(?m)^(\s{10}\})(\r?\n)(\s{10}\.width\(''100%''\))'
 $posterIdActionChainReplacement = '$1$2          .id(poetryPosterComponentId)$2$3'
 $posterIdMovedToActions = ($poetryPosterSource -replace '\.id\(poetryPosterComponentId\)\r?\n', '') -replace $posterIdActionChainPattern, $posterIdActionChainReplacement

@@ -329,6 +329,7 @@ function Assert-PoetryPosterNativeShellContract([string]$Source) {
     @{ Slice = $literalPoster.Text; Pattern = 'backgroundImage\(\$r\(''app\.media\.poem_frame''\)\)\s*\.backgroundImageSize\(ImageSize\.Cover\)'; Message = 'Poem frame must use ImageSize.Cover' },
     @{ Slice = $literalPoster.Text; Pattern = 'backgroundImage\(\$r\(''app\.media\.poem_bg''\)\)\s*\.backgroundImageSize\(ImageSize\.Cover\)'; Message = 'Poem background must use ImageSize.Cover' },
     @{ Slice = $poster.Text; Pattern = '\.padding\(poetryPosterVisualSpec\.poemTextPaddingVp\)'; Message = 'Poem text must use visual spec padding' },
+    @{ Slice = $poster.Text; Pattern = 'Text\(this\.poemText\)[\s\S]*?\.maxFontScale\(poetryPosterVisualSpec\.poemTextMaxFontScale\)[\s\S]*?\.accessibilityText\(this\.poemText\)'; Message = 'Poem text must cap poster-template scaling while retaining its accessible source text' },
     @{ Slice = $pixelMap.Text; Pattern = 'componentSnapshot\.get\(poetryPosterComponentId,\s*\{\s*waitUntilRenderFinished:\s*true\s*\}\)'; Message = 'Poster snapshot must wait for rendering' },
     @{ Slice = $saveImage.Text; Pattern = 'withCallerOwnedPixelMap'; Message = 'Poster saving must retain caller-owned pixel map cleanup' },
     @{ Slice = $save.Text; Pattern = 'shouldStartPoetryPosterAction\(this\.actionInFlight\)'; Message = 'savePoster must gate concurrent actions' },

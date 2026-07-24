@@ -206,8 +206,10 @@ struct PoetryPosterPage {
       Column() {
         Text(this.poemText)
           .fontSize(poetryPosterVisualSpec.poemTextFontSizeFp)
+          .maxFontScale(poetryPosterVisualSpec.poemTextMaxFontScale)
           .fontColor(AppColor.textPrimary)
           .textAlign(TextAlign.Center)
+          .accessibilityText(this.poemText)
           .padding(poetryPosterVisualSpec.poemTextPaddingVp)
           .width('100%')
       }

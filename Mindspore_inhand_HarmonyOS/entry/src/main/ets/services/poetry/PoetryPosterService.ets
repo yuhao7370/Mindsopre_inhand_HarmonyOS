@@ -17,6 +17,7 @@ export interface PoetryPosterVisualSpec {
   readonly posterMinHeightVp: number;
   readonly posterMaxWidthVp: number;
   readonly poemTextFontSizeFp: number;
+  readonly poemTextMaxFontScale: number;
   readonly logoWidthVp: number;
   readonly logoHeightVp: number;
   readonly qrCodeSizeVp: number;
@@ -32,6 +33,7 @@ export const poetryPosterVisualSpec: PoetryPosterVisualSpec = {
   posterMinHeightVp: 520,
   posterMaxWidthVp: 420,
   poemTextFontSizeFp: 15,
+  poemTextMaxFontScale: 1.6,
   logoWidthVp: 76,
   logoHeightVp: 57,
   qrCodeSizeVp: 80

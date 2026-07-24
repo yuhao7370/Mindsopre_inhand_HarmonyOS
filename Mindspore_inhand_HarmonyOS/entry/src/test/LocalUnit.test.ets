@@ -3251,6 +3251,8 @@ export default function localUnitTest() {
       expect(poetryPosterVisualSpec.posterMinHeightVp).assertEqual(520);
       expect(poetryPosterVisualSpec.posterMaxWidthVp).assertEqual(420);
       expect(poetryPosterVisualSpec.poemTextFontSizeFp).assertEqual(15);
+      expect(poetryPosterVisualSpec.poemTextMaxFontScale > 1).assertTrue();
+      expect(poetryPosterVisualSpec.poemTextMaxFontScale <= 2).assertTrue();
       expect(poetryPosterVisualSpec.logoWidthVp).assertEqual(76);
       expect(poetryPosterVisualSpec.logoHeightVp).assertEqual(57);
       expect(poetryPosterVisualSpec.qrCodeSizeVp).assertEqual(80);
