@@ -34,6 +34,89 @@ function Get-TextSha256([string]$Text) {
     )).Replace('-', '').ToLowerInvariant()
 }
 
+function Get-StreamSha256([IO.Stream]$Stream) {
+  $sha = [Security.Cryptography.SHA256]::Create()
+  try {
+    return ([BitConverter]::ToString($sha.ComputeHash($Stream))).Replace('-', '').ToLowerInvariant()
+  } finally {
+    $sha.Dispose()
+  }
+}
+
+function Get-DisplayMetricValues([string]$Text, [string]$Pattern, [string]$Label) {
+  $matches = @([regex]::Matches($Text, $Pattern))
+  if ($matches.Count -eq 0) { Fail "display dump is missing $Label." }
+  $values = @($matches | ForEach-Object { [double]$_.Groups[1].Value } | Select-Object -Unique)
+  if ($values.Count -ne 1) { Fail "display dump has conflicting $Label values." }
+  return [double]$values[0]
+}
+
+function Get-HapStructure([string]$Path) {
+  Add-Type -AssemblyName System.IO.Compression
+  $file = [IO.File]::OpenRead($Path)
+  $archive = $null
+  try {
+    try {
+      $archive = [IO.Compression.ZipArchive]::new(
+        $file,
+        [IO.Compression.ZipArchiveMode]::Read,
+        $false
+      )
+    } catch {
+      Fail 'hapPath must be a readable ZIP/HAP archive.'
+    }
+    $entries = @($archive.Entries)
+    if ($entries.Count -eq 0) { Fail 'hapPath must contain packaged entries.' }
+    $entryNames = @($entries | ForEach-Object { $_.FullName.Replace('\', '/') })
+    if (@($entryNames | Group-Object | Where-Object { $_.Count -ne 1 }).Count -gt 0 -or
+      @($entryNames | Where-Object { $_ -match '(^|/)\.\.(/|$)|^/' }).Count -gt 0) {
+      Fail 'hapPath contains duplicate or unsafe archive entries.'
+    }
+    foreach ($requiredEntry in @('module.json', 'pack.info', 'ets/modules.abc')) {
+      $entry = @($entries | Where-Object { $_.FullName.Replace('\', '/') -ceq $requiredEntry })
+      if ($entry.Count -ne 1 -or $entry[0].Length -le 0) {
+        Fail "hapPath is missing a non-empty $requiredEntry."
+      }
+    }
+    $moduleEntry = $archive.GetEntry('module.json')
+    $moduleStream = $moduleEntry.Open()
+    $moduleReader = [IO.StreamReader]::new($moduleStream, [Text.Encoding]::UTF8, $true)
+    try {
+      $module = $moduleReader.ReadToEnd() | ConvertFrom-Json
+    } catch {
+      Fail 'HAP module.json must be valid JSON.'
+    } finally {
+      $moduleReader.Dispose()
+      $moduleStream.Dispose()
+    }
+    if ([string](Require-Property (Require-Property $module 'app') 'bundleName') -cne 'com.yuhaofeng.mih' -or
+      [string](Require-Property (Require-Property $module 'module') 'name') -cne 'entry' -or
+      [string](Require-Property $module.module 'mainElement') -cne 'EntryAbility' -or
+      @((Require-Property $module.module 'abilities') | Where-Object {
+          [string](Require-Property $_ 'name') -ceq 'EntryAbility'
+        }).Count -ne 1) {
+      Fail 'HAP module.json does not identify the production entry bundle/ability.'
+    }
+    $abis = @($entryNames | ForEach-Object {
+        if ($_ -match '^libs/([^/]+)/[^/]+\.so$') { $matches[1] }
+      } | Sort-Object -Unique)
+    $moduleAbcStream = $archive.GetEntry('ets/modules.abc').Open()
+    try {
+      $moduleAbcSha256 = Get-StreamSha256 $moduleAbcStream
+    } finally {
+      $moduleAbcStream.Dispose()
+    }
+    return [pscustomobject]@{
+      Abis = $abis
+      EntryNames = $entryNames
+      ModuleAbcSha256 = $moduleAbcSha256
+    }
+  } finally {
+    if ($null -ne $archive) { $archive.Dispose() }
+    $file.Dispose()
+  }
+}
+
 function Flatten-Nodes([object]$Node) {
   $items = [Collections.Generic.List[object]]::new()
   if ($null -eq $Node) { return $items }
@@ -89,12 +172,68 @@ function Get-PreservationNode([object[]]$Nodes, [string]$Selector, [string]$Stat
     'key' { @($Nodes | Where-Object { (Attr $_ 'key') -ceq $value }) }
     'text' { @($Nodes | Where-Object { (Node-Label $_) -ceq $value }) }
     'type' { @($Nodes | Where-Object { (Attr $_ 'type') -ceq $value }) }
+    'bounds' { @($Nodes | Where-Object { (Attr $_ 'bounds') -ceq $value }) }
     default { @() }
   })
   if ($matches.Count -ne 1) {
     Fail "state '$StateName' selector '$Selector' must identify exactly one captured subtree; found $($matches.Count)."
   }
   return $matches[0]
+}
+
+function Get-VisualRegionData(
+  [string]$ScreenshotPath,
+  [object]$Bounds,
+  [string]$StateName,
+  [string]$Selector
+) {
+  Add-Type -AssemblyName System.Drawing
+  $bitmap = [Drawing.Bitmap]::new($ScreenshotPath)
+  try {
+    if ($Bounds.Left -lt 0 -or $Bounds.Top -lt 0 -or
+      $Bounds.Right -gt $bitmap.Width -or $Bounds.Bottom -gt $bitmap.Height -or
+      $Bounds.Width -le 0 -or $Bounds.Height -le 0) {
+      Fail "state '$StateName' selector '$Selector' has invalid screenshot-region bounds."
+    }
+    $pixels = [byte[]]::new($Bounds.Width * $Bounds.Height * 3)
+    $offset = 0
+    [double]$lumaSum = 0
+    [double]$lumaSquaredSum = 0
+    for ($y = $Bounds.Top; $y -lt $Bounds.Bottom; $y++) {
+      for ($x = $Bounds.Left; $x -lt $Bounds.Right; $x++) {
+        $color = $bitmap.GetPixel($x, $y)
+        $pixels[$offset++] = $color.R
+        $pixels[$offset++] = $color.G
+        $pixels[$offset++] = $color.B
+        $luma = (0.2126 * $color.R) + (0.7152 * $color.G) + (0.0722 * $color.B)
+        $lumaSum += $luma
+        $lumaSquaredSum += $luma * $luma
+      }
+    }
+    $pixelCount = $Bounds.Width * $Bounds.Height
+    $mean = $lumaSum / $pixelCount
+    $variance = [Math]::Max(0, ($lumaSquaredSum / $pixelCount) - ($mean * $mean))
+    return [pscustomobject]@{
+      Width = $Bounds.Width
+      Height = $Bounds.Height
+      Pixels = $pixels
+      LumaStandardDeviation = [Math]::Sqrt($variance)
+    }
+  } finally {
+    $bitmap.Dispose()
+  }
+}
+
+function Get-VisualRegionMeanAbsoluteError([object]$Left, [object]$Right) {
+  if ($Left.Width -ne $Right.Width -or $Left.Height -ne $Right.Height -or
+    $Left.Pixels.Length -ne $Right.Pixels.Length) {
+    return [double]::PositiveInfinity
+  }
+  [long]$difference = 0
+  for ($index = 0; $index -lt $Left.Pixels.Length; $index++) {
+    $difference += [Math]::Abs([int]$Left.Pixels[$index] - [int]$Right.Pixels[$index])
+  }
+  return $difference / [double]$Left.Pixels.Length
 }
 
 function Get-PreservationHash([object]$Node) {
@@ -132,7 +271,10 @@ if ([string]::IsNullOrWhiteSpace($repositoryRoot) -or -not [IO.Path]::IsPathRoot
   Fail 'repositoryRoot must be an existing absolute directory.'
 }
 $repositoryRoot = [IO.Path]::GetFullPath($repositoryRoot).TrimEnd('\', '/')
-$resolvedGitRoot = Normalize-Text ((& git -C $repositoryRoot rev-parse --show-toplevel 2>$null) -join "`n")
+$resolvedGitRoot = Normalize-Text (
+  (& git -c core.autocrlf=false -c core.safecrlf=false -C $repositoryRoot `
+      rev-parse --show-toplevel 2>$null) -join "`n"
+)
 if ($LASTEXITCODE -ne 0 -or [IO.Path]::GetFullPath($resolvedGitRoot).TrimEnd('\', '/') -cne $repositoryRoot) {
   Fail 'repositoryRoot must be the exact Git worktree root.'
 }
@@ -142,30 +284,126 @@ if ((Get-FileHash -LiteralPath $candidateDiffPath -Algorithm SHA256).Hash.ToLowe
   $candidateHash.ToLowerInvariant()) {
   Fail 'candidateDiffSha256 does not match candidateDiffPath.'
 }
-$hapPath = [string](Require-Property $manifest 'hapPath')
-Require-AbsoluteFile $hapPath 'hapPath'
-$hapHash = [string](Require-Property $manifest 'hapSha256')
-if ($hapHash -notmatch '^[0-9a-f]{64}$') { Fail 'hapSha256 must be 64 hex characters.' }
-$actualHapHash = (Get-FileHash -LiteralPath $hapPath -Algorithm SHA256).Hash.ToLowerInvariant()
-if ($actualHapHash -cne $hapHash) { Fail 'hapSha256 does not match hapPath.' }
 $commitSha = [string](Require-Property $manifest 'commitSha')
 if ($commitSha -ne '' -and $commitSha -notmatch '^[0-9a-f]{40}$') { Fail 'commitSha must be empty or 40 hex characters.' }
-$headSha = Normalize-Text ((& git -C $repositoryRoot rev-parse HEAD 2>$null) -join "`n")
-$statusText = Normalize-Text ((& git -C $repositoryRoot status --porcelain=v1 --untracked-files=all 2>$null) -join "`n")
+$headSha = Normalize-Text (
+  (& git -c core.autocrlf=false -c core.safecrlf=false -C $repositoryRoot `
+      rev-parse HEAD 2>$null) -join "`n"
+)
+$statusText = Normalize-Text (
+  (& git -c core.autocrlf=false -c core.safecrlf=false -C $repositoryRoot `
+      status --porcelain=v1 --untracked-files=all 2>$null) -join "`n"
+)
 if ($commitSha -eq '') {
   if ($statusText -match '(?m)^\?\? ') {
     Fail 'an uncommitted evidence candidate must not contain untracked files outside the Git diff.'
   }
-  $gitDiff = Normalize-Text ((& git -C $repositoryRoot diff --binary HEAD -- 2>$null) -join "`n")
+  $gitDiff = Normalize-Text (
+    (& git -c core.autocrlf=false -c core.safecrlf=false -C $repositoryRoot `
+        diff --binary HEAD -- 2>$null) -join "`n"
+  )
 } else {
-  $resolvedCommit = Normalize-Text ((& git -C $repositoryRoot rev-parse $commitSha 2>$null) -join "`n")
+  $resolvedCommit = Normalize-Text (
+    (& git -c core.autocrlf=false -c core.safecrlf=false -C $repositoryRoot `
+        rev-parse $commitSha 2>$null) -join "`n"
+  )
   if ($LASTEXITCODE -ne 0 -or $resolvedCommit -cne $commitSha -or $headSha -cne $commitSha) {
     Fail 'commitSha must resolve to the captured worktree HEAD.'
   }
-  $gitDiff = Normalize-Text ((& git -C $repositoryRoot diff --binary "$commitSha^" $commitSha -- 2>$null) -join "`n")
+  $gitDiff = Normalize-Text (
+    (& git -c core.autocrlf=false -c core.safecrlf=false -C $repositoryRoot `
+        diff --binary "$commitSha^" $commitSha -- 2>$null) -join "`n"
+  )
 }
 if ((Normalize-Text ([IO.File]::ReadAllText($candidateDiffPath))) -cne $gitDiff) {
   Fail 'candidateDiffPath is not the actual Git candidate diff.'
+}
+$candidateKind = if ($commitSha -eq '') { 'workingTree' } else { 'commit' }
+$candidateIdentitySha256 = if ($candidateKind -eq 'workingTree') {
+  Get-TextSha256 $gitDiff
+} else {
+  Get-TextSha256 $headSha
+}
+
+$hapPath = [string](Require-Property $manifest 'hapPath')
+Require-AbsoluteFile $hapPath 'hapPath'
+$canonicalHapPath = Join-Path $repositoryRoot 'entry\build\default\outputs\default\entry-default-unsigned.hap'
+if ([IO.Path]::GetFullPath($hapPath) -ine [IO.Path]::GetFullPath($canonicalHapPath)) {
+  Fail 'hapPath must be the canonical HAP output of the bound repository.'
+}
+$hapHash = [string](Require-Property $manifest 'hapSha256')
+if ($hapHash -notmatch '^[0-9a-f]{64}$') { Fail 'hapSha256 must be 64 hex characters.' }
+$actualHapHash = (Get-FileHash -LiteralPath $hapPath -Algorithm SHA256).Hash.ToLowerInvariant()
+if ($actualHapHash -cne $hapHash) { Fail 'hapSha256 does not match hapPath.' }
+$hapStructure = Get-HapStructure $hapPath
+$buildProfilePath = Join-Path $repositoryRoot 'entry\build-profile.json5'
+Require-AbsoluteFile $buildProfilePath 'entry/build-profile.json5'
+$buildProfile = [IO.File]::ReadAllText($buildProfilePath)
+$abiMatch = [regex]::Match(
+  $buildProfile,
+  '"abiFilters"\s*:\s*\[(?<abis>.*?)\]',
+  [Text.RegularExpressions.RegexOptions]::Singleline
+)
+if (-not $abiMatch.Success) { Fail 'entry/build-profile.json5 must declare abiFilters.' }
+$targetAbis = @([regex]::Matches($abiMatch.Groups['abis'].Value, '"([^"]+)"') |
+    ForEach-Object { $_.Groups[1].Value })
+if (($targetAbis -join ',') -cne 'arm64-v8a,x86_64' -or
+  ($hapStructure.Abis -join ',') -cne ($targetAbis -join ',')) {
+  Fail 'HAP ABI payloads must exactly match the arm64-v8a,x86_64 candidate profile.'
+}
+foreach ($abi in $targetAbis) {
+  if ($hapStructure.EntryNames -cnotcontains "libs/$abi/libMNN.so") {
+    Fail "HAP is missing the candidate runtime marker for ABI $abi."
+  }
+}
+$buildReceiptPath = [string](Require-Property $manifest 'buildReceiptPath')
+Require-AbsoluteFile $buildReceiptPath 'buildReceiptPath'
+if ([IO.Path]::GetFullPath($buildReceiptPath) -ine [IO.Path]::GetFullPath("$hapPath.runtime-ui-build.json")) {
+  Fail 'buildReceiptPath must be the canonical sidecar of hapPath.'
+}
+try {
+  $buildReceipt = Get-Content -LiteralPath $buildReceiptPath -Raw -Encoding utf8 | ConvertFrom-Json
+} catch {
+  Fail 'buildReceiptPath must contain valid UTF-8 JSON.'
+}
+$receiptWriterPath = Join-Path $repositoryRoot 'scripts\write-runtime-ui-build-receipt.ps1'
+Require-AbsoluteFile $receiptWriterPath 'runtime UI build receipt writer'
+if ([int](Require-Property $buildReceipt 'schemaVersion') -ne 1 -or
+  [string](Require-Property $buildReceipt 'repositoryRoot') -cne $repositoryRoot -or
+  [string](Require-Property $buildReceipt 'gitHead') -cne $headSha -or
+  [string](Require-Property $buildReceipt 'gitStatusSha256') -cne (Get-TextSha256 $statusText) -or
+  [string](Require-Property $buildReceipt 'candidateKind') -cne $candidateKind -or
+  [string](Require-Property $buildReceipt 'candidateIdentitySha256') -cne $candidateIdentitySha256 -or
+  [string](Require-Property $buildReceipt 'hapSha256') -cne $actualHapHash -or
+  [string](Require-Property $buildReceipt 'moduleAbcSha256') -cne $hapStructure.ModuleAbcSha256 -or
+  [string](Require-Property $buildReceipt 'buildProfileSha256') -cne
+    (Get-FileHash -LiteralPath $buildProfilePath -Algorithm SHA256).Hash.ToLowerInvariant() -or
+  [string](Require-Property $buildReceipt 'receiptWriterSha256') -cne
+    (Get-FileHash -LiteralPath $receiptWriterPath -Algorithm SHA256).Hash.ToLowerInvariant() -or
+  (@((Require-Property $buildReceipt 'abis')) -join ',') -cne ($targetAbis -join ',')) {
+  Fail 'build receipt does not bind the HAP to the current candidate/HEAD/profile/ABI payload.'
+}
+$buildScriptPath = Join-Path $repositoryRoot 'scripts\build-hap.ps1'
+Require-AbsoluteFile $buildScriptPath 'scripts/build-hap.ps1'
+$tokens = $null
+$parseErrors = $null
+$buildAst = [Management.Automation.Language.Parser]::ParseFile(
+  $buildScriptPath,
+  [ref]$tokens,
+  [ref]$parseErrors
+)
+if ($parseErrors.Count -ne 0) { Fail 'scripts/build-hap.ps1 must parse cleanly.' }
+$verifyCall = "& (Join-Path `$PSScriptRoot 'verify-ai-runtime-haps.ps1') -MainHapPath `$mainHap"
+$receiptCall = "& (Join-Path `$PSScriptRoot 'write-runtime-ui-build-receipt.ps1') -HapPath `$mainHap"
+$verifyStatements = @($buildAst.EndBlock.Statements | Where-Object {
+    $_.Extent.Text.Replace("`r`n", "`n").Trim() -ceq $verifyCall
+  })
+$receiptStatements = @($buildAst.EndBlock.Statements | Where-Object {
+    $_.Extent.Text.Replace("`r`n", "`n").Trim() -ceq $receiptCall
+  })
+if ($verifyStatements.Count -ne 1 -or $receiptStatements.Count -ne 1 -or
+  $receiptStatements[0].Extent.StartOffset -le $verifyStatements[0].Extent.StartOffset) {
+  Fail 'build-hap must write the runtime evidence receipt after successful HAP payload verification.'
 }
 
 $runtimeRoutes = @(
@@ -184,32 +422,67 @@ $fontScale = [double](Require-Property $manifest 'fontScale')
 if ($fontScale -notin @(1.0, 3.2)) { Fail 'fontScale must be 1.0 or 3.2.' }
 $sourceKind = [string](Require-Property $manifest 'source')
 if ($sourceKind -notin @('production', 'harness')) { Fail 'source must be production or harness.' }
-if (($fontScale -eq 3.2 -or $routeName -eq '/custommodel/CustomModelMainActivity') -and $sourceKind -ne 'harness') {
-  Fail '3.2x and hidden-route evidence must come from the isolated harness.'
+$harnessPagePath = Join-Path $repositoryRoot 'entry\src\main\ets\pages\RuntimeHarnessPage.ets'
+$entryAbilityPath = Join-Path $repositoryRoot 'entry\src\main\ets\entryability\EntryAbility.ets'
+$hasHarnessPage = Test-Path -LiteralPath $harnessPagePath -PathType Leaf
+$derivedSource = if ($hasHarnessPage -and $candidateKind -eq 'workingTree' -and
+  $gitDiff -match '(?m)^\+\+\+ b/entry/src/main/ets/pages/RuntimeHarnessPage\.ets$') {
+  'harness'
+} else {
+  'production'
 }
-$density = [double](Require-Property $manifest 'density')
-if ($density -le 0) { Fail 'density must be positive.' }
-$captureEnvironmentPath = [string](Require-Property $manifest 'captureEnvironmentPath')
-Require-AbsoluteFile $captureEnvironmentPath 'captureEnvironmentPath'
-try {
-  $captureEnvironment = Get-Content -LiteralPath $captureEnvironmentPath -Raw -Encoding utf8 | ConvertFrom-Json
-} catch {
-  Fail 'captureEnvironmentPath must contain valid UTF-8 JSON.'
+if ($sourceKind -cne $derivedSource) {
+  Fail 'source must be derived from the bound production or isolated harness candidate.'
 }
-if ([string](Require-Property $captureEnvironment 'source') -cne $sourceKind -or
-  [double](Require-Property $captureEnvironment 'fontScale') -ne $fontScale -or
-  [double](Require-Property $captureEnvironment 'density') -ne $density -or
-  [string](Require-Property $captureEnvironment 'repositoryRoot') -cne $repositoryRoot -or
-  [string](Require-Property $captureEnvironment 'gitHead') -cne $headSha) {
-  Fail 'capture environment does not bind source/font/density/repository/HEAD claims.'
+$derivedFontScale = 1.0
+if ($derivedSource -eq 'harness') {
+  Require-AbsoluteFile $entryAbilityPath 'harness EntryAbility'
+  $harnessPage = [IO.File]::ReadAllText($harnessPagePath)
+  $entryAbility = [IO.File]::ReadAllText($entryAbilityPath)
+  if ($harnessPage -notmatch '(?m)^[\t ]*(?:export[\t ]+)?struct[\t ]+RuntimeHarnessPage\b' -or
+    $gitDiff -notmatch '(?m)^\+\+\+ b/entry/src/main/ets/entryability/EntryAbility\.ets$') {
+    Fail 'harness source must contain the bound RuntimeHarnessPage and EntryAbility patch.'
+  }
+  if ($entryAbility -match '\.setFontSizeScale\(3\.2\)') { $derivedFontScale = 3.2 }
 }
-if ([string](Require-Property $captureEnvironment 'gitStatusSha256') -cne (Get-TextSha256 $statusText)) {
-  Fail 'capture environment git status does not match the worktree.'
+if ($fontScale -ne $derivedFontScale -or
+  (($fontScale -eq 3.2 -or $routeName -eq '/custommodel/CustomModelMainActivity') -and
+    $derivedSource -ne 'harness')) {
+  Fail 'fontScale/hidden-route claims do not match the bound production or harness source.'
 }
-$displayWidthPx = [int](Require-Property $captureEnvironment 'displayWidthPx')
-$displayHeightPx = [int](Require-Property $captureEnvironment 'displayHeightPx')
-if ($displayWidthPx -le 0 -or $displayHeightPx -le 0) {
-  Fail 'capture environment display dimensions must be positive.'
+$displayDumpPath = [string](Require-Property $manifest 'displayDumpPath')
+Require-AbsoluteFile $displayDumpPath 'displayDumpPath'
+$displayDump = [IO.File]::ReadAllText($displayDumpPath)
+$displayWidthPx = [int](Get-DisplayMetricValues $displayDump '(?m)^Width:\s+(\d+)\s*$' 'display width')
+$displayHeightPx = [int](Get-DisplayMetricValues $displayDump '(?m)^Height:\s+(\d+)\s*$' 'display height')
+$modeWidth = [int](Get-DisplayMetricValues `
+    $displayDump `
+    '(?m)^activeModes<id, W, H, RS>:\s+\d+,\s*(\d+),\s*\d+,\s*\d+\s*$' `
+    'active-mode width')
+$modeHeight = [int](Get-DisplayMetricValues `
+    $displayDump `
+    '(?m)^activeModes<id, W, H, RS>:\s+\d+,\s*\d+,\s*(\d+),\s*\d+\s*$' `
+    'active-mode height')
+$density = Get-DisplayMetricValues $displayDump '(?m)^Density:\s+([0-9.]+)\s*$' 'density'
+$virtualPixelRatio = Get-DisplayMetricValues `
+  $displayDump `
+  '(?m)^VirtualPixelRatio:\s+([0-9.]+)\s*$' `
+  'virtual pixel ratio'
+$virtualWidth = Get-DisplayMetricValues $displayDump '(?m)^VirtualWidth:\s+(\d+)\s*$' 'virtual width'
+$virtualHeight = Get-DisplayMetricValues $displayDump '(?m)^VirtualHeight:\s+(\d+)\s*$' 'virtual height'
+if ($displayWidthPx -le 0 -or $displayHeightPx -le 0 -or $density -le 0 -or
+  $modeWidth -ne $displayWidthPx -or $modeHeight -ne $displayHeightPx -or
+  [Math]::Abs($density - $virtualPixelRatio) -gt 0.001 -or
+  [Math]::Abs(($virtualWidth * $density) - $displayWidthPx) -gt 2 -or
+  [Math]::Abs(($virtualHeight * $density) - $displayHeightPx) -gt 2 -or
+  [double](Require-Property $manifest 'density') -ne $density) {
+  Fail 'display dump dimensions/density are inconsistent with each other or the manifest.'
+}
+if ($displayWidthPx -ne 1320 -or $displayHeightPx -ne 2856 -or
+  [Math]::Abs($density - 3.5) -gt 0.001 -or
+  [Math]::Abs($virtualWidth - 377) -gt 0.001 -or
+  [Math]::Abs($virtualHeight - 816) -gt 0.001) {
+  Fail 'device evidence must come from the pinned API 24 emulator display profile.'
 }
 
 foreach ($permissionField in @('permissionBefore', 'permissionAfter')) {
@@ -302,10 +575,12 @@ foreach ($state in $states) {
   if ($pagePath -cne 'pages/FeatureRuntimePage' -or (Attr $appRoot[0] 'pagePath') -cne $pagePath) {
     Fail "state '$name' has the wrong pagePath."
   }
-  $nodes = @(Flatten-Nodes $appRoot[0])
-  if (@($nodes | Where-Object { (Attr $_ 'key') -ceq $routeName }).Count -ne 1) {
+  $appNodes = @(Flatten-Nodes $appRoot[0])
+  $routeRoot = @($appNodes | Where-Object { (Attr $_ 'key') -ceq $routeName })
+  if ($routeRoot.Count -ne 1) {
     Fail "state '$name' does not bind routeName to the captured runtime root key."
   }
+  $nodes = @(Flatten-Nodes $routeRoot[0])
   $scrollableCount = Require-Property $state 'scrollableCount'
   if ($scrollableCount -isnot [int] -or $scrollableCount -lt 0) { Fail "state '$name' scrollableCount is invalid." }
   $actualScrolls = @($nodes | Where-Object { (Is-Visible $_) -and (Attr $_ 'type') -eq 'Scroll' }).Count
@@ -343,8 +618,14 @@ foreach ($state in $states) {
   if ($null -eq $appBounds -or $appBounds.Width -le 0 -or $appBounds.Height -le 0) {
     Fail "state '$name' application bounds are invalid."
   }
-  if ($bottomInsetPx -ne ($displayHeightPx - $appBounds.Bottom)) {
-    Fail "state '$name' bottomInsetPx does not match the captured display/application bounds."
+  $routeBounds = Parse-Bounds (Attr $routeRoot[0] 'bounds')
+  if ($null -eq $routeBounds -or $routeBounds.Width -le 0 -or $routeBounds.Height -le 0 -or
+    $routeBounds.Left -lt $appBounds.Left -or $routeBounds.Top -lt $appBounds.Top -or
+    $routeBounds.Right -gt $appBounds.Right -or $routeBounds.Bottom -gt $appBounds.Bottom) {
+    Fail "state '$name' runtime route bounds are invalid or outside the application root."
+  }
+  if ($bottomInsetPx -ne ($displayHeightPx - $routeBounds.Bottom)) {
+    Fail "state '$name' bottomInsetPx does not match the captured display/runtime-route bounds."
   }
   $clickableBounds = [Collections.Generic.List[object]]::new()
   foreach ($node in $nodes | Where-Object { Is-Visible $_ }) {
@@ -352,9 +633,9 @@ foreach ($state in $states) {
     if ([string]::IsNullOrWhiteSpace($boundsText)) { continue }
     $bounds = Parse-Bounds $boundsText
     if ($null -eq $bounds -or $bounds.Width -lt 0 -or $bounds.Height -lt 0 -or
-      $bounds.Left -lt $appBounds.Left -or $bounds.Top -lt $appBounds.Top -or
-      $bounds.Right -gt $appBounds.Right -or $bounds.Bottom -gt $appBounds.Bottom) {
-      Fail "state '$name' contains visible bounds outside the application area."
+      $bounds.Left -lt $routeBounds.Left -or $bounds.Top -lt $routeBounds.Top -or
+      $bounds.Right -gt $routeBounds.Right -or $bounds.Bottom -gt $routeBounds.Bottom) {
+      Fail "state '$name' contains visible bounds outside the runtime route area."
     }
     $label = Node-Label $node
     if (-not [string]::IsNullOrWhiteSpace($label) -and ($bounds.Width -le 0 -or $bounds.Height -le 0)) {
@@ -364,7 +645,7 @@ foreach ($state in $states) {
       if (($bounds.Width / $density) -lt $minTargetVp -or ($bounds.Height / $density) -lt $minTargetVp) {
         Fail "state '$name' contains an undersized clickable target."
       }
-      if ($bounds.Bottom -gt ($appBounds.Bottom - $bottomInsetPx)) {
+      if ($bounds.Bottom -gt $routeBounds.Bottom) {
         Fail "state '$name' contains a clickable target inside the bottom inset."
       }
       $clickableBounds.Add($bounds)
@@ -397,15 +678,25 @@ foreach ($state in $states) {
   $preservedFrom = [string](Require-Property $state 'preservedBoundsHashFrom')
   $preservedSelectors = @((Require-Property $state 'preservedNodeSelectors'))
   $preservedHashes = @{}
+  $preservedVisualRegions = @{}
   foreach ($selector in $preservedSelectors) {
-    $preservedHashes[[string]$selector] = Get-PreservationHash (
-      Get-PreservationNode $nodes ([string]$selector) $name
-    )
+    $preservedNode = Get-PreservationNode $nodes ([string]$selector) $name
+    $preservedHashes[[string]$selector] = Get-PreservationHash $preservedNode
+    $preservedBounds = Parse-Bounds (Attr $preservedNode 'bounds')
+    if ($null -eq $preservedBounds) {
+      Fail "state '$name' selector '$selector' has invalid visual bounds."
+    }
+    $visualRegion = Get-VisualRegionData $screenshotPath $preservedBounds $name ([string]$selector)
+    if ($visualRegion.LumaStandardDeviation -lt 2.0) {
+      Fail "state '$name' selector '$selector' does not contain a non-empty visual result."
+    }
+    $preservedVisualRegions[[string]$selector] = $visualRegion
   }
   $stateData[$name] = [pscustomobject]@{
     PreserveFrom = $preservedFrom
     Selectors = $preservedSelectors
     Hashes = $preservedHashes
+    VisualRegions = $preservedVisualRegions
   }
 }
 
@@ -420,6 +711,12 @@ foreach ($name in $stateData.Keys) {
   foreach ($selector in $stateData[$name].Selectors) {
     if ($stateData[$name].Hashes[[string]$selector] -cne $stateData[$reference].Hashes[[string]$selector]) {
       Fail "state '$name' changed preserved subtree '$selector'."
+    }
+    $visualMae = Get-VisualRegionMeanAbsoluteError `
+      $stateData[$name].VisualRegions[[string]$selector] `
+      $stateData[$reference].VisualRegions[[string]$selector]
+    if ($visualMae -gt 2.0) {
+      Fail "state '$name' changed preserved screenshot pixels for '$selector' (MAE=$visualMae)."
     }
   }
 }

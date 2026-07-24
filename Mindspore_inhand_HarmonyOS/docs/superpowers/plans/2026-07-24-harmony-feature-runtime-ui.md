@@ -121,6 +121,7 @@ hdc shell uitest uiInput swipe <x1> <y1> <x2> <y2> 600
 hdc shell uitest uiInput keyEvent Back
 hdc shell uitest dumpLayout -p /data/local/tmp/<state>.json
 hdc shell snapshot_display -f /data/local/tmp/<state>.jpeg
+hdc shell hidumper -s DisplayManagerService -a '-a' > <evidence-directory>\display-manager.txt
 hdc file recv /data/local/tmp/<state>.json <evidence-directory>
 hdc file recv /data/local/tmp/<state>.jpeg <evidence-directory>
 hdc shell aa dump -a
@@ -142,12 +143,13 @@ The manifest is UTF-8 JSON with this fixed schema:
   "candidateDiffSha256": "<64 hex>",
   "hapPath": "<absolute HAP path>",
   "hapSha256": "<64 hex>",
+  "buildReceiptPath": "<canonical HAP .runtime-ui-build.json sidecar>",
   "commitSha": "",
   "routeName": "<exact AppRoute name>",
   "fontScale": 1.0,
   "source": "production",
   "density": 3.5,
-  "captureEnvironmentPath": "<absolute capture-environment JSON path>",
+  "displayDumpPath": "<absolute raw DisplayManagerService dump path>",
   "permissionBefore": { "camera": -1, "media": -1 },
   "permissionAfter": { "camera": 0, "media": -1 },
   "permissionBeforePath": "<absolute permission-state JSON path>",
@@ -167,27 +169,40 @@ The manifest is UTF-8 JSON with this fixed schema:
       "minPrimaryTargetVp": 48,
       "bottomInsetPx": 98,
       "preservedBoundsHashFrom": "",
-      "preservedNodeSelectors": ["id:<stable captured node id>"]
+      "preservedNodeSelectors": ["bounds:[x1,y1][x2,y2]"]
     }
   ]
 }
 ```
 
-`captureEnvironmentPath` records `source`, `fontScale`, `density`,
-`repositoryRoot`, `gitHead`, `gitStatusSha256`, `displayWidthPx`, and
-`displayHeightPx`. The checker binds the candidate diff to the exact Git
-worktree/HEAD, binds capture claims to that environment record, decodes every
-JPEG at the captured display dimensions, and compares permission claims with
-the raw permission-state JSON. The captured runtime root must carry the exact
-route as its `key`; the declared bottom inset must equal the display/application
-bounds difference. It rejects missing files, a mismatched HAP hash, invalid
-enums, missing foreground `aa dump`, wrong page/route, wrong scroll count,
-empty or absent required state/action labels, forbidden texts, non-clickable
-required controls, undersized targets, visible bounds outside the application
-area, any overlapping visible clickable bounds, hidden labels, fixed-route
-camera switches, missing state labels, and changed selected subtrees. A
-preserved subtree hash includes stable identity, text, bounds, image, state,
-and recursive child attributes—not bounds alone.
+`buildReceiptPath` points to the receipt emitted only after the exact HAP passes
+the full payload verifier. The receipt binds the HAP and `modules.abc` hashes,
+build profile, verified ABI set, repository root, HEAD, normalized working-tree
+candidate, and receipt-writer revision. The checker also opens the canonical
+project HAP itself, validates its module/ability metadata and archive structure,
+and requires both configured ABIs with their native runtime payloads.
+
+`displayDumpPath` is the raw `DisplayManagerService` output captured directly
+from the API 24 emulator. Its physical/virtual dimensions and density must
+match the pinned 1320x2856, 377x816, 3.5 profile. `source` and `fontScale` are
+derived from the bound repository candidate: production evidence uses 1.0x;
+3.2x evidence requires the exact tracked `RuntimeHarnessPage` and
+`EntryAbility.setFontSizeScale(3.2)` patch. They are not trusted from a
+hand-authored capture-environment JSON.
+
+The foreground application root and the keyed runtime route `Stack` are
+validated separately. The bottom inset is `displayHeight - routeBottom`, and
+clickable bounds are compared directly with that route bottom so the inset is
+never subtracted twice. The checker rejects missing files, invalid enums,
+missing foreground `aa dump`, wrong page/route, wrong scroll count, empty or
+absent required state/action labels, forbidden texts, non-clickable required
+controls, undersized targets, visible bounds outside the route, overlapping
+visible clickable bounds, hidden labels, fixed-route camera switches, missing
+state labels, and changed selected content. Preservation combines the recursive
+dump-subtree hash with decoded screenshot pixels inside every selected bound;
+the region must contain real image variance and paired captures must remain
+within the fixed pixel-error threshold, so an `Image` node whose dump reports
+`backgroundImage:"empty source"` still proves its visible PixelMap content.
 
 `test-runtime-ui-evidence-guard.ps1` builds a real temporary Git worktree,
 decodable JPEG, dump, raw permission proofs, and manifest, then mutates each
@@ -202,7 +217,9 @@ Font, direct-route, state, and permission setup is deterministic:
 - 3.2x evidence uses the isolated Runtime harness worktree. Its
   `EntryAbility.ets` calls
   `this.context.getApplicationContext().setFontSizeScale(3.2)` before loading
-  the production page. After capture, restore that exact file with
+  the production page. Build the harness HAP and receipt, then capture and
+  validate while that exact tracked harness diff remains present. Only after
+  validation restore every harness file with
   `git restore --source=HEAD -- <file>` and require an empty harness
   `git status --short`.
 - Hidden/direct routes use the harness-only `RuntimeHarnessPage` route
@@ -224,14 +241,15 @@ Every paired dump is machine-checked, not judged from the JPEG alone:
 - icon/action bounds measure at least 44vp, with primary/header controls at
   least 48vp after dividing pixels by the captured device density;
 - static/text/custom pages expose one top-level scrollable content region;
-- no visible text/action bounds overlap or cross the application bottom inset;
+- no visible text/action bounds overlap or cross the keyed runtime route;
 - fixed-camera routes contain no switch action; switchable routes contain one
   localized semantic action;
 - hidden model/catalog labels are absent from the production dump;
 - loading/success/failure/retry text and selected-state semantics exist in the
   owning builder's dump;
-- before/after hashes confirm cancel/failure keeps the input or last-valid
-  result required by that workflow.
+- paired dump-subtree hashes and screenshot-region comparisons confirm
+  cancel/failure keeps the real PixelMap input or last-valid result required by
+  that workflow.
 
 Each mutation runner must prove these concrete RED cases (plus comment/string/
 decoy resistance):

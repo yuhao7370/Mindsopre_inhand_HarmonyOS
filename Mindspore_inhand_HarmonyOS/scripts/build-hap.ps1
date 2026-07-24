@@ -102,3 +102,4 @@ if ($LASTEXITCODE -ne 0) {
 }
 $mainHap = Join-Path $PSScriptRoot '..\entry\build\default\outputs\default\entry-default-unsigned.hap'
 & (Join-Path $PSScriptRoot 'verify-ai-runtime-haps.ps1') -MainHapPath $mainHap
+& (Join-Path $PSScriptRoot 'write-runtime-ui-build-receipt.ps1') -HapPath $mainHap
