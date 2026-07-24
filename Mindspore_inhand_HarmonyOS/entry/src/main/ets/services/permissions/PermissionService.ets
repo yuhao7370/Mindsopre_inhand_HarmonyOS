@@ -57,10 +57,6 @@ export function permissionRequestSummary(
   };
 }
 
-export function shouldOpenHarmonySettingsFallback(summary: PermissionRequestSummary): boolean {
-  return !summary.ok && summary.denied.length > 0;
-}
-
 export function runtimeOpenPermissionSettingsAction(
   deniedPermissions: Array<Permissions>
 ): OpenPermissionSettingsAction {
@@ -143,29 +139,15 @@ export class PermissionService {
     if (!action.openSettings) {
       return { ok: true, requested: [], denied: [] };
     }
-    const manager = abilityAccessCtrl.createAtManager();
-    try {
-      const result: Array<number> = await manager.requestPermissionOnSetting(context, action.permissions);
-      const summary = permissionRequestSummary(action.permissions, result);
-      if (shouldOpenHarmonySettingsFallback(summary)) {
-        await this.openHarmonySettingsFallback(context);
-      }
-      return summary;
-    } catch (_) {
-      await this.openHarmonySettingsFallback(context);
-      return {
-        ok: false,
-        requested: action.permissions,
-        denied: action.permissions
-      };
-    }
-  }
-
-  private async openHarmonySettingsFallback(context: common.UIAbilityContext): Promise<void> {
     try {
       await context.startAbility(harmonySettingsFallbackWant(context.applicationInfo.name));
     } catch (_) {
     }
+    return {
+      ok: false,
+      requested: action.permissions,
+      denied: action.permissions
+    };
   }
 
   private async requestPermissionNames(

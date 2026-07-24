@@ -477,8 +477,7 @@ import {
   runtimeOpenPermissionSettingsAction,
   runtimePermissionRecoveryActionForWorkflow,
   runtimePermissionRunActionForWorkflow,
-  runtimePermissionNamesForWorkflow,
-  shouldOpenHarmonySettingsFallback
+  runtimePermissionNamesForWorkflow
 } from '../main/ets/services/permissions/PermissionService';
 import {
   shouldConsumeIndexBackPress
@@ -9465,10 +9464,6 @@ export default function localUnitTest() {
       expect(fallbackWant.abilityName).assertEqual('com.huawei.hmos.settings.MainAbility');
       expect(JSON.stringify(fallbackWant.parameters))
         .assertEqual('{"settingsParamBundleName":"com.example.mindspore"}');
-      expect(shouldOpenHarmonySettingsFallback(deniedSummary)).assertTrue();
-      expect(shouldOpenHarmonySettingsFallback(
-        permissionRequestSummary(['ohos.permission.CAMERA'], [0])
-      )).assertFalse();
       liveCameraRouteNames.forEach((routeName: string) => {
         const workflow: FeatureWorkflow = workflowForRoute(routeName)!;
         expect(runtimePermissionRecoveryActionForWorkflow(
