@@ -1781,6 +1781,10 @@ type DanceReferenceVideoDownloadListener =
   DanceReferenceVideoProgressListener | DanceReferenceVideoEmptyListener | DanceReferenceVideoFailureListener;
 
 class ManualDanceReferenceVideoDownloadTask implements DanceReferenceVideoDownloadTask {
+  readonly onEvents: Array<DanceReferenceVideoDownloadEvent> = [];
+  readonly onCallbacks: Array<DanceReferenceVideoDownloadListener> = [];
+  readonly offEvents: Array<DanceReferenceVideoDownloadEvent> = [];
+  readonly offCallbacks: Array<DanceReferenceVideoDownloadListener> = [];
   private readonly progressCallbacks: Array<DanceReferenceVideoProgressListener> = [];
   private readonly completeCallbacks: Array<DanceReferenceVideoEmptyListener> = [];
   private readonly pauseCallbacks: Array<DanceReferenceVideoEmptyListener> = [];
@@ -1804,6 +1808,8 @@ class ManualDanceReferenceVideoDownloadTask implements DanceReferenceVideoDownlo
   }
 
   on(event: DanceReferenceVideoDownloadEvent, callback: DanceReferenceVideoDownloadListener): void {
+    this.onEvents.push(event);
+    this.onCallbacks.push(callback);
     if (event === 'progress') {
       this.progressCallbacks.push(callback as DanceReferenceVideoProgressListener);
       return;
@@ -1823,7 +1829,9 @@ class ManualDanceReferenceVideoDownloadTask implements DanceReferenceVideoDownlo
     this.failCallbacks.push(callback as DanceReferenceVideoFailureListener);
   }
 
-  off(_event: DanceReferenceVideoDownloadEvent, _callback?: DanceReferenceVideoDownloadListener): void {
+  off(event: DanceReferenceVideoDownloadEvent, callback: DanceReferenceVideoDownloadListener): void {
+    this.offEvents.push(event);
+    this.offCallbacks.push(callback);
   }
 
   async getTaskInfo(): Promise<request.DownloadInfo> {
@@ -3788,6 +3796,21 @@ export default function localUnitTest() {
       expect(progressEvents[0].totalBytes).assertEqual(200);
       expect(progressEvents[1].receivedBytes).assertEqual(100);
       expect(progressEvents[1].totalBytes).assertEqual(200);
+    });
+
+    it('removesDanceReferenceVideoDownloadListenersWithTheirRegisteredCallbacks', 0, async () => {
+      const task = new ManualDanceReferenceVideoDownloadTask(danceReferenceVideoDownloadStatusRunning);
+      const promise = waitForDanceReferenceVideoDownload(task);
+
+      task.emitComplete();
+      await promise;
+
+      expect(task.onEvents.join(',')).assertEqual('progress,complete,pause,remove,fail');
+      expect(task.offEvents.join(',')).assertEqual('progress,complete,pause,remove,fail');
+      expect(task.offCallbacks.length).assertEqual(task.onCallbacks.length);
+      for (let index = 0; index < task.onCallbacks.length; index++) {
+        expect(task.offCallbacks[index] === task.onCallbacks[index]).assertTrue();
+      }
     });
 
     it('settlesDanceReferenceVideoDownloadWhenTaskAlreadyEnded', 0, async () => {

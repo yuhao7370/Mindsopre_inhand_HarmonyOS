@@ -51,7 +51,7 @@ export type DanceReferenceVideoDownloadListener =
 
 export interface DanceReferenceVideoDownloadTask {
   on(event: DanceReferenceVideoDownloadEvent, callback: DanceReferenceVideoDownloadListener): void;
-  off(event: DanceReferenceVideoDownloadEvent, callback?: DanceReferenceVideoDownloadListener): void;
+  off(event: DanceReferenceVideoDownloadEvent, callback: DanceReferenceVideoDownloadListener): void;
   getTaskInfo(): Promise<request.DownloadInfo>;
 }
 
@@ -178,7 +178,7 @@ export class HarmonyDanceReferenceVideoDownloadTask implements DanceReferenceVid
     this.task.on(event, callback as DanceReferenceVideoEmptyListener);
   }
 
-  off(event: DanceReferenceVideoDownloadEvent, callback?: DanceReferenceVideoDownloadListener): void {
+  off(event: DanceReferenceVideoDownloadEvent, callback: DanceReferenceVideoDownloadListener): void {
     if (event === 'progress') {
       this.task.off(event, callback as DanceReferenceVideoProgressListener);
       return;
@@ -262,10 +262,10 @@ export function waitForDanceReferenceVideoDownload(
     };
     const cleanup = (): void => {
       task.off('progress', progress);
-      task.off('complete');
-      task.off('pause');
-      task.off('remove');
-      task.off('fail');
+      task.off('complete', complete);
+      task.off('pause', pause);
+      task.off('remove', remove);
+      task.off('fail', fail);
     };
     const complete = (): void => {
       if (settled) {
