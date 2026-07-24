@@ -12,6 +12,7 @@ export struct NativePageTitleBar {
       Row() {
         SymbolGlyph($r('sys.symbol.chevron_backward'))
           .fontSize(24)
+          .maxFontScale(1)
           .fontColor([AppColor.textPrimary])
       }
       .width(48)
@@ -32,6 +33,7 @@ export struct NativePageTitleBar {
         Row() {
           SymbolGlyph($r('sys.symbol.more'))
             .fontSize(24)
+            .maxFontScale(1)
             .fontColor([AppColor.textPrimary])
         }
         .width(48)

@@ -18,6 +18,7 @@ export struct NativePageTitleBar {
       Row() {
         SymbolGlyph($r('sys.symbol.chevron_backward'))
           .fontSize(24)
+          .maxFontScale(1)
           .fontColor([AppColor.textPrimary])
       }
       .width(48)
@@ -31,6 +32,7 @@ export struct NativePageTitleBar {
         Row() {
           SymbolGlyph($r('sys.symbol.more'))
             .fontSize(24)
+            .maxFontScale(1)
             .fontColor([AppColor.textPrimary])
         }
         .width(48)
@@ -57,6 +59,8 @@ Assert-NativePageTitleBarContract $fixture
 Assert-Rejected 'back target changed to 40vp' ([regex]::Replace($fixture, '\.width\(48\)', '.width(40)', 1))
 Assert-Rejected 'back callback removed' ($fixture -replace '\.onClick\(\(\) => this\.onBack\(\)\)', '')
 Assert-Rejected 'more callback removed' ($fixture -replace '\.onClick\(\(\) => this\.onMore\(\)\)', '')
+Assert-Rejected 'back icon scale cap removed' ([regex]::Replace($fixture, '(?s)(sys\.symbol\.chevron_backward''\)\)\s*\.fontSize\(24\)\s*)\.maxFontScale\(1\)', '$1'))
+Assert-Rejected 'more icon scale cap removed' ([regex]::Replace($fixture, '(?s)(sys\.symbol\.more''\)\)\s*\.fontSize\(24\)\s*)\.maxFontScale\(1\)', '$1'))
 Assert-Rejected 'commented valid code' ($fixture -replace 'SymbolGlyph\(\$r\(''sys\.symbol\.chevron_backward''\)\)', '// SymbolGlyph($r(''sys.symbol.chevron_backward''))')
 Assert-Rejected 'string literal valid code' ($fixture -replace 'SymbolGlyph\(\$r\(''sys\.symbol\.chevron_backward''\)\)', "'SymbolGlyph(`$r('sys.symbol.chevron_backward'))'")
 

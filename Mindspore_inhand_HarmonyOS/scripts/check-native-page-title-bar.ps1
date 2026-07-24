@@ -62,6 +62,7 @@ function Assert-IconAction(
   $literalLength = [Math]::Min($container.Length, $LiteralBuild.Length - $symbol.Index)
   $literalContainer = $LiteralBuild.Substring($symbol.Index, $literalLength)
   $requiredPatterns = @(
+    '\.maxFontScale\(1\)',
     '\.width\(48\)',
     '\.height\(48\)',
     'accessibilityText\(\$r\(\s*\x27\s*\x27\s*\)\)',
