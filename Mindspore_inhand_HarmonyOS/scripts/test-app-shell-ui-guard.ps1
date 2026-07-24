@@ -98,6 +98,13 @@ function Test-AppShellUiGuard {
       $actionPattern = "Button\(appString\('$($_)'\)(?:,\s*\{[^}]*\})?\)(?:(?!Button\()[\s\S])*?\.constraintSize\(\{\s*minHeight:\s*48\s*\}"
       if ($consentScroll -notmatch $actionPattern) { throw "Consent action must be at least 48vp: $_" }
     }
+    $agreementButton = [regex]::Match(
+      $consentScroll,
+      "Button\(appString\('me_user_agreement'\),\s*\{\s*type:\s*ButtonType\.Normal\s*\}\)(?<chain>(?:(?!Button\()[\s\S])*)"
+    )
+    if (-not $agreementButton.Success -or
+      $agreementButton.Groups['chain'].Value -notmatch '\.fontColor\(AppColor\.textAccent\)' -or
+      $agreementButton.Groups['chain'].Value -notmatch '\.backgroundColor\((?:AppColor\.cardBackground|Color\.Transparent)\)') { return $false }
     $build = Get-BracedBody $Splash 'build()'
     $brandBackgroundPattern = "Column\(\)\s*\{[\s\S]*?\}\s*\.width\('100%'\)\s*\.height\('100%'\)\s*\.backgroundColor\(AppColor\.pageBackground\)\s*\.accessibilityLevel\(this\.showPrivacyDialog\s*\?\s*'no-hide-descendants'\s*:\s*'auto'\)"
     if ($build -notmatch $brandBackgroundPattern) { return $false }
@@ -207,6 +214,12 @@ Assert-RejectedMutation 'agree action moved outside consent Scroll' $permission 
   $actionPattern = "(?s)(Button\(appString\('$($_)'\).*?)\.constraintSize\(\{ minHeight: 48 \}\)"
   Assert-RejectedMutation "consent action minimum height removed: $_" $permission ($splash -replace $actionPattern, '$1') $dance
 }
+$agreementBackgroundPattern = "(?s)(Button\(appString\('me_user_agreement'\),\s*\{\s*type:\s*ButtonType\.Normal\s*\}\)(?:(?!Button\()[\s\S])*?)\.backgroundColor\(AppColor\.cardBackground\)"
+$nativeBlueAgreement = [regex]::Replace($splash, $agreementBackgroundPattern, '$1.backgroundColor(''#0A59F7'')', 1)
+if ($nativeBlueAgreement -eq $splash -or $nativeBlueAgreement -notmatch '\.backgroundColor\(AppColor\.cardBackground\)') {
+  throw 'Agreement background mutation must replace the real button while retaining the card-background token decoy.'
+}
+Assert-RejectedMutation 'agreement link restored to native blue with card-background token decoy' $permission $nativeBlueAgreement $dance
 Assert-RejectedMutation 'consent background accessibility hiding made unconditional' $permission ($splash -replace "this\.showPrivacyDialog \? 'no-hide-descendants' : 'auto'", "'no-hide-descendants'") $dance
 $wrongScopeAccessibility = $splash -replace "\.accessibilityLevel\(this\.showPrivacyDialog \? 'no-hide-descendants' : 'auto'\)", ''
 $wrongScopeAccessibility = $wrongScopeAccessibility -replace '(\.accessibilityGroup\(true\))', "`$1`n      .accessibilityLevel(this.showPrivacyDialog ? 'no-hide-descendants' : 'auto')"

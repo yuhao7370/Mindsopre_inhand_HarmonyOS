@@ -103,6 +103,7 @@ export struct SplashPage {
           .constraintSize({ minHeight: 48 })
           .fontSize(13)
           .fontColor(AppColor.textAccent)
+          .backgroundColor(AppColor.cardBackground)
           .width('100%')
           .accessibilityText(appString('me_user_agreement') as Resource)
           .onClick(() => this.openPrivacyPolicy())

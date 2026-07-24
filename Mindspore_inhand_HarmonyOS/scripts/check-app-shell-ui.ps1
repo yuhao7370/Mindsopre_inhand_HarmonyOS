@@ -139,6 +139,15 @@ if ($consentScroll.IndexOf('me_user_agreements') -gt $consentScroll.IndexOf('me_
       throw "Consent action must be at least 48vp: $_"
     }
   }
+$agreementButton = [regex]::Match(
+  $consentScroll,
+  "Button\(appString\('me_user_agreement'\),\s*\{\s*type:\s*ButtonType\.Normal\s*\}\)(?<chain>(?:(?!Button\()[\s\S])*)"
+)
+if (-not $agreementButton.Success -or
+  $agreementButton.Groups['chain'].Value -notmatch '\.fontColor\(AppColor\.textAccent\)' -or
+  $agreementButton.Groups['chain'].Value -notmatch '\.backgroundColor\((?:AppColor\.cardBackground|Color\.Transparent)\)') {
+  throw 'Consent agreement link must use textAccent on the white or transparent card background.'
+}
 $build = Get-BracedBody $splash 'build()'
 $brandBackgroundPattern = "Column\(\)\s*\{[\s\S]*?\}\s*\.width\('100%'\)\s*\.height\('100%'\)\s*\.backgroundColor\(AppColor\.pageBackground\)\s*\.accessibilityLevel\(this\.showPrivacyDialog\s*\?\s*'no-hide-descendants'\s*:\s*'auto'\)"
 if ($build -notmatch $brandBackgroundPattern) {
@@ -151,9 +160,6 @@ if ($appTheme -notmatch 'readonly\s+textAccent:\s*string' -or
   $appTheme -notmatch "cardBackground:\s*'#FFFFFF'" -or
   $appTheme -notmatch "textAccent:\s*'#0B3A82'") {
   throw 'Theme must retain the approved 10.81:1 text accent on the white card.'
-}
-if ($splash -notmatch 'Button\(appString\(''me_user_agreement''\),\s*\{\s*type:\s*ButtonType\.Normal\s*\}\)[\s\S]*?\.fontColor\(AppColor\.textAccent\)') {
-  throw 'Consent agreement link must use the text accent button style.'
 }
 if (-not (Test-EntryAbilityLightColorMode $entryAbility)) { throw 'Application must explicitly use the implemented light theme.' }
 if ((Get-Json5StringProperty $module 'icon') -cne '$media:logo_splash') { throw 'Application icon must use the flat MindSpore logo.' }
