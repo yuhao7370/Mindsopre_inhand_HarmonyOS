@@ -91,11 +91,14 @@ try {
     "`n      this.startLiveCameraPreview();"
   $preparing = "      if (shouldPublishLiveObjectDetectionPreparingStatus(" +
     "`n        workflow,`n        this.resultRows.length > 0 || this.liveObjectDetectionRetryAction() !== 'none'" +
-    "`n      )) {`n        this.statusKey = 'feature_runtime_status_preparing';`n      }"
+    "`n      )) {`n        if (shouldPublishLiveSegmentationPreparingStatus(" +
+    "`n          workflow,`n          this.segmentationForegroundPixelMap !== undefined || this.liveSegmentationRetryAction() !== 'none'" +
+    "`n        )) {`n          this.statusKey = 'feature_runtime_status_preparing';`n        }`n      }"
   $fixedBack = "  if (workflow.routeName === AppRoute.IMAGE_CAMERA.name ||" +
     "`n    workflow.routeName === AppRoute.OBJECT_CAMERA.name) {`n    return 'back';`n  }"
   $preserve = '    shouldShowLiveClassificationCameraOverlay(workflow) ||' +
-    "`n    shouldShowLiveObjectDetectionCameraOverlay(workflow)) && !resultOk;"
+    "`n    shouldShowLiveObjectDetectionCameraOverlay(workflow) ||" +
+    "`n    usesAndroidLiveSegmentationLayout(workflow)) && !resultOk;"
 
   Mutate-And-Run 'remove-status-overlay' $page `
     '        this.liveObjectDetectionStatusOverlay()' '        this.runtimeStatusBar()'
@@ -144,7 +147,8 @@ try {
   Mutate-And-Run 'always-preparing' $page $preparing `
     "      this.statusKey = 'feature_runtime_status_preparing';"
   Mutate-And-Run 'drop-object-text-preservation' $catalog $preserve `
-    '    shouldShowLiveClassificationCameraOverlay(workflow)) && !resultOk;'
+    ('    shouldShowLiveClassificationCameraOverlay(workflow) ||' +
+      "`n    usesAndroidLiveSegmentationLayout(workflow)) && !resultOk;")
   Mutate-And-Run 'front-camera' $catalog $fixedBack ($fixedBack.Replace("return 'back';", "return 'front';"))
   Mutate-And-Run 'drop-right-clamp' $service `
     'Math.max(0, overlayWidth - maxWidth)' 'overlayWidth'

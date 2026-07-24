@@ -51,6 +51,7 @@ export type FeatureResultKind =
 export type FeaturePermissionKind = 'camera' | 'media' | 'internet';
 export type LiveClassificationRetryAction = 'none' | 'restartCamera' | 'restartInference';
 export type LiveObjectDetectionRetryAction = 'none' | 'restartCamera' | 'restartInference';
+export type LiveSegmentationRetryAction = 'none' | 'restartCamera' | 'restartInference';
 
 export interface FeatureWorkflow {
   readonly routeName: string;
@@ -286,7 +287,7 @@ export function workflowForRoute(routeName: string): FeatureWorkflow | undefined
   return featureWorkflows.find((workflow: FeatureWorkflow) => workflow.routeName === routeName);
 }
 
-export type SpecializedAndroidLiveLayout = 'imageClassification' | 'objectDetection';
+export type SpecializedAndroidLiveLayout = 'imageClassification' | 'objectDetection' | 'segmentation';
 
 export function specializedAndroidLiveLayoutForWorkflow(
   workflow: FeatureWorkflow | undefined
@@ -297,13 +298,15 @@ export function specializedAndroidLiveLayoutForWorkflow(
   if (workflow?.routeName === AppRoute.OBJECT_CAMERA.name) {
     return 'objectDetection';
   }
+  if (usesAndroidLiveSegmentationLayout(workflow)) {
+    return 'segmentation';
+  }
   return undefined;
 }
 
 export function usesSimpleAndroidLiveLayout(workflow: FeatureWorkflow | undefined): boolean {
   const routeName = workflow?.routeName ?? '';
-  return routeName === AppRoute.SEGMENTATION_LIVE.name ||
-    routeName === AppRoute.GESTURE_LIVE.name ||
+  return routeName === AppRoute.GESTURE_LIVE.name ||
     routeName === AppRoute.SCENE_LIVE.name ||
     routeName === AppRoute.LIVE_SKELETON.name;
 }
@@ -683,6 +686,10 @@ export function shouldShowCopyTextAction(aiMethod: string): boolean {
   return aiMethod === 'recognizeText' || aiMethod === 'translateText';
 }
 
+export function usesAndroidLiveSegmentationLayout(workflow: FeatureWorkflow | undefined): boolean {
+  return workflow?.routeName === AppRoute.SEGMENTATION_LIVE.name;
+}
+
 export function textRecognitionActionEnabled(workflowRunning: boolean): boolean {
   return !workflowRunning;
 }
@@ -785,6 +792,34 @@ export function liveObjectDetectionRetryActionForStatus(
   return 'none';
 }
 
+export function liveSegmentationRetryActionForStatus(
+  workflow: FeatureWorkflow | undefined,
+  statusKey: AppStringKey
+): LiveSegmentationRetryAction {
+  if (!usesAndroidLiveSegmentationLayout(workflow)) {
+    return 'none';
+  }
+  if (statusKey === 'feature_runtime_live_camera_failed' ||
+    statusKey === 'feature_runtime_live_camera_surface_missing' ||
+    statusKey === 'feature_runtime_permission_denied') {
+    return 'restartCamera';
+  }
+  if (statusKey === 'feature_runtime_live_frame_failed' ||
+    statusKey === 'feature_runtime_run_failed' ||
+    statusKey === 'feature_runtime_pending_adapter' ||
+    statusKey === 'feature_runtime_segmentation_failed') {
+    return 'restartInference';
+  }
+  return 'none';
+}
+
+export function shouldPublishLiveSegmentationPreparingStatus(
+  workflow: FeatureWorkflow | undefined,
+  hasForegroundOrRetry: boolean
+): boolean {
+  return !usesAndroidLiveSegmentationLayout(workflow) || !hasForegroundOrRetry;
+}
+
 export function shouldPublishLiveObjectDetectionPreparingStatus(
   workflow: FeatureWorkflow | undefined,
   hasObjectDetections: boolean
@@ -823,6 +858,7 @@ export function shouldPublishLiveClassificationPreparingStatus(
 export function shouldClearRuntimeResultAtWorkflowStart(workflow: FeatureWorkflow | undefined): boolean {
   return !shouldShowLiveClassificationCameraOverlay(workflow) &&
     !shouldShowLiveObjectDetectionCameraOverlay(workflow) &&
+    !usesAndroidLiveSegmentationLayout(workflow) &&
     workflow?.routeName !== AppRoute.PORTRAIT_SEGMENTATION.name &&
     !usesAndroidObjectPhotoLayout(workflow) &&
     !usesAndroidStyleTransferLayout(workflow) &&
@@ -838,8 +874,8 @@ export function shouldMirrorSegmentationForeground(
   workflow: FeatureWorkflow | undefined,
   liveCameraPosition: LiveCameraPosition
 ): boolean {
-  return workflow?.routeName === AppRoute.PORTRAIT_SEGMENTATION.name &&
-    liveCameraPosition === 'front';
+  return (workflow?.routeName === AppRoute.PORTRAIT_SEGMENTATION.name ||
+    usesAndroidLiveSegmentationLayout(workflow)) && liveCameraPosition === 'front';
 }
 
 export function inputKindReplacesPrimaryInput(inputKind: FeatureInputKind): boolean {
@@ -897,7 +933,8 @@ export function shouldPreserveRuntimeTextResultOnAiResult(
 ): boolean {
   return (usesAndroidStillSceneLayout(workflow) || usesAndroidObjectPhotoLayout(workflow) ||
     shouldShowLiveClassificationCameraOverlay(workflow) ||
-    shouldShowLiveObjectDetectionCameraOverlay(workflow)) && !resultOk;
+    shouldShowLiveObjectDetectionCameraOverlay(workflow) ||
+    usesAndroidLiveSegmentationLayout(workflow)) && !resultOk;
 }
 
 export function shouldPreserveRuntimeVisualResultOnAiResult(
@@ -907,6 +944,9 @@ export function shouldPreserveRuntimeVisualResultOnAiResult(
 ): boolean {
   if (shouldShowLiveObjectDetectionCameraOverlay(workflow)) {
     return !resultOk || dataKind === 'objectDetections';
+  }
+  if (usesAndroidLiveSegmentationLayout(workflow)) {
+    return !resultOk || dataKind === 'segmentation';
   }
   if (usesAndroidObjectPhotoLayout(workflow)) {
     return !resultOk || dataKind === 'objectDetections';

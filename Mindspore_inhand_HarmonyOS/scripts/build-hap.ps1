@@ -60,6 +60,8 @@ $env:PATH = (Join-Path $devEcoRoot 'jbr\bin') + ';' + $env:PATH
 & (Join-Path $PSScriptRoot 'test-live-image-classification-layout-guard.ps1')
 & (Join-Path $PSScriptRoot 'check-live-object-detection-layout-parity.ps1')
 & (Join-Path $PSScriptRoot 'test-live-object-detection-layout-guard.ps1')
+& (Join-Path $PSScriptRoot 'check-live-segmentation-runtime-ui.ps1')
+& (Join-Path $PSScriptRoot 'test-live-segmentation-runtime-ui-guard.ps1')
 & (Join-Path $PSScriptRoot 'check-still-scene-layout-parity.ps1')
 & (Join-Path $PSScriptRoot 'test-still-scene-layout-parity-guard.ps1')
 & (Join-Path $PSScriptRoot 'check-custom-model-layout-parity.ps1')

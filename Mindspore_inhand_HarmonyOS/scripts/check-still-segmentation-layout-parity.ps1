@@ -298,11 +298,12 @@ foreach ($line in @(
   'const pixelMap = await styleTransferPixelMapFromRgbaOutput(rgba, width, height);',
   'if (this.segmentationForegroundPixelMapOwner.accept(requestId, pixelMap)) {',
   'this.segmentationForegroundPixelMap = pixelMap;',
-  'await foregroundUpdate;',
+  'const foregroundReady = await this.updateSegmentationForegroundPreview(data.result, runtimeRequestId);',
+  'if (!foregroundReady) {',
   'this.segmentationForegroundPixelMapOwner.invalidatePendingReplacement();'
 )) { Assert-CodeLine $segmentation $line "atomic foreground chain is missing: $line" }
 Assert-Contains $segmentation `
-  "if (stillSegmentation) {`n          this.segmentationForegroundPixelMapOwner.invalidatePendingReplacement();" `
+  "if (stillSegmentation || liveSegmentation) {`n          this.segmentationForegroundPixelMapOwner.invalidatePendingReplacement();" `
   'current still-segmentation conversion failure must invalidate only the pending replacement.'
 
 $saveWrapper = Get-TextSection $page '  private saveStillSegmentationResultImage(): void {' `

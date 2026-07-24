@@ -152,13 +152,13 @@ $catalog = Remove-ArkTsCommentsAndStrings $catalogRaw
 $catalogWithLiterals = Remove-ArkTsCommentsAndStrings $catalogRaw $true
 
 $overlay = Section $page '  liveClassificationStatusOverlay() {' `
-  "`n`n  @Builder`n  imageClassificationAndroidLiveLayout()" 'classification status overlay'
+  "`n`n  @Builder`n  liveSegmentationStatusOverlay()" 'classification status overlay'
 $overlayWithLiterals = Section $pageWithLiterals '  liveClassificationStatusOverlay() {' `
-  "`n`n  @Builder`n  imageClassificationAndroidLiveLayout()" 'classification status overlay literals'
+  "`n`n  @Builder`n  liveSegmentationStatusOverlay()" 'classification status overlay literals'
 $layout = Section $page '  imageClassificationAndroidLiveLayout() {' `
-  "`n`n  @Builder`n  objectDetectionAndroidLiveLayout()" 'classification layout'
+  "`n`n  @Builder`n  segmentationAndroidLiveLayout()" 'classification layout'
 $layoutWithLiterals = Section $pageWithLiterals '  imageClassificationAndroidLiveLayout() {' `
-  "`n`n  @Builder`n  objectDetectionAndroidLiveLayout()" 'classification layout literals'
+  "`n`n  @Builder`n  segmentationAndroidLiveLayout()" 'classification layout literals'
 $retry = Section $page '  private retryLiveClassification(): void {' `
   "`n`n  private runWorkflow(): void {" 'classification retry handler'
 $retryWithLiterals = Section $pageWithLiterals '  private retryLiveClassification(): void {' `

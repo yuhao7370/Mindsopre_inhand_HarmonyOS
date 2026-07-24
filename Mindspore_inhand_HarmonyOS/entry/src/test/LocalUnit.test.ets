@@ -4140,14 +4140,15 @@ export default function localUnitTest() {
       expect(shouldShowCompositeSegmentationSaveAction(undefined)).assertFalse();
     });
 
-    it('mirrorsOnlyAndroidPortraitForegroundForFrontCamera', 0, () => {
+    it('mirrorsPortraitAndLiveSegmentationForegroundOnlyForFrontCamera', 0, () => {
       const portraitSegmentation: FeatureWorkflow = workflowForRoute(AppRoute.PORTRAIT_SEGMENTATION.name)!;
       const segmentationLive: FeatureWorkflow = workflowForRoute(AppRoute.SEGMENTATION_LIVE.name)!;
       const segmentationStill: FeatureWorkflow = workflowForRoute(AppRoute.SEGMENTATION_STILL.name)!;
 
       expect(shouldMirrorSegmentationForeground(portraitSegmentation, 'front')).assertTrue();
       expect(shouldMirrorSegmentationForeground(portraitSegmentation, 'back')).assertFalse();
-      expect(shouldMirrorSegmentationForeground(segmentationLive, 'front')).assertFalse();
+      expect(shouldMirrorSegmentationForeground(segmentationLive, 'front')).assertTrue();
+      expect(shouldMirrorSegmentationForeground(segmentationLive, 'back')).assertFalse();
       expect(shouldMirrorSegmentationForeground(segmentationStill, 'front')).assertFalse();
       expect(shouldMirrorSegmentationForeground(undefined, 'front')).assertFalse();
     });
@@ -4284,6 +4285,7 @@ export default function localUnitTest() {
     it('preservesPortraitSegmentationResultsWhenOnlyBackgroundInputChanges', 0, () => {
       const portraitSegmentation: FeatureWorkflow = workflowForRoute(AppRoute.PORTRAIT_SEGMENTATION.name)!;
       const stillSegmentation: FeatureWorkflow = workflowForRoute(AppRoute.SEGMENTATION_STILL.name)!;
+      const liveSegmentation: FeatureWorkflow = workflowForRoute(AppRoute.SEGMENTATION_LIVE.name)!;
       const styleTransfer: FeatureWorkflow = workflowForRoute(AppRoute.STYLE_TRANSFER.name)!;
 
       expect(shouldPreserveRuntimeResultAfterInputReady(portraitSegmentation, 'backgroundImage')).assertTrue();
@@ -4295,6 +4297,8 @@ export default function localUnitTest() {
       expect(shouldPreserveRuntimeVisualResultOnAiResult(portraitSegmentation, false, 'segmentation')).assertFalse();
       expect(shouldPreserveRuntimeVisualResultOnAiResult(portraitSegmentation, true, '')).assertFalse();
       expect(shouldPreserveRuntimeVisualResultOnAiResult(stillSegmentation, true, 'segmentation')).assertTrue();
+      expect(shouldPreserveRuntimeVisualResultOnAiResult(liveSegmentation, false, '')).assertTrue();
+      expect(shouldPreserveRuntimeVisualResultOnAiResult(liveSegmentation, true, 'segmentation')).assertTrue();
     });
 
     it('usesCurrentPortraitBackgroundWhenApplyingStaleSegmentationResult', 0, () => {
@@ -10205,12 +10209,11 @@ export default function localUnitTest() {
 
     it('usesSimpleAndroidLiveLayoutOnlyForMatchingAndroidActivities', 0, () => {
       const simpleLiveRouteNames: Array<string> = [
-        AppRoute.SEGMENTATION_LIVE.name,
         AppRoute.GESTURE_LIVE.name,
         AppRoute.SCENE_LIVE.name,
         AppRoute.LIVE_SKELETON.name
       ];
-      expect(new Set<string>(simpleLiveRouteNames).size).assertEqual(4);
+      expect(new Set<string>(simpleLiveRouteNames).size).assertEqual(3);
 
       featureWorkflows.forEach((workflow: FeatureWorkflow) => {
         expect(usesSimpleAndroidLiveLayout(workflow))
@@ -10412,7 +10415,7 @@ export default function localUnitTest() {
       expect(stillSegmentationResultToastKey(undefined, false)).assertUndefined();
     });
 
-    it('preservesStillSegmentationForegroundUntilAtomicReplacement', 0, () => {
+    it('preservesStillAndLiveSegmentationForegroundUntilAtomicReplacement', 0, () => {
       const stillSegmentation = workflowForRoute(AppRoute.SEGMENTATION_STILL.name);
       const liveSegmentation = workflowForRoute(AppRoute.SEGMENTATION_LIVE.name);
       const portraitSegmentation = workflowForRoute(AppRoute.PORTRAIT_SEGMENTATION.name);
@@ -10428,10 +10431,12 @@ export default function localUnitTest() {
       expect(shouldPreserveRuntimeResultAfterInputReady(styleTransfer, 'contentImage')).assertTrue();
 
       expect(shouldClearRuntimeResultAtWorkflowStart(stillSegmentation)).assertFalse();
+      expect(shouldClearRuntimeResultAtWorkflowStart(liveSegmentation)).assertFalse();
       expect(shouldPreserveRuntimeVisualResultOnAiResult(stillSegmentation, false, '')).assertTrue();
       expect(shouldPreserveRuntimeVisualResultOnAiResult(stillSegmentation, true, 'segmentation')).assertTrue();
       expect(shouldPreserveRuntimeVisualResultOnAiResult(stillSegmentation, true, 'classification')).assertFalse();
-      expect(shouldPreserveRuntimeVisualResultOnAiResult(liveSegmentation, false, '')).assertFalse();
+      expect(shouldPreserveRuntimeVisualResultOnAiResult(liveSegmentation, false, '')).assertTrue();
+      expect(shouldPreserveRuntimeVisualResultOnAiResult(liveSegmentation, true, 'segmentation')).assertTrue();
       expect(shouldPreserveRuntimeVisualResultOnAiResult(portraitSegmentation, true, 'segmentation')).assertTrue();
       expect(shouldPreserveRuntimeVisualResultOnAiResult(styleTransfer, true, 'styleTransfer')).assertTrue();
     });
@@ -10653,13 +10658,15 @@ export default function localUnitTest() {
       expect(shouldShowGestureStillFailureToast(undefined, true)).assertFalse();
     });
 
-    it('selectsSpecializedAndroidLiveLayoutOnlyForImageAndObjectCamera', 0, () => {
+    it('selectsSpecializedAndroidLiveLayoutForImageObjectAndSegmentationCamera', 0, () => {
       featureWorkflows.forEach((workflow: FeatureWorkflow) => {
         let expectedLayout: string | undefined = undefined;
         if (workflow.routeName === AppRoute.IMAGE_CAMERA.name) {
           expectedLayout = 'imageClassification';
         } else if (workflow.routeName === AppRoute.OBJECT_CAMERA.name) {
           expectedLayout = 'objectDetection';
+        } else if (workflow.routeName === AppRoute.SEGMENTATION_LIVE.name) {
+          expectedLayout = 'segmentation';
         }
         expect(specializedAndroidLiveLayoutForWorkflow(workflow)).assertEqual(expectedLayout);
       });
@@ -10680,6 +10687,7 @@ export default function localUnitTest() {
         usesAndroidPortraitSegmentationLayout(workflow),
         specializedAndroidLiveLayoutForWorkflow(workflow) === 'imageClassification',
         specializedAndroidLiveLayoutForWorkflow(workflow) === 'objectDetection',
+        specializedAndroidLiveLayoutForWorkflow(workflow) === 'segmentation',
         usesSimpleAndroidLiveLayout(workflow)
       ].filter((matches: boolean) => matches).length;
 

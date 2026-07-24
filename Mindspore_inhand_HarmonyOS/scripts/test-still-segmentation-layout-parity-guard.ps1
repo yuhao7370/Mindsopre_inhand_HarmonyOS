@@ -240,15 +240,16 @@ try {
     'this.segmentationForegroundPixelMapOwner.clear();'
   Assert-GuardRejects 'fire-and-forget-foreground' $page `
     '  private async updateSegmentationPreview(' "`n`n  private updatePosePreview" `
-    'await foregroundUpdate;' 'foregroundUpdate;'
+    'const foregroundReady = await this.updateSegmentationForegroundPreview(data.result, runtimeRequestId);' `
+    'const foregroundReady = this.updateSegmentationForegroundPreview(data.result, runtimeRequestId);'
   Assert-GuardRejects 'bypass-owner-accept' $page `
     '  private async updateSegmentationPreview(' "`n`n  private updatePosePreview" `
     'if (this.segmentationForegroundPixelMapOwner.accept(requestId, pixelMap)) {' `
     'if (pixelMap !== undefined) {'
   Assert-GuardRejects 'clear-owner-on-conversion-failure' $page `
     '  private async updateSegmentationPreview(' "`n`n  private updatePosePreview" `
-    "if (stillSegmentation) {`n          this.segmentationForegroundPixelMapOwner.invalidatePendingReplacement();`n          this.statusKey = 'feature_runtime_segmentation_failed';" `
-    "if (stillSegmentation) {`n          this.segmentationForegroundPixelMapOwner.clear();`n          this.statusKey = 'feature_runtime_segmentation_failed';"
+    "if (stillSegmentation || liveSegmentation) {`n          this.segmentationForegroundPixelMapOwner.invalidatePendingReplacement();`n          this.statusKey = 'feature_runtime_segmentation_failed';" `
+    "if (stillSegmentation || liveSegmentation) {`n          this.segmentationForegroundPixelMapOwner.clear();`n          this.statusKey = 'feature_runtime_segmentation_failed';"
 
   Assert-GuardRejects 'remove-click-save-gate' $page `
     '  private saveStillSegmentationResultImage(): void {' `

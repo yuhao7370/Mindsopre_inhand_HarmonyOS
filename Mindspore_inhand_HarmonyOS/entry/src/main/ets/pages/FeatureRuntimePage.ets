@@ -7,6 +7,7 @@ import {
   FeatureWorkflow,
   LiveClassificationRetryAction,
   LiveObjectDetectionRetryAction,
+  LiveSegmentationRetryAction,
   autoStartInputKindForWorkflow,
   fixedLiveCameraPositionForWorkflow,
   inputKindReplacesPrimaryInput,
@@ -37,6 +38,7 @@ import {
   usesAndroidPortraitSegmentationLayout,
   usesAndroidTextRecognitionLayout,
   usesAndroidTextTranslationLayout,
+  usesAndroidLiveSegmentationLayout,
   usesSimpleAndroidLiveLayout,
   visibleInputKindsForWorkflow,
   shouldShowPrimaryImageInputPreview,
@@ -72,6 +74,8 @@ import {
   shouldPublishLiveClassificationPreparingStatus,
   liveObjectDetectionRetryActionForStatus,
   shouldPublishLiveObjectDetectionPreparingStatus,
+  liveSegmentationRetryActionForStatus,
+  shouldPublishLiveSegmentationPreparingStatus,
   shouldShowLiveGestureCameraOverlay,
   shouldShowLiveObjectDetectionCameraOverlay,
   shouldShowLivePoseCameraOverlay,
@@ -1124,6 +1128,31 @@ struct FeatureRuntimePage {
     return liveClassificationRetryActionForStatus(workflowForRoute(this.routeName), this.statusKey);
   }
 
+  private liveSegmentationRetryAction(): LiveSegmentationRetryAction {
+    return liveSegmentationRetryActionForStatus(workflowForRoute(this.routeName), this.statusKey);
+  }
+
+  private retryLiveSegmentation(): void {
+    const workflow = workflowForRoute(this.routeName);
+    const action = liveSegmentationRetryActionForStatus(workflow, this.statusKey);
+    if (action === 'restartCamera') {
+      this.liveCameraInputSelected = true;
+      this.startLiveCameraPreview();
+      return;
+    }
+    if (action !== 'restartInference' || workflow === undefined) {
+      return;
+    }
+    this.statusKey = 'feature_runtime_status_preparing';
+    this.stopLiveRuntimeLoop();
+    if (this.liveCameraInputSelected && this.liveCameraActive) {
+      this.startLiveRuntimeLoop(workflow);
+      return;
+    }
+    this.liveCameraInputSelected = true;
+    this.startLiveCameraPreview();
+  }
+
   private retryLiveClassification(): void {
     const workflow = workflowForRoute(this.routeName);
     const action = liveClassificationRetryActionForStatus(workflow, this.statusKey);
@@ -1235,7 +1264,12 @@ struct FeatureRuntimePage {
         workflow,
         this.resultRows.length > 0 || this.liveObjectDetectionRetryAction() !== 'none'
       )) {
-        this.statusKey = 'feature_runtime_status_preparing';
+        if (shouldPublishLiveSegmentationPreparingStatus(
+          workflow,
+          this.segmentationForegroundPixelMap !== undefined || this.liveSegmentationRetryAction() !== 'none'
+        )) {
+          this.statusKey = 'feature_runtime_status_preparing';
+        }
       }
     }
     if (shouldClearRuntimeResultAtWorkflowStart(workflow)) {
@@ -1564,6 +1598,11 @@ struct FeatureRuntimePage {
       return;
     }
 
+    const foregroundReady = await this.updateSegmentationForegroundPreview(data.result, runtimeRequestId);
+    if (!foregroundReady) {
+      return;
+    }
+
     this.segmentationImageUri = data.imageUri;
     this.updateSegmentationImageOrientation(data.imageUri);
     const backgroundImageUri = runtimeSegmentationBackgroundImageUri(
@@ -1580,27 +1619,25 @@ struct FeatureRuntimePage {
     this.segmentationRectangles = data.result.rectangles;
     this.segmentationImageWidth = data.result.imageWidth ?? this.segmentationSourceWidth(data.result.rectangles);
     this.segmentationImageHeight = data.result.imageHeight ?? this.segmentationSourceHeight(data.result.rectangles);
-    const foregroundUpdate = this.updateSegmentationForegroundPreview(data.result, runtimeRequestId);
-    if (usesAndroidStillSegmentationLayout(workflow)) {
-      await foregroundUpdate;
-    }
   }
 
   private async updateSegmentationForegroundPreview(
     result: SegmentationResult,
     runtimeRequestId: number
-  ): Promise<void> {
-    const stillSegmentation = usesAndroidStillSegmentationLayout(workflowForRoute(this.routeName));
+  ): Promise<boolean> {
+    const workflow = workflowForRoute(this.routeName);
+    const stillSegmentation = usesAndroidStillSegmentationLayout(workflow);
+    const liveSegmentation = usesAndroidLiveSegmentationLayout(workflow);
     const rgba = result.foregroundImageRgba;
     const width = result.foregroundImageWidth ?? 0;
     const height = result.foregroundImageHeight ?? 0;
     if (rgba === undefined || rgba.byteLength === 0 || width <= 0 || height <= 0) {
-      if (stillSegmentation) {
+      if (stillSegmentation || liveSegmentation) {
         this.segmentationForegroundPixelMapOwner.invalidatePendingReplacement();
         this.statusKey = 'feature_runtime_segmentation_failed';
         this.showStillSegmentationFailureToastIfNeeded(false);
       }
-      return;
+      return false;
     }
 
     const requestId = this.segmentationForegroundPixelMapOwner.beginReplacement();
@@ -1608,23 +1645,23 @@ struct FeatureRuntimePage {
       const pixelMap = await styleTransferPixelMapFromRgbaOutput(rgba, width, height);
       if (!this.runtimeRequestGeneration.isCurrent(runtimeRequestId)) {
         this.segmentationForegroundPixelMapOwner.accept(requestId, pixelMap);
-        return;
+        return false;
       }
       if (this.segmentationForegroundPixelMapOwner.accept(requestId, pixelMap)) {
         this.segmentationForegroundPixelMap = pixelMap;
+        return true;
       }
+      return false;
     } catch (_) {
       if (this.runtimeRequestGeneration.isCurrent(runtimeRequestId) &&
         this.segmentationForegroundPixelMapOwner.isCurrent(requestId)) {
-        if (stillSegmentation) {
+        if (stillSegmentation || liveSegmentation) {
           this.segmentationForegroundPixelMapOwner.invalidatePendingReplacement();
           this.statusKey = 'feature_runtime_segmentation_failed';
           this.showStillSegmentationFailureToastIfNeeded(false);
-        } else {
-          this.segmentationForegroundPixelMapOwner.clear();
-          this.segmentationForegroundPixelMap = undefined;
         }
       }
+      return false;
     }
   }
 
@@ -4008,6 +4045,43 @@ struct FeatureRuntimePage {
   }
 
   @Builder
+  liveSegmentationStatusOverlay() {
+    Row({ space: AppSpacing.sm }) {
+      Row({ space: AppSpacing.xs }) {
+        if (this.statusKey === 'feature_runtime_status_preparing') {
+          LoadingProgress()
+            .width(20)
+            .height(20)
+            .color(Color.White)
+        }
+        Text(appString(this.statusKey))
+          .fontSize(13)
+          .fontColor('#F3F4F6')
+          .maxFontScale(1.6)
+          .layoutWeight(1)
+      }
+      .layoutWeight(1)
+      .constraintSize({ minHeight: 48 })
+      .alignItems(VerticalAlign.Center)
+      if (this.liveSegmentationRetryAction() !== 'none') {
+        Button(appString('web_retry'), { type: ButtonType.Normal })
+          .constraintSize({ minWidth: 72, minHeight: 48 })
+          .fontSize(14)
+          .fontColor(Color.White)
+          .maxFontScale(1.6)
+          .backgroundColor(Color.Transparent)
+          .border({ width: 1, color: '#99FFFFFF', radius: AppRadius.button })
+          .onClick(() => this.retryLiveSegmentation())
+      }
+    }
+    .width('calc(100% - 32vp)')
+    .constraintSize({ maxWidth: 520 })
+    .padding({ left: AppSpacing.md, right: AppSpacing.md, top: AppSpacing.xs, bottom: AppSpacing.xs })
+    .backgroundColor('#B31F2937')
+    .borderRadius(AppRadius.card)
+  }
+
+  @Builder
   imageClassificationAndroidLiveLayout() {
     Column() {
       this.runtimeActionToolbar(true)
@@ -4021,6 +4095,41 @@ struct FeatureRuntimePage {
         .padding({ bottom: AppSpacing.md })
         .justifyContent(FlexAlign.End)
         .alignItems(HorizontalAlign.Center)
+      }
+      .width('100%')
+      .layoutWeight(1)
+      .backgroundColor('#111827')
+    }
+    .width('100%')
+    .height('100%')
+    .backgroundColor(AppColor.pageBackground)
+  }
+
+  @Builder
+  segmentationAndroidLiveLayout() {
+    Column() {
+      this.runtimeActionToolbar(true)
+      Stack({ alignContent: Alignment.TopStart }) {
+        this.liveCameraSurfaceContent()
+        Column({ space: AppSpacing.md }) {
+          Row() {
+            if (this.liveCameraSwitchAvailable) {
+              this.runtimeCameraSwitchAction()
+            }
+          }
+          .width('100%')
+          .padding({ left: AppSpacing.md, right: AppSpacing.md })
+          .justifyContent(FlexAlign.End)
+          Row() {
+            this.liveSegmentationStatusOverlay()
+          }
+          .width('100%')
+          .justifyContent(FlexAlign.Center)
+        }
+        .width('100%')
+        .height('100%')
+        .padding({ top: AppSpacing.sm, bottom: AppSpacing.md })
+        .justifyContent(FlexAlign.SpaceBetween)
       }
       .width('100%')
       .layoutWeight(1)
@@ -5312,6 +5421,8 @@ struct FeatureRuntimePage {
       this.stillSceneAndroidLayout()
     } else if (usesAndroidPortraitSegmentationLayout(workflowForRoute(this.routeName))) {
       this.portraitSegmentationAndroidLayout()
+    } else if (specializedAndroidLiveLayoutForWorkflow(workflowForRoute(this.routeName)) === 'segmentation') {
+      this.segmentationAndroidLiveLayout()
     } else if (specializedAndroidLiveLayoutForWorkflow(workflowForRoute(this.routeName)) === 'imageClassification') {
       this.imageClassificationAndroidLiveLayout()
     } else if (specializedAndroidLiveLayoutForWorkflow(workflowForRoute(this.routeName)) === 'objectDetection') {
