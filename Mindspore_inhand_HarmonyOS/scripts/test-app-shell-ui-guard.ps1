@@ -45,6 +45,25 @@ function Test-BottomTabBarContract([string]$source, [string]$layoutSpec) {
   }
 }
 
+function Test-PublicRootTabContract([string]$source) {
+  try {
+    $mainPageSource = Remove-SourceComments $source
+    if ($mainPageSource -match '\bCollegePage\b|\bcurrentPageBuilder\b') { return $false }
+    if ([regex]::Matches($mainPageSource, '\bExperiencePage\s*\(\s*\)').Count -ne 1) { return $false }
+    if ([regex]::Matches($mainPageSource, '\bMePage\s*\(\s*\)').Count -ne 1) { return $false }
+
+    $build = Get-BracedBody $mainPageSource 'build()'
+    if ([regex]::Matches($build, '\bStack\s*\(\s*\)').Count -ne 1) { return $false }
+    $stack = Get-BracedBody $build 'Stack()'
+    if ($stack -match '\bif\s*\(') { return $false }
+    $experienceRoot = 'ExperiencePage\s*\(\s*\)\s*\.visibility\(\s*this\.selectedTab\s*===\s*MainTab\.EXPERIENCE\s*\?\s*Visibility\.Visible\s*:\s*Visibility\.Hidden\s*\)\s*\.hitTestBehavior\(\s*this\.selectedTab\s*===\s*MainTab\.EXPERIENCE\s*\?\s*HitTestMode\.Default\s*:\s*HitTestMode\.None\s*\)'
+    $meRoot = 'MePage\s*\(\s*\)\s*\.visibility\(\s*this\.selectedTab\s*===\s*MainTab\.ME\s*\?\s*Visibility\.Visible\s*:\s*Visibility\.Hidden\s*\)\s*\.hitTestBehavior\(\s*this\.selectedTab\s*===\s*MainTab\.ME\s*\?\s*HitTestMode\.Default\s*:\s*HitTestMode\.None\s*\)'
+    return $stack -match $experienceRoot -and $stack -match $meRoot
+  } catch {
+    return $false
+  }
+}
+
 function Test-AppShellUiGuard {
   param(
     [string]$Permission,
@@ -55,7 +74,8 @@ function Test-AppShellUiGuard {
     [string]$DarkColor = $script:darkColor,
     [string]$AppTheme = $script:appTheme,
     [string]$BottomTab = $script:bottomTab,
-    [string]$BottomTabLayoutSpec = $script:bottomTabLayoutSpec
+    [string]$BottomTabLayoutSpec = $script:bottomTabLayoutSpec,
+    [string]$MainPage = $script:mainPage
   )
 
   try {
@@ -89,7 +109,8 @@ function Test-AppShellUiGuard {
     return $AppTheme -match 'readonly\s+textAccent:\s*string' -and
       $AppTheme -match "cardBackground:\s*'#FFFFFF'" -and
       $AppTheme -match "textAccent:\s*'#0B3A82'" -and
-      (Test-BottomTabBarContract $BottomTab $BottomTabLayoutSpec)
+      (Test-BottomTabBarContract $BottomTab $BottomTabLayoutSpec) -and
+      (Test-PublicRootTabContract $MainPage)
   } catch {
     return $false
   }
@@ -122,10 +143,11 @@ function Assert-RejectedMutation {
     [string]$DarkColor = $script:darkColor,
     [string]$AppTheme = $script:appTheme,
     [string]$BottomTab = $script:bottomTab,
-    [string]$BottomTabLayoutSpec = $script:bottomTabLayoutSpec
+    [string]$BottomTabLayoutSpec = $script:bottomTabLayoutSpec,
+    [string]$MainPage = $script:mainPage
   )
 
-  if (Test-AppShellUiGuard $Permission $Splash $Dance $EntryAbility $Module $DarkColor $AppTheme $BottomTab $BottomTabLayoutSpec) {
+  if (Test-AppShellUiGuard $Permission $Splash $Dance $EntryAbility $Module $DarkColor $AppTheme $BottomTab $BottomTabLayoutSpec $MainPage) {
     throw "Guard accepted mutation: $Name"
   }
 }
@@ -152,6 +174,7 @@ $script:module = Get-Content (Join-Path $root 'entry/src/main/module.json5') -Ra
 $script:darkColor = Get-Content (Join-Path $root 'entry/src/main/resources/dark/element/color.json') -Raw
 $script:bottomTab = Get-Content (Join-Path $root 'entry/src/main/ets/common/components/BottomTabBar.ets') -Raw
 $script:bottomTabLayoutSpec = Get-Content (Join-Path $root 'entry/src/main/ets/common/data/BottomTabBarLayoutSpec.ets') -Raw
+$script:mainPage = Get-Content (Join-Path $root 'entry/src/main/ets/pages/MainPage.ets') -Raw
 
 if (-not (Test-AppShellUiGuard $permission $splash $dance)) {
   throw 'Guard fixture must pass.'
@@ -218,3 +241,8 @@ Assert-RejectedMutation -Name 'bottom tab accessibility group removed' -Permissi
 Assert-RejectedMutation -Name 'bottom tab button role removed' -Permission $permission -Splash $splash -Dance $dance -BottomTab ($script:bottomTab -replace '\.accessibilityRole\(AccessibilityRoleType\.BUTTON\)', '')
 Assert-RejectedMutation -Name 'bottom tab wide-window cap removed' -Permission $permission -Splash $splash -Dance $dance -BottomTab ($script:bottomTab -replace ',\s*maxWidth:\s*bottomTabBarMaxWidthVp', '')
 Assert-RejectedMutation -Name 'bottom tab max width changed' -Permission $permission -Splash $splash -Dance $dance -BottomTabLayoutSpec ($script:bottomTabLayoutSpec -replace 'bottomTabBarMaxWidthVp:\s*number\s*=\s*500', 'bottomTabBarMaxWidthVp: number = 501')
+Assert-RejectedMutation -Name 'Experience hidden hit-test removed behind a comment decoy' -Permission $permission -Splash $splash -Dance $dance -MainPage (($script:mainPage -replace '\s*\.hitTestBehavior\(this\.selectedTab === MainTab\.EXPERIENCE \? HitTestMode\.Default : HitTestMode\.None\)', '') + "`n// .hitTestBehavior(this.selectedTab === MainTab.EXPERIENCE ? HitTestMode.Default : HitTestMode.None)")
+Assert-RejectedMutation -Name 'Me hidden hit-test removed behind a comment decoy' -Permission $permission -Splash $splash -Dance $dance -MainPage (($script:mainPage -replace '\s*\.hitTestBehavior\(this\.selectedTab === MainTab\.ME \? HitTestMode\.Default : HitTestMode\.None\)', '') + "`n// .hitTestBehavior(this.selectedTab === MainTab.ME ? HitTestMode.Default : HitTestMode.None)")
+Assert-RejectedMutation -Name 'College root reinserted' -Permission $permission -Splash $splash -Dance $dance -MainPage ($script:mainPage + "`nCollegePage()")
+Assert-RejectedMutation -Name 'Experience root conditionally remounted' -Permission $permission -Splash $splash -Dance $dance -MainPage ($script:mainPage -replace 'ExperiencePage\(\)\s*\.visibility', 'if (this.selectedTab === MainTab.EXPERIENCE) { ExperiencePage().visibility' -replace '(\.hitTestBehavior\(this\.selectedTab === MainTab\.EXPERIENCE \? HitTestMode\.Default : HitTestMode\.None\))', '$1 }')
+Assert-RejectedMutation -Name 'Me root duplicated' -Permission $permission -Splash $splash -Dance $dance -MainPage ($script:mainPage + "`nMePage()")

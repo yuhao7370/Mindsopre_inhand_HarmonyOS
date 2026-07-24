@@ -8,6 +8,7 @@ $module = Get-Content (Join-Path $root 'entry/src/main/module.json5') -Raw
 $darkColor = Get-Content (Join-Path $root 'entry/src/main/resources/dark/element/color.json') -Raw
 $bottomTab = Get-Content (Join-Path $root 'entry/src/main/ets/common/components/BottomTabBar.ets') -Raw
 $bottomTabLayoutSpec = Get-Content (Join-Path $root 'entry/src/main/ets/common/data/BottomTabBarLayoutSpec.ets') -Raw
+$mainPage = Get-Content (Join-Path $root 'entry/src/main/ets/pages/MainPage.ets') -Raw
 
 function Remove-SourceComments([string]$source) {
   $withoutBlockComments = [regex]::Replace($source, '/\*[\s\S]*?\*/', '')
@@ -51,6 +52,25 @@ function Test-BottomTabBarContract([string]$source, [string]$layoutSpec) {
     if ($build -notmatch 'Text\(appString\(tab\.titleKey\)\)[\s\S]*?\.fontSize\(11\)[\s\S]*?\.fontColor\(this\.selected === tab\.id \? AppColor\.textAccent : AppColor\.textSecondary\)') { return $false }
     if ($build -notmatch "Row\(\)\s*\{[\s\S]*?\}\s*\.width\('90%'\)\s*\.constraintSize\(\{\s*minHeight:\s*bottomTabBarMinHeightVp,\s*maxWidth:\s*bottomTabBarMaxWidthVp\s*\}\)\s*\.margin\([\s\S]*?\.borderRadius\(31\)[\s\S]*?\.shadow\(") { return $false }
     return $true
+  } catch {
+    return $false
+  }
+}
+
+function Test-PublicRootTabContract([string]$source) {
+  try {
+    $mainPageSource = Remove-SourceComments $source
+    if ($mainPageSource -match '\bCollegePage\b|\bcurrentPageBuilder\b') { return $false }
+    if ([regex]::Matches($mainPageSource, '\bExperiencePage\s*\(\s*\)').Count -ne 1) { return $false }
+    if ([regex]::Matches($mainPageSource, '\bMePage\s*\(\s*\)').Count -ne 1) { return $false }
+
+    $build = Get-BracedBody $mainPageSource 'build()'
+    if ([regex]::Matches($build, '\bStack\s*\(\s*\)').Count -ne 1) { return $false }
+    $stack = Get-BracedBody $build 'Stack()'
+    if ($stack -match '\bif\s*\(') { return $false }
+    $experienceRoot = 'ExperiencePage\s*\(\s*\)\s*\.visibility\(\s*this\.selectedTab\s*===\s*MainTab\.EXPERIENCE\s*\?\s*Visibility\.Visible\s*:\s*Visibility\.Hidden\s*\)\s*\.hitTestBehavior\(\s*this\.selectedTab\s*===\s*MainTab\.EXPERIENCE\s*\?\s*HitTestMode\.Default\s*:\s*HitTestMode\.None\s*\)'
+    $meRoot = 'MePage\s*\(\s*\)\s*\.visibility\(\s*this\.selectedTab\s*===\s*MainTab\.ME\s*\?\s*Visibility\.Visible\s*:\s*Visibility\.Hidden\s*\)\s*\.hitTestBehavior\(\s*this\.selectedTab\s*===\s*MainTab\.ME\s*\?\s*HitTestMode\.Default\s*:\s*HitTestMode\.None\s*\)'
+    return $stack -match $experienceRoot -and $stack -match $meRoot
   } catch {
     return $false
   }
@@ -151,4 +171,7 @@ $bottomTab = Remove-SourceComments $bottomTab
 }
 if (-not (Test-BottomTabBarContract $bottomTab $bottomTabLayoutSpec)) {
   throw 'Bottom tab accessibility and wide-window contract must hold structurally.'
+}
+if (-not (Test-PublicRootTabContract $mainPage)) {
+  throw 'Public roots must remain mounted once in one Stack with hidden pages excluded from hit testing.'
 }
