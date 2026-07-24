@@ -1,20 +1,13 @@
+param(
+  [string]$SourceRoot = ''
+)
+
 $ErrorActionPreference = 'Stop'
 
-$root = Split-Path -Parent $PSScriptRoot
-$switchIcon = Join-Path $root 'entry/src/main/resources/base/media/front_back_switch.png'
-$expectedHash = 'F5182699627421A3E96749C619782A9B4AD63E0941BBAA012BB929960B6C1133'
-
-if (-not (Test-Path -LiteralPath $switchIcon)) {
-  throw 'Missing Android live-camera switch media: front_back_switch.png'
-}
-
-$hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $switchIcon).Hash
-if ($hash -ne $expectedHash) {
-  throw "Android live-camera switch media hash mismatch. Expected $expectedHash, got $hash"
-}
-
-$runtimePagePath = Join-Path $root 'entry/src/main/ets/pages/FeatureRuntimePage.ets'
-$source = (Get-Content -Raw -Encoding UTF8 -LiteralPath $runtimePagePath) -replace "`r`n", "`n"
+if ([string]::IsNullOrWhiteSpace($SourceRoot)) { $SourceRoot = Split-Path -Parent $PSScriptRoot }
+$SourceRoot = [IO.Path]::GetFullPath($SourceRoot)
+$runtimePagePath = Join-Path $SourceRoot 'entry/src/main/ets/pages/FeatureRuntimePage.ets'
+$source = ([IO.File]::ReadAllText($runtimePagePath)).Replace("`r`n", "`n").Replace("`r", "`n")
 
 function SourceSlice([string] $text, [string] $startMarker, [string] $endMarker) {
   $start = $text.IndexOf($startMarker)
@@ -28,18 +21,19 @@ function SourceSlice([string] $text, [string] $startMarker, [string] $endMarker)
   return $text.Substring($start, $end - $start)
 }
 
-$previewSlice = SourceSlice $source 'if (this.liveCameraSwitchAvailable)' "    }`n    .width('100%')"
+$previewSlice = SourceSlice $source 'runtimeCameraSwitchAction()' 'runtimePermissionRecoveryOverlay()'
 if ($previewSlice -notmatch "Image\(\`$r\('app\.media\.front_back_switch'\)\)") {
-  throw 'FeatureRuntimePage must render Android front_back_switch.png for live camera switching'
+  throw 'FeatureRuntimePage must render the existing camera switch media'
 }
 if ($previewSlice -match "Button\(appString\('feature_runtime_switch_camera'\)\)") {
   throw 'FeatureRuntimePage must not render the live camera switch as a text button'
 }
-if ($previewSlice -notmatch '\.width\(35\)' -or $previewSlice -notmatch '\.height\(35\)') {
-  throw 'FeatureRuntimePage live camera switch icon must keep the Android 35x35vp visual size'
+if ($previewSlice -notmatch '\.width\(48\)' -or $previewSlice -notmatch '\.height\(48\)' -or
+  $previewSlice -notmatch "\.accessibilityText\(appString\('feature_runtime_switch_camera'\) as Resource\)") {
+  throw 'FeatureRuntimePage live camera switch must use a localized 48vp semantic target'
 }
 if ($previewSlice -notmatch 'this\.switchLiveCamera\(\)') {
   throw 'FeatureRuntimePage live camera switch icon must keep the existing switch handler'
 }
 
-Write-Host 'Android live-camera switch icon wiring is present'
+Write-Output 'Live-camera switch semantic wiring is present.'

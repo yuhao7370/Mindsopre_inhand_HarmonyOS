@@ -3182,17 +3182,19 @@ struct FeatureRuntimePage {
           .height(22)
           .objectFit(ImageFit.Contain)
       }
-        .width(40)
-        .height(40)
+        .width(48)
+        .height(48)
         .justifyContent(FlexAlign.Center)
         .alignItems(VerticalAlign.Center)
+        .accessibilityText($r('app.string.action_back'))
+        .accessibilityRole(AccessibilityRoleType.BACK_BUTTON)
         .onClick(() => router.back())
       Text(appString(this.titleKey))
-        .fontSize(22)
+        .fontSize(20)
         .fontWeight(FontWeight.Bold)
         .fontColor(AppColor.textPrimary)
         .layoutWeight(1)
-        .maxLines(1)
+        .maxLines(2)
       if (showActions && this.helpContentKey !== undefined) {
         Row() {
           Image($r('app.media.icon_help'))
@@ -3200,11 +3202,13 @@ struct FeatureRuntimePage {
             .height(24)
             .objectFit(ImageFit.Contain)
         }
-          .width(40)
-          .height(40)
+          .width(48)
+          .height(48)
           .justifyContent(FlexAlign.Center)
           .alignItems(VerticalAlign.Center)
           .margin({ left: AppSpacing.xs })
+          .accessibilityText(appString('feature_runtime_help') as Resource)
+          .accessibilityRole(AccessibilityRoleType.BUTTON)
           .onClick(() => this.showLocalHelpDialog())
       }
       if (showActions && this.helpUrl.length > 0) {
@@ -3214,45 +3218,92 @@ struct FeatureRuntimePage {
             .height(24)
             .objectFit(ImageFit.Contain)
         }
-          .width(40)
-          .height(40)
+          .width(48)
+          .height(48)
           .justifyContent(FlexAlign.Center)
           .alignItems(VerticalAlign.Center)
           .margin({ left: AppSpacing.xs })
+          .accessibilityText($r('app.string.action_more'))
+          .accessibilityRole(AccessibilityRoleType.BUTTON)
           .onClick(() => this.openHelpPage())
       }
     }
     .width('100%')
-    .height(56)
-    .padding({ left: AppSpacing.page, right: AppSpacing.page })
+    .constraintSize({ minHeight: 56 })
+    .padding({ left: AppSpacing.page, right: AppSpacing.page, top: AppSpacing.xs, bottom: AppSpacing.xs })
     .alignItems(VerticalAlign.Center)
     .backgroundColor(Color.White)
+  }
+
+  @Builder
+  runtimeStatusBar() {
+    Text(appString(this.statusKey))
+      .fontSize(14)
+      .fontColor(Color.White)
+      .textAlign(TextAlign.Center)
+      .padding({ left: AppSpacing.md, right: AppSpacing.md, top: AppSpacing.sm, bottom: AppSpacing.sm })
+      .constraintSize({ minHeight: 44 })
+      .backgroundColor('#B31F2937')
+      .borderRadius(AppRadius.button)
+  }
+
+  @Builder
+  runtimeCameraSwitchAction() {
+    Row() {
+      Image($r('app.media.front_back_switch'))
+        .width(24)
+        .height(24)
+        .objectFit(ImageFit.Contain)
+    }
+    .width(48)
+    .height(48)
+    .justifyContent(FlexAlign.Center)
+    .alignItems(VerticalAlign.Center)
+    .backgroundColor('#B31F2937')
+    .borderRadius(24)
+    .accessibilityText(appString('feature_runtime_switch_camera') as Resource)
+    .accessibilityRole(AccessibilityRoleType.BUTTON)
+    .onClick(() => this.switchLiveCamera())
   }
 
   @Builder
   runtimePermissionRecoveryOverlay() {
     if (this.shouldShowRuntimePermissionRetry()) {
       Stack({ alignContent: Alignment.Center }) {
-        Column() {
-          Text(appString(this.statusKey))
-            .fontSize(14)
-            .fontColor(AppColor.textPrimary)
-            .textAlign(TextAlign.Center)
-          Button(appString('splash_permission_retry'))
-            .height(36)
-            .margin({ top: AppSpacing.sm })
-            .onClick(() => this.retryRuntimePermission())
-          Button(appString('app_permission_by_hand'))
-            .height(36)
-            .margin({ top: AppSpacing.sm })
-            .onClick(() => this.openRuntimePermissionSettings())
+        Scroll() {
+          Column() {
+            Text(appString(this.statusKey))
+              .fontSize(16)
+              .fontColor(AppColor.textPrimary)
+              .textAlign(TextAlign.Center)
+              .width('100%')
+            Button(appString('splash_permission_retry'))
+              .width('100%')
+              .constraintSize({ minHeight: 48 })
+              .margin({ top: AppSpacing.md })
+              .onClick(() => this.retryRuntimePermission())
+            Button(appString('app_permission_by_hand'), { type: ButtonType.Normal })
+              .width('100%')
+              .constraintSize({ minHeight: 48 })
+              .fontColor(AppColor.accent)
+              .backgroundColor(AppColor.cardBackground)
+              .border({ width: 1, color: AppColor.divider, radius: AppRadius.button })
+              .margin({ top: AppSpacing.sm })
+              .onClick(() => this.openRuntimePermissionSettings())
+          }
+          .width('100%')
+          .padding(AppSpacing.md)
         }
-        .padding(AppSpacing.md)
-        .backgroundColor('#E6FFFFFF')
+        .width('100%')
+        .constraintSize({ maxWidth: 520, maxHeight: 520 })
+        .backgroundColor(AppColor.cardBackground)
         .borderRadius(AppRadius.card)
+        .margin(AppSpacing.page)
       }
       .width('100%')
       .height('100%')
+      .backgroundColor('#66000000')
+      .hitTestBehavior(HitTestMode.Block)
     }
   }
 
@@ -3265,17 +3316,19 @@ struct FeatureRuntimePage {
           .height(22)
           .objectFit(ImageFit.Contain)
       }
-        .width(40)
-        .height(40)
+        .width(48)
+        .height(48)
         .justifyContent(FlexAlign.Center)
         .alignItems(VerticalAlign.Center)
+        .accessibilityText($r('app.string.action_back'))
+        .accessibilityRole(AccessibilityRoleType.BACK_BUTTON)
         .onClick(() => router.back())
       Text(appString(this.titleKey))
-        .fontSize(22)
+        .fontSize(20)
         .fontWeight(FontWeight.Bold)
         .fontColor(AppColor.textPrimary)
         .layoutWeight(1)
-        .maxLines(1)
+        .maxLines(2)
       if (this.liveCameraSwitchAvailable) {
         Row() {
           Image($r('app.media.icon_camera'))
@@ -3283,18 +3336,20 @@ struct FeatureRuntimePage {
             .height(24)
             .objectFit(ImageFit.Contain)
         }
-          .width(40)
-          .height(40)
+          .width(48)
+          .height(48)
           .justifyContent(FlexAlign.Center)
           .alignItems(VerticalAlign.Center)
+          .accessibilityText(appString('feature_runtime_switch_camera') as Resource)
+          .accessibilityRole(AccessibilityRoleType.BUTTON)
           .onClick(() => this.switchLiveCamera())
       }
       SaveButton({
         icon: SaveIconStyle.FULL_FILLED,
         buttonType: ButtonType.Normal
       })
-        .width(40)
-        .height(40)
+        .width(48)
+        .height(48)
         .enabled(compositeSegmentationSaveReady(this.workflowRunning,
           this.segmentationForegroundPixelMap !== undefined, this.resultImageSaveInFlight))
         .onClick((_event: ClickEvent, result: SaveButtonOnClickResult) => {
@@ -3306,8 +3361,8 @@ struct FeatureRuntimePage {
         })
     }
     .width('100%')
-    .height(56)
-    .padding({ left: AppSpacing.page, right: AppSpacing.page })
+    .constraintSize({ minHeight: 56 })
+    .padding({ left: AppSpacing.page, right: AppSpacing.page, top: AppSpacing.xs, bottom: AppSpacing.xs })
     .alignItems(VerticalAlign.Center)
     .backgroundColor(Color.White)
   }
@@ -3502,20 +3557,22 @@ struct FeatureRuntimePage {
       this.runtimeActionToolbar(false)
       Stack({ alignContent: Alignment.TopStart }) {
         this.liveCameraSurfaceContent()
-        if (this.liveCameraSwitchAvailable) {
-          Column() {
-            Image($r('app.media.front_back_switch'))
-              .width(35)
-              .height(35)
-              .objectFit(ImageFit.Contain)
-              .margin({ bottom: 30 })
-              .onClick(() => this.switchLiveCamera())
+        Column() {
+          this.runtimeStatusBar()
+          if (this.liveCameraSwitchAvailable) {
+            this.runtimeCameraSwitchAction()
           }
-          .width('100%')
-          .height('100%')
-          .justifyContent(FlexAlign.End)
-          .alignItems(HorizontalAlign.Center)
         }
+        .width('100%')
+        .height('100%')
+        .padding({
+          left: AppSpacing.page,
+          right: AppSpacing.page,
+          top: AppSpacing.sm,
+          bottom: AppSpacing.md
+        })
+        .justifyContent(FlexAlign.SpaceBetween)
+        .alignItems(HorizontalAlign.Center)
         this.runtimePermissionRecoveryOverlay()
       }
       .width('100%')
