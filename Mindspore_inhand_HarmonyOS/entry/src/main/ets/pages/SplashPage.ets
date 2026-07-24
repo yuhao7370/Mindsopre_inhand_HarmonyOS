@@ -13,21 +13,15 @@ import {
 export struct SplashPage {
   onFinished: () => void = () => {};
   private consentService: PrivacyConsentService | undefined = undefined;
-  private countdownTimer: number = -1;
-  @State countdownValue: number = 3;
   @State showPrivacyDialog: boolean = false;
 
   aboutToAppear() {
     const service = this.privacyConsentService();
     if (service !== undefined && service.hasAcceptedPrivacy()) {
-      this.startCountdown();
+      this.onFinished();
       return;
     }
     this.showPrivacyDialog = true;
-  }
-
-  aboutToDisappear() {
-    this.stopCountdown();
   }
 
   private uiAbilityContext(): common.UIAbilityContext | undefined {
@@ -54,27 +48,7 @@ export struct SplashPage {
     }
   }
 
-  private startCountdown(): void {
-    this.stopCountdown();
-    this.countdownValue = 3;
-    this.countdownTimer = setInterval(() => {
-      if (this.countdownValue <= 1) {
-        this.finishSplash();
-        return;
-      }
-      this.countdownValue -= 1;
-    }, 1000);
-  }
-
-  private stopCountdown(): void {
-    if (this.countdownTimer >= 0) {
-      clearInterval(this.countdownTimer);
-      this.countdownTimer = -1;
-    }
-  }
-
   private finishSplash(): void {
-    this.stopCountdown();
     this.onFinished();
   }
 
@@ -106,23 +80,6 @@ export struct SplashPage {
         url: userPrivacyRulesUrl
       }
     });
-  }
-
-  @Builder
-  countdownButton() {
-    Row() {
-      Text(`${this.countdownValue}`)
-        .fontSize(14)
-        .fontColor(AppColor.accent)
-        .fontWeight(FontWeight.Bold)
-      Text(appString('splash_count_down'))
-        .fontSize(14)
-        .fontColor(AppColor.accent)
-    }
-    .height(34)
-    .padding({ left: AppSpacing.md, right: AppSpacing.md })
-    .border({ width: 1, color: AppColor.accent, radius: 17 })
-    .onClick(() => this.finishSplash())
   }
 
   @Builder
@@ -178,12 +135,6 @@ export struct SplashPage {
   build() {
     Stack() {
       Column() {
-        Row() {
-          Blank()
-          this.countdownButton()
-        }
-        .width('100%')
-        .padding({ top: AppSpacing.lg, right: AppSpacing.lg })
         Image($r('app.media.logo_splash'))
           .width(splashLogoWidthVp)
           .height(splashLogoHeightVp)

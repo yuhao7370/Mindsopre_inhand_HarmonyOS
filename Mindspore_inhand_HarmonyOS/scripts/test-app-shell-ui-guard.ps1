@@ -11,7 +11,10 @@ function Test-AppShellUiGuard {
   if ($Splash -match 'PermissionService|showPermissionDialog|permissionDialog|requestPermissionsFromUser|abilityAccessCtrl|ohos\.permission\.CAMERA|ohos\.permission\.READ_IMAGEVIDEO') {
     return $false
   }
-  if ($Splash -notmatch 'aboutToAppear\(\)\s*\{\s*const service = this\.privacyConsentService\(\);\s*if \(service !== undefined && service\.hasAcceptedPrivacy\(\)\) \{\s*this\.startCountdown\(\);\s*return;\s*\}\s*this\.showPrivacyDialog = true;\s*\}') {
+  if ($Splash -notmatch 'aboutToAppear\(\)\s*\{\s*const service = this\.privacyConsentService\(\);\s*if \(service !== undefined && service\.hasAcceptedPrivacy\(\)\) \{\s*this\.onFinished\(\);\s*return;\s*\}\s*this\.showPrivacyDialog = true;\s*\}') {
+    return $false
+  }
+  if ($Splash -match 'countdownTimer|countdownValue|startCountdown|countdownButton|setInterval') {
     return $false
   }
   if ($Splash -notmatch 'private\s+acceptPrivacy\(\):\s*void\s*\{\s*const service = this\.privacyConsentService\(\);\s*if \(service !== undefined\) \{\s*service\.acceptPrivacy\(\);\s*\}\s*this\.showPrivacyDialog = false;\s*this\.finishSplash\(\);\s*\}') {
@@ -53,7 +56,7 @@ Assert-RejectedMutation 'Splash permission dialog restored' $permission ($splash
 Assert-RejectedMutation 'Splash permission builder restored' $permission ($splash + ' permissionDialog') $dance
 Assert-RejectedMutation 'Splash direct permission manager restored' $permission ($splash + "`nconst manager = abilityAccessCtrl.createAtManager(); manager.requestPermissionsFromUser(context, ['ohos.permission.CAMERA', 'ohos.permission.READ_IMAGEVIDEO']);") $dance
 Assert-RejectedMutation 'Splash alias permission manager restored' $permission ($splash + "`nconst requestManager = abilityAccessCtrl.createAtManager(); requestManager.requestPermissionsFromUser(context, ['ohos.permission.CAMERA', 'ohos.permission.READ_IMAGEVIDEO']);") $dance
-Assert-RejectedMutation 'stored consent no longer starts the countdown' $permission ($splash -replace 'this\.startCountdown\(\);\s*return;', 'this.finishSplash(); return;') $dance
-Assert-RejectedMutation 'first consent starts the countdown' $permission ($splash -replace 'this\.showPrivacyDialog = false;\s*this\.finishSplash\(\);', 'this.showPrivacyDialog = false; this.startCountdown();') $dance
+Assert-RejectedMutation 'stored consent no longer finishes immediately' $permission ($splash -replace 'this\.onFinished\(\);\s*return;', 'this.finishSplash(); return;') $dance
+Assert-RejectedMutation 'countdown interval restored' $permission ($splash + "`nsetInterval(() => {}, 1000);") $dance
 Assert-RejectedMutation 'first consent no longer persists before finishing' $permission ($splash -replace 'service\.acceptPrivacy\(\);', '') $dance
 Assert-RejectedMutation 'Dance camera request removed' $permission $splash ($dance -replace 'requestCamera', 'request')

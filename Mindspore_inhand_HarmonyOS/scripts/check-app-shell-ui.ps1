@@ -9,8 +9,11 @@ if ($permission -match 'requestStartup|startupPermissionNames') {
 if ($splash -match 'PermissionService|showPermissionDialog|permissionDialog|requestPermissionsFromUser|abilityAccessCtrl|ohos\.permission\.CAMERA|ohos\.permission\.READ_IMAGEVIDEO') {
   throw 'Splash must not request or recover runtime permissions.'
 }
-if ($splash -notmatch 'aboutToAppear\(\)\s*\{\s*const service = this\.privacyConsentService\(\);\s*if \(service !== undefined && service\.hasAcceptedPrivacy\(\)\) \{\s*this\.startCountdown\(\);\s*return;\s*\}\s*this\.showPrivacyDialog = true;\s*\}') {
-  throw 'Stored privacy consent must start the temporary countdown.'
+if ($splash -notmatch 'aboutToAppear\(\)\s*\{\s*const service = this\.privacyConsentService\(\);\s*if \(service !== undefined && service\.hasAcceptedPrivacy\(\)\) \{\s*this\.onFinished\(\);\s*return;\s*\}\s*this\.showPrivacyDialog = true;\s*\}') {
+  throw 'Stored privacy consent must finish Splash immediately.'
+}
+if ($splash -match 'countdownTimer|countdownValue|startCountdown|countdownButton|setInterval') {
+  throw 'Returning users must not wait on a second splash countdown.'
 }
 if ($splash -notmatch 'private\s+acceptPrivacy\(\):\s*void\s*\{\s*const service = this\.privacyConsentService\(\);\s*if \(service !== undefined\) \{\s*service\.acceptPrivacy\(\);\s*\}\s*this\.showPrivacyDialog = false;\s*this\.finishSplash\(\);\s*\}') {
   throw 'First privacy consent must persist and finish Splash immediately.'
