@@ -4,6 +4,8 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+. (Join-Path $PSScriptRoot 'arkts-source-guard.ps1')
+
 if ([string]::IsNullOrWhiteSpace($SourceRoot)) {
   $SourceRoot = Split-Path -Parent $PSScriptRoot
 }
@@ -11,7 +13,7 @@ $SourceRoot = [IO.Path]::GetFullPath($SourceRoot)
 $pagePath = Join-Path $SourceRoot 'entry\src\main\ets\pages\FeatureRuntimePage.ets'
 $buildPath = Join-Path $SourceRoot 'scripts\build-hap.ps1'
 $source = ([IO.File]::ReadAllText($pagePath)).Replace("`r`n", "`n").Replace("`r", "`n")
-$source = [regex]::Replace($source, '(?ms)/\*.*?\*/|//[^\n]*', '')
+$source = Remove-ArkTsCommentsAndTemplateRaw $source $true
 
 function Get-Builder([string]$Name, [string]$NextName) {
   $startMarker = "  @Builder`n  $Name"
