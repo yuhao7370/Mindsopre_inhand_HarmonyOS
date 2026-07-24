@@ -3,11 +3,13 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'runtime-source-guard-helpers.ps1')
 
 if ([string]::IsNullOrWhiteSpace($SourceRoot)) { $SourceRoot = Split-Path -Parent $PSScriptRoot }
 $SourceRoot = [IO.Path]::GetFullPath($SourceRoot)
 $runtimePagePath = Join-Path $SourceRoot 'entry/src/main/ets/pages/FeatureRuntimePage.ets'
 $source = ([IO.File]::ReadAllText($runtimePagePath)).Replace("`r`n", "`n").Replace("`r", "`n")
+$source = Remove-RuntimeSourceComments $source
 
 function SourceSlice([string] $text, [string] $startMarker, [string] $endMarker) {
   $start = $text.IndexOf($startMarker)
@@ -28,18 +30,17 @@ function AssertToolbarIconAction(
   [string]$handler,
   [string]$forbiddenHandler
 ) {
-  if ($slice -notmatch "Image\(\`$r\('app\.media\.${mediaName}'\)\)") {
-    throw "FeatureRuntimePage title-row action must render $mediaName"
-  }
-  if ($slice -notmatch '\.width\(48\)' -or $slice -notmatch '\.height\(48\)' -or
-    $slice -notmatch '\.width\(24\)' -or $slice -notmatch '\.height\(24\)' -or
-    $slice -notmatch '\.objectFit\(ImageFit\.Contain\)') {
-    throw "FeatureRuntimePage title-row $mediaName action must use a 48vp target with a contained icon"
-  }
-  if ($slice -notmatch [regex]::Escape($semanticName)) {
-    throw "FeatureRuntimePage title-row $mediaName action must have its localized accessibility name"
-  }
-  if ($slice -notmatch $handler -or $slice -match $forbiddenHandler) {
+  $chain = Get-RuntimeOuterActionChain `
+    $slice `
+    "Image\(\`$r\('app\.media\.${mediaName}'\)\)" `
+    "Feature runtime $mediaName action"
+  Assert-RuntimeSemanticAction `
+    $chain `
+    ([regex]::Escape($semanticName)) `
+    'BUTTON' `
+    $handler `
+    "Feature runtime $mediaName action"
+  if ($chain -match $forbiddenHandler) {
     throw "FeatureRuntimePage title-row $mediaName action must keep the correct click handler"
   }
 }

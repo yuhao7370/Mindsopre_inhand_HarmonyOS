@@ -147,7 +147,6 @@ foreach ($line in @(
   '.height(37)',
   '.margin({ top: 14 })',
   '.backgroundColor(Color.Black)',
-  'this.runtimePermissionRecoveryOverlay()',
   ".width('100%')",
   ".height('100%')"
 )) { Assert-CodeLine $builder $line "dedicated builder is missing executable line: $line." }
@@ -179,7 +178,10 @@ foreach ($marker in @(
   'this.openHelpPage()'
 )) { Assert-Excludes $builder $marker 'dedicated builder must not expose generic/overlay actions' }
 
-$buildSelection = Get-TextSection $page '  build() {' "`n    } else {`n      Scroll()" 'top-level layout selection'
+$buildSelection = Get-TextSection $page `
+  '  runtimeLayoutContent() {' `
+  "`n    } else {`n      Scroll()" `
+  'top-level layout selection'
 Assert-Contains $buildSelection 'usesAndroidStillSegmentationLayout(workflowForRoute(this.routeName))' `
   'top-level build must select the exact still-segmentation layout before fallback.'
 Assert-Contains $buildSelection 'this.stillSegmentationAndroidLayout()' `

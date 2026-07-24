@@ -162,7 +162,6 @@ foreach ($line in @(
   '.fontSize(14)',
   '.layoutWeight(1)',
   '.margin({ left: 20, right: 20, top: 14 })',
-  'this.runtimePermissionRecoveryOverlay()',
   ".width('100%')",
   ".height('100%')",
   '.backgroundColor(Color.White)'
@@ -260,8 +259,11 @@ Assert-CodeLine $sceneService "failureKind: scenes.length === 0 ? 'empty' : unde
 Assert-CodeLine $sceneService "failureKind: 'runtime'," `
   'scene service must preserve runtime-failure provenance.'
 
-$buildStart = $page.IndexOf('  build() {', [StringComparison]::Ordinal)
-if ($buildStart -lt 0) { throw 'Still scene parity guard failed: top-level build was not found.' }
+$buildStart = $page.IndexOf(
+  "  @Builder`n  runtimeLayoutContent() {",
+  [StringComparison]::Ordinal
+)
+if ($buildStart -lt 0) { throw 'Still scene parity guard failed: runtime layout selector was not found.' }
 $buildSelection = $page.Substring($buildStart)
 $stillSelector = '} else if (usesAndroidStillSceneLayout(workflowForRoute(this.routeName))) {'
 $stillIndex = Get-CodeLineIndex $buildSelection $stillSelector

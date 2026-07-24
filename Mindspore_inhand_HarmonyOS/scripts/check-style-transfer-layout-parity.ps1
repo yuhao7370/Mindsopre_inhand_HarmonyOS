@@ -177,7 +177,6 @@ foreach ($line in @(
   "Button(appString(workflowInputLabelKey(workflowForRoute(this.routeName), 'styleTransferModelFile')), { type: ButtonType.Normal })",
   ".onClick(() => this.prepareInput('styleTransferModelFile'))",
   'this.styleTransferStyleGrid()',
-  'this.runtimePermissionRecoveryOverlay()',
   ".width('100%')",
   ".height('100%')",
   '.backgroundColor(Color.White)'
@@ -395,7 +394,10 @@ $sharedSave = Get-TextSection $page '  private saveResultPixelMap(' `
   "`n`n  private saveStyleTransferResultImage" 'shared segmentation save path'
 Assert-Excludes $sharedSave 'showRuntimeToast' 'shared segmentation save path must not gain Toast feedback'
 
-$build = $page.Substring($page.IndexOf("`n  build() {", [StringComparison]::Ordinal))
+$build = $page.Substring($page.IndexOf(
+    "`n  @Builder`n  runtimeLayoutContent() {",
+    [StringComparison]::Ordinal
+  ))
 $styleSelector = '} else if (usesAndroidStyleTransferLayout(workflowForRoute(this.routeName))) {'
 $objectIndex = Get-CodeLineIndex $build '} else if (usesAndroidObjectPhotoLayout(workflowForRoute(this.routeName))) {'
 $styleIndex = Get-CodeLineIndex $build $styleSelector ($objectIndex + 1)

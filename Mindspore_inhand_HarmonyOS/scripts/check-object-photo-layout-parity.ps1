@@ -243,8 +243,7 @@ foreach ($line in @(
   ".onClick(() => this.prepareInput('modelFile'))",
   '.padding({ right: 16, bottom: 16 })',
   '.justifyContent(FlexAlign.End)',
-  '.alignItems(HorizontalAlign.End)',
-  'this.runtimePermissionRecoveryOverlay()'
+  '.alignItems(HorizontalAlign.End)'
 )) {
   Assert-CodeLine $builder $line "dedicated builder is missing executable line: $line."
 }
@@ -336,7 +335,10 @@ if ($failureReturnIndex -lt 0 -or $applyPickIndex -le $failureReturnIndex -or
   throw 'Object Photo parity guard failed: only successful cached models may open the follow-up initial photo picker.'
 }
 
-$build = $page.Substring($page.IndexOf("`n  build() {", [StringComparison]::Ordinal))
+$build = $page.Substring($page.IndexOf(
+    "`n  @Builder`n  runtimeLayoutContent() {",
+    [StringComparison]::Ordinal
+  ))
 $selectorLine = '} else if (usesAndroidObjectPhotoLayout(workflowForRoute(this.routeName))) {'
 $selectorIndex = Get-CodeLineIndex $build $selectorLine
 $genericIndex = Get-CodeLineIndex $build '} else {' ($selectorIndex + 1)

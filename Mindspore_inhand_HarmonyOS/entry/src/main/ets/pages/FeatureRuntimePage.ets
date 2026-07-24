@@ -3520,7 +3520,6 @@ struct FeatureRuntimePage {
       .width('100%')
       .height('100%')
       .backgroundColor(Color.White)
-      this.runtimePermissionRecoveryOverlay()
     }
     .width('100%')
     .height('100%')
@@ -3540,7 +3539,6 @@ struct FeatureRuntimePage {
         .width('100%')
         .height('100%')
         .justifyContent(FlexAlign.End)
-        this.runtimePermissionRecoveryOverlay()
       }
       .width('100%')
       .layoutWeight(1)
@@ -3573,7 +3571,6 @@ struct FeatureRuntimePage {
         })
         .justifyContent(FlexAlign.SpaceBetween)
         .alignItems(HorizontalAlign.Center)
-        this.runtimePermissionRecoveryOverlay()
       }
       .width('100%')
       .layoutWeight(1)
@@ -3614,7 +3611,6 @@ struct FeatureRuntimePage {
         .width('100%')
         .height('100%')
         .justifyContent(FlexAlign.End)
-        this.runtimePermissionRecoveryOverlay()
       }
       .width('100%')
       .layoutWeight(1)
@@ -3643,7 +3639,6 @@ struct FeatureRuntimePage {
         .padding({ right: 16, bottom: 16 })
         .justifyContent(FlexAlign.End)
         .alignItems(HorizontalAlign.End)
-        this.runtimePermissionRecoveryOverlay()
       }
       .width('100%')
       .layoutWeight(1)
@@ -3698,7 +3693,6 @@ struct FeatureRuntimePage {
         .padding({ right: 16, bottom: 16 })
         .justifyContent(FlexAlign.End)
         .alignItems(HorizontalAlign.End)
-        this.runtimePermissionRecoveryOverlay()
       }
       .width('100%')
       .layoutWeight(1)
@@ -3857,7 +3851,6 @@ struct FeatureRuntimePage {
       .width('100%')
       .height('100%')
       .backgroundColor(Color.White)
-      this.runtimePermissionRecoveryOverlay()
     }
     .width('100%')
     .height('100%')
@@ -3983,7 +3976,6 @@ struct FeatureRuntimePage {
       .width('100%')
       .height('100%')
       .backgroundColor(Color.White)
-      this.runtimePermissionRecoveryOverlay()
     }
     .width('100%')
     .height('100%')
@@ -4092,7 +4084,6 @@ struct FeatureRuntimePage {
       .width('100%')
       .height('100%')
       .backgroundColor(Color.White)
-      this.runtimePermissionRecoveryOverlay()
     }
     .width('100%')
     .height('100%')
@@ -4239,7 +4230,6 @@ struct FeatureRuntimePage {
       .width('100%')
       .height('100%')
       .backgroundColor(Color.White)
-      this.runtimePermissionRecoveryOverlay()
     }
     .width('100%')
     .height('100%')
@@ -4347,7 +4337,6 @@ struct FeatureRuntimePage {
       .width('100%')
       .height('100%')
       .backgroundColor(Color.White)
-      this.runtimePermissionRecoveryOverlay()
     }
     .width('100%')
     .height('100%')
@@ -4444,7 +4433,6 @@ struct FeatureRuntimePage {
       .width('100%')
       .height('100%')
       .backgroundColor(Color.White)
-      this.runtimePermissionRecoveryOverlay()
     }
     .width('100%')
     .height('100%')
@@ -4540,14 +4528,14 @@ struct FeatureRuntimePage {
       .width('100%')
       .height('100%')
       .backgroundColor(Color.White)
-      this.runtimePermissionRecoveryOverlay()
     }
     .width('100%')
     .height('100%')
     .backgroundColor(Color.White)
   }
 
-  build() {
+  @Builder
+  runtimeLayoutContent() {
     if (usesAndroidTextTranslationLayout(workflowForRoute(this.routeName))) {
       this.textTranslationAndroidLayout()
     } else if (usesAndroidTextRecognitionLayout(workflowForRoute(this.routeName))) {
@@ -4852,5 +4840,15 @@ struct FeatureRuntimePage {
     .scrollBar(BarState.Off)
       .backgroundColor(AppColor.pageBackground)
     }
+  }
+
+  build() {
+    Stack({ alignContent: Alignment.TopStart }) {
+      this.runtimeLayoutContent()
+      this.runtimePermissionRecoveryOverlay()
+    }
+    .width('100%')
+    .height('100%')
+    .key(this.routeName)
   }
 }

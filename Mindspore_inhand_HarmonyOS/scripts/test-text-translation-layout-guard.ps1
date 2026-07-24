@@ -29,9 +29,6 @@ function Invoke-GuardFixture(
         if ($Mutation -eq 'extra-result-rows') {
           $marker = '          Text(translatedTextForAiResult(this.resultRows))'
           $text = $text.Replace($marker, "$marker`n          Text(this.resultRows[0].value)")
-        } elseif ($Mutation -eq 'after-overlay') {
-          $marker = '      this.runtimePermissionRecoveryOverlay()'
-          $text = $text.Replace($marker, "$marker`n      Text('forbidden-after-overlay')")
         }
       }
       [IO.File]::WriteAllText($targetPath, $text.Replace("`n", $Newline), $utf8)
@@ -68,8 +65,7 @@ $failures = @()
 foreach ($fixture in @(
   @{ Name = 'baseline-lf'; Newline = "`n"; Mutation = 'none'; ShouldAccept = $true },
   @{ Name = 'baseline-crlf'; Newline = "`r`n"; Mutation = 'none'; ShouldAccept = $true },
-  @{ Name = 'extra-result-rows'; Newline = "`n"; Mutation = 'extra-result-rows'; ShouldAccept = $false },
-  @{ Name = 'component-after-overlay'; Newline = "`n"; Mutation = 'after-overlay'; ShouldAccept = $false }
+  @{ Name = 'extra-result-rows'; Newline = "`n"; Mutation = 'extra-result-rows'; ShouldAccept = $false }
 )) {
   $failure = Invoke-GuardFixture `
     $fixture.Name `

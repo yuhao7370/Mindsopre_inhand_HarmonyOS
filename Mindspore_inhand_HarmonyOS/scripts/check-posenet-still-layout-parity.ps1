@@ -49,7 +49,6 @@ foreach ($marker in @(
   "backgroundColor('#E6E6E6')",
   "backgroundColor('#00FF00')",
   "backgroundColor('#FF0000')",
-  'this.runtimePermissionRecoveryOverlay()',
   '.layoutWeight(9)',
   '.margin({ top: 14 })'
 )) {
@@ -107,7 +106,10 @@ $toast = Get-TextSection $page '  private showPoseNetStillToastIfNeeded' "`n`n  
 Assert-Contains $toast 'poseNetStillToastKey' 'Toast helper must use the pure route policy.'
 Assert-Contains $toast 'this.showRuntimeToast(toastKey)' 'Toast helper must render the mapped key.'
 
-$build = $page.Substring($page.IndexOf("`n  build() {", [StringComparison]::Ordinal))
+$build = $page.Substring($page.IndexOf(
+    "`n  @Builder`n  runtimeLayoutContent() {",
+    [StringComparison]::Ordinal
+  ))
 $selectorIndex = $build.IndexOf('usesAndroidPoseNetStillLayout(workflowForRoute(this.routeName))', [StringComparison]::Ordinal)
 $genericIndex = $build.IndexOf("    } else {`n      Scroll() {", [StringComparison]::Ordinal)
 if ($selectorIndex -lt 0 -or $genericIndex -lt 0 -or $selectorIndex -ge $genericIndex) {

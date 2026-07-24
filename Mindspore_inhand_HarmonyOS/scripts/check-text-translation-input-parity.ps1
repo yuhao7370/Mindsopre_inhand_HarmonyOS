@@ -87,15 +87,14 @@ Assert-Excludes $copyMethod 'copyableTextForAiResult' `
 $builder = Get-TextSection `
   $page `
   '  textTranslationAndroidLayout() {' `
-  "`n  build() {" `
+  "`n`n  @Builder`n  runtimeLayoutContent() {" `
   'dedicated Text Translation builder'
 foreach ($marker in @(
   'this.runtimeActionToolbar(false)',
   'Text(translatedTextForAiResult(this.resultRows))',
   "this.prepareInput('photo')",
   "this.prepareInput('camera')",
-  'this.copyTranslatedText()',
-  'this.runtimePermissionRecoveryOverlay()'
+  'this.copyTranslatedText()'
 )) {
   Assert-Contains $builder $marker "dedicated builder is missing $marker."
 }
@@ -109,14 +108,8 @@ if ($resultRowsCount -ne 1) {
 $photoIndex = $builder.IndexOf("Button(appString('feature_input_photo_android')", [StringComparison]::Ordinal)
 $cameraIndex = $builder.IndexOf("Button(appString('feature_input_camera_android')", [StringComparison]::Ordinal)
 $copyIndex = $builder.IndexOf("Button(appString('feature_runtime_copy_text')", [StringComparison]::Ordinal)
-$permissionIndex = $builder.IndexOf('this.runtimePermissionRecoveryOverlay()', [StringComparison]::Ordinal)
 if ($photoIndex -lt 0 -or $cameraIndex -le $photoIndex -or $copyIndex -le $cameraIndex) {
   throw 'Text translation parity guard failed: bottom actions must be Photo, Camera, Copy.'
-}
-$expectedPermissionTail = "this.runtimePermissionRecoveryOverlay()`n    }`n    .width('100%')`n    .height('100%')`n    .backgroundColor(Color.White)`n  }`n"
-if ($permissionIndex -le $copyIndex -or
-  -not $builder.Substring($permissionIndex).Equals($expectedPermissionTail, [StringComparison]::Ordinal)) {
-  throw 'Text translation parity guard failed: permission recovery must render last.'
 }
 
 foreach ($marker in @(
@@ -134,14 +127,17 @@ foreach ($marker in @(
   Assert-Excludes $builder $marker 'dedicated builder contains generic debug/result/save UI'
 }
 
-$buildStart = $page.IndexOf("`n  build() {", [StringComparison]::Ordinal)
-if ($buildStart -lt 0) {
-  throw 'Text translation parity guard failed: page build method was not found.'
+$runtimeContentStart = $page.IndexOf(
+  "`n  @Builder`n  runtimeLayoutContent() {",
+  [StringComparison]::Ordinal
+)
+if ($runtimeContentStart -lt 0) {
+  throw 'Text translation parity guard failed: runtime layout selector was not found.'
 }
-$build = $page.Substring($buildStart)
+$runtimeContent = $page.Substring($runtimeContentStart)
 $selectorBranch = 'if (usesAndroidTextTranslationLayout(workflowForRoute(this.routeName)))'
-$selectorIndex = $build.IndexOf($selectorBranch, [StringComparison]::Ordinal)
-$genericIndex = $build.IndexOf("    } else {`n      Scroll() {", [StringComparison]::Ordinal)
+$selectorIndex = $runtimeContent.IndexOf($selectorBranch, [StringComparison]::Ordinal)
+$genericIndex = $runtimeContent.IndexOf("    } else {`n      Scroll() {", [StringComparison]::Ordinal)
 if ($selectorIndex -lt 0 -or $genericIndex -lt 0 -or $selectorIndex -ge $genericIndex) {
   throw 'Text translation parity guard failed: dedicated selector must precede the generic fallback.'
 }

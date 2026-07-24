@@ -32,6 +32,7 @@ function New-ValidFixture([string]$Root) {
       .width(48)
       .height(48)
       .accessibilityText($r('app.string.action_back'))
+      .accessibilityRole(AccessibilityRoleType.BACK_BUTTON)
       .onClick(() => router.back())
       Text(appString(this.titleKey))
         .layoutWeight(1)
@@ -46,6 +47,7 @@ function New-ValidFixture([string]$Root) {
         .width(48)
         .height(48)
         .accessibilityText(appString('feature_runtime_help') as Resource)
+        .accessibilityRole(AccessibilityRoleType.BUTTON)
         .onClick(() => this.showLocalHelpDialog())
       }
       if (showActions && this.helpUrl.length > 0) {
@@ -58,6 +60,7 @@ function New-ValidFixture([string]$Root) {
         .width(48)
         .height(48)
         .accessibilityText($r('app.string.action_more'))
+        .accessibilityRole(AccessibilityRoleType.BUTTON)
         .onClick(() => this.openHelpPage())
       }
     }
@@ -82,6 +85,7 @@ function New-ValidFixture([string]$Root) {
     .width(48)
     .height(48)
     .accessibilityText(appString('feature_runtime_switch_camera') as Resource)
+    .accessibilityRole(AccessibilityRoleType.BUTTON)
     .onClick(() => this.switchLiveCamera())
   }
 
@@ -164,6 +168,21 @@ function New-ValidFixture([string]$Root) {
   imageClassificationAndroidLiveLayout() {
   }
 
+  @Builder
+  runtimeLayoutContent() {
+    this.simpleAndroidLiveLayout()
+  }
+
+  build() {
+    Stack({ alignContent: Alignment.TopStart }) {
+      this.runtimeLayoutContent()
+      this.runtimePermissionRecoveryOverlay()
+    }
+    .width('100%')
+    .height('100%')
+    .key(this.routeName)
+  }
+
   // Decoys must never satisfy a missing real contract:
   // .height(56) .width(48) .backgroundColor('#66000000')
 '@
@@ -205,7 +224,14 @@ function Assert-Rejected([string]$ValidRoot, [string]$Name, [string]$Before, [st
   Copy-Fixture $ValidRoot $root
   Replace-Once (Join-Path $root 'entry\src\main\ets\pages\FeatureRuntimePage.ets') $Before $After
   $rejected = $false
-  try { & $guardPath -SourceRoot $root | Out-Null } catch { $rejected = $true }
+  try {
+    & $guardPath -SourceRoot $root | Out-Null
+    & $backGuardPath -SourceRoot $root | Out-Null
+    & $headerGuardPath -SourceRoot $root | Out-Null
+    & $switchGuardPath -SourceRoot $root | Out-Null
+  } catch {
+    $rejected = $true
+  }
   if (-not $rejected) { throw "Runtime shared UI guard accepted mutation: $Name" }
 }
 
@@ -226,6 +252,30 @@ try {
   Assert-Rejected $valid 'small-switch-target' `
     "    .width(48)`n    .height(48)`n    .accessibilityText(appString('feature_runtime_switch_camera') as Resource)" `
     "    .width(40)`n    .height(40)`n    .accessibilityText(appString('feature_runtime_switch_camera') as Resource)"
+  Assert-Rejected $valid 'small-back-parent-child-decoy' `
+    "        Image(`$r('app.media.icon_back'))`n          .width(11)`n          .height(22)`n          .objectFit(ImageFit.Contain)`n      }`n      .width(48)`n      .height(48)" `
+    "        Image(`$r('app.media.icon_back'))`n          .width(48)`n          .height(48)`n          .objectFit(ImageFit.Contain)`n      }`n      .width(40)`n      .height(40)"
+  Assert-Rejected $valid 'small-back-parent-sibling-decoy' `
+    "      .width(48)`n      .height(48)`n      .accessibilityText(`$r('app.string.action_back'))`n      .accessibilityRole(AccessibilityRoleType.BACK_BUTTON)`n      .onClick(() => router.back())`n      Text(appString(this.titleKey))" `
+    "      .width(40)`n      .height(40)`n      .accessibilityText(`$r('app.string.action_back'))`n      .accessibilityRole(AccessibilityRoleType.BACK_BUTTON)`n      .onClick(() => router.back())`n      Row() {`n        Image(`$r('app.media.icon_back'))`n      }`n      .width(48)`n      .height(48)`n      .accessibilityText(`$r('app.string.action_back'))`n      .accessibilityRole(AccessibilityRoleType.BACK_BUTTON)`n      .onClick(() => router.back())`n      Text(appString(this.titleKey))"
+  Assert-Rejected $valid 'small-help-parent-child-decoy' `
+    "          Image(`$r('app.media.icon_help'))`n            .width(24)`n            .height(24)`n            .objectFit(ImageFit.Contain)`n        }`n        .width(48)`n        .height(48)" `
+    "          Image(`$r('app.media.icon_help'))`n            .width(48)`n            .height(48)`n            .objectFit(ImageFit.Contain)`n        }`n        .width(40)`n        .height(40)"
+  Assert-Rejected $valid 'small-more-parent-child-decoy' `
+    "          Image(`$r('app.media.icon_more'))`n            .width(24)`n            .height(24)`n            .objectFit(ImageFit.Contain)`n        }`n        .width(48)`n        .height(48)" `
+    "          Image(`$r('app.media.icon_more'))`n            .width(48)`n            .height(48)`n            .objectFit(ImageFit.Contain)`n        }`n        .width(40)`n        .height(40)"
+  Assert-Rejected $valid 'small-switch-parent-child-decoy' `
+    "      Image(`$r('app.media.front_back_switch'))`n        .width(24)`n        .height(24)`n        .objectFit(ImageFit.Contain)`n    }`n    .width(48)`n    .height(48)" `
+    "      Image(`$r('app.media.front_back_switch'))`n        .width(48)`n        .height(48)`n        .objectFit(ImageFit.Contain)`n    }`n    .width(40)`n    .height(40)"
+  Assert-Rejected $valid 'missing-help-role' `
+    "        .accessibilityText(appString('feature_runtime_help') as Resource)`n        .accessibilityRole(AccessibilityRoleType.BUTTON)" `
+    "        .accessibilityText(appString('feature_runtime_help') as Resource)`n        .accessibilityRole(AccessibilityRoleType.NONE)"
+  Assert-Rejected $valid 'back-semantic-comment-string-decoy' `
+    "      .accessibilityText(`$r('app.string.action_back'))`n      .accessibilityRole(AccessibilityRoleType.BACK_BUTTON)`n      .onClick(() => router.back())`n      Text(appString(this.titleKey))`n        .layoutWeight(1)" `
+    "      // .accessibilityText(`$r('app.string.action_back'))`n      .accessibilityDescription(`".accessibilityText(`$r('app.string.action_back'))`")`n      .accessibilityRole(AccessibilityRoleType.BACK_BUTTON)`n      .onClick(() => router.back())`n      Text(appString(this.titleKey))`n        .layoutWeight(1)"
+  Assert-Rejected $valid 'back-image-template-string-decoy' `
+    "  runtimeActionToolbar(showActions: boolean) {`n    Row() {`n      Row() {`n        Image(`$r('app.media.icon_back'))" `
+    "  runtimeActionToolbar(showActions: boolean) {`n    const imageDecoy = ```n        Image(`$r('app.media.icon_back'))`n    ```n    Row() {`n      Row() {`n        Image(`$r('app.media.icon_default'))"
   Assert-Rejected $valid 'missing-full-scrim' `
     "      .backgroundColor('#66000000')" `
     "      .backgroundColor(Color.Transparent)"
@@ -238,6 +288,9 @@ try {
   Assert-Rejected $valid 'fixed-route-switch-exposed' `
     "          if (this.liveCameraSwitchAvailable) {`n            this.runtimeCameraSwitchAction()`n          }" `
     '          this.runtimeCameraSwitchAction()'
+  Assert-Rejected $valid 'content-scoped-overlay' `
+    "  @Builder`n  runtimeLayoutContent() {`n    this.simpleAndroidLiveLayout()`n  }`n`n  build() {`n    Stack({ alignContent: Alignment.TopStart }) {`n      this.runtimeLayoutContent()`n      this.runtimePermissionRecoveryOverlay()`n    }`n    .width('100%')`n    .height('100%')`n    .key(this.routeName)`n  }" `
+    "  @Builder`n  runtimeLayoutContent() {`n    Column() {`n      this.runtimeActionToolbar(false)`n      Stack() {`n        this.simpleAndroidLiveLayout()`n        this.runtimePermissionRecoveryOverlay()`n      }`n    }`n  }`n`n  build() {`n    this.runtimeLayoutContent()`n  }"
 
   Write-Output 'Runtime shared UI guard mutation fixtures passed.'
 } finally {

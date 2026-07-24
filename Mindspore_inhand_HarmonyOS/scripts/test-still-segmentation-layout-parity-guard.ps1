@@ -112,7 +112,7 @@ try {
   $root = New-MutationRoot 'generic-card'
   Replace-OnceInSection (Join-Path $root 'entry\src\main\ets\pages\FeatureRuntimePage.ets') `
     '  stillSegmentationAndroidLayout() {' "`n`n  @Builder`n  customModelAndroidLayout()" `
-    'this.runtimePermissionRecoveryOverlay()' "Text(appString(this.summaryKey))`n      this.runtimePermissionRecoveryOverlay()"
+    'this.runtimeActionToolbar(false)' "this.runtimeActionToolbar(false)`n      Text(appString(this.summaryKey))"
   Assert-GuardFails $root 'generic summary is injected'
 
   $root = New-MutationRoot 'input-owner-clear'

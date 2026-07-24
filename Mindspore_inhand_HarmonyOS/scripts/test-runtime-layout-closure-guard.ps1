@@ -34,7 +34,8 @@ struct FeatureRuntimePage {
   }`;
 
   // build() { this.textRecognitionAndroidLayout() }
-  build() {
+  @Builder
+  runtimeLayoutContent() {
     if (usesAndroidTextTranslationLayout(workflowForRoute(this.routeName))) {
       this.textTranslationAndroidLayout()
     } else if (usesAndroidTextRecognitionLayout(workflowForRoute(this.routeName))) {
@@ -67,6 +68,16 @@ struct FeatureRuntimePage {
         }
       }
     }
+  }
+
+  build() {
+    Stack({ alignContent: Alignment.TopStart }) {
+      this.runtimeLayoutContent()
+      this.runtimePermissionRecoveryOverlay()
+    }
+    .width('100%')
+    .height('100%')
+    .key(this.routeName)
   }
 }
 '@
@@ -192,8 +203,8 @@ try {
   Assert-GuardRejectsMutation $validRoot 'fake-build-template-decoy' {
     param($root)
     Replace-Once (Join-Path $root $pagePath) `
-      "  // build() { this.textRecognitionAndroidLayout() }`n  build() {" `
-      "  // build() { this.textRecognitionAndroidLayout() }`n  private buildDecoy2: string = ```n  build() {`n  }```;`n  render() {"
+      "  build() {`n    Stack({ alignContent: Alignment.TopStart }) {" `
+      "  private buildDecoy2: string = ```n  build() {`n  }```;`n  render() {`n    Stack({ alignContent: Alignment.TopStart }) {"
   }
 
   Assert-GuardRejectsMutation $validRoot 'sibling-component-real-build' {

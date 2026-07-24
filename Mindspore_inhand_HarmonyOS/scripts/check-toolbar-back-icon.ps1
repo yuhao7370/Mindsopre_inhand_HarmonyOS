@@ -3,6 +3,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'runtime-source-guard-helpers.ps1')
 
 if ([string]::IsNullOrWhiteSpace($SourceRoot)) { $SourceRoot = Split-Path -Parent $PSScriptRoot }
 $SourceRoot = [IO.Path]::GetFullPath($SourceRoot)
@@ -21,13 +22,17 @@ function SourceSlice([string] $text, [string] $startMarker, [string] $endMarker)
 
 $runtimeSource = ([IO.File]::ReadAllText((Join-Path $SourceRoot 'entry/src/main/ets/pages/FeatureRuntimePage.ets'))).
   Replace("`r`n", "`n").Replace("`r", "`n")
+$runtimeSource = Remove-RuntimeSourceComments $runtimeSource
 $runtimeHeader = SourceSlice $runtimeSource 'runtimeActionToolbar(showActions: boolean)' 'runtimeStatusBar()'
-if ($runtimeHeader -notmatch "Image\(\`$r\('app\.media\.icon_back'\)\)" -or
-  $runtimeHeader -notmatch '\.width\(48\)[\s\S]*?\.height\(48\)' -or
-  $runtimeHeader -notmatch "\.accessibilityText\(\`$r\('app\.string\.action_back'\)\)" -or
-  $runtimeHeader -notmatch 'router\.back\(\)' -or
-  $runtimeHeader -match "Text\('<'\)") {
-  throw 'Toolbar back action must keep its icon and handler in a localized 48vp semantic target.'
-}
+$backChain = Get-RuntimeOuterActionChain `
+  $runtimeHeader `
+  "Image\(\`$r\('app\.media\.icon_back'\)\)" `
+  'Toolbar back action'
+Assert-RuntimeSemanticAction `
+  $backChain `
+  "\.accessibilityText\(\`$r\('app\.string\.action_back'\)\)" `
+  'BACK_BUTTON' `
+  'router\.back\(\)' `
+  'Toolbar back action'
 
 Write-Output 'Toolbar back action semantic wiring is present.'

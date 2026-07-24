@@ -23,6 +23,17 @@ function Require-AbsoluteFile([string]$Path, [string]$Label) {
   }
 }
 
+function Normalize-Text([string]$Text) {
+  return $Text.Replace("`r`n", "`n").Replace("`r", "`n").TrimEnd("`n")
+}
+
+function Get-TextSha256([string]$Text) {
+  $bytes = [Text.Encoding]::UTF8.GetBytes((Normalize-Text $Text))
+  return ([BitConverter]::ToString(
+      [Security.Cryptography.SHA256]::Create().ComputeHash($bytes)
+    )).Replace('-', '').ToLowerInvariant()
+}
+
 function Flatten-Nodes([object]$Node) {
   $items = [Collections.Generic.List[object]]::new()
   if ($null -eq $Node) { return $items }
@@ -66,15 +77,41 @@ function Node-Label([object]$Node) {
   return ''
 }
 
-function Get-PreservationHash([object[]]$Nodes) {
-  $parts = @($Nodes | Where-Object {
-      (Is-Visible $_) -and (Attr $_ 'type') -in @('Image', 'XComponent')
-    } | ForEach-Object {
-      '{0}|{1}|{2}|{3}' -f (Attr $_ 'type'), (Attr $_ 'id'), (Attr $_ 'bounds'), (Attr $_ 'backgroundImage')
-    } | Sort-Object)
-  $bytes = [Text.Encoding]::UTF8.GetBytes(($parts -join "`n"))
-  $hash = [Security.Cryptography.SHA256]::Create().ComputeHash($bytes)
-  return ([BitConverter]::ToString($hash)).Replace('-', '').ToLowerInvariant()
+function Get-PreservationNode([object[]]$Nodes, [string]$Selector, [string]$StateName) {
+  $separator = $Selector.IndexOf(':', [StringComparison]::Ordinal)
+  if ($separator -le 0 -or $separator -eq $Selector.Length - 1) {
+    Fail "state '$StateName' has an invalid preservedNodeSelector '$Selector'."
+  }
+  $kind = $Selector.Substring(0, $separator)
+  $value = $Selector.Substring($separator + 1)
+  $matches = @(switch ($kind) {
+    'id' { @($Nodes | Where-Object { (Attr $_ 'id') -ceq $value }) }
+    'key' { @($Nodes | Where-Object { (Attr $_ 'key') -ceq $value }) }
+    'text' { @($Nodes | Where-Object { (Node-Label $_) -ceq $value }) }
+    'type' { @($Nodes | Where-Object { (Attr $_ 'type') -ceq $value }) }
+    default { @() }
+  })
+  if ($matches.Count -ne 1) {
+    Fail "state '$StateName' selector '$Selector' must identify exactly one captured subtree; found $($matches.Count)."
+  }
+  return $matches[0]
+}
+
+function Get-PreservationHash([object]$Node) {
+  $stableNames = @(
+    'type', 'id', 'key', 'text', 'originalText', 'description', 'bounds',
+    'backgroundImage', 'selected', 'checked', 'enabled', 'visible'
+  )
+  $parts = [Collections.Generic.List[string]]::new()
+  foreach ($name in $stableNames) {
+    $parts.Add("$name=$(Attr $Node $name)")
+  }
+  if ($Node.PSObject.Properties.Name -contains 'children' -and $null -ne $Node.children) {
+    foreach ($child in @($Node.children)) {
+      $parts.Add("child=$(Get-PreservationHash $child)")
+    }
+  }
+  return Get-TextSha256 ($parts -join "`n")
 }
 
 $ManifestPath = [IO.Path]::GetFullPath($ManifestPath)
@@ -89,6 +126,22 @@ $task = Require-Property $manifest 'task'
 if ($task -isnot [int] -or $task -lt 1 -or $task -gt 18) { Fail 'task must be an integer from 1 through 18.' }
 $candidateHash = [string](Require-Property $manifest 'candidateDiffSha256')
 if ($candidateHash -notmatch '^[0-9a-f]{64}$') { Fail 'candidateDiffSha256 must be 64 hex characters.' }
+$repositoryRoot = [string](Require-Property $manifest 'repositoryRoot')
+if ([string]::IsNullOrWhiteSpace($repositoryRoot) -or -not [IO.Path]::IsPathRooted($repositoryRoot) -or
+  -not [IO.Directory]::Exists($repositoryRoot)) {
+  Fail 'repositoryRoot must be an existing absolute directory.'
+}
+$repositoryRoot = [IO.Path]::GetFullPath($repositoryRoot).TrimEnd('\', '/')
+$resolvedGitRoot = Normalize-Text ((& git -C $repositoryRoot rev-parse --show-toplevel 2>$null) -join "`n")
+if ($LASTEXITCODE -ne 0 -or [IO.Path]::GetFullPath($resolvedGitRoot).TrimEnd('\', '/') -cne $repositoryRoot) {
+  Fail 'repositoryRoot must be the exact Git worktree root.'
+}
+$candidateDiffPath = [string](Require-Property $manifest 'candidateDiffPath')
+Require-AbsoluteFile $candidateDiffPath 'candidateDiffPath'
+if ((Get-FileHash -LiteralPath $candidateDiffPath -Algorithm SHA256).Hash.ToLowerInvariant() -cne
+  $candidateHash.ToLowerInvariant()) {
+  Fail 'candidateDiffSha256 does not match candidateDiffPath.'
+}
 $hapPath = [string](Require-Property $manifest 'hapPath')
 Require-AbsoluteFile $hapPath 'hapPath'
 $hapHash = [string](Require-Property $manifest 'hapSha256')
@@ -97,6 +150,23 @@ $actualHapHash = (Get-FileHash -LiteralPath $hapPath -Algorithm SHA256).Hash.ToL
 if ($actualHapHash -cne $hapHash) { Fail 'hapSha256 does not match hapPath.' }
 $commitSha = [string](Require-Property $manifest 'commitSha')
 if ($commitSha -ne '' -and $commitSha -notmatch '^[0-9a-f]{40}$') { Fail 'commitSha must be empty or 40 hex characters.' }
+$headSha = Normalize-Text ((& git -C $repositoryRoot rev-parse HEAD 2>$null) -join "`n")
+$statusText = Normalize-Text ((& git -C $repositoryRoot status --porcelain=v1 --untracked-files=all 2>$null) -join "`n")
+if ($commitSha -eq '') {
+  if ($statusText -match '(?m)^\?\? ') {
+    Fail 'an uncommitted evidence candidate must not contain untracked files outside the Git diff.'
+  }
+  $gitDiff = Normalize-Text ((& git -C $repositoryRoot diff --binary HEAD -- 2>$null) -join "`n")
+} else {
+  $resolvedCommit = Normalize-Text ((& git -C $repositoryRoot rev-parse $commitSha 2>$null) -join "`n")
+  if ($LASTEXITCODE -ne 0 -or $resolvedCommit -cne $commitSha -or $headSha -cne $commitSha) {
+    Fail 'commitSha must resolve to the captured worktree HEAD.'
+  }
+  $gitDiff = Normalize-Text ((& git -C $repositoryRoot diff --binary "$commitSha^" $commitSha -- 2>$null) -join "`n")
+}
+if ((Normalize-Text ([IO.File]::ReadAllText($candidateDiffPath))) -cne $gitDiff) {
+  Fail 'candidateDiffPath is not the actual Git candidate diff.'
+}
 
 $runtimeRoutes = @(
   '/imageobject/ObjectPhotoActivity', '/imageobject/ObjectCameraActivity', '/imageobject/ImageCameraActivity',
@@ -119,6 +189,28 @@ if (($fontScale -eq 3.2 -or $routeName -eq '/custommodel/CustomModelMainActivity
 }
 $density = [double](Require-Property $manifest 'density')
 if ($density -le 0) { Fail 'density must be positive.' }
+$captureEnvironmentPath = [string](Require-Property $manifest 'captureEnvironmentPath')
+Require-AbsoluteFile $captureEnvironmentPath 'captureEnvironmentPath'
+try {
+  $captureEnvironment = Get-Content -LiteralPath $captureEnvironmentPath -Raw -Encoding utf8 | ConvertFrom-Json
+} catch {
+  Fail 'captureEnvironmentPath must contain valid UTF-8 JSON.'
+}
+if ([string](Require-Property $captureEnvironment 'source') -cne $sourceKind -or
+  [double](Require-Property $captureEnvironment 'fontScale') -ne $fontScale -or
+  [double](Require-Property $captureEnvironment 'density') -ne $density -or
+  [string](Require-Property $captureEnvironment 'repositoryRoot') -cne $repositoryRoot -or
+  [string](Require-Property $captureEnvironment 'gitHead') -cne $headSha) {
+  Fail 'capture environment does not bind source/font/density/repository/HEAD claims.'
+}
+if ([string](Require-Property $captureEnvironment 'gitStatusSha256') -cne (Get-TextSha256 $statusText)) {
+  Fail 'capture environment git status does not match the worktree.'
+}
+$displayWidthPx = [int](Require-Property $captureEnvironment 'displayWidthPx')
+$displayHeightPx = [int](Require-Property $captureEnvironment 'displayHeightPx')
+if ($displayWidthPx -le 0 -or $displayHeightPx -le 0) {
+  Fail 'capture environment display dimensions must be positive.'
+}
 
 foreach ($permissionField in @('permissionBefore', 'permissionAfter')) {
   $permission = Require-Property $manifest $permissionField
@@ -127,6 +219,32 @@ foreach ($permissionField in @('permissionBefore', 'permissionAfter')) {
     if ($value -isnot [int] -or $value -notin @(-1, 0, 1, 2)) {
       Fail "$permissionField.$kind must be a known permission-state integer."
     }
+  }
+}
+$permissionProofPaths = @{
+  permissionBefore = [string](Require-Property $manifest 'permissionBeforePath')
+  permissionAfter = [string](Require-Property $manifest 'permissionAfterPath')
+}
+foreach ($permissionField in @('permissionBefore', 'permissionAfter')) {
+  $proofPath = $permissionProofPaths[$permissionField]
+  Require-AbsoluteFile $proofPath "$permissionField proof"
+  try {
+    $proof = Get-Content -LiteralPath $proofPath -Raw -Encoding utf8 | ConvertFrom-Json
+  } catch {
+    Fail "$permissionField proof must be the JSON output from the permission-state command."
+  }
+  if ([string](Require-Property $proof 'bundleName') -cne 'com.yuhaofeng.mih') {
+    Fail "$permissionField proof has the wrong bundle."
+  }
+  $statesByName = @{}
+  foreach ($entry in @((Require-Property $proof 'permStateList'))) {
+    $statesByName[[string](Require-Property $entry 'permissionName')] = [int](Require-Property $entry 'grantStatus')
+  }
+  if (-not $statesByName.ContainsKey('ohos.permission.CAMERA') -or
+    -not $statesByName.ContainsKey('ohos.permission.READ_IMAGEVIDEO') -or
+    $statesByName['ohos.permission.CAMERA'] -ne [int]$manifest.$permissionField.camera -or
+    $statesByName['ohos.permission.READ_IMAGEVIDEO'] -ne [int]$manifest.$permissionField.media) {
+    Fail "$permissionField does not match its captured permission-state JSON."
   }
 }
 
@@ -155,10 +273,27 @@ foreach ($state in $states) {
     $screenshotBytes[$screenshotBytes.Length - 2] -ne 0xFF -or $screenshotBytes[$screenshotBytes.Length - 1] -ne 0xD9) {
     Fail "state '$name' screenshot does not contain JPEG markers."
   }
+  try {
+    Add-Type -AssemblyName System.Drawing
+    $decodedScreenshot = [Drawing.Image]::FromFile($screenshotPath)
+    $screenshotWidth = $decodedScreenshot.Width
+    $screenshotHeight = $decodedScreenshot.Height
+    $decodedScreenshot.Dispose()
+  } catch {
+    Fail "state '$name' screenshot is not a decodable JPEG."
+  }
+  if ($screenshotWidth -ne $displayWidthPx -or $screenshotHeight -ne $displayHeightPx) {
+    Fail "state '$name' screenshot dimensions do not match the captured display."
+  }
   try { $layout = Get-Content -LiteralPath $layoutPath -Raw -Encoding utf8 | ConvertFrom-Json } catch {
     Fail "state '$name' layout must be valid UTF-8 JSON."
   }
   $allNodes = @(Flatten-Nodes $layout)
+  $displayBounds = Parse-Bounds (Attr $layout 'bounds')
+  if ($null -eq $displayBounds -or $displayBounds.Width -ne $displayWidthPx -or
+    $displayBounds.Height -ne $displayHeightPx) {
+    Fail "state '$name' layout root does not match the captured display dimensions."
+  }
   $appRoot = @($allNodes | Where-Object {
       (Attr $_ 'bundleName') -eq 'com.yuhaofeng.mih' -and (Attr $_ 'abilityName') -eq 'EntryAbility'
     })
@@ -168,6 +303,9 @@ foreach ($state in $states) {
     Fail "state '$name' has the wrong pagePath."
   }
   $nodes = @(Flatten-Nodes $appRoot[0])
+  if (@($nodes | Where-Object { (Attr $_ 'key') -ceq $routeName }).Count -ne 1) {
+    Fail "state '$name' does not bind routeName to the captured runtime root key."
+  }
   $scrollableCount = Require-Property $state 'scrollableCount'
   if ($scrollableCount -isnot [int] -or $scrollableCount -lt 0) { Fail "state '$name' scrollableCount is invalid." }
   $actualScrolls = @($nodes | Where-Object { (Is-Visible $_) -and (Attr $_ 'type') -eq 'Scroll' }).Count
@@ -176,6 +314,9 @@ foreach ($state in $states) {
   $requiredTexts = @(Require-Property $state 'requiredTexts')
   $forbiddenTexts = @(Require-Property $state 'forbiddenTexts')
   $requiredClickableTexts = @(Require-Property $state 'requiredClickableTexts')
+  if ($requiredTexts.Count -eq 0 -or $requiredClickableTexts.Count -eq 0) {
+    Fail "state '$name' must declare required state text and actions."
+  }
   $labels = @($nodes | Where-Object { Is-Visible $_ } | ForEach-Object { Node-Label $_ })
   foreach ($text in $requiredTexts) {
     if ([string]::IsNullOrWhiteSpace([string]$text) -or $labels -cnotcontains [string]$text) {
@@ -195,13 +336,17 @@ foreach ($state in $states) {
   $minTargetVp = [double](Require-Property $state 'minTargetVp')
   $minPrimaryTargetVp = [double](Require-Property $state 'minPrimaryTargetVp')
   $bottomInsetPx = [int](Require-Property $state 'bottomInsetPx')
-  if ($minTargetVp -lt 44 -or $minPrimaryTargetVp -lt 48 -or $bottomInsetPx -lt 0) {
+  if ($minTargetVp -lt 44 -or $minPrimaryTargetVp -lt 48 -or $bottomInsetPx -le 0) {
     Fail "state '$name' has invalid target or inset thresholds."
   }
   $appBounds = Parse-Bounds (Attr $appRoot[0] 'bounds')
   if ($null -eq $appBounds -or $appBounds.Width -le 0 -or $appBounds.Height -le 0) {
     Fail "state '$name' application bounds are invalid."
   }
+  if ($bottomInsetPx -ne ($displayHeightPx - $appBounds.Bottom)) {
+    Fail "state '$name' bottomInsetPx does not match the captured display/application bounds."
+  }
+  $clickableBounds = [Collections.Generic.List[object]]::new()
   foreach ($node in $nodes | Where-Object { Is-Visible $_ }) {
     $boundsText = Attr $node 'bounds'
     if ([string]::IsNullOrWhiteSpace($boundsText)) { continue }
@@ -222,6 +367,17 @@ foreach ($state in $states) {
       if ($bounds.Bottom -gt ($appBounds.Bottom - $bottomInsetPx)) {
         Fail "state '$name' contains a clickable target inside the bottom inset."
       }
+      $clickableBounds.Add($bounds)
+    }
+  }
+  for ($left = 0; $left -lt $clickableBounds.Count; $left++) {
+    for ($right = $left + 1; $right -lt $clickableBounds.Count; $right++) {
+      $a = $clickableBounds[$left]
+      $b = $clickableBounds[$right]
+      if ([Math]::Max($a.Left, $b.Left) -lt [Math]::Min($a.Right, $b.Right) -and
+        [Math]::Max($a.Top, $b.Top) -lt [Math]::Min($a.Bottom, $b.Bottom)) {
+        Fail "state '$name' contains overlapping visible clickable actions."
+      }
     }
   }
 
@@ -238,21 +394,18 @@ foreach ($state in $states) {
     }
     $requiredControls += $bounds
   }
-  for ($left = 0; $left -lt $requiredControls.Count; $left++) {
-    for ($right = $left + 1; $right -lt $requiredControls.Count; $right++) {
-      $a = $requiredControls[$left]
-      $b = $requiredControls[$right]
-      if ([Math]::Max($a.Left, $b.Left) -lt [Math]::Min($a.Right, $b.Right) -and
-        [Math]::Max($a.Top, $b.Top) -lt [Math]::Min($a.Bottom, $b.Bottom)) {
-        Fail "state '$name' contains overlapping required actions."
-      }
-    }
-  }
-
   $preservedFrom = [string](Require-Property $state 'preservedBoundsHashFrom')
+  $preservedSelectors = @((Require-Property $state 'preservedNodeSelectors'))
+  $preservedHashes = @{}
+  foreach ($selector in $preservedSelectors) {
+    $preservedHashes[[string]$selector] = Get-PreservationHash (
+      Get-PreservationNode $nodes ([string]$selector) $name
+    )
+  }
   $stateData[$name] = [pscustomobject]@{
     PreserveFrom = $preservedFrom
-    Hash = Get-PreservationHash $nodes
+    Selectors = $preservedSelectors
+    Hashes = $preservedHashes
   }
 }
 
@@ -260,8 +413,14 @@ foreach ($name in $stateData.Keys) {
   $reference = $stateData[$name].PreserveFrom
   if ($reference -eq '') { continue }
   if (-not $stateData.ContainsKey($reference) -or $reference -ceq $name -or
-    $stateData[$name].Hash -cne $stateData[$reference].Hash) {
+    $stateData[$name].Selectors.Count -eq 0 -or
+    ($stateData[$name].Selectors -join "`n") -cne ($stateData[$reference].Selectors -join "`n")) {
     Fail "state '$name' does not preserve the referenced visual bounds."
+  }
+  foreach ($selector in $stateData[$name].Selectors) {
+    if ($stateData[$name].Hashes[[string]$selector] -cne $stateData[$reference].Hashes[[string]$selector]) {
+      Fail "state '$name' changed preserved subtree '$selector'."
+    }
   }
 }
 

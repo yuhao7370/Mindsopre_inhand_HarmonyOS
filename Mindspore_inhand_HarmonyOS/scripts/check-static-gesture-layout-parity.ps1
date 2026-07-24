@@ -54,7 +54,6 @@ foreach ($marker in @(
   "this.prepareInput('photo')",
   "this.prepareInput('camera')",
   'this.openLinkedLiveRoute()',
-  'this.runtimePermissionRecoveryOverlay()',
   '.padding(50)',
   '.layoutWeight(9)',
   '.layoutWeight(1)'
@@ -119,7 +118,10 @@ $failureMethod = Get-TextSection `
 Assert-Contains $failureMethod 'shouldShowGestureStillFailureToast' 'failure helper must use the pure route policy.'
 Assert-Contains $failureMethod 'this.showRuntimeToast(messageKey)' 'failed Gesture Still results must show a Toast.'
 
-$build = $page.Substring($page.IndexOf("`n  build() {", [StringComparison]::Ordinal))
+$build = $page.Substring($page.IndexOf(
+    "`n  @Builder`n  runtimeLayoutContent() {",
+    [StringComparison]::Ordinal
+  ))
 $selectorIndex = $build.IndexOf('usesAndroidGestureStillLayout(workflowForRoute(this.routeName))', [StringComparison]::Ordinal)
 $genericIndex = $build.IndexOf("    } else {`n      Scroll() {", [StringComparison]::Ordinal)
 if ($selectorIndex -lt 0 -or $genericIndex -lt 0 -or $selectorIndex -ge $genericIndex) {

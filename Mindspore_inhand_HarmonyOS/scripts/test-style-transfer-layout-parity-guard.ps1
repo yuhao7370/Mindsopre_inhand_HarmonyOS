@@ -286,11 +286,6 @@ try {
     '  styleTransferStyleGrid() {' '  styleTransferStyleItem(' `
     ".columnsTemplate('1fr 1fr 1fr 1fr')" "const gridDecoy = `".columnsTemplate('1fr 1fr 1fr 1fr')`";" `
     'four-column grid exists only as a literal decoy'
-  Assert-PageSectionMutationFails 'missing-permission-overlay' `
-    '  styleTransferAndroidLayout() {' '  stillSegmentationAndroidLayout() {' `
-    'this.runtimePermissionRecoveryOverlay()' "const overlayDecoy = 'this.runtimePermissionRecoveryOverlay()';" `
-    'permission overlay exists only as a literal decoy'
-
   $recoveryEnabledRoot = New-MutationRoot 'recovery-enabled-while-running'
   Replace-Once `
     (Join-Path $recoveryEnabledRoot 'entry\src\main\ets\pages\FeatureRuntimePage.ets') `

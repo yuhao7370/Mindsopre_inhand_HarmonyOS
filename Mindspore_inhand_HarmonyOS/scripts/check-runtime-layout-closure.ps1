@@ -110,7 +110,7 @@ function Get-BracedSection([string]$Text, [int]$OpenBraceIndex) {
       }
     }
   }
-  throw 'Runtime layout closure guard failed: build() has no matching closing brace.'
+  throw 'Runtime layout closure guard failed: method has no matching closing brace.'
 }
 
 if ([string]::IsNullOrWhiteSpace($SourceRoot)) { $SourceRoot = Split-Path -Parent $PSScriptRoot }
@@ -129,13 +129,16 @@ if ($structMatches.Count -ne 1) {
 $structOpenBrace = $page.IndexOf('{', $structMatches[0].Index, [StringComparison]::Ordinal)
 $featureRuntimePageBody = Get-BracedSection $page $structOpenBrace
 
-$buildMatches = [regex]::Matches($featureRuntimePageBody, '(?m)^[\t ]*build\(\)[\t ]*\{[\t ]*$')
-if ($buildMatches.Count -ne 1) {
-  throw "Runtime layout closure guard failed: expected one real FeatureRuntimePage.build() method, found $($buildMatches.Count)."
+$contentMatches = [regex]::Matches(
+  $featureRuntimePageBody,
+  '(?m)^[\t ]*runtimeLayoutContent\(\)[\t ]*\{[\t ]*$'
+)
+if ($contentMatches.Count -ne 1) {
+  throw "Runtime layout closure guard failed: expected one real runtimeLayoutContent() method, found $($contentMatches.Count)."
 }
-$openBrace = $featureRuntimePageBody.IndexOf('{', $buildMatches[0].Index, [StringComparison]::Ordinal)
-$buildBody = Get-BracedSection $featureRuntimePageBody $openBrace
-$actualLines = @($buildBody.Split("`n") | ForEach-Object { $_.Trim() } | Where-Object { $_.Length -gt 0 })
+$openBrace = $featureRuntimePageBody.IndexOf('{', $contentMatches[0].Index, [StringComparison]::Ordinal)
+$contentBody = Get-BracedSection $featureRuntimePageBody $openBrace
+$actualLines = @($contentBody.Split("`n") | ForEach-Object { $_.Trim() } | Where-Object { $_.Length -gt 0 })
 
 $rawExpectedLines = @(
   'if (usesAndroidTextTranslationLayout(workflowForRoute(this.routeName))) {',
@@ -168,17 +171,43 @@ $rawExpectedLines = @(
 )
 $expectedLines = @($rawExpectedLines | ForEach-Object { (ConvertTo-ArkTsStructuralText $_).Trim() })
 if ($actualLines.Count -lt $expectedLines.Count) {
-  throw 'Runtime layout closure guard failed: build() ends before the complete selector chain.'
+  throw 'Runtime layout closure guard failed: runtimeLayoutContent() ends before the complete selector chain.'
 }
 for ($index = 0; $index -lt $expectedLines.Count; $index++) {
   if ($actualLines[$index] -cne $expectedLines[$index]) {
-    throw "Runtime layout closure guard failed: build() line $($index + 1) must be '$($rawExpectedLines[$index])'."
+    throw "Runtime layout closure guard failed: runtimeLayoutContent() line $($index + 1) must be '$($rawExpectedLines[$index])'."
   }
 }
 for ($index = 0; $index -lt $expectedLines.Count - 1; $index++) {
   $count = @($actualLines | Where-Object { $_ -ceq $expectedLines[$index] }).Count
   if ($count -ne 1) {
     throw "Runtime layout closure guard failed: selector/builder line must occur exactly once: $($rawExpectedLines[$index])"
+  }
+}
+
+$buildMatches = [regex]::Matches($featureRuntimePageBody, '(?m)^[\t ]*build\(\)[\t ]*\{[\t ]*$')
+if ($buildMatches.Count -ne 1) {
+  throw "Runtime layout closure guard failed: expected one real FeatureRuntimePage.build() method, found $($buildMatches.Count)."
+}
+$buildOpenBrace = $featureRuntimePageBody.IndexOf('{', $buildMatches[0].Index, [StringComparison]::Ordinal)
+$buildBody = Get-BracedSection $featureRuntimePageBody $buildOpenBrace
+$buildLines = @($buildBody.Split("`n") | ForEach-Object { $_.Trim() } | Where-Object { $_.Length -gt 0 })
+$expectedBuildLines = @(
+  'Stack({ alignContent: Alignment.TopStart }) {',
+  'this.runtimeLayoutContent()',
+  'this.runtimePermissionRecoveryOverlay()',
+  '}',
+  '.width(''100%'')',
+  '.height(''100%'')',
+  '.key(this.routeName)'
+)
+if ($buildLines.Count -ne $expectedBuildLines.Count) {
+  throw 'Runtime layout closure guard failed: build() must contain only the shared runtime content/overlay stack.'
+}
+for ($index = 0; $index -lt $expectedBuildLines.Count; $index++) {
+  $expected = (ConvertTo-ArkTsStructuralText $expectedBuildLines[$index]).Trim()
+  if ($buildLines[$index] -cne $expected) {
+    throw "Runtime layout closure guard failed: build() line $($index + 1) must be '$($expectedBuildLines[$index])'."
   }
 }
 

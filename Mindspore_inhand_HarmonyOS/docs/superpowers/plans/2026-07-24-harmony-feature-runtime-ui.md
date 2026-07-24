@@ -137,6 +137,8 @@ The manifest is UTF-8 JSON with this fixed schema:
 ```json
 {
   "task": 1,
+  "repositoryRoot": "<absolute Git worktree root>",
+  "candidateDiffPath": "<absolute Git diff artifact>",
   "candidateDiffSha256": "<64 hex>",
   "hapPath": "<absolute HAP path>",
   "hapSha256": "<64 hex>",
@@ -145,8 +147,11 @@ The manifest is UTF-8 JSON with this fixed schema:
   "fontScale": 1.0,
   "source": "production",
   "density": 3.5,
+  "captureEnvironmentPath": "<absolute capture-environment JSON path>",
   "permissionBefore": { "camera": -1, "media": -1 },
   "permissionAfter": { "camera": 0, "media": -1 },
+  "permissionBeforePath": "<absolute permission-state JSON path>",
+  "permissionAfterPath": "<absolute permission-state JSON path>",
   "aaDumpPath": "<absolute text path>",
   "states": [
     {
@@ -155,26 +160,38 @@ The manifest is UTF-8 JSON with this fixed schema:
       "screenshot": "<absolute JPEG path>",
       "pagePath": "pages/FeatureRuntimePage",
       "scrollableCount": 1,
-      "requiredTexts": [],
+      "requiredTexts": ["<visible state label>"],
       "forbiddenTexts": [],
-      "requiredClickableTexts": [],
+      "requiredClickableTexts": ["<visible action label>"],
       "minTargetVp": 44,
       "minPrimaryTargetVp": 48,
       "bottomInsetPx": 98,
-      "preservedBoundsHashFrom": ""
+      "preservedBoundsHashFrom": "",
+      "preservedNodeSelectors": ["id:<stable captured node id>"]
     }
   ]
 }
 ```
 
-The checker rejects missing files, a mismatched HAP hash, invalid enums,
-missing foreground `aa dump`, wrong page/route, wrong scroll count,
-absent/forbidden texts, non-clickable required controls, undersized targets,
-visible bounds outside the application area, overlapping action bounds, hidden
-labels, fixed-route camera switches, missing state labels, and mismatched
-preservation hashes. `test-runtime-ui-evidence-guard.ps1` builds one valid tiny
-dump/manifest and mutates every field above, including comment/text decoys, to
-prove rejection.
+`captureEnvironmentPath` records `source`, `fontScale`, `density`,
+`repositoryRoot`, `gitHead`, `gitStatusSha256`, `displayWidthPx`, and
+`displayHeightPx`. The checker binds the candidate diff to the exact Git
+worktree/HEAD, binds capture claims to that environment record, decodes every
+JPEG at the captured display dimensions, and compares permission claims with
+the raw permission-state JSON. The captured runtime root must carry the exact
+route as its `key`; the declared bottom inset must equal the display/application
+bounds difference. It rejects missing files, a mismatched HAP hash, invalid
+enums, missing foreground `aa dump`, wrong page/route, wrong scroll count,
+empty or absent required state/action labels, forbidden texts, non-clickable
+required controls, undersized targets, visible bounds outside the application
+area, any overlapping visible clickable bounds, hidden labels, fixed-route
+camera switches, missing state labels, and changed selected subtrees. A
+preserved subtree hash includes stable identity, text, bounds, image, state,
+and recursive child attributes—not bounds alone.
+
+`test-runtime-ui-evidence-guard.ps1` builds a real temporary Git worktree,
+decodable JPEG, dump, raw permission proofs, and manifest, then mutates each
+claim and common decoy shape to prove rejection.
 
 Font, direct-route, state, and permission setup is deterministic:
 

@@ -265,7 +265,6 @@ export function sceneDetectionOverlayRows(result: SceneDetectionResult): Array<S
       .width('100%')
       .height('100%')
       .backgroundColor(Color.White)
-      this.runtimePermissionRecoveryOverlay()
     }
     .width('100%')
     .height('100%')
@@ -276,7 +275,8 @@ export function sceneDetectionOverlayRows(result: SceneDetectionResult): Array<S
   portraitSegmentationAndroidLayout() {
   }
 
-  build() {
+  @Builder
+  runtimeLayoutContent() {
     if (false) {
     } else if (usesAndroidStillSceneLayout(workflowForRoute(this.routeName))) {
       this.stillSceneAndroidLayout()
@@ -377,8 +377,8 @@ try {
     'const requestId = ++this.inputPreparationRequestId;' `
     "if (!shouldAllowRuntimeInputChange(workflowForRoute(this.routeName), inputKind, this.workflowRunning)) { return; }`n    const requestId = ++this.inputPreparationRequestId;"
   Assert-MutationRejected $validRoot 'generic-loading-injected' $pagePath `
-    'this.runtimePermissionRecoveryOverlay()' `
-    "LoadingProgress()`n      this.runtimePermissionRecoveryOverlay()"
+    'this.runtimeActionToolbar(false)' `
+    "this.runtimeActionToolbar(false)`n      LoadingProgress()"
   Assert-MutationRejected $validRoot 'combined-scene-rows' $aiPath `
     "rows.push(resultRow('feature_runtime_scene_overlay_scene', scene.label));" `
     "rows.push(resultRow('feature_runtime_result_scenes', scene.label));"

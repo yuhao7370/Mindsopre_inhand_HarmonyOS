@@ -80,6 +80,20 @@ Assert-Contains $simpleLive 'if \(this\.liveCameraSwitchAvailable\) \{\s*this\.r
 Assert-Contains $simpleLive '\.padding\(\{\s*left:\s*AppSpacing\.page,\s*right:\s*AppSpacing\.page,\s*top:\s*AppSpacing\.sm,\s*bottom:\s*AppSpacing\.md\s*\}\)' 'simple live overlays must stay within responsive safe padding.'
 Assert-NotContains $simpleLive '\.width\(35\)|\.height\(35\)|\.margin\(\{\s*bottom:\s*30\s*\}\)' 'simple live layout must not retain fixed Android switch geometry.'
 
+$runtimeContentStart = $source.IndexOf("  @Builder`n  runtimeLayoutContent() {", [StringComparison]::Ordinal)
+$buildStart = $source.IndexOf("  build() {", [StringComparison]::Ordinal)
+if ($runtimeContentStart -lt 0 -or $buildStart -lt 0 -or $runtimeContentStart -ge $buildStart) {
+  throw 'Runtime shared UI guard failed: missing runtimeLayoutContent()/build() boundary.'
+}
+$runtimeContent = $source.Substring($runtimeContentStart, $buildStart - $runtimeContentStart)
+Assert-NotContains $runtimeContent 'this\.runtimePermissionRecoveryOverlay\(\)' 'permission recovery must not remain scoped inside a route/content layout.'
+$build = $source.Substring($buildStart)
+Assert-Contains $build 'build\(\) \{\s*Stack\(\{ alignContent: Alignment\.TopStart \}\) \{\s*this\.runtimeLayoutContent\(\)\s*this\.runtimePermissionRecoveryOverlay\(\)\s*\}\s*\.width\(''100%''\)\s*\.height\(''100%''\)\s*\.key\(this\.routeName\)\s*\}' 'build() must place one recovery overlay above the complete runtime content, including its toolbar, and bind the runtime route to the captured root.'
+$overlayCalls = [regex]::Matches($source, '(?m)^[\t ]*this\.runtimePermissionRecoveryOverlay\(\)[\t ]*$')
+if ($overlayCalls.Count -ne 1) {
+  throw "Runtime shared UI guard failed: expected one top-level permission recovery call, found $($overlayCalls.Count)."
+}
+
 $tokens = $null
 $parseErrors = $null
 $ast = [Management.Automation.Language.Parser]::ParseFile($buildPath, [ref]$tokens, [ref]$parseErrors)

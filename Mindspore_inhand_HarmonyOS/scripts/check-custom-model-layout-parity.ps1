@@ -209,8 +209,7 @@ foreach ($marker in @(
   '.onClick(() => this.runCustomModelAndroidAction())',
   "Text(appString('feature_runtime_custom_model_output_title'))",
   'Scroll() {',
-  'Text(this.customModelOutputText())',
-  'this.runtimePermissionRecoveryOverlay()'
+  'Text(this.customModelOutputText())'
 )) {
   Assert-Contains $builder $marker "dedicated builder is missing $marker."
 }
@@ -420,7 +419,10 @@ $outputResolver = Get-TextSection $page '  private customModelOutputText(): Reso
 Assert-Contains $outputResolver 'customModelOutputFallbackKey(' 'visible output must use the Task 1 priority policy.'
 Assert-Contains $outputResolver 'return fallbackKey === undefined ? this.resultText : appString(fallbackKey);' 'terminal output must render directly only when no fallback key applies.'
 
-$build = $page.Substring($page.IndexOf("`n  build() {", [StringComparison]::Ordinal))
+$build = $page.Substring($page.IndexOf(
+    "`n  @Builder`n  runtimeLayoutContent() {",
+    [StringComparison]::Ordinal
+  ))
 $selectorIndex = $build.IndexOf('usesAndroidCustomModelLayout(workflowForRoute(this.routeName))', [StringComparison]::Ordinal)
 $genericIndex = $build.IndexOf("    } else {`n      Scroll() {", [StringComparison]::Ordinal)
 if ($selectorIndex -lt 0 -or $genericIndex -lt 0 -or $selectorIndex -ge $genericIndex) {
