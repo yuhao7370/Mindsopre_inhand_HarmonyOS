@@ -681,6 +681,18 @@ export function shouldShowCopyTextAction(aiMethod: string): boolean {
   return aiMethod === 'recognizeText' || aiMethod === 'translateText';
 }
 
+export function textRecognitionActionEnabled(workflowRunning: boolean): boolean {
+  return !workflowRunning;
+}
+
+export function textRecognitionRunActionLabelKey(
+  statusKey: AppStringKey,
+  runActionKey: AppStringKey
+): AppStringKey {
+  return statusKey === 'feature_runtime_text_recognition_failed' ||
+    statusKey === 'feature_runtime_run_failed' ? 'web_retry' : runActionKey;
+}
+
 export function shouldShowResultSaveAction(
   workflow: FeatureWorkflow | undefined,
   resultImageReady: boolean

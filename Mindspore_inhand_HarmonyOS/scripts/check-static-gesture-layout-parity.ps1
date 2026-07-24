@@ -259,7 +259,7 @@ Exclude $box '.translate({ y: -24 })' `
   'the static gesture label must use edge-aware placement instead of a fixed upward offset'
 
 $builder = Section $page '  gestureStillAndroidLayout() {' `
-  "`n`n  @Builder`n  textRecognitionAndroidLayout()" 'static gesture layout'
+  "`n`n  @Builder`n  textRecognitionPreview()" 'static gesture layout'
 foreach ($line in @(
   'this.runtimeActionToolbar(false)',
   'Scroll() {',

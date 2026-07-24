@@ -60,6 +60,8 @@ import {
   shouldMirrorSegmentationForeground,
   shouldMirrorLiveGestureCameraOverlay,
   shouldShowCopyTextAction,
+  textRecognitionActionEnabled,
+  textRecognitionRunActionLabelKey,
   shouldShowCompositeSegmentationSaveAction,
   compositeSegmentationSaveReady,
   shouldShowLiveClassificationCameraOverlay,
@@ -370,6 +372,7 @@ struct FeatureRuntimePage {
   @State gestureImageHeight: number = 0;
   @State gestureStillOverlayWidthVp: number = 0;
   @State gestureStillOverlayHeightVp: number = 0;
+  @State textRecognitionImageOrientation: ImageRotateOrientation = ImageRotateOrientation.UP;
   @State sceneOverlayRows: Array<SceneDetectionOverlayRow> = [];
   @State helpUrl: string = '';
   @State helpContentKey: AppStringKey | undefined = undefined;
@@ -958,6 +961,10 @@ struct FeatureRuntimePage {
       this.applyPortraitBackgroundUri(result.uri, portraitSegmentationCustomBackgroundId);
     } else {
       this.imageInputUri = result.uri;
+    }
+    if (usesAndroidTextRecognitionLayout(workflow) && (inputKind === 'photo' || inputKind === 'camera')) {
+      this.textRecognitionImageOrientation = ImageRotateOrientation.UP;
+      this.updateTextRecognitionImageOrientation(result.uri);
     }
     if (shouldShowStyleOriginalAfterInputReady(workflow, inputKind)) {
       this.styleOriginalPreviewRecovered = true;
@@ -2034,6 +2041,7 @@ struct FeatureRuntimePage {
   private copyRecognizedText(): void {
     new ClipboardService().copyText(this.recognizedTextForCopy()).then((result: CopyTextResult) => {
       this.statusKey = result.ok ? 'feature_runtime_copy_done' : 'feature_runtime_copy_failed';
+      this.showRuntimeToast(this.statusKey);
     });
   }
 
@@ -2869,6 +2877,14 @@ struct FeatureRuntimePage {
 
   private percentLength(value: number): string {
     return `${value}%`;
+  }
+
+  private updateTextRecognitionImageOrientation(uri: string): void {
+    this.updateOverlayPreviewImageOrientation(uri, (orientation: ImageRotateOrientation) => {
+      if (this.imageInputUri === uri) {
+        this.textRecognitionImageOrientation = orientation;
+      }
+    });
   }
 
   private updateObjectDetectionImageOrientation(uri: string): void {
@@ -4879,99 +4895,158 @@ struct FeatureRuntimePage {
   }
 
   @Builder
-  textRecognitionAndroidLayout() {
-    Stack({ alignContent: Alignment.TopStart }) {
-      Column() {
-        this.runtimeActionToolbar(false)
-        Row() {
-        }
-        .width('100%')
-        .height(1)
-        .backgroundColor('#DBDBDB')
-        Stack({ alignContent: Alignment.Center }) {
-          if (this.imageInputUri.length > 0) {
-            Image(this.imageInputUri)
-              .width('100%')
-              .height('100%')
-              .padding(10)
-              .objectFit(ImageFit.Contain)
-          } else {
-            Column() {
-              Image($r('app.media.icon_style'))
-                .width(69.33)
-                .height(56.33)
-                .objectFit(ImageFit.Contain)
-              Text(appString('workflow_summary_text_recognition_android_prompt'))
-                .fontSize(16)
-                .fontColor('#666666')
-                .textAlign(TextAlign.Center)
-                .margin({ top: 10 })
-            }
-            .alignItems(HorizontalAlign.Center)
-          }
-          if (this.workflowRunning) {
-            LoadingProgress()
-              .width(80)
-              .height(80)
-          }
-        }
-        .width('100%')
-        .layoutWeight(5)
-        .backgroundColor('#E6E6E6')
-        Row() {
-          Button(appString('feature_input_photo_android'), { type: ButtonType.Normal })
-            .layoutWeight(1)
-            .height(37)
-            .fontSize(14)
-            .fontWeight(FontWeight.Normal)
-            .fontColor('#666666')
-            .backgroundColor('#F4F3F8')
-            .borderRadius(5)
-            .onClick(() => this.prepareInput('photo'))
-          Button(appString('feature_input_camera_android'), { type: ButtonType.Normal })
-            .layoutWeight(1)
-            .height(37)
-            .fontSize(14)
-            .fontWeight(FontWeight.Normal)
-            .fontColor('#666666')
-            .backgroundColor('#F4F3F8')
-            .borderRadius(5)
-            .margin({ left: 10 })
-            .onClick(() => this.prepareInput('camera'))
-        }
-        .width('100%')
-        .height(50)
-        .margin({ left: 10, right: 10, top: 14, bottom: 10 })
-        .alignItems(VerticalAlign.Center)
-        Scroll() {
-          Text(this.textRecognitionOutputText())
-            .width('100%')
-            .fontSize(14)
-            .fontColor('#000000')
-            .copyOption(CopyOptions.LocalDevice)
-        }
-        .width('100%')
-        .layoutWeight(3)
-        .padding({ left: 24, right: 24 })
-        .scrollBar(BarState.Auto)
-        .backgroundColor('#E6E6E6')
-        Button(appString('feature_runtime_copy_text'), { type: ButtonType.Normal })
+  textRecognitionPreview() {
+    Stack({ alignContent: Alignment.Center }) {
+      if (this.imageInputUri.length > 0) {
+        Image(this.imageInputUri)
           .width('100%')
-          .height(48)
-          .fontSize(14)
-          .fontWeight(FontWeight.Normal)
-          .fontColor('#000000')
-          .backgroundColor(Color.White)
-          .borderRadius(10)
-          .onClick(() => this.copyRecognizedText())
+          .height('100%')
+          .objectFit(ImageFit.Contain)
+          .orientation(this.textRecognitionImageOrientation)
+      } else {
+        Column({ space: AppSpacing.sm }) {
+          Row() {
+          }
+          .width(32)
+          .height(3)
+          .backgroundColor(AppColor.accent)
+          .borderRadius(2)
+          Text(appString('workflow_summary_text_recognition_android_prompt'))
+            .fontSize(14)
+            .fontColor(AppColor.textSecondary)
+            .maxFontScale(1.6)
+            .textAlign(TextAlign.Center)
+        }
+        .padding(AppSpacing.md)
+        .alignItems(HorizontalAlign.Center)
       }
-      .width('100%')
-      .height('100%')
-      .backgroundColor(Color.White)
     }
     .width('100%')
     .height('100%')
-    .backgroundColor(Color.White)
+    .clip(true)
+    .backgroundColor(AppColor.cardBackground)
+  }
+
+  @Builder
+  textRecognitionAndroidLayout() {
+    Column() {
+      this.runtimeActionToolbar(false)
+      Scroll() {
+        Column({ space: AppSpacing.md }) {
+          Stack({ alignContent: Alignment.Center }) {
+            this.textRecognitionPreview()
+          }
+          .width('100%')
+          .aspectRatio(4 / 3)
+          .constraintSize({ minHeight: 220, maxHeight: 420 })
+          .clip(true)
+          .backgroundColor(AppColor.cardBackground)
+          .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
+          Row({ space: AppSpacing.sm }) {
+            if (this.workflowRunning) {
+              LoadingProgress()
+                .width(24)
+                .height(24)
+            }
+            Text(appString(this.statusKey))
+              .fontSize(14)
+              .fontColor(AppColor.textSecondary)
+              .maxFontScale(1.6)
+              .layoutWeight(1)
+            if (!this.workflowRunning &&
+              (this.statusKey === 'feature_runtime_text_recognition_failed' ||
+                this.statusKey === 'feature_runtime_run_failed')) {
+              Button(appString('web_retry'), { type: ButtonType.Normal })
+                .constraintSize({ minWidth: 72, minHeight: 48 })
+                .maxFontScale(1.6)
+                .fontColor(AppColor.accent)
+                .backgroundColor(Color.Transparent)
+                .onClick(() => this.runPrimaryAction())
+            }
+          }
+          .width('100%')
+          .constraintSize({ minHeight: 48 })
+          .padding({ left: AppSpacing.md, right: AppSpacing.sm, top: AppSpacing.sm, bottom: AppSpacing.sm })
+          .alignItems(VerticalAlign.Center)
+          .backgroundColor(AppColor.cardBackground)
+          .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
+          Column({ space: AppSpacing.sm }) {
+            Text(appString(workflowResultTitleKey(workflowForRoute(this.routeName))))
+              .fontSize(16)
+              .fontWeight(FontWeight.Medium)
+              .fontColor(AppColor.textPrimary)
+              .maxFontScale(1.6)
+              .width('100%')
+            Text(this.textRecognitionOutputText())
+              .width('100%')
+              .fontSize(14)
+              .fontColor(AppColor.textSecondary)
+              .maxFontScale(1.6)
+              .copyOption(CopyOptions.LocalDevice)
+          }
+          .width('100%')
+          .constraintSize({ minHeight: 112 })
+          .padding(AppSpacing.md)
+          .alignItems(HorizontalAlign.Start)
+          .backgroundColor(AppColor.cardBackground)
+          .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
+          Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.SpaceBetween }) {
+            Button(appString(workflowInputLabelKey(workflowForRoute(this.routeName), 'photo')),
+              { type: ButtonType.Normal })
+              .width('calc(50% - 4vp)')
+              .constraintSize({ minHeight: 48 })
+              .maxFontScale(1.6)
+              .fontColor(AppColor.accent)
+              .backgroundColor(AppColor.cardBackground)
+              .border({ width: 1, color: AppColor.divider, radius: AppRadius.button })
+              .margin({ bottom: AppSpacing.sm })
+              .enabled(textRecognitionActionEnabled(this.workflowRunning))
+              .onClick(() => this.prepareInput('photo'))
+            Button(appString(workflowInputLabelKey(workflowForRoute(this.routeName), 'camera')),
+              { type: ButtonType.Normal })
+              .width('calc(50% - 4vp)')
+              .constraintSize({ minHeight: 48 })
+              .maxFontScale(1.6)
+              .fontColor(AppColor.accent)
+              .backgroundColor(AppColor.cardBackground)
+              .border({ width: 1, color: AppColor.divider, radius: AppRadius.button })
+              .margin({ bottom: AppSpacing.sm })
+              .enabled(textRecognitionActionEnabled(this.workflowRunning))
+              .onClick(() => this.prepareInput('camera'))
+            Button(appString(textRecognitionRunActionLabelKey(this.statusKey, this.runActionKey)))
+              .width('calc(50% - 4vp)')
+              .constraintSize({ minHeight: 48 })
+              .maxFontScale(1.6)
+              .fontColor(Color.White)
+              .backgroundColor(AppColor.accent)
+              .borderRadius(AppRadius.button)
+              .margin({ bottom: AppSpacing.sm })
+              .enabled(this.runActionEnabled() && textRecognitionActionEnabled(this.workflowRunning))
+              .onClick(() => this.runPrimaryAction())
+            Button(appString('feature_runtime_copy_text'), { type: ButtonType.Normal })
+              .width('calc(50% - 4vp)')
+              .constraintSize({ minHeight: 48 })
+              .maxFontScale(1.6)
+              .fontColor(AppColor.accent)
+              .backgroundColor(AppColor.cardBackground)
+              .border({ width: 1, color: AppColor.divider, radius: AppRadius.button })
+              .margin({ bottom: AppSpacing.sm })
+              .enabled(textRecognitionActionEnabled(this.workflowRunning))
+              .onClick(() => this.copyRecognizedText())
+          }
+          .width('100%')
+        }
+        .width('100%')
+        .padding({ left: AppSpacing.page, right: AppSpacing.page, top: AppSpacing.md, bottom: AppSpacing.xl })
+      }
+      .width('100%')
+      .layoutWeight(1)
+      .align(Alignment.TopStart)
+      .scrollBar(BarState.Auto)
+    }
+    .width('100%')
+    .height('100%')
+    .backgroundColor(AppColor.pageBackground)
   }
 
   @Builder

@@ -420,6 +420,8 @@ import {
   shouldKeepScreenOnForWorkflow,
   shouldMirrorLiveGestureCameraOverlay,
   shouldShowCopyTextAction,
+  textRecognitionActionEnabled,
+  textRecognitionRunActionLabelKey,
   shouldShowCompositeSegmentationSaveAction,
   compositeSegmentationSaveReady,
   shouldShowResultSaveAction,
@@ -4163,6 +4165,26 @@ export default function localUnitTest() {
       expect(shouldShowCopyTextAction(textRecognition.aiMethod)).assertTrue();
       expect(shouldShowCopyTextAction(textTranslation.aiMethod)).assertTrue();
       expect(shouldShowCopyTextAction(styleTransfer.aiMethod)).assertFalse();
+    });
+
+    it('disablesEveryTextRecognitionActionWhileInferenceIsRunning', 0, () => {
+      expect(textRecognitionActionEnabled(false)).assertTrue();
+      expect(textRecognitionActionEnabled(true)).assertFalse();
+    });
+
+    it('labelsTextRecognitionFailuresAsRetryWithoutChangingOtherRunLabels', 0, () => {
+      expect(textRecognitionRunActionLabelKey(
+        'feature_runtime_text_recognition_failed',
+        'feature_runtime_run'
+      )).assertEqual('web_retry');
+      expect(textRecognitionRunActionLabelKey(
+        'feature_runtime_run_failed',
+        'feature_runtime_run'
+      )).assertEqual('web_retry');
+      expect(textRecognitionRunActionLabelKey(
+        'feature_runtime_copy_failed',
+        'feature_runtime_run'
+      )).assertEqual('feature_runtime_run');
     });
 
     it('usesAndroidTextTranslationInputHint', 0, () => {

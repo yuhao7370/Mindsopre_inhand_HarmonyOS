@@ -133,7 +133,7 @@ try {
   $gesture = 'entry\src\main\ets\services\ai\GestureService.ets'
   $build = 'scripts\build-hap.ps1'
   $layoutStart = '  gestureStillAndroidLayout() {'
-  $layoutEnd = "`n`n  @Builder`n  textRecognitionAndroidLayout()"
+  $layoutEnd = "`n`n  @Builder`n  textRecognitionPreview()"
   $previewStart = '  gestureStillAndroidPreview() {'
   $previewEnd = "`n`n  @Builder`n  gestureStillAndroidLayout()"
 
