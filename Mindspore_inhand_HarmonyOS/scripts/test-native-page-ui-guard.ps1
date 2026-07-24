@@ -185,7 +185,12 @@ struct QrCodePage {
       if (this.statusKey === 'image_save_failed') {
         Text(appString('image_save_failed'))
       }
+      Button(appString('app_cancel'))
+        .backgroundColor(Color.Transparent)
+        .fontColor(AppColor.accent)
+        .border({ width: 1, color: AppColor.accent, radius: AppRadius.button })
     }
+    .padding({ left: AppSpacing.md, right: AppSpacing.md, top: AppSpacing.md, bottom: AppSpacing.xl })
   }
 
   build() {
@@ -229,6 +234,9 @@ Assert-QrCodeRejected 'more callback removed' ($qrFixture -replace 'onMore:\s*\(
 Assert-QrCodeRejected 'save enabled binding changed to a constant' ($qrFixture -replace '\.enabled\(!this\.saveInFlight\)', '.enabled(true)')
 Assert-QrCodeRejected 'dismiss reason mapping removed' ($qrFixture -replace 'qrCodeSheetActionForNativeDismiss\(action\.reason === DismissReason\.PRESS_BACK\)', 'false')
 Assert-QrCodeRejected 'QR accessible name resource cast removed' ($qrFixture -replace 'appString\(this\.titleKey\) as Resource', 'appString(this.titleKey)')
+Assert-QrCodeRejected 'cancel changed back to a primary action' ($qrFixture -replace '\.backgroundColor\(Color\.Transparent\)', '.backgroundColor(AppColor.primary)')
+Assert-QrCodeRejected 'cancel outline removed' ($qrFixture -replace '\.border\(\{ width: 1, color: AppColor\.accent, radius: AppRadius\.button \}\)', '')
+Assert-QrCodeRejected 'sheet bottom safe-area padding reduced to regular padding' ($qrFixture -replace 'bottom: AppSpacing\.xl', 'bottom: AppSpacing.md')
 
 function Assert-PoetryPosterRejected([string]$Name, [string]$Source) {
   try {

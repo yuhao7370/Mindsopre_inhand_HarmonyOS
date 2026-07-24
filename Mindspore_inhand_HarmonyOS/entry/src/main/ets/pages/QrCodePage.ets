@@ -2,7 +2,7 @@ import { common } from '@kit.AbilityKit';
 import router from '@ohos.router';
 import { NativePageTitleBar } from '../common/components/NativePageTitleBar';
 import { AppStringKey, appString } from '../common/i18n/AppStrings';
-import { AppColor, AppSpacing } from '../common/theme/AppTheme';
+import { AppColor, AppRadius, AppSpacing } from '../common/theme/AppTheme';
 import {
   QrCodeSaveSheetAction,
   qrCodeSheetActionForNativeDismiss,
@@ -114,10 +114,13 @@ struct QrCodePage {
       Button(appString('app_cancel'))
         .width('100%')
         .height(48)
+        .backgroundColor(Color.Transparent)
+        .fontColor(AppColor.accent)
+        .border({ width: 1, color: AppColor.accent, radius: AppRadius.button })
         .onClick(() => this.applySaveSheetAction('cancel'))
     }
     .width('100%')
-    .padding(AppSpacing.md)
+    .padding({ left: AppSpacing.md, right: AppSpacing.md, top: AppSpacing.md, bottom: AppSpacing.xl })
   }
 
   build() {

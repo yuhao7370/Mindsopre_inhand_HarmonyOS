@@ -217,7 +217,9 @@ function Assert-QrCodePageNativeShellContract([string]$Source) {
   }
   foreach ($requirement in @(
     @{ Pattern = 'SaveButton\s*\('; Message = 'QrCodePage native sheet must use SaveButton' },
-    @{ Pattern = '\.enabled\(\s*!this\.saveInFlight\s*\)'; Message = 'QrCodePage SaveButton must disable while saving' }
+    @{ Pattern = '\.enabled\(\s*!this\.saveInFlight\s*\)'; Message = 'QrCodePage SaveButton must disable while saving' },
+    @{ Pattern = 'Button\s*\(\s*appString\(\s*''\s*''\s*\)\s*\)[\s\S]*?\.backgroundColor\(Color\.Transparent\)[\s\S]*?\.fontColor\(AppColor\.accent\)[\s\S]*?\.border\(\{\s*width:\s*1,\s*color:\s*AppColor\.accent,\s*radius:\s*AppRadius\.button\s*\}\)'; Message = 'QrCodePage Cancel action must remain a transparent outlined secondary action' },
+    @{ Pattern = '\.padding\(\{\s*left:\s*AppSpacing\.md,\s*right:\s*AppSpacing\.md,\s*top:\s*AppSpacing\.md,\s*bottom:\s*AppSpacing\.xl\s*\}\)'; Message = 'QrCodePage native sheet must reserve explicit bottom safe-area padding' }
   )) {
     if ($sheet.Text -notmatch $requirement.Pattern) {
       throw $requirement.Message
