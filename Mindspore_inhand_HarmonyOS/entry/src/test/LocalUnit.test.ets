@@ -472,7 +472,8 @@ import {
 import { featureRuntimeOverlayPreviewImageOrientationFromRotationDegrees } from '../main/ets/features/runtime/FeatureRuntimeOverlayPreview';
 import {
   declaredPermissionNames,
-  runtimeOpenAppSettingsAction,
+  permissionRequestSummary,
+  runtimeOpenPermissionSettingsAction,
   runtimePermissionRecoveryActionForWorkflow,
   runtimePermissionRunActionForWorkflow,
   runtimePermissionNamesForWorkflow
@@ -9444,11 +9445,18 @@ export default function localUnitTest() {
         imageCamera,
         'feature_runtime_live_camera_failed'
       )).assertEqual('runWorkflow');
-      const runtimeSettingsAction = runtimeOpenAppSettingsAction('com.example.mindspore');
+      const deniedSummary = permissionRequestSummary(
+        ['ohos.permission.CAMERA', 'ohos.permission.READ_IMAGEVIDEO'],
+        [0, -1]
+      );
+      expect(deniedSummary.ok).assertFalse();
+      expect(JSON.stringify(deniedSummary.denied))
+        .assertEqual('["ohos.permission.READ_IMAGEVIDEO"]');
+      const runtimeSettingsAction = runtimeOpenPermissionSettingsAction(deniedSummary.denied);
       expect(runtimeSettingsAction.openSettings).assertTrue();
-      expect(runtimeSettingsAction.want.action).assertEqual('action.settings.app.info');
-      expect(JSON.stringify(runtimeSettingsAction.want.parameters))
-        .assertEqual('{"settingsParamBundleName":"com.example.mindspore"}');
+      expect(JSON.stringify(runtimeSettingsAction.permissions))
+        .assertEqual('["ohos.permission.READ_IMAGEVIDEO"]');
+      expect(runtimeOpenPermissionSettingsAction([]).openSettings).assertFalse();
       liveCameraRouteNames.forEach((routeName: string) => {
         const workflow: FeatureWorkflow = workflowForRoute(routeName)!;
         expect(runtimePermissionRecoveryActionForWorkflow(

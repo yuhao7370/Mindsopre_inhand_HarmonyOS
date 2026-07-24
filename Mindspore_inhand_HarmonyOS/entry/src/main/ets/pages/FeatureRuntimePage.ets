@@ -134,7 +134,7 @@ import {
   PermissionService,
   RuntimePermissionRecoveryAction,
   RuntimePermissionRunAction,
-  runtimeOpenAppSettingsAction,
+  runtimePermissionNamesForWorkflow,
   runtimePermissionRecoveryActionForWorkflow,
   runtimePermissionRunActionForWorkflow
 } from '../services/permissions/PermissionService';
@@ -239,7 +239,7 @@ import {
   HarmonyKeepScreenOnWindowProvider,
   KeepScreenOnService
 } from '../services/window/KeepScreenOnService';
-import { common, OpenLinkOptions } from '@kit.AbilityKit';
+import { common, OpenLinkOptions, Permissions } from '@kit.AbilityKit';
 import { image } from '@kit.ImageKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import {
@@ -367,6 +367,7 @@ struct FeatureRuntimePage {
   private liveCameraPreviewRequestId: number = 0;
   private liveRuntimeGeneration: number = 0;
   private liveObjectDetectionFrameId: number = 0;
+  private runtimeDeniedPermissionNames: Array<Permissions> = [];
   private runtimeRequestGeneration: RuntimeRequestGeneration = new RuntimeRequestGeneration();
   private inputPreparationRequestId: number = 0;
   private liveRuntimeLoopService: LiveRuntimeLoopService = new LiveRuntimeLoopService();
@@ -736,6 +737,7 @@ struct FeatureRuntimePage {
         return;
       }
       if (!permission.ok) {
+        this.runtimeDeniedPermissionNames = permission.denied;
         this.applyLiveCameraPreviewResult({
           ok: false,
           surfaceId: '',
@@ -744,6 +746,7 @@ struct FeatureRuntimePage {
         this.resultText = permission.requested.join(', ');
         return;
       }
+      this.runtimeDeniedPermissionNames = [];
 
       const pendingStopTask = this.liveCameraStopTask;
       if (pendingStopTask !== undefined) {
@@ -1148,6 +1151,7 @@ struct FeatureRuntimePage {
         return;
       }
       if (!permission.ok) {
+        this.runtimeDeniedPermissionNames = permission.denied;
         this.statusKey = 'feature_runtime_permission_denied';
         if (!shouldPreserveRuntimeTextResultOnAiResult(workflow, false)) {
           this.resultText = usesAndroidCustomModelLayout(workflow) ?
@@ -1159,6 +1163,7 @@ struct FeatureRuntimePage {
         }
         return;
       }
+      this.runtimeDeniedPermissionNames = [];
       const frameInputReady = await this.prepareLiveFrameImageInput(context, runtimeRequestId, liveGeneration);
       if (!this.isRuntimeRequestCurrent(runtimeRequestId, liveGeneration)) {
         return;
@@ -1903,15 +1908,22 @@ struct FeatureRuntimePage {
   }
 
   private openRuntimePermissionSettings(): void {
+    this.openRuntimePermissionSettingsAsync();
+  }
+
+  private async openRuntimePermissionSettingsAsync(): Promise<void> {
     const context = this.uiAbilityContext();
     if (context === undefined) {
       return;
     }
-    try {
-      const action = runtimeOpenAppSettingsAction(context.applicationInfo.name);
-      context.startAbility(action.want).catch(() => {
-      });
-    } catch (_) {
+    const workflow = workflowForRoute(this.routeName);
+    const deniedPermissions = this.runtimeDeniedPermissionNames.length > 0 ?
+      this.runtimeDeniedPermissionNames :
+      (workflow === undefined ? [] : runtimePermissionNamesForWorkflow(workflow));
+    const permission = await new PermissionService().requestOnSetting(context, deniedPermissions);
+    this.runtimeDeniedPermissionNames = permission.denied;
+    if (permission.ok) {
+      this.retryRuntimePermission();
     }
   }
 

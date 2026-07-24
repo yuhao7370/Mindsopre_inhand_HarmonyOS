@@ -1,7 +1,6 @@
-import { abilityAccessCtrl, common, PermissionRequestResult, Permissions, Want } from '@kit.AbilityKit';
+import { abilityAccessCtrl, common, PermissionRequestResult, Permissions } from '@kit.AbilityKit';
 import { FeaturePermissionKind, FeatureWorkflow } from '../../features/runtime/FeatureWorkflowCatalog';
 
-export const appDetailsSettingsAction = 'action.settings.app.info';
 export const cameraPermissionName: Permissions = 'ohos.permission.CAMERA';
 export const mediaPermissionName: Permissions = 'ohos.permission.READ_IMAGEVIDEO';
 export const internetPermissionName: Permissions = 'ohos.permission.INTERNET';
@@ -17,31 +16,48 @@ export const declaredPermissionNames: Array<Permissions> = [
 export interface PermissionRequestSummary {
   readonly ok: boolean;
   readonly requested: Array<Permissions>;
+  readonly denied: Array<Permissions>;
 }
 
-export interface OpenAppSettingsAction {
+export interface OpenPermissionSettingsAction {
   readonly openSettings: boolean;
-  readonly want: Want;
+  readonly permissions: Array<Permissions>;
+}
+
+export function permissionRequestSummary(
+  permissionNames: Array<Permissions>,
+  authResults: Array<number>
+): PermissionRequestSummary {
+  const denied: Array<Permissions> = [];
+  permissionNames.forEach((permissionName: Permissions, index: number) => {
+    if (authResults[index] !== 0) {
+      denied.push(permissionName);
+    }
+  });
+  return {
+    ok: denied.length === 0,
+    requested: permissionNames,
+    denied: denied
+  };
+}
+
+export function runtimeOpenPermissionSettingsAction(
+  deniedPermissions: Array<Permissions>
+): OpenPermissionSettingsAction {
+  if (deniedPermissions.length === 0) {
+    return {
+      openSettings: false,
+      permissions: []
+    };
+  }
+  return {
+    openSettings: true,
+    permissions: [deniedPermissions[0]]
+  };
 }
 
 export type RuntimePermissionRecoveryAction = 'none' | 'retryRun' | 'retryCameraInput';
 export type RuntimePermissionRunAction = 'runWorkflow' | 'retryCameraInput';
-
-export function appDetailsSettingsWantForBundle(bundleName: string): Want {
-  return {
-    action: appDetailsSettingsAction,
-    parameters: {
-      settingsParamBundleName: bundleName
-    }
-  };
-}
-
-export function runtimeOpenAppSettingsAction(bundleName: string): OpenAppSettingsAction {
-  return {
-    openSettings: true,
-    want: appDetailsSettingsWantForBundle(bundleName)
-  };
-}
 
 export function permissionNameForKind(kind: FeaturePermissionKind): Permissions {
   switch (kind) {
@@ -99,22 +115,44 @@ export class PermissionService {
     return this.requestPermissionNames(context, runtimePermissionNamesForWorkflow(workflow));
   }
 
+  async requestOnSetting(
+    context: common.UIAbilityContext,
+    deniedPermissions: Array<Permissions>
+  ): Promise<PermissionRequestSummary> {
+    const action = runtimeOpenPermissionSettingsAction(deniedPermissions);
+    if (!action.openSettings) {
+      return { ok: true, requested: [], denied: [] };
+    }
+    const manager = abilityAccessCtrl.createAtManager();
+    try {
+      const result: Array<number> = await manager.requestPermissionOnSetting(context, action.permissions);
+      return permissionRequestSummary(action.permissions, result);
+    } catch (_) {
+      return {
+        ok: false,
+        requested: action.permissions,
+        denied: action.permissions
+      };
+    }
+  }
+
   private async requestPermissionNames(
     context: common.UIAbilityContext,
     permissionNames: Array<Permissions>
   ): Promise<PermissionRequestSummary> {
     if (permissionNames.length === 0) {
-      return { ok: true, requested: [] };
+      return { ok: true, requested: [], denied: [] };
     }
     const manager = abilityAccessCtrl.createAtManager();
     try {
       const result: PermissionRequestResult = await manager.requestPermissionsFromUser(context, permissionNames);
-      return {
-        ok: result.authResults.find((authResult: number) => authResult !== 0) === undefined,
-        requested: permissionNames
-      };
+      return permissionRequestSummary(permissionNames, result.authResults);
     } catch (_) {
-      return { ok: false, requested: permissionNames };
+      return {
+        ok: false,
+        requested: permissionNames,
+        denied: permissionNames
+      };
     }
   }
 }
