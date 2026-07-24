@@ -68,13 +68,6 @@ export function runtimePermissionNamesForWorkflow(workflow: FeatureWorkflow): Ar
   return names;
 }
 
-export function startupPermissionNames(): Array<Permissions> {
-  return [
-    cameraPermissionName,
-    mediaPermissionName
-  ];
-}
-
 export function runtimePermissionRecoveryActionForWorkflow(
   workflow: FeatureWorkflow | undefined,
   statusKey: string
@@ -98,8 +91,8 @@ export function runtimePermissionRunActionForWorkflow(
 }
 
 export class PermissionService {
-  async requestStartup(context: common.UIAbilityContext): Promise<PermissionRequestSummary> {
-    return this.requestPermissionNames(context, startupPermissionNames());
+  async requestCamera(context: common.UIAbilityContext): Promise<PermissionRequestSummary> {
+    return this.requestPermissionNames(context, [cameraPermissionName]);
   }
 
   async requestForWorkflow(context: common.UIAbilityContext, workflow: FeatureWorkflow): Promise<PermissionRequestSummary> {

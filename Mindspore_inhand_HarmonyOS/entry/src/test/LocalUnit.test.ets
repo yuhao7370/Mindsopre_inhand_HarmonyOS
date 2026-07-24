@@ -471,31 +471,14 @@ import {
 } from '../main/ets/features/runtime/FeatureRuntimeViewIds';
 import { featureRuntimeOverlayPreviewImageOrientationFromRotationDegrees } from '../main/ets/features/runtime/FeatureRuntimeOverlayPreview';
 import {
-  appDetailsSettingsWantForBundle,
   declaredPermissionNames,
-  PermissionRequestSummary,
   runtimeOpenAppSettingsAction,
   runtimePermissionRecoveryActionForWorkflow,
   runtimePermissionRunActionForWorkflow,
-  runtimePermissionNamesForWorkflow,
-  startupPermissionNames
+  runtimePermissionNamesForWorkflow
 } from '../main/ets/services/permissions/PermissionService';
 import {
-  canFinishSplashForStartupPermissionState,
-  finishSplashActionForStartupPermissionState,
-  SplashFinishAction,
-  shouldConsumeSplashBackPress,
-  shouldConsumeIndexBackPress,
-  splashOpenAppSettingsAction,
-  SplashOpenAppSettingsAction,
-  splashRetryPermissionAction,
-  SplashRetryPermissionAction,
-  splashStartupTransitionForMissingContext,
-  splashStartupTransitionForRequest,
-  splashStartupTransitionForRequestAfterPrivacyAccept,
-  SplashStartupTransition,
-  splashStartupPermissionStateForMissingContext,
-  splashStartupPermissionStateForRequest
+  shouldConsumeIndexBackPress
 } from '../main/ets/services/splash/SplashStartupService';
 import {
   splashLogoHeightVp,
@@ -2645,62 +2628,7 @@ export default function localUnitTest() {
       expect(store.values.get('preferences_privacy')).assertFalse();
     });
 
-    it('blocksSplashEntryWhenStartupPermissionsAreDeniedLikeAndroid', 0, () => {
-      const denied: PermissionRequestSummary = {
-        ok: false,
-        requested: ['ohos.permission.CAMERA']
-      };
-      const granted: PermissionRequestSummary = {
-        ok: true,
-        requested: ['ohos.permission.CAMERA', 'ohos.permission.READ_IMAGEVIDEO']
-      };
-
-      expect(splashStartupPermissionStateForRequest(denied)).assertEqual('blocked');
-      expect(splashStartupPermissionStateForMissingContext()).assertEqual('blocked');
-      expect(canFinishSplashForStartupPermissionState('blocked')).assertFalse();
-      expect(splashStartupPermissionStateForRequest(granted)).assertEqual('ready');
-      expect(canFinishSplashForStartupPermissionState('ready')).assertTrue();
-
-      const deniedTransition: SplashStartupTransition = splashStartupTransitionForRequest(denied);
-      expect(deniedTransition.showPermissionDialog).assertTrue();
-      expect(deniedTransition.startCountdown).assertFalse();
-      const missingContextTransition: SplashStartupTransition = splashStartupTransitionForMissingContext();
-      expect(missingContextTransition.showPermissionDialog).assertTrue();
-      expect(missingContextTransition.startCountdown).assertFalse();
-      const grantedTransition: SplashStartupTransition = splashStartupTransitionForRequest(granted);
-      expect(grantedTransition.showPermissionDialog).assertFalse();
-      expect(grantedTransition.startCountdown).assertTrue();
-      expect(grantedTransition.finishImmediately).assertFalse();
-      const firstAcceptGrantedTransition: SplashStartupTransition =
-        splashStartupTransitionForRequestAfterPrivacyAccept(granted);
-      expect(firstAcceptGrantedTransition.showPermissionDialog).assertFalse();
-      expect(firstAcceptGrantedTransition.startCountdown).assertFalse();
-      expect(firstAcceptGrantedTransition.finishImmediately).assertTrue();
-      const firstAcceptDeniedTransition: SplashStartupTransition =
-        splashStartupTransitionForRequestAfterPrivacyAccept(denied);
-      expect(firstAcceptDeniedTransition.showPermissionDialog).assertTrue();
-      expect(firstAcceptDeniedTransition.finishImmediately).assertFalse();
-      const blockedFinish: SplashFinishAction = finishSplashActionForStartupPermissionState('blocked');
-      const readyFinish: SplashFinishAction = finishSplashActionForStartupPermissionState('ready');
-      const retryAction: SplashRetryPermissionAction = splashRetryPermissionAction();
-      const settingsAction: SplashOpenAppSettingsAction = splashOpenAppSettingsAction('com.example.mindspore');
-      const settingsWant = appDetailsSettingsWantForBundle('com.example.mindspore');
-      expect(blockedFinish.finishSplash).assertFalse();
-      expect(readyFinish.finishSplash).assertTrue();
-      expect(retryAction.requestPermissions).assertTrue();
-      expect(retryAction.showPermissionDialog).assertFalse();
-      expect(settingsAction.openSettings).assertTrue();
-      expect(settingsAction.want.action).assertEqual('action.settings.app.info');
-      expect(settingsWant.action).assertEqual('action.settings.app.info');
-      expect(JSON.stringify(settingsWant.parameters)).assertEqual('{"settingsParamBundleName":"com.example.mindspore"}');
-      expect(hasAppStringKey('app_need_permission')).assertTrue();
-      expect(hasAppStringKey('app_permission_by_hand')).assertTrue();
-      expect(hasAppStringKey('splash_permission_retry')).assertTrue();
-      expect(hasAppStringKey('splash_permission_exit')).assertTrue();
-    });
-
     it('consumesSplashBackPressLikeAndroidStartupActivity', 0, () => {
-      expect(shouldConsumeSplashBackPress()).assertTrue();
       expect(shouldConsumeIndexBackPress(false)).assertTrue();
       expect(shouldConsumeIndexBackPress(true)).assertFalse();
     });
@@ -9449,15 +9377,6 @@ export default function localUnitTest() {
       expect(permissionNames.indexOf('ohos.permission.INTERNET')).assertEqual(-1);
       expect(declaredPermissionNames.indexOf('ohos.permission.INTERNET') >= 0).assertTrue();
       expect(declaredPermissionNames.indexOf('ohos.permission.SHORT_TERM_WRITE_IMAGEVIDEO') >= 0).assertTrue();
-    });
-
-    it('requestsAndroidStartupRuntimePermissionsWithoutInternet', 0, () => {
-      const permissionNames = startupPermissionNames();
-      expect(permissionNames.length).assertEqual(2);
-      expect(permissionNames.indexOf('ohos.permission.CAMERA') >= 0).assertTrue();
-      expect(permissionNames.indexOf('ohos.permission.READ_IMAGEVIDEO') >= 0).assertTrue();
-      expect(permissionNames.indexOf('ohos.permission.INTERNET')).assertEqual(-1);
-      expect(permissionNames.indexOf('ohos.permission.SHORT_TERM_WRITE_IMAGEVIDEO')).assertEqual(-1);
     });
 
     it('recoversRuntimePermissionDenialWithAndroidLikeRetryActions', 0, () => {

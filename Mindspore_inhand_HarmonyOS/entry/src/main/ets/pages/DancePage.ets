@@ -324,7 +324,7 @@ struct DancePage {
     const surfaceId = this.liveCameraSurfaceId.length > 0 ?
       this.liveCameraSurfaceId :
       this.liveCameraController.getXComponentSurfaceId();
-    const permission: PermissionRequestSummary = await new PermissionService().requestStartup(context);
+    const permission: PermissionRequestSummary = await new PermissionService().requestCamera(context);
     if (!permission.ok) {
       this.statusKey = 'feature_runtime_permission_denied';
       this.liveCameraActive = false;
