@@ -227,6 +227,7 @@ struct PoetryPosterPage {
             .objectFit(ImageFit.Contain)
           Text(appString('poem_ai_credit'))
             .fontSize(poetryPosterVisualSpec.poemTextFontSizeFp)
+            .maxFontScale(1)
             .fontColor(AppColor.textSecondary)
             .margin({ top: AppSpacing.xs })
         }
