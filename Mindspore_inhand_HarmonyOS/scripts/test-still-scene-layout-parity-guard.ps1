@@ -39,6 +39,12 @@ export function shouldPreserveRuntimeTextResultOnAiResult(workflow: FeatureWorkf
 }
 '@
 
+  Write-FixtureFile $Root 'entry\src\main\ets\common\data\FeatureCatalog.ets' @'
+export const allExperienceFeatures: FeatureItem[] = [
+  { id: 'scene', title: 'Scene Detection', titleKey: 'title_scene_detection', icon: 'scene', routeName: AppRoute.SCENE_STILL.name, visibleByDefault: false },
+];
+'@
+
   Write-FixtureFile $Root 'entry\src\main\ets\services\ai\SceneDetectionService.ets' @'
 function emptySceneResult(): SceneDetectionResult {
   const scenes: Array<SceneDetection> = [];
@@ -66,11 +72,20 @@ type AiRunCode = 'SCENE_DETECTION_FAILED' | 'SCENE_DETECTION_RUNTIME_FAILED';
 class DefaultAiService {
   private async detectScene(inputs: AiRunInputs): Promise<AiRunResult> {
     const result: SceneDetectionResult = await this.sceneDetectionService.detectScenes(inputs.imageUri ?? '');
+    if (!result.ok || result.scenes.length === 0) {
+      return {
+        ok: false,
+        code: result.failureKind === 'runtime' ?
+          'SCENE_DETECTION_RUNTIME_FAILED' : 'SCENE_DETECTION_FAILED',
+        aiMethod: 'detectScene',
+        messageKey: 'feature_runtime_scene_failed',
+      };
+    }
     return {
-      ok: false,
-      code: result.failureKind === 'runtime' ?
-        'SCENE_DETECTION_RUNTIME_FAILED' : 'SCENE_DETECTION_FAILED',
-      aiMethod: 'detectScene'
+      ok: true,
+      code: 'SCENE_DETECTION_DONE',
+      aiMethod: 'detectScene',
+      messageKey: 'feature_runtime_scene_done',
     };
   }
 
@@ -185,90 +200,119 @@ export function sceneDetectionOverlayRows(result: SceneDetectionResult): Array<S
 
   @Builder
   stillSceneAndroidLayout() {
-    Stack({ alignContent: Alignment.TopStart }) {
-      Column() {
-        this.runtimeActionToolbar(false)
-        Row() {
-        }
-        .width('100%')
-        .height(1)
-        .backgroundColor('#E4E4E4')
-        Stack({ alignContent: Alignment.Center }) {
-          if (this.imageInputUri.length > 0) {
-            Image(this.imageInputUri)
-              .width(266)
-              .height(356)
-              .objectFit(ImageFit.Fill)
-          } else {
-            Column({ space: 10 }) {
-              Image($r('app.media.icon_style'))
-                .width(69.33)
-                .height(56.33)
-              Text(appString('workflow_summary_scene_still_android_prompt'))
-                .fontSize(16)
-                .fontColor('#666666')
+    Column() {
+      this.runtimeActionToolbar(false)
+      Scroll() {
+        Column({ space: AppSpacing.md }) {
+          Stack({ alignContent: Alignment.Center }) {
+            if (this.imageInputUri.length > 0) {
+              Image(this.imageInputUri)
+                .width('100%')
+                .height('100%')
+                .objectFit(ImageFit.Contain)
+            } else {
+              Column({ space: AppSpacing.sm }) {
+                Image($r('app.media.icon_style'))
+                  .width(56)
+                  .height(56)
+                  .objectFit(ImageFit.Contain)
+                Text(appString('workflow_summary_scene_still_android_prompt'))
+                  .fontSize(16)
+                  .fontColor(AppColor.textSecondary)
+                  .textAlign(TextAlign.Center)
+                  .maxFontScale(1.6)
+                  .width('100%')
+              }
+              .width('100%')
+              .padding(AppSpacing.lg)
+              .alignItems(HorizontalAlign.Center)
             }
           }
-        }
-        .width('100%')
-        .height(376)
-        .backgroundColor('#E6E6E6')
-        Row() {
+          .width('100%')
+          .aspectRatio(4 / 3)
+          .constraintSize({ minHeight: 220, maxHeight: 420 })
+          .clip(true)
+          .backgroundColor(AppColor.cardBackground)
+          .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
+          Row({ space: AppSpacing.sm }) {
+            if (this.workflowRunning) {
+              LoadingProgress()
+                .width(24)
+                .height(24)
+            }
+            Text(appString(this.statusKey))
+              .fontSize(14)
+              .fontColor(AppColor.textSecondary)
+              .maxFontScale(1.6)
+              .layoutWeight(1)
+          }
+          .width('100%')
+          .constraintSize({ minHeight: 48 })
+          .padding(AppSpacing.md)
+          .backgroundColor(AppColor.cardBackground)
+          .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
+          Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.SpaceBetween }) {
           Button(appString('feature_input_photo_android'), { type: ButtonType.Normal })
-            .layoutWeight(1)
-            .height(37)
-            .margin({ left: 20, right: 5 })
-            .fontColor('#666666')
-            .backgroundColor('#F4F3F8')
-            .borderRadius(5)
-            .enabled(!this.workflowRunning)
-            .onClick(() => this.prepareInput('photo'))
-          Button(appString('feature_input_camera_android'), { type: ButtonType.Normal })
-            .layoutWeight(1)
-            .height(37)
-            .margin({ left: 5, right: 5 })
-            .fontColor('#666666')
-            .backgroundColor('#F4F3F8')
-            .borderRadius(5)
-            .enabled(!this.workflowRunning)
-            .onClick(() => this.prepareInput('camera'))
-          Button(appString('feature_runtime_go_live_android_hms'), { type: ButtonType.Normal })
-            .layoutWeight(1)
-            .height(37)
-            .margin({ left: 5, right: 5 })
-            .fontColor('#666666')
-            .backgroundColor('#F4F3F8')
-            .borderRadius(5)
-            .enabled(!this.workflowRunning)
-            .onClick(() => {
-              this.openStillSceneLiveRoute()
-            })
-        }
-        .width('100%')
-        .margin({ top: 14 })
-        Scroll() {
-          Column() {
+              .width('calc(50% - 4vp)')
+              .constraintSize({ minHeight: 48 })
+              .maxFontScale(1.6)
+              .fontColor(AppColor.accent)
+              .backgroundColor(AppColor.cardBackground)
+              .border({ width: 1, color: AppColor.divider, radius: AppRadius.button })
+              .enabled(!this.workflowRunning)
+              .onClick(() => this.prepareInput('photo'))
+            Button(appString('feature_input_camera_android'), { type: ButtonType.Normal })
+              .width('calc(50% - 4vp)')
+              .constraintSize({ minHeight: 48 })
+              .maxFontScale(1.6)
+              .fontColor(AppColor.accent)
+              .backgroundColor(AppColor.cardBackground)
+              .border({ width: 1, color: AppColor.divider, radius: AppRadius.button })
+              .enabled(!this.workflowRunning)
+              .onClick(() => this.prepareInput('camera'))
+            Button(appString('feature_runtime_go_live_android_hms'), { type: ButtonType.Normal })
+              .width('calc(50% - 4vp)')
+              .constraintSize({ minHeight: 48 })
+              .maxFontScale(1.6)
+              .fontColor(AppColor.accent)
+              .backgroundColor(AppColor.cardBackground)
+              .border({ width: 1, color: AppColor.divider, radius: AppRadius.button })
+              .enabled(!this.workflowRunning)
+              .onClick(() => {
+                this.openStillSceneLiveRoute()
+              })
+            Button(appString(this.statusKey === 'feature_runtime_scene_failed' ||
+              this.statusKey === 'feature_runtime_scene_runner_unavailable' ?
+              'splash_permission_retry' : this.runActionKey))
+              .width('calc(50% - 4vp)')
+              .constraintSize({ minHeight: 48 })
+              .maxFontScale(1.6)
+              .fontColor(Color.White)
+              .backgroundColor(AppColor.accent)
+              .enabled(this.runActionEnabled())
+              .onClick(() => this.runPrimaryAction())
+          }
+          .width('100%')
+          if (this.resultRows.length > 0) {
+            Text(appString(workflowResultTitleKey(workflowForRoute(this.routeName))))
             ForEach(this.resultRows, (row: AiRunResultRow) => {
               Text() {
                 Span(appString(row.labelKey))
                 Span('\uFF1A')
                 Span(this.resultRowValue(row))
               }
-              .fontSize(14)
-              .fontColor(Color.Black)
+              .maxFontScale(1.6)
             })
           }
         }
-        .layoutWeight(1)
-        .margin({ left: 20, right: 20, top: 14 })
+        .width('100%')
+        .padding({ left: AppSpacing.page, right: AppSpacing.page, top: AppSpacing.md, bottom: AppSpacing.xl })
       }
-      .width('100%')
-      .height('100%')
-      .backgroundColor(Color.White)
+      .scrollBar(BarState.Auto)
     }
     .width('100%')
     .height('100%')
-    .backgroundColor(Color.White)
+    .backgroundColor(AppColor.pageBackground)
   }
 
   @Builder
@@ -335,6 +379,7 @@ try {
   & $guardPath -SourceRoot $validRoot | Out-Null
 
   $catalogPath = 'entry\src\main\ets\features\runtime\FeatureWorkflowCatalog.ets'
+  $featureCatalogPath = 'entry\src\main\ets\common\data\FeatureCatalog.ets'
   $pagePath = 'entry\src\main\ets\pages\FeatureRuntimePage.ets'
   $scenePath = 'entry\src\main\ets\services\ai\SceneDetectionService.ets'
   $aiPath = 'entry\src\main\ets\services\ai\AiService.ets'
@@ -346,27 +391,33 @@ try {
   Assert-MutationRejected $validRoot 'selector-string-decoy' $catalogPath `
     'return workflow?.routeName === AppRoute.SCENE_STILL.name;' `
     "const selectorDecoy = 'return workflow?.routeName === AppRoute.SCENE_STILL.name;'; return false;"
+  Assert-MutationRejected $validRoot 'scene-entry-visible' $featureCatalogPath `
+    "routeName: AppRoute.SCENE_STILL.name, visibleByDefault: false" `
+    "routeName: AppRoute.SCENE_STILL.name, visibleByDefault: true"
   Assert-MutationRejected $validRoot 'toolbar-comment-decoy' $pagePath `
     'this.runtimeActionToolbar(false)' `
     '// this.runtimeActionToolbar(false)'
-  Assert-MutationRejected $validRoot 'wrong-preview-dimensions' $pagePath `
-    ".width(266)`r`n              .height(356)" `
-    ".width(265)`n              .height(355)"
-  Assert-MutationRejected $validRoot 'wrong-frame-color' $pagePath `
-    ".backgroundColor('#E6E6E6')" `
-    ".backgroundColor('#E5E5E5')"
-  Assert-MutationRejected $validRoot 'wrong-prompt-color' $pagePath `
-    "Text(appString('workflow_summary_scene_still_android_prompt'))`n                .fontSize(16)`n                .fontColor('#666666')" `
-    "Text(appString('workflow_summary_scene_still_android_prompt'))`n                .fontSize(16)`n                .fontColor('#333333')"
-  Assert-MutationRejected $validRoot 'wrong-photo-margin' $pagePath `
-    '.margin({ left: 20, right: 5 })' `
-    '.margin({ left: 5, right: 5 })'
+  Assert-MutationRejected $validRoot 'restore-fill-preview' $pagePath `
+    "Image(this.imageInputUri)`n                .width('100%')`n                .height('100%')`n                .objectFit(ImageFit.Contain)" `
+    "Image(this.imageInputUri)`n                .width('100%')`n                .height('100%')`n                .objectFit(ImageFit.Fill)"
+  Assert-MutationRejected $validRoot 'restore-fixed-preview-height' $pagePath `
+    '.constraintSize({ minHeight: 220, maxHeight: 420 })' `
+    '.height(376)'
+  Assert-MutationRejected $validRoot 'remove-status-feedback' $pagePath `
+    'Text(appString(this.statusKey))' `
+    "Text('')"
+  Assert-MutationRejected $validRoot 'restore-undersized-photo-action' $pagePath `
+    "Button(appString('feature_input_photo_android'), { type: ButtonType.Normal })`n              .width('calc(50% - 4vp)')`n              .constraintSize({ minHeight: 48 })" `
+    "Button(appString('feature_input_photo_android'), { type: ButtonType.Normal })`n              .width('calc(50% - 4vp)')`n              .height(37)"
+  Assert-MutationRejected $validRoot 'remove-failure-retry-label' $pagePath `
+    "Button(appString(this.statusKey === 'feature_runtime_scene_failed' ||`n              this.statusKey === 'feature_runtime_scene_runner_unavailable' ?`n              'splash_permission_retry' : this.runActionKey))" `
+    'Button(appString(this.runActionKey))'
   Assert-MutationRejected $validRoot 'wrong-action-order' $pagePath `
     ".onClick(() => this.prepareInput('photo'))" `
     ".onClick(() => this.prepareInput('camera'))"
   Assert-MutationRejected $validRoot 'missing-running-disable' $pagePath `
-    ".enabled(!this.workflowRunning)`n            .onClick(() => this.prepareInput('photo'))" `
-    ".enabled(true)`n            .onClick(() => this.prepareInput('photo'))"
+    ".enabled(!this.workflowRunning)`n              .onClick(() => this.prepareInput('photo'))" `
+    ".enabled(true)`n              .onClick(() => this.prepareInput('photo'))"
   Assert-MutationRejected $validRoot 'missing-live-handler-guard' $pagePath `
     "if (this.workflowRunning) {`n      return;`n    }`n    this.openLinkedLiveRoute();" `
     'this.openLinkedLiveRoute();'
@@ -376,9 +427,9 @@ try {
   Assert-MutationRejected $validRoot 'sibling-sync-input-semantics' $pagePath `
     'const requestId = ++this.inputPreparationRequestId;' `
     "if (!shouldAllowRuntimeInputChange(workflowForRoute(this.routeName), inputKind, this.workflowRunning)) { return; }`n    const requestId = ++this.inputPreparationRequestId;"
-  Assert-MutationRejected $validRoot 'generic-loading-injected' $pagePath `
-    'this.runtimeActionToolbar(false)' `
-    "this.runtimeActionToolbar(false)`n      LoadingProgress()"
+  Assert-MutationRejected $validRoot 'nested-scroll-injected' $pagePath `
+    'Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.SpaceBetween }) {' `
+    "Scroll() {`n          Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.SpaceBetween }) {"
   Assert-MutationRejected $validRoot 'combined-scene-rows' $aiPath `
     "rows.push(resultRow('feature_runtime_scene_overlay_scene', scene.label));" `
     "rows.push(resultRow('feature_runtime_result_scenes', scene.label));"
@@ -400,6 +451,9 @@ try {
   Assert-MutationRejected $validRoot 'runtime-failure-toasts' $catalogPath `
     "resultCode === 'SCENE_DETECTION_FAILED'" `
     "resultCode === 'SCENE_DETECTION_RUNTIME_FAILED'"
+  Assert-MutationRejected $validRoot 'changed-scene-failure-message' $aiPath `
+    "messageKey: 'feature_runtime_scene_failed'," `
+    "messageKey: 'feature_runtime_scene_done',"
   Assert-MutationRejected $validRoot 'throw-toast-injected' $pagePath `
     "if (!shouldPreserveRuntimeTextResultOnAiResult(workflow, false)) {`n      this.resultRows = [];`n    }`n  }`n`n  private async prepareLiveFrameImageInput" `
     "if (!shouldPreserveRuntimeTextResultOnAiResult(workflow, false)) {`n      this.resultRows = [];`n    }`n    this.showStillSceneFailureToastIfNeeded('SCENE_DETECTION_RUNTIME_FAILED');`n  }`n`n  private async prepareLiveFrameImageInput"

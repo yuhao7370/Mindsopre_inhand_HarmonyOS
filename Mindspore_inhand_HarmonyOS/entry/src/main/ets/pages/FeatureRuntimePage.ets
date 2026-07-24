@@ -3443,104 +3443,142 @@ struct FeatureRuntimePage {
 
   @Builder
   stillSceneAndroidLayout() {
-    Stack({ alignContent: Alignment.TopStart }) {
-      Column() {
-        this.runtimeActionToolbar(false)
-        Row() {
-        }
-        .width('100%')
-        .height(1)
-        .backgroundColor('#E4E4E4')
-        Stack({ alignContent: Alignment.Center }) {
-          if (this.imageInputUri.length > 0) {
-            Image(this.imageInputUri)
-              .width(266)
-              .height(356)
-              .objectFit(ImageFit.Fill)
-          } else {
-            Column({ space: 10 }) {
-              Image($r('app.media.icon_style'))
-                .width(69.33)
-                .height(56.33)
+    Column() {
+      this.runtimeActionToolbar(false)
+      Scroll() {
+        Column({ space: AppSpacing.md }) {
+          Stack({ alignContent: Alignment.Center }) {
+            if (this.imageInputUri.length > 0) {
+              Image(this.imageInputUri)
+                .width('100%')
+                .height('100%')
                 .objectFit(ImageFit.Contain)
-              Text(appString('workflow_summary_scene_still_android_prompt'))
-                .fontSize(16)
-                .fontColor('#666666')
-                .textAlign(TextAlign.Center)
-            }
-            .alignItems(HorizontalAlign.Center)
-          }
-        }
-        .width('100%')
-        .height(376)
-        .backgroundColor('#E6E6E6')
-        Row() {
-          Button(appString('feature_input_photo_android'), { type: ButtonType.Normal })
-            .layoutWeight(1)
-            .height(37)
-            .margin({ left: 20, right: 5 })
-            .fontSize(14)
-            .fontWeight(FontWeight.Normal)
-            .fontColor('#666666')
-            .backgroundColor('#F4F3F8')
-            .borderRadius(5)
-            .enabled(!this.workflowRunning)
-            .onClick(() => this.prepareInput('photo'))
-          Button(appString('feature_input_camera_android'), { type: ButtonType.Normal })
-            .layoutWeight(1)
-            .height(37)
-            .margin({ left: 5, right: 5 })
-            .fontSize(14)
-            .fontWeight(FontWeight.Normal)
-            .fontColor('#666666')
-            .backgroundColor('#F4F3F8')
-            .borderRadius(5)
-            .enabled(!this.workflowRunning)
-            .onClick(() => this.prepareInput('camera'))
-          Button(appString('feature_runtime_go_live_android_hms'), { type: ButtonType.Normal })
-            .layoutWeight(1)
-            .height(37)
-            .margin({ left: 5, right: 5 })
-            .fontSize(14)
-            .fontWeight(FontWeight.Normal)
-            .fontColor('#666666')
-            .backgroundColor('#F4F3F8')
-            .borderRadius(5)
-            .enabled(!this.workflowRunning)
-            .onClick(() => {
-              this.openStillSceneLiveRoute()
-            })
-        }
-        .width('100%')
-        .margin({ top: 14 })
-        .alignItems(VerticalAlign.Center)
-        Scroll() {
-          Column() {
-            ForEach(this.resultRows, (row: AiRunResultRow) => {
-              Text() {
-                Span(appString(row.labelKey))
-                Span('\uFF1A')
-                Span(this.resultRowValue(row))
+            } else {
+              Column({ space: AppSpacing.sm }) {
+                Image($r('app.media.icon_style'))
+                  .width(56)
+                  .height(56)
+                  .objectFit(ImageFit.Contain)
+                Text(appString('workflow_summary_scene_still_android_prompt'))
+                  .fontSize(16)
+                  .fontColor(AppColor.textSecondary)
+                  .textAlign(TextAlign.Center)
+                  .maxFontScale(1.6)
+                  .width('100%')
               }
-              .fontSize(14)
-              .fontColor(Color.Black)
               .width('100%')
-            }, (row: AiRunResultRow, index: number) => `${index}-${row.labelKey}-${row.value}`)
+              .padding(AppSpacing.lg)
+              .alignItems(HorizontalAlign.Center)
+            }
           }
           .width('100%')
-          .alignItems(HorizontalAlign.Start)
+          .aspectRatio(4 / 3)
+          .constraintSize({ minHeight: 220, maxHeight: 420 })
+          .clip(true)
+          .backgroundColor(AppColor.cardBackground)
+          .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
+          Row({ space: AppSpacing.sm }) {
+            if (this.workflowRunning) {
+              LoadingProgress()
+                .width(24)
+                .height(24)
+            }
+            Text(appString(this.statusKey))
+              .fontSize(14)
+              .fontColor(AppColor.textSecondary)
+              .maxFontScale(1.6)
+              .layoutWeight(1)
+          }
+          .width('100%')
+          .constraintSize({ minHeight: 48 })
+          .padding(AppSpacing.md)
+          .alignItems(VerticalAlign.Center)
+          .backgroundColor(AppColor.cardBackground)
+          .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
+          Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.SpaceBetween }) {
+            Button(appString('feature_input_photo_android'), { type: ButtonType.Normal })
+              .width('calc(50% - 4vp)')
+              .constraintSize({ minHeight: 48 })
+              .maxFontScale(1.6)
+              .fontColor(AppColor.accent)
+              .backgroundColor(AppColor.cardBackground)
+              .border({ width: 1, color: AppColor.divider, radius: AppRadius.button })
+              .margin({ bottom: AppSpacing.sm })
+              .enabled(!this.workflowRunning)
+              .onClick(() => this.prepareInput('photo'))
+            Button(appString('feature_input_camera_android'), { type: ButtonType.Normal })
+              .width('calc(50% - 4vp)')
+              .constraintSize({ minHeight: 48 })
+              .maxFontScale(1.6)
+              .fontColor(AppColor.accent)
+              .backgroundColor(AppColor.cardBackground)
+              .border({ width: 1, color: AppColor.divider, radius: AppRadius.button })
+              .margin({ bottom: AppSpacing.sm })
+              .enabled(!this.workflowRunning)
+              .onClick(() => this.prepareInput('camera'))
+            Button(appString('feature_runtime_go_live_android_hms'), { type: ButtonType.Normal })
+              .width('calc(50% - 4vp)')
+              .constraintSize({ minHeight: 48 })
+              .maxFontScale(1.6)
+              .fontColor(AppColor.accent)
+              .backgroundColor(AppColor.cardBackground)
+              .border({ width: 1, color: AppColor.divider, radius: AppRadius.button })
+              .margin({ bottom: AppSpacing.sm })
+              .enabled(!this.workflowRunning)
+              .onClick(() => {
+                this.openStillSceneLiveRoute()
+              })
+            Button(appString(this.statusKey === 'feature_runtime_scene_failed' ||
+              this.statusKey === 'feature_runtime_scene_runner_unavailable' ?
+              'splash_permission_retry' : this.runActionKey))
+              .width('calc(50% - 4vp)')
+              .constraintSize({ minHeight: 48 })
+              .maxFontScale(1.6)
+              .fontColor(Color.White)
+              .backgroundColor(AppColor.accent)
+              .borderRadius(AppRadius.button)
+              .margin({ bottom: AppSpacing.sm })
+              .enabled(this.runActionEnabled())
+              .onClick(() => this.runPrimaryAction())
+          }
+          .width('100%')
+          if (this.resultRows.length > 0) {
+            Column({ space: AppSpacing.sm }) {
+              Text(appString(workflowResultTitleKey(workflowForRoute(this.routeName))))
+                .fontSize(16)
+                .fontWeight(FontWeight.Medium)
+                .fontColor(AppColor.textPrimary)
+                .maxFontScale(1.6)
+                .width('100%')
+              ForEach(this.resultRows, (row: AiRunResultRow) => {
+                Text() {
+                  Span(appString(row.labelKey))
+                  Span('\uFF1A')
+                  Span(this.resultRowValue(row))
+                }
+                .fontSize(14)
+                .fontColor(AppColor.textPrimary)
+                .maxFontScale(1.6)
+                .width('100%')
+              }, (row: AiRunResultRow, index: number) => `${index}-${row.labelKey}-${row.value}`)
+            }
+            .width('100%')
+            .padding(AppSpacing.md)
+            .alignItems(HorizontalAlign.Start)
+            .backgroundColor(AppColor.cardBackground)
+            .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
+          }
         }
         .width('100%')
-        .layoutWeight(1)
-        .margin({ left: 20, right: 20, top: 14 })
+        .padding({ left: AppSpacing.page, right: AppSpacing.page, top: AppSpacing.md, bottom: AppSpacing.xl })
       }
       .width('100%')
-      .height('100%')
-      .backgroundColor(Color.White)
+      .layoutWeight(1)
+      .scrollBar(BarState.Auto)
     }
-    .width('100%')
-    .height('100%')
-    .backgroundColor(Color.White)
+      .width('100%')
+      .height('100%')
+      .backgroundColor(AppColor.pageBackground)
   }
 
   @Builder
