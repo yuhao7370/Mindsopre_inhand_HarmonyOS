@@ -1,8 +1,40 @@
+function Remove-SourceComments([string]$source) {
+  $withoutBlockComments = [regex]::Replace($source, '/\*[\s\S]*?\*/', '')
+  return [regex]::Replace($withoutBlockComments, '(?m)//.*$', '')
+}
+
+function Test-EntryAbilityLightColorMode([string]$source) {
+  $withoutComments = Remove-SourceComments $source
+  return $withoutComments -match '(?m)^\s*this\.context\.getApplicationContext\(\)\.setColorMode\(\s*ConfigurationConstant\.ColorMode\.COLOR_MODE_LIGHT\s*\);\s*$'
+}
+
+function Get-Json5StringProperty([string]$source, [string]$property) {
+  $withoutComments = Remove-SourceComments $source
+  $escapedProperty = [regex]::Escape($property)
+  $pattern = "(?m)^\s*`"$escapedProperty`"\s*:\s*`"(?<value>[^`"]*)`"\s*,?\s*$"
+  $matches = [regex]::Matches($withoutComments, $pattern)
+  if ($matches.Count -ne 1) { return $null }
+  return $matches[0].Groups['value'].Value
+}
+
+function Test-DarkStartWindowBackground([string]$source) {
+  try {
+    $resource = $source | ConvertFrom-Json -ErrorAction Stop
+    $startWindowColors = @($resource.color | Where-Object { $_.name -ceq 'start_window_background' })
+    return $startWindowColors.Count -eq 1 -and $startWindowColors[0].value -ceq '#FFFFFF'
+  } catch {
+    return $false
+  }
+}
+
 function Test-AppShellUiGuard {
   param(
     [string]$Permission,
     [string]$Splash,
     [string]$Dance,
+    [string]$EntryAbility = $script:entryAbility,
+    [string]$Module = $script:module,
+    [string]$DarkColor = $script:darkColor,
     [string]$AppTheme = $script:appTheme
   )
 
@@ -30,6 +62,10 @@ function Test-AppShellUiGuard {
     $brandBackgroundPattern = "Column\(\)\s*\{[\s\S]*?\}\s*\.width\('100%'\)\s*\.height\('100%'\)\s*\.backgroundColor\(AppColor\.pageBackground\)\s*\.accessibilityLevel\(this\.showPrivacyDialog\s*\?\s*'no-hide-descendants'\s*:\s*'auto'\)"
     if ($build -notmatch $brandBackgroundPattern) { return $false }
     if ($build -match "Column\(\)\s*\{[\s\S]*?\}\s*\.width\('100%'\)\s*\.height\('100%'\)\s*\.backgroundColor\(AppColor\.pageBackground\)\s*\.accessibilityLevel\('no-hide-descendants'\)") { return $false }
+    if (-not (Test-EntryAbilityLightColorMode $EntryAbility)) { return $false }
+    if ((Get-Json5StringProperty $Module 'icon') -cne '$media:logo_splash') { return $false }
+    if ((Get-Json5StringProperty $Module 'startWindowIcon') -cne '$media:logo_splash') { return $false }
+    if (-not (Test-DarkStartWindowBackground $DarkColor)) { return $false }
     return $AppTheme -match 'readonly\s+textAccent:\s*string' -and
       $AppTheme -match "cardBackground:\s*'#FFFFFF'" -and
       $AppTheme -match "textAccent:\s*'#0B3A82'"
@@ -60,10 +96,13 @@ function Assert-RejectedMutation {
     [string]$Permission,
     [string]$Splash,
     [string]$Dance,
+    [string]$EntryAbility = $script:entryAbility,
+    [string]$Module = $script:module,
+    [string]$DarkColor = $script:darkColor,
     [string]$AppTheme = $script:appTheme
   )
 
-  if (Test-AppShellUiGuard $Permission $Splash $Dance $AppTheme) {
+  if (Test-AppShellUiGuard $Permission $Splash $Dance $EntryAbility $Module $DarkColor $AppTheme) {
     throw "Guard accepted mutation: $Name"
   }
 }
@@ -85,6 +124,9 @@ $permission = Get-Content (Join-Path $root 'entry/src/main/ets/services/permissi
 $splash = Get-Content (Join-Path $root 'entry/src/main/ets/pages/SplashPage.ets') -Raw
 $dance = Get-Content (Join-Path $root 'entry/src/main/ets/pages/DancePage.ets') -Raw
 $script:appTheme = Get-Content (Join-Path $root 'entry/src/main/ets/common/theme/AppTheme.ets') -Raw
+$script:entryAbility = Get-Content (Join-Path $root 'entry/src/main/ets/entryability/EntryAbility.ets') -Raw
+$script:module = Get-Content (Join-Path $root 'entry/src/main/module.json5') -Raw
+$script:darkColor = Get-Content (Join-Path $root 'entry/src/main/resources/dark/element/color.json') -Raw
 
 if (-not (Test-AppShellUiGuard $permission $splash $dance)) {
   throw 'Guard fixture must pass.'
@@ -121,4 +163,26 @@ Assert-RejectedMutation 'consent background accessibility hiding made unconditio
 $wrongScopeAccessibility = $splash -replace "\.accessibilityLevel\(this\.showPrivacyDialog \? 'no-hide-descendants' : 'auto'\)", ''
 $wrongScopeAccessibility = $wrongScopeAccessibility -replace '(\.accessibilityGroup\(true\))', "`$1`n      .accessibilityLevel(this.showPrivacyDialog ? 'no-hide-descendants' : 'auto')"
 Assert-RejectedMutation 'consent background accessibility hiding moved to card' $permission $wrongScopeAccessibility $dance
-Assert-RejectedMutation 'text accent contrast lowered' $permission $splash $dance ($script:appTheme -replace "textAccent:\s*'#0B3A82'", "textAccent: '#FFFFFF'")
+Assert-RejectedMutation -Name 'text accent contrast lowered' -Permission $permission -Splash $splash -Dance $dance -AppTheme ($script:appTheme -replace "textAccent:\s*'#0B3A82'", "textAccent: '#FFFFFF'")
+Assert-RejectedMutation -Name 'light color mode removed' -Permission $permission -Splash $splash -Dance $dance -EntryAbility ($script:entryAbility -replace 'COLOR_MODE_LIGHT', 'COLOR_MODE_NOT_SET')
+Assert-RejectedMutation -Name 'application icon restored to template asset' -Permission $permission -Splash $splash -Dance $dance -Module ($script:module -replace '"icon": "\$media:logo_splash"', '"icon": "\$media:layered_image"')
+Assert-RejectedMutation -Name 'start-window icon restored to template asset' -Permission $permission -Splash $splash -Dance $dance -Module ($script:module -replace '"startWindowIcon": "\$media:logo_splash"', '"startWindowIcon": "\$media:startIcon"')
+Assert-RejectedMutation -Name 'dark start-window background restored' -Permission $permission -Splash $splash -Dance $dance -DarkColor ($script:darkColor -replace '"value": "#FFFFFF"', '"value": "#000000"')
+Assert-RejectedMutation -Name 'light color mode comment decoy' -Permission $permission -Splash $splash -Dance $dance -EntryAbility (($script:entryAbility -replace 'ConfigurationConstant\.ColorMode\.COLOR_MODE_LIGHT', 'ConfigurationConstant.ColorMode.COLOR_MODE_NOT_SET') + "`n// COLOR_MODE_LIGHT")
+Assert-RejectedMutation -Name 'application icon comment decoy' -Permission $permission -Splash $splash -Dance $dance -Module ($script:module -replace '"icon": "\$media:logo_splash"', '"icon": "\$media:layered_image" // "icon": "$media:logo_splash"')
+Assert-RejectedMutation -Name 'start-window icon comment decoy' -Permission $permission -Splash $splash -Dance $dance -Module ($script:module -replace '"startWindowIcon": "\$media:logo_splash"', '"startWindowIcon": "$media:startIcon" // "startWindowIcon": "$media:logo_splash"')
+$darkStartWindowBackgroundDecoy = @'
+{
+  "color": [
+    {
+      "name": "start_window_background",
+      "value": "#000000"
+    },
+    {
+      "name": "unrelated",
+      "value": "#FFFFFF"
+    }
+  ]
+}
+'@
+Assert-RejectedMutation -Name 'dark start-window background unrelated-color decoy' -Permission $permission -Splash $splash -Dance $dance -DarkColor $darkStartWindowBackgroundDecoy

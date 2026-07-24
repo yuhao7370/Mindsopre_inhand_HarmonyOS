@@ -3,6 +3,38 @@ $permission = Get-Content (Join-Path $root 'entry/src/main/ets/services/permissi
 $splash = Get-Content (Join-Path $root 'entry/src/main/ets/pages/SplashPage.ets') -Raw
 $dance = Get-Content (Join-Path $root 'entry/src/main/ets/pages/DancePage.ets') -Raw
 $appTheme = Get-Content (Join-Path $root 'entry/src/main/ets/common/theme/AppTheme.ets') -Raw
+$entryAbility = Get-Content (Join-Path $root 'entry/src/main/ets/entryability/EntryAbility.ets') -Raw
+$module = Get-Content (Join-Path $root 'entry/src/main/module.json5') -Raw
+$darkColor = Get-Content (Join-Path $root 'entry/src/main/resources/dark/element/color.json') -Raw
+
+function Remove-SourceComments([string]$source) {
+  $withoutBlockComments = [regex]::Replace($source, '/\*[\s\S]*?\*/', '')
+  return [regex]::Replace($withoutBlockComments, '(?m)//.*$', '')
+}
+
+function Test-EntryAbilityLightColorMode([string]$source) {
+  $withoutComments = Remove-SourceComments $source
+  return $withoutComments -match '(?m)^\s*this\.context\.getApplicationContext\(\)\.setColorMode\(\s*ConfigurationConstant\.ColorMode\.COLOR_MODE_LIGHT\s*\);\s*$'
+}
+
+function Get-Json5StringProperty([string]$source, [string]$property) {
+  $withoutComments = Remove-SourceComments $source
+  $escapedProperty = [regex]::Escape($property)
+  $pattern = "(?m)^\s*`"$escapedProperty`"\s*:\s*`"(?<value>[^`"]*)`"\s*,?\s*$"
+  $matches = [regex]::Matches($withoutComments, $pattern)
+  if ($matches.Count -ne 1) { return $null }
+  return $matches[0].Groups['value'].Value
+}
+
+function Test-DarkStartWindowBackground([string]$source) {
+  try {
+    $resource = $source | ConvertFrom-Json -ErrorAction Stop
+    $startWindowColors = @($resource.color | Where-Object { $_.name -ceq 'start_window_background' })
+    return $startWindowColors.Count -eq 1 -and $startWindowColors[0].value -ceq '#FFFFFF'
+  } catch {
+    return $false
+  }
+}
 
 if ($permission -match 'requestStartup|startupPermissionNames') {
   throw 'Startup permission API must not exist.'
@@ -83,3 +115,7 @@ if ($appTheme -notmatch 'readonly\s+textAccent:\s*string' -or
 if ($splash -notmatch 'Button\(appString\(''me_user_agreement''\),\s*\{\s*type:\s*ButtonType\.Normal\s*\}\)[\s\S]*?\.fontColor\(AppColor\.textAccent\)') {
   throw 'Consent agreement link must use the text accent button style.'
 }
+if (-not (Test-EntryAbilityLightColorMode $entryAbility)) { throw 'Application must explicitly use the implemented light theme.' }
+if ((Get-Json5StringProperty $module 'icon') -cne '$media:logo_splash') { throw 'Application icon must use the flat MindSpore logo.' }
+if ((Get-Json5StringProperty $module 'startWindowIcon') -cne '$media:logo_splash') { throw 'Start icon must use the flat MindSpore logo.' }
+if (-not (Test-DarkStartWindowBackground $darkColor)) { throw 'Dark-qualified start window must remain light.' }
