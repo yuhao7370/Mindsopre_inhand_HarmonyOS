@@ -269,6 +269,8 @@ function Assert-PoetryPosterNativeShellContract([string]$Source) {
     @{ Slice = $share.Text; Pattern = 'return\s+this\.shareSavedPosterImage\('; Message = 'sharePoster must return the system share promise before release' },
     @{ Slice = $share.Text; Pattern = '\.finally\(\(\)\s*=>\s*\{\s*this\.actionInFlight\s*=\s*false;\s*\}\)'; Message = 'sharePoster must release its action gate in finally' },
     @{ Slice = $build.Text; Pattern = 'Column\(\{\s*space:\s*AppSpacing\.md\s*\}\)'; Message = 'Poster actions must be a single vertical column' },
+    @{ Slice = $cleanSource; Pattern = 'const\s+posterActionBottomSafePadding\s*:\s*number\s*=\s*AppSpacing\.xl\s*\*\s*2\s*;'; Message = 'Poster actions must declare semantic bottom safe-area padding' },
+    @{ Slice = $build.Text; Pattern = '\.padding\(\{\s*left:\s*AppSpacing\.page,\s*right:\s*AppSpacing\.page,\s*top:\s*AppSpacing\.page,\s*bottom:\s*posterActionBottomSafePadding\s*\}\)'; Message = 'Poster Scroll content must keep a scrollable bottom safe area after its status text' },
     @{ Slice = $literalBuild.Text; Pattern = 'SaveButton\([\s\S]*?\.width\(''100%''\)\s*\.height\(48\)\s*\.enabled\(!this\.actionInFlight\)'; Message = 'SaveButton must be full-width, 48vp, and disabled in flight' },
     @{ Slice = $literalBuild.Text; Pattern = 'Button\(appString\(''poem_share_poster''\)\)[\s\S]*?\.width\(''100%''\)\s*\.height\(48\)\s*\.enabled\(!this\.actionInFlight\)'; Message = 'Share button must be full-width, 48vp, and disabled in flight' }
   )) {

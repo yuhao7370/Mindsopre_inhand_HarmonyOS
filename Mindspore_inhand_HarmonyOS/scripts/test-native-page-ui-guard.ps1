@@ -263,5 +263,7 @@ Assert-PoetryPosterRejected 'save button moved into poster card' ($poetryPosterS
 Assert-PoetryPosterRejected 'snapshot wait removed' ($poetryPosterSource -replace 'waitUntilRenderFinished:\s*true', 'waitUntilRenderFinished: false')
 Assert-PoetryPosterRejected 'save finally removed' ([regex]::Replace($poetryPosterSource, '(?s)(private savePoster\(\): void \{.*?\.finally\(\(\) => \{)\s*this\.actionInFlight = false;\s*(\}\))', '$1$2', 1))
 Assert-PoetryPosterRejected 'share finally removed' ([regex]::Replace($poetryPosterSource, '(?s)(private sharePoster\(\): void \{.*?\.finally\(\(\) => \{)\s*this\.actionInFlight = false;\s*(\}\))', '$1$2', 1))
+Assert-PoetryPosterRejected 'poster bottom safe area reduced to a regular page inset' ($poetryPosterSource -replace 'bottom:\s*posterActionBottomSafePadding', 'bottom: AppSpacing.page')
+Assert-PoetryPosterRejected 'poster action safe-area padding contract removed' ($poetryPosterSource -replace 'const\s+posterActionBottomSafePadding\s*:\s*number\s*=\s*AppSpacing\.xl\s*\*\s*2\s*;', '')
 
 Write-Host 'Native page UI guard mutation tests passed'

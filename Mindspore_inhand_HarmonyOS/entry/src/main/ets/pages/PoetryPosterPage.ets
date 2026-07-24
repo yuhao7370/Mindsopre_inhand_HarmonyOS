@@ -30,6 +30,8 @@ interface PoetryPosterPageParams {
   poem?: string;
 }
 
+const posterActionBottomSafePadding: number = AppSpacing.xl * 2;
+
 @Entry
 @Component
 struct PoetryPosterPage {
@@ -228,7 +230,12 @@ struct PoetryPosterPage {
         }
         .width('100%')
         .alignItems(HorizontalAlign.Center)
-        .padding(AppSpacing.page)
+        .padding({
+          left: AppSpacing.page,
+          right: AppSpacing.page,
+          top: AppSpacing.page,
+          bottom: posterActionBottomSafePadding
+        })
       }
       .layoutWeight(1)
       .width('100%')
