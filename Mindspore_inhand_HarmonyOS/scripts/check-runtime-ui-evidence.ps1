@@ -275,8 +275,23 @@ $resolvedGitRoot = Normalize-Text (
   (& git -c core.autocrlf=false -c core.safecrlf=false -C $repositoryRoot `
       rev-parse --show-toplevel 2>$null) -join "`n"
 )
-if ($LASTEXITCODE -ne 0 -or [IO.Path]::GetFullPath($resolvedGitRoot).TrimEnd('\', '/') -cne $repositoryRoot) {
-  Fail 'repositoryRoot must be the exact Git worktree root.'
+if ($LASTEXITCODE -ne 0) {
+  Fail 'repositoryRoot must belong to a Git worktree.'
+}
+$gitPathPrefix = Normalize-Text (
+  (& git -c core.autocrlf=false -c core.safecrlf=false -C $repositoryRoot `
+      rev-parse --show-prefix 2>$null) -join "`n"
+)
+if ($LASTEXITCODE -ne 0) {
+  Fail 'repositoryRoot must expose its Git worktree-relative prefix.'
+}
+$expectedProjectRoot = if ([string]::IsNullOrEmpty($gitPathPrefix)) {
+  [IO.Path]::GetFullPath($resolvedGitRoot).TrimEnd('\', '/')
+} else {
+  [IO.Path]::GetFullPath((Join-Path $resolvedGitRoot $gitPathPrefix)).TrimEnd('\', '/')
+}
+if ($expectedProjectRoot -cne $repositoryRoot) {
+  Fail 'repositoryRoot must be the exact project root inside its Git worktree.'
 }
 $candidateDiffPath = [string](Require-Property $manifest 'candidateDiffPath')
 Require-AbsoluteFile $candidateDiffPath 'candidateDiffPath'
@@ -425,8 +440,13 @@ if ($sourceKind -notin @('production', 'harness')) { Fail 'source must be produc
 $harnessPagePath = Join-Path $repositoryRoot 'entry\src\main\ets\pages\RuntimeHarnessPage.ets'
 $entryAbilityPath = Join-Path $repositoryRoot 'entry\src\main\ets\entryability\EntryAbility.ets'
 $hasHarnessPage = Test-Path -LiteralPath $harnessPagePath -PathType Leaf
+$diffPathPrefix = if ([string]::IsNullOrEmpty($gitPathPrefix)) {
+  ''
+} else {
+  [regex]::Escape($gitPathPrefix.Replace('\', '/'))
+}
 $derivedSource = if ($hasHarnessPage -and $candidateKind -eq 'workingTree' -and
-  $gitDiff -match '(?m)^\+\+\+ b/entry/src/main/ets/pages/RuntimeHarnessPage\.ets$') {
+  $gitDiff -match "(?m)^\+\+\+ b/${diffPathPrefix}entry/src/main/ets/pages/RuntimeHarnessPage\.ets$") {
   'harness'
 } else {
   'production'
@@ -440,7 +460,7 @@ if ($derivedSource -eq 'harness') {
   $harnessPage = [IO.File]::ReadAllText($harnessPagePath)
   $entryAbility = [IO.File]::ReadAllText($entryAbilityPath)
   if ($harnessPage -notmatch '(?m)^[\t ]*(?:export[\t ]+)?struct[\t ]+RuntimeHarnessPage\b' -or
-    $gitDiff -notmatch '(?m)^\+\+\+ b/entry/src/main/ets/entryability/EntryAbility\.ets$') {
+    $gitDiff -notmatch "(?m)^\+\+\+ b/${diffPathPrefix}entry/src/main/ets/entryability/EntryAbility\.ets$") {
     Fail 'harness source must contain the bound RuntimeHarnessPage and EntryAbility patch.'
   }
   if ($entryAbility -match '\.setFontSizeScale\(3\.2\)') { $derivedFontScale = 3.2 }

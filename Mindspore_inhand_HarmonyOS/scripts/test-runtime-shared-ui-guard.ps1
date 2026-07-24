@@ -36,6 +36,7 @@ function New-ValidFixture([string]$Root) {
       .onClick(() => router.back())
       Text(appString(this.titleKey))
         .layoutWeight(1)
+        .maxFontScale(1.6)
         .maxLines(2)
       if (showActions && this.helpContentKey !== undefined) {
         Row() {
@@ -70,6 +71,7 @@ function New-ValidFixture([string]$Root) {
   @Builder
   runtimeStatusBar() {
     Text(appString(this.statusKey))
+      .maxFontScale(1.6)
       .constraintSize({ minHeight: 44 })
       .backgroundColor('#B31F2937')
   }
@@ -95,11 +97,15 @@ function New-ValidFixture([string]$Root) {
       Stack() {
         Scroll() {
           Column() {
+            Text(appString(this.statusKey))
+              .maxFontScale(1.6)
             Button(appString('splash_permission_retry'))
               .constraintSize({ minHeight: 48 })
+              .maxFontScale(1.6)
               .onClick(() => this.retryRuntimePermission())
             Button(appString('app_permission_by_hand'), { type: ButtonType.Normal })
               .constraintSize({ minHeight: 48 })
+              .maxFontScale(1.6)
               .onClick(() => this.openRuntimePermissionSettings())
           }
         }
@@ -122,6 +128,7 @@ function New-ValidFixture([string]$Root) {
       .accessibilityText($r('app.string.action_back'))
       .onClick(() => router.back())
       Text(appString(this.titleKey))
+        .maxFontScale(1.6)
         .maxLines(2)
       if (this.liveCameraSwitchAvailable) {
         Row() {
@@ -285,6 +292,21 @@ try {
   Assert-Rejected $valid 'recovery-blocks-child-actions' `
     '      .hitTestBehavior(HitTestMode.Default)' `
     '      .hitTestBehavior(HitTestMode.Block)'
+  Assert-Rejected $valid 'unbounded-runtime-title-scale' `
+    "      Text(appString(this.titleKey))`n        .layoutWeight(1)`n        .maxFontScale(1.6)`n        .maxLines(2)" `
+    "      Text(appString(this.titleKey))`n        .layoutWeight(1)`n        .maxLines(2)"
+  Assert-Rejected $valid 'unbounded-status-scale' `
+    "    Text(appString(this.statusKey))`n      .maxFontScale(1.6)`n      .constraintSize({ minHeight: 44 })" `
+    "    Text(appString(this.statusKey))`n      .constraintSize({ minHeight: 44 })"
+  Assert-Rejected $valid 'unbounded-recovery-message-scale' `
+    "            Text(appString(this.statusKey))`n              .maxFontScale(1.6)`n            Button(appString('splash_permission_retry'))" `
+    "            Text(appString(this.statusKey))`n            Button(appString('splash_permission_retry'))"
+  Assert-Rejected $valid 'unbounded-retry-scale' `
+    "            Button(appString('splash_permission_retry'))`n              .constraintSize({ minHeight: 48 })`n              .maxFontScale(1.6)" `
+    "            Button(appString('splash_permission_retry'))`n              .constraintSize({ minHeight: 48 })"
+  Assert-Rejected $valid 'unbounded-settings-scale' `
+    "            Button(appString('app_permission_by_hand'), { type: ButtonType.Normal })`n              .constraintSize({ minHeight: 48 })`n              .maxFontScale(1.6)" `
+    "            Button(appString('app_permission_by_hand'), { type: ButtonType.Normal })`n              .constraintSize({ minHeight: 48 })"
   Assert-Rejected $valid 'swap-recovery-handlers' `
     'this.retryRuntimePermission()' `
     'this.openRuntimePermissionSettings()'

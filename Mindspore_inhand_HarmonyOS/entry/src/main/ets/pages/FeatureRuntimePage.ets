@@ -3206,6 +3206,7 @@ struct FeatureRuntimePage {
         .fontWeight(FontWeight.Bold)
         .fontColor(AppColor.textPrimary)
         .layoutWeight(1)
+        .maxFontScale(1.6)
         .maxLines(2)
       if (showActions && this.helpContentKey !== undefined) {
         Row() {
@@ -3253,6 +3254,7 @@ struct FeatureRuntimePage {
       .fontSize(14)
       .fontColor(Color.White)
       .textAlign(TextAlign.Center)
+      .maxFontScale(1.6)
       .padding({ left: AppSpacing.md, right: AppSpacing.md, top: AppSpacing.sm, bottom: AppSpacing.sm })
       .constraintSize({ minHeight: 44 })
       .backgroundColor('#B31F2937')
@@ -3288,15 +3290,18 @@ struct FeatureRuntimePage {
               .fontSize(16)
               .fontColor(AppColor.textPrimary)
               .textAlign(TextAlign.Center)
+              .maxFontScale(1.6)
               .width('100%')
             Button(appString('splash_permission_retry'))
               .width('100%')
               .constraintSize({ minHeight: 48 })
+              .maxFontScale(1.6)
               .margin({ top: AppSpacing.md })
               .onClick(() => this.retryRuntimePermission())
             Button(appString('app_permission_by_hand'), { type: ButtonType.Normal })
               .width('100%')
               .constraintSize({ minHeight: 48 })
+              .maxFontScale(1.6)
               .fontColor(AppColor.accent)
               .backgroundColor(AppColor.cardBackground)
               .border({ width: 1, color: AppColor.divider, radius: AppRadius.button })
@@ -3340,6 +3345,7 @@ struct FeatureRuntimePage {
         .fontWeight(FontWeight.Bold)
         .fontColor(AppColor.textPrimary)
         .layoutWeight(1)
+        .maxFontScale(1.6)
         .maxLines(2)
       if (this.liveCameraSwitchAvailable) {
         Row() {
