@@ -289,7 +289,7 @@ export function topLocalSceneDetections(
   for (let index = 0; index < scanLimit; index++) {
     const score = scores[index];
     const label = sceneLabelForImageClassificationLabel(labels[index]);
-    if (!(score > 0)) {
+    if (!Number.isFinite(score) || !(score > 0)) {
       continue;
     }
     const candidate: SceneDetection = {
@@ -319,7 +319,27 @@ export function topLocalSceneDetections(
   if (scenes.length === 0 && otherCandidates.length > 0) {
     scenes.push(otherCandidates[0]);
   }
-  return scenes;
+  return normalizeSelectedSceneScores(scenes);
+}
+
+function normalizeSelectedSceneScores(scenes: Array<SceneDetection>): Array<SceneDetection> {
+  let selectedScoreSum = 0;
+  for (let index = 0; index < scenes.length; index++) {
+    selectedScoreSum += scenes[index].score;
+  }
+  if (!(selectedScoreSum > 0) || !Number.isFinite(selectedScoreSum)) {
+    return [];
+  }
+  const normalizedScenes: Array<SceneDetection> = [];
+  for (let index = 0; index < scenes.length; index++) {
+    const scene = scenes[index];
+    const normalizedScene: SceneDetection = {
+      label: scene.label,
+      score: scene.score / selectedScoreSum
+    };
+    normalizedScenes.push(normalizedScene);
+  }
+  return normalizedScenes;
 }
 
 function androidSceneModelDetections(

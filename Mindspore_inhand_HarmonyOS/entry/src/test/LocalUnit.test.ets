@@ -6364,9 +6364,9 @@ export default function localUnitTest() {
       expect(result.ok).assertTrue();
       expect(result.scenes.length).assertEqual(2);
       expect(result.scenes[0].label).assertEqual('food');
-      expect(result.scenes[0].score).assertEqual(0.91);
+      expect(result.scenes[0].score.toFixed(4)).assertEqual('0.5260');
       expect(result.scenes[1].label).assertEqual('beach');
-      expect(result.scenes[1].score).assertEqual(0.82);
+      expect(result.scenes[1].score.toFixed(4)).assertEqual('0.4740');
     });
 
     it('localSceneDetectionRunnerKeepsCommonPlaces365Aliases', 0, () => {
@@ -6399,6 +6399,24 @@ export default function localUnitTest() {
       expect(result.scenes[4].label).assertEqual('classroom');
     });
 
+    it('localSceneDetectionRunnerNormalizesSelectedModelScoresToProbabilities', 0, async () => {
+      const runner = new ImageClassificationSceneDetectionRunner({
+        labels: ['field', 'sky', 'mountain'],
+        scoreRunner: new FixedScoreRunner([13.8679, 9.8894, 7.5723]),
+        maxScenes: 3
+      });
+
+      const result = await runner.detectScenes('file://selected/landscape.jpg');
+
+      expect(result.ok).assertTrue();
+      expect(result.scenes.length).assertEqual(3);
+      expect(result.scenes[0].score.toFixed(4)).assertEqual('0.4426');
+      expect(result.scenes[1].score.toFixed(4)).assertEqual('0.3157');
+      expect(result.scenes[2].score.toFixed(4)).assertEqual('0.2417');
+      const scoreSum = result.scenes.reduce((sum: number, scene: SceneDetection) => sum + scene.score, 0);
+      expect(scoreSum.toFixed(6)).assertEqual('1.000000');
+    });
+
     it('parseSceneDetectionLabelsReadsPlaces365List', 0, () => {
       expect(sceneDetectionLabelRawfilePath).assertEqual('labels/places365.txt');
       expect(sceneDetectionModelRawfilePath).assertEqual('model/resnet18-place365.ms');
@@ -6424,7 +6442,7 @@ export default function localUnitTest() {
 
       expect(scenes.length).assertEqual(1);
       expect(scenes[0].label).assertEqual('stage');
-      expect(scenes[0].score.toFixed(2)).assertEqual('0.77');
+      expect(scenes[0].score.toFixed(2)).assertEqual('1.00');
     });
 
     it('topLocalSceneDetectionsSkipsOtherWhenUsefulSceneExists', 0, () => {
@@ -6436,9 +6454,9 @@ export default function localUnitTest() {
 
       expect(scenes.length).assertEqual(2);
       expect(scenes[0].label).assertEqual('beach');
-      expect(scenes[0].score).assertEqual(0.91);
+      expect(scenes[0].score.toFixed(4)).assertEqual('0.5652');
       expect(scenes[1].label).assertEqual('diningroom');
-      expect(scenes[1].score).assertEqual(0.7);
+      expect(scenes[1].score.toFixed(4)).assertEqual('0.4348');
     });
 
     it('topLocalSceneDetectionsIgnoresNanScores', 0, () => {
@@ -6450,7 +6468,7 @@ export default function localUnitTest() {
 
       expect(scenes.length).assertEqual(1);
       expect(scenes[0].label).assertEqual('beach');
-      expect(scenes[0].score).assertEqual(0.64);
+      expect(scenes[0].score).assertEqual(1);
 
       const onlyNanOtherScenes = topLocalSceneDetections(
         [Number.NaN],
@@ -6464,7 +6482,7 @@ export default function localUnitTest() {
       const scenes = topLocalSceneDetections([0.99, 0.88], ['accordion', 'unknown_scene'], 2);
       expect(scenes.length).assertEqual(1);
       expect(scenes[0].label).assertEqual('other');
-      expect(scenes[0].score).assertEqual(0.99);
+      expect(scenes[0].score).assertEqual(1);
 
       const workflow = workflowForRoute(AppRoute.SCENE_STILL.name);
       expect(workflow !== undefined).assertTrue();
@@ -6487,7 +6505,7 @@ export default function localUnitTest() {
       expect(rows[0].labelKey).assertEqual('feature_runtime_result_scene_count');
       expect(rows[0].value).assertEqual('1');
       expect(rows[1].labelKey).assertEqual('feature_runtime_result_scenes');
-      expect(rows[1].value).assertEqual('1. other 99.00%');
+      expect(rows[1].value).assertEqual('1. other 100.00%');
     });
 
     it('mapsAndroidSceneLabelsToChineseDisplayLabelsWithoutChangingUnknownLabels', 0, () => {
@@ -8553,7 +8571,7 @@ export default function localUnitTest() {
       expect(resourceManager.seenPaths[0]).assertEqual('labels/places365.txt');
       expect(result.ok).assertTrue();
       expect(result.code).assertEqual('SCENE_DETECTION_DONE');
-      expect(result.detailText.indexOf('aircraft 92.00%') >= 0).assertTrue();
+      expect(result.detailText.indexOf('aircraft 53.18%') >= 0).assertTrue();
     });
 
     it('cachedRuntimeFactoryReusesLocalSceneDetectionServiceForLiveLoops', 0, async () => {
@@ -9284,10 +9302,10 @@ export default function localUnitTest() {
 
       expect(resourceManager.seenPaths[0]).assertEqual('labels/places365.txt');
       expect(result.ok).assertTrue();
-      expect(result.detailText.indexOf('舞台 82.00%') >= 0).assertTrue();
+      expect(result.detailText.indexOf('舞台 89.13%') >= 0).assertTrue();
       const rows = aiRunResultRows(result);
       expect(rows[1].labelKey).assertEqual('feature_runtime_result_scenes');
-      expect(rows[1].value.indexOf('1. 舞台 82.00%') >= 0).assertTrue();
+      expect(rows[1].value.indexOf('1. 舞台 89.13%') >= 0).assertTrue();
     });
 
     it('runtimeFactoryInjectsSegmentationServiceForSegmentationWorkflow', 0, async () => {
