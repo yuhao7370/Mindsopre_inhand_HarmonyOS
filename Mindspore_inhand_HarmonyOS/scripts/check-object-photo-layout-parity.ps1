@@ -247,9 +247,10 @@ $preserveText = Get-TextSection $catalog `
   'export function shouldPreserveRuntimeTextResultOnAiResult' `
   'export function shouldPreserveRuntimeVisualResultOnAiResult' `
   'Object Photo text preservation'
-Assert-CodeLine $preserveText `
-  'return (usesAndroidStillSceneLayout(workflow) || usesAndroidObjectPhotoLayout(workflow)) && !resultOk;' `
-  'failed Object Photo result rows must be preserved.'
+Assert-Contains $preserveText 'usesAndroidObjectPhotoLayout(workflow) ||' `
+  'failed Object Photo result rows must remain part of the shared preservation policy.'
+Assert-Contains $preserveText '&& !resultOk;' `
+  'successful Object Photo results must still replace prior rows.'
 
 $preserveVisual = Get-TextSection $catalog `
   'export function shouldPreserveRuntimeVisualResultOnAiResult' `

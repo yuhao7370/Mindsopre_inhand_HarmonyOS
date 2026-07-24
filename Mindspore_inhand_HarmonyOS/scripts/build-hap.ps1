@@ -56,6 +56,8 @@ $env:PATH = (Join-Path $devEcoRoot 'jbr\bin') + ';' + $env:PATH
 & (Join-Path $PSScriptRoot 'test-still-segmentation-layout-parity-guard.ps1')
 & (Join-Path $PSScriptRoot 'check-text-recognition-layout-parity.ps1')
 & (Join-Path $PSScriptRoot 'test-text-recognition-layout-parity-guard.ps1')
+& (Join-Path $PSScriptRoot 'check-live-image-classification-layout-parity.ps1')
+& (Join-Path $PSScriptRoot 'test-live-image-classification-layout-guard.ps1')
 & (Join-Path $PSScriptRoot 'check-still-scene-layout-parity.ps1')
 & (Join-Path $PSScriptRoot 'test-still-scene-layout-parity-guard.ps1')
 & (Join-Path $PSScriptRoot 'check-custom-model-layout-parity.ps1')

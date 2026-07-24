@@ -253,8 +253,8 @@ try {
   Assert-GuardRejectsSectionMutation 'clear-failed-result-rows' $catalog `
     'export function shouldPreserveRuntimeTextResultOnAiResult' `
     'export function shouldPreserveRuntimeVisualResultOnAiResult' `
-    'return (usesAndroidStillSceneLayout(workflow) || usesAndroidObjectPhotoLayout(workflow)) && !resultOk;' `
-    'return usesAndroidStillSceneLayout(workflow) && !resultOk;'
+    'usesAndroidObjectPhotoLayout(workflow) ||' `
+    ''
   Assert-GuardRejectsSectionMutation 'clear-failed-overlay' $catalog `
     '  if (usesAndroidObjectPhotoLayout(workflow)) {' `
     '  if (usesAndroidStyleTransferLayout(workflow)) {' `

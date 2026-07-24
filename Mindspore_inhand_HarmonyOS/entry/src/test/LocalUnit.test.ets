@@ -428,6 +428,8 @@ import {
   shouldShowStandaloneSegmentationForegroundPreview,
   shouldShowStandaloneSegmentationOverlayPreview,
   shouldShowLiveClassificationCameraOverlay,
+  liveClassificationRetryActionForStatus,
+  shouldPublishLiveClassificationPreparingStatus,
   shouldShowLiveGestureCameraOverlay,
   shouldShowLiveObjectDetectionCameraOverlay,
   shouldShowLivePoseCameraOverlay,
@@ -10048,7 +10050,13 @@ export default function localUnitTest() {
     });
 
     it('keepsPreviousLiveClassificationLabelUntilNextResultLikeAndroid', 0, () => {
-      expect(shouldClearRuntimeResultAtWorkflowStart(workflowForRoute(AppRoute.IMAGE_CAMERA.name)))
+      const imageCamera = workflowForRoute(AppRoute.IMAGE_CAMERA.name);
+
+      expect(shouldClearRuntimeResultAtWorkflowStart(imageCamera))
+        .assertFalse();
+      expect(shouldPreserveRuntimeTextResultOnAiResult(imageCamera, false))
+        .assertTrue();
+      expect(shouldPreserveRuntimeTextResultOnAiResult(imageCamera, true))
         .assertFalse();
       expect(shouldClearRuntimeResultAtWorkflowStart(workflowForRoute(AppRoute.PORTRAIT_SEGMENTATION.name)))
         .assertFalse();
@@ -10058,6 +10066,46 @@ export default function localUnitTest() {
         .assertTrue();
       expect(shouldClearRuntimeResultAtWorkflowStart(undefined))
         .assertTrue();
+    });
+
+    it('offersExplicitLiveClassificationRetryOnlyForCameraAndInferenceFailures', 0, () => {
+      const imageCamera = workflowForRoute(AppRoute.IMAGE_CAMERA.name);
+      const objectCamera = workflowForRoute(AppRoute.OBJECT_CAMERA.name);
+
+      expect(liveClassificationRetryActionForStatus(imageCamera, 'feature_runtime_live_camera_failed'))
+        .assertEqual('restartCamera');
+      expect(liveClassificationRetryActionForStatus(imageCamera, 'feature_runtime_live_camera_surface_missing'))
+        .assertEqual('restartCamera');
+      expect(liveClassificationRetryActionForStatus(imageCamera, 'feature_runtime_permission_denied'))
+        .assertEqual('restartCamera');
+      expect(liveClassificationRetryActionForStatus(imageCamera, 'feature_runtime_live_frame_failed'))
+        .assertEqual('restartInference');
+      expect(liveClassificationRetryActionForStatus(imageCamera, 'feature_runtime_run_failed'))
+        .assertEqual('restartInference');
+      expect(liveClassificationRetryActionForStatus(
+        imageCamera,
+        'feature_runtime_classification_runner_unavailable'
+      )).assertEqual('restartInference');
+      expect(liveClassificationRetryActionForStatus(imageCamera, 'feature_runtime_classification_failed'))
+        .assertEqual('restartInference');
+      expect(liveClassificationRetryActionForStatus(imageCamera, 'feature_runtime_status_preparing'))
+        .assertEqual('none');
+      expect(liveClassificationRetryActionForStatus(imageCamera, 'feature_runtime_classification_done'))
+        .assertEqual('none');
+      expect(liveClassificationRetryActionForStatus(objectCamera, 'feature_runtime_run_failed'))
+        .assertEqual('none');
+      expect(liveClassificationRetryActionForStatus(undefined, 'feature_runtime_live_camera_failed'))
+        .assertEqual('none');
+    });
+
+    it('keepsLiveClassificationSuccessVisibleBetweenAutomaticFrames', 0, () => {
+      const imageCamera = workflowForRoute(AppRoute.IMAGE_CAMERA.name);
+      const objectCamera = workflowForRoute(AppRoute.OBJECT_CAMERA.name);
+
+      expect(shouldPublishLiveClassificationPreparingStatus(imageCamera, false)).assertTrue();
+      expect(shouldPublishLiveClassificationPreparingStatus(imageCamera, true)).assertFalse();
+      expect(shouldPublishLiveClassificationPreparingStatus(objectCamera, true)).assertTrue();
+      expect(shouldPublishLiveClassificationPreparingStatus(undefined, true)).assertTrue();
     });
 
     it('keepsLiveObjectOverlayOnFailureAndAtomicallyReplacesItOnCurrentSuccess', 0, () => {

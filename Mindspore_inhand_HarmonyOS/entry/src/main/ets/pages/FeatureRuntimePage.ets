@@ -5,6 +5,7 @@ import {
   FeatureInputKind,
   FeaturePermissionKind,
   FeatureWorkflow,
+  LiveClassificationRetryAction,
   autoStartInputKindForWorkflow,
   fixedLiveCameraPositionForWorkflow,
   inputKindReplacesPrimaryInput,
@@ -66,6 +67,8 @@ import {
   compositeSegmentationSaveReady,
   shouldShowLiveClassificationCameraOverlay,
   liveClassificationEmptyPromptKey,
+  liveClassificationRetryActionForStatus,
+  shouldPublishLiveClassificationPreparingStatus,
   shouldShowLiveGestureCameraOverlay,
   shouldShowLiveObjectDetectionCameraOverlay,
   shouldShowLivePoseCameraOverlay,
@@ -758,9 +761,11 @@ struct FeatureRuntimePage {
     }
 
     this.statusKey = 'feature_runtime_status_preparing';
-    this.resultRows = [];
-    this.resultText = '';
-    this.clearVisualResults();
+    if (shouldClearRuntimeResultAtWorkflowStart(workflow)) {
+      this.resultRows = [];
+      this.resultText = '';
+      this.clearVisualResults();
+    }
     try {
       const permission = await new PermissionService().requestForWorkflow(context, workflow);
       if (requestId !== this.liveCameraPreviewRequestId) {
@@ -1087,6 +1092,31 @@ struct FeatureRuntimePage {
     this.runWorkflow();
   }
 
+  private liveClassificationRetryAction(): LiveClassificationRetryAction {
+    return liveClassificationRetryActionForStatus(workflowForRoute(this.routeName), this.statusKey);
+  }
+
+  private retryLiveClassification(): void {
+    const workflow = workflowForRoute(this.routeName);
+    const action = liveClassificationRetryActionForStatus(workflow, this.statusKey);
+    if (action === 'restartCamera') {
+      this.liveCameraInputSelected = true;
+      this.startLiveCameraPreview();
+      return;
+    }
+    if (action !== 'restartInference' || workflow === undefined) {
+      return;
+    }
+    this.statusKey = 'feature_runtime_status_preparing';
+    this.stopLiveRuntimeLoop();
+    if (this.liveCameraInputSelected && this.liveCameraActive) {
+      this.startLiveRuntimeLoop(workflow);
+      return;
+    }
+    this.liveCameraInputSelected = true;
+    this.startLiveCameraPreview();
+  }
+
   private runWorkflow(): void {
     const workflow = workflowForRoute(this.routeName);
     if (!workflow) {
@@ -1172,7 +1202,9 @@ struct FeatureRuntimePage {
       }
       return;
     }
-    this.statusKey = 'feature_runtime_status_preparing';
+    if (shouldPublishLiveClassificationPreparingStatus(workflow, this.resultRows.length > 0)) {
+      this.statusKey = 'feature_runtime_status_preparing';
+    }
     if (shouldClearRuntimeResultAtWorkflowStart(workflow)) {
       this.resultText = '';
       this.resultRows = [];
@@ -1315,9 +1347,11 @@ struct FeatureRuntimePage {
     }
     if (!result.ok) {
       this.statusKey = result.messageKey;
-      this.resultText = '';
-      this.resultRows = [];
       const workflow = workflowForRoute(this.routeName);
+      if (!shouldPreserveRuntimeTextResultOnAiResult(workflow, false)) {
+        this.resultText = '';
+        this.resultRows = [];
+      }
       if (shouldShowLiveObjectDetectionCameraOverlay(workflow)) {
         hilog.error(
           runtimeLogDomain,
@@ -3878,35 +3912,66 @@ struct FeatureRuntimePage {
   }
 
   @Builder
+  liveClassificationStatusOverlay() {
+    Column({ space: AppSpacing.sm }) {
+      Text(this.liveClassificationOverlayValue())
+        .width('100%')
+        .fontSize(18)
+        .fontWeight(FontWeight.Medium)
+        .fontColor(Color.White)
+        .maxFontScale(1.6)
+      Row({ space: AppSpacing.sm }) {
+        Row({ space: AppSpacing.xs }) {
+          if (this.statusKey === 'feature_runtime_status_preparing') {
+            LoadingProgress()
+              .width(20)
+              .height(20)
+              .color(Color.White)
+          }
+          Text(appString(this.statusKey))
+            .fontSize(13)
+            .fontColor('#E5E7EB')
+            .maxFontScale(1.6)
+            .layoutWeight(1)
+        }
+        .layoutWeight(1)
+        .constraintSize({ minHeight: 48 })
+        .alignItems(VerticalAlign.Center)
+        if (this.liveClassificationRetryAction() !== 'none') {
+          Button(appString('web_retry'), { type: ButtonType.Normal })
+            .constraintSize({ minWidth: 72, minHeight: 48 })
+            .fontSize(14)
+            .fontColor(Color.White)
+            .maxFontScale(1.6)
+            .backgroundColor(Color.Transparent)
+            .border({ width: 1, color: '#99FFFFFF', radius: AppRadius.button })
+            .onClick(() => this.retryLiveClassification())
+        }
+      }
+      .width('100%')
+      .alignItems(VerticalAlign.Center)
+    }
+    .width('calc(100% - 32vp)')
+    .constraintSize({ maxWidth: 520 })
+    .padding({ left: AppSpacing.md, right: AppSpacing.md, top: AppSpacing.sm, bottom: AppSpacing.sm })
+    .backgroundColor('#B31F2937')
+    .borderRadius(AppRadius.card)
+  }
+
+  @Builder
   imageClassificationAndroidLiveLayout() {
     Column() {
       this.runtimeActionToolbar(true)
       Stack({ alignContent: Alignment.TopStart }) {
         this.liveCameraSurfaceContent()
         Column() {
-          Column() {
-            Text(this.liveClassificationOverlayValue())
-              .fontSize(14)
-              .fontWeight(FontWeight.Bold)
-              .fontColor(AppColor.textPrimary)
-              .maxLines(1)
-              .textOverflow({ overflow: TextOverflow.Ellipsis })
-              .margin({ top: 6 })
-            Divider()
-              .strokeWidth(0.5)
-              .color('#E6E6E6')
-              .width('100%')
-              .margin({ top: 10 })
-          }
-          .width('100%')
-          .height(100)
-          .padding({ left: 15, right: 15 })
-          .alignItems(HorizontalAlign.Start)
-          .backgroundColor(Color.White)
+          this.liveClassificationStatusOverlay()
         }
         .width('100%')
         .height('100%')
+        .padding({ bottom: AppSpacing.md })
         .justifyContent(FlexAlign.End)
+        .alignItems(HorizontalAlign.Center)
       }
       .width('100%')
       .layoutWeight(1)
