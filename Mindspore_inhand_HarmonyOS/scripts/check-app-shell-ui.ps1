@@ -6,6 +6,8 @@ $appTheme = Get-Content (Join-Path $root 'entry/src/main/ets/common/theme/AppThe
 $entryAbility = Get-Content (Join-Path $root 'entry/src/main/ets/entryability/EntryAbility.ets') -Raw
 $module = Get-Content (Join-Path $root 'entry/src/main/module.json5') -Raw
 $darkColor = Get-Content (Join-Path $root 'entry/src/main/resources/dark/element/color.json') -Raw
+$bottomTab = Get-Content (Join-Path $root 'entry/src/main/ets/common/components/BottomTabBar.ets') -Raw
+$bottomTabLayoutSpec = Get-Content (Join-Path $root 'entry/src/main/ets/common/data/BottomTabBarLayoutSpec.ets') -Raw
 
 function Remove-SourceComments([string]$source) {
   $withoutBlockComments = [regex]::Replace($source, '/\*[\s\S]*?\*/', '')
@@ -31,6 +33,24 @@ function Test-DarkStartWindowBackground([string]$source) {
     $resource = $source | ConvertFrom-Json -ErrorAction Stop
     $startWindowColors = @($resource.color | Where-Object { $_.name -ceq 'start_window_background' })
     return $startWindowColors.Count -eq 1 -and $startWindowColors[0].value -ceq '#FFFFFF'
+  } catch {
+    return $false
+  }
+}
+
+function Test-BottomTabBarContract([string]$source, [string]$layoutSpec) {
+  try {
+    $bottomTabSource = Remove-SourceComments $source
+    $layoutSpecSource = Remove-SourceComments $layoutSpec
+    if ($layoutSpecSource -notmatch '(?m)^\s*export\s+const\s+bottomTabBarMaxWidthVp:\s*number\s*=\s*500\s*;\s*$') { return $false }
+
+    $build = Get-BracedBody $bottomTabSource 'build()'
+    $tabItemPattern = 'ForEach\(this\.tabs,\s*\(tab:\s*TabItem\)\s*=>\s*\{\s*Column\(\)\s*\{[\s\S]*?\}\s*\.layoutWeight\(1\)[\s\S]*?\.accessibilityGroup\(true\)[\s\S]*?\.accessibilityText\(appString\(tab\.titleKey\) as Resource\)[\s\S]*?\.accessibilityRole\(AccessibilityRoleType\.BUTTON\)[\s\S]*?\.accessibilitySelected\(this\.selected === tab\.id\)[\s\S]*?\.onClick\(\(\) => this\.onChange\(tab\.id\)\)'
+    if ($build -notmatch $tabItemPattern) { return $false }
+    if ($build -notmatch "Image\(mainTabIconMediaResource\(tab,\s*this\.selected === tab\.id\)\)\s*\.width\(22\)\s*\.height\(22\)\s*\.objectFit\(ImageFit\.Contain\)\s*\.accessibilityLevel\('no'\)\s*Text\(appString\(tab\.titleKey\)\)") { return $false }
+    if ($build -notmatch 'Text\(appString\(tab\.titleKey\)\)[\s\S]*?\.fontSize\(11\)[\s\S]*?\.fontColor\(this\.selected === tab\.id \? AppColor\.textAccent : AppColor\.textSecondary\)') { return $false }
+    if ($build -notmatch "Row\(\)\s*\{[\s\S]*?\}\s*\.width\('90%'\)\s*\.constraintSize\(\{\s*minHeight:\s*bottomTabBarMinHeightVp,\s*maxWidth:\s*bottomTabBarMaxWidthVp\s*\}\)\s*\.margin\([\s\S]*?\.borderRadius\(31\)[\s\S]*?\.shadow\(") { return $false }
+    return $true
   } catch {
     return $false
   }
@@ -119,3 +139,16 @@ if (-not (Test-EntryAbilityLightColorMode $entryAbility)) { throw 'Application m
 if ((Get-Json5StringProperty $module 'icon') -cne '$media:logo_splash') { throw 'Application icon must use the flat MindSpore logo.' }
 if ((Get-Json5StringProperty $module 'startWindowIcon') -cne '$media:logo_splash') { throw 'Start icon must use the flat MindSpore logo.' }
 if (-not (Test-DarkStartWindowBackground $darkColor)) { throw 'Dark-qualified start window must remain light.' }
+$bottomTab = Remove-SourceComments $bottomTab
+@(
+  'accessibilityGroup\(true\)',
+  'accessibilityText\(appString\(tab\.titleKey\) as Resource\)',
+  'accessibilityRole\(AccessibilityRoleType\.BUTTON\)',
+  'accessibilitySelected\(this\.selected === tab\.id\)',
+  'constraintSize\(\{\s*minHeight:\s*bottomTabBarMinHeightVp,\s*maxWidth:\s*bottomTabBarMaxWidthVp\s*\}\)'
+) | ForEach-Object {
+  if ($bottomTab -notmatch $_) { throw "Bottom tab contract missing: $_" }
+}
+if (-not (Test-BottomTabBarContract $bottomTab $bottomTabLayoutSpec)) {
+  throw 'Bottom tab accessibility and wide-window contract must hold structurally.'
+}

@@ -27,6 +27,24 @@ function Test-DarkStartWindowBackground([string]$source) {
   }
 }
 
+function Test-BottomTabBarContract([string]$source, [string]$layoutSpec) {
+  try {
+    $bottomTabSource = Remove-SourceComments $source
+    $layoutSpecSource = Remove-SourceComments $layoutSpec
+    if ($layoutSpecSource -notmatch '(?m)^\s*export\s+const\s+bottomTabBarMaxWidthVp:\s*number\s*=\s*500\s*;\s*$') { return $false }
+
+    $build = Get-BracedBody $bottomTabSource 'build()'
+    $tabItemPattern = 'ForEach\(this\.tabs,\s*\(tab:\s*TabItem\)\s*=>\s*\{\s*Column\(\)\s*\{[\s\S]*?\}\s*\.layoutWeight\(1\)[\s\S]*?\.accessibilityGroup\(true\)[\s\S]*?\.accessibilityText\(appString\(tab\.titleKey\) as Resource\)[\s\S]*?\.accessibilityRole\(AccessibilityRoleType\.BUTTON\)[\s\S]*?\.accessibilitySelected\(this\.selected === tab\.id\)[\s\S]*?\.onClick\(\(\) => this\.onChange\(tab\.id\)\)'
+    if ($build -notmatch $tabItemPattern) { return $false }
+    if ($build -notmatch "Image\(mainTabIconMediaResource\(tab,\s*this\.selected === tab\.id\)\)\s*\.width\(22\)\s*\.height\(22\)\s*\.objectFit\(ImageFit\.Contain\)\s*\.accessibilityLevel\('no'\)\s*Text\(appString\(tab\.titleKey\)\)") { return $false }
+    if ($build -notmatch 'Text\(appString\(tab\.titleKey\)\)[\s\S]*?\.fontSize\(11\)[\s\S]*?\.fontColor\(this\.selected === tab\.id \? AppColor\.textAccent : AppColor\.textSecondary\)') { return $false }
+    if ($build -notmatch "Row\(\)\s*\{[\s\S]*?\}\s*\.width\('90%'\)\s*\.constraintSize\(\{\s*minHeight:\s*bottomTabBarMinHeightVp,\s*maxWidth:\s*bottomTabBarMaxWidthVp\s*\}\)\s*\.margin\([\s\S]*?\.borderRadius\(31\)[\s\S]*?\.shadow\(") { return $false }
+    return $true
+  } catch {
+    return $false
+  }
+}
+
 function Test-AppShellUiGuard {
   param(
     [string]$Permission,
@@ -35,7 +53,9 @@ function Test-AppShellUiGuard {
     [string]$EntryAbility = $script:entryAbility,
     [string]$Module = $script:module,
     [string]$DarkColor = $script:darkColor,
-    [string]$AppTheme = $script:appTheme
+    [string]$AppTheme = $script:appTheme,
+    [string]$BottomTab = $script:bottomTab,
+    [string]$BottomTabLayoutSpec = $script:bottomTabLayoutSpec
   )
 
   try {
@@ -68,7 +88,8 @@ function Test-AppShellUiGuard {
     if (-not (Test-DarkStartWindowBackground $DarkColor)) { return $false }
     return $AppTheme -match 'readonly\s+textAccent:\s*string' -and
       $AppTheme -match "cardBackground:\s*'#FFFFFF'" -and
-      $AppTheme -match "textAccent:\s*'#0B3A82'"
+      $AppTheme -match "textAccent:\s*'#0B3A82'" -and
+      (Test-BottomTabBarContract $BottomTab $BottomTabLayoutSpec)
   } catch {
     return $false
   }
@@ -99,10 +120,12 @@ function Assert-RejectedMutation {
     [string]$EntryAbility = $script:entryAbility,
     [string]$Module = $script:module,
     [string]$DarkColor = $script:darkColor,
-    [string]$AppTheme = $script:appTheme
+    [string]$AppTheme = $script:appTheme,
+    [string]$BottomTab = $script:bottomTab,
+    [string]$BottomTabLayoutSpec = $script:bottomTabLayoutSpec
   )
 
-  if (Test-AppShellUiGuard $Permission $Splash $Dance $EntryAbility $Module $DarkColor $AppTheme) {
+  if (Test-AppShellUiGuard $Permission $Splash $Dance $EntryAbility $Module $DarkColor $AppTheme $BottomTab $BottomTabLayoutSpec) {
     throw "Guard accepted mutation: $Name"
   }
 }
@@ -127,6 +150,8 @@ $script:appTheme = Get-Content (Join-Path $root 'entry/src/main/ets/common/theme
 $script:entryAbility = Get-Content (Join-Path $root 'entry/src/main/ets/entryability/EntryAbility.ets') -Raw
 $script:module = Get-Content (Join-Path $root 'entry/src/main/module.json5') -Raw
 $script:darkColor = Get-Content (Join-Path $root 'entry/src/main/resources/dark/element/color.json') -Raw
+$script:bottomTab = Get-Content (Join-Path $root 'entry/src/main/ets/common/components/BottomTabBar.ets') -Raw
+$script:bottomTabLayoutSpec = Get-Content (Join-Path $root 'entry/src/main/ets/common/data/BottomTabBarLayoutSpec.ets') -Raw
 
 if (-not (Test-AppShellUiGuard $permission $splash $dance)) {
   throw 'Guard fixture must pass.'
@@ -186,3 +211,10 @@ $darkStartWindowBackgroundDecoy = @'
 }
 '@
 Assert-RejectedMutation -Name 'dark start-window background unrelated-color decoy' -Permission $permission -Splash $splash -Dance $dance -DarkColor $darkStartWindowBackgroundDecoy
+Assert-RejectedMutation -Name 'bottom tab localized accessibility text removed' -Permission $permission -Splash $splash -Dance $dance -BottomTab ($script:bottomTab -replace '\.accessibilityText\(appString\(tab\.titleKey\) as Resource\)', '')
+Assert-RejectedMutation -Name 'bottom tab selected state made constant' -Permission $permission -Splash $splash -Dance $dance -BottomTab ($script:bottomTab -replace 'accessibilitySelected\(this\.selected === tab\.id\)', 'accessibilitySelected(true)')
+Assert-RejectedMutation -Name 'bottom tab decorative image announced' -Permission $permission -Splash $splash -Dance $dance -BottomTab ($script:bottomTab -replace "\.accessibilityLevel\('no'\)", '')
+Assert-RejectedMutation -Name 'bottom tab accessibility group removed' -Permission $permission -Splash $splash -Dance $dance -BottomTab ($script:bottomTab -replace '\.accessibilityGroup\(true\)', '')
+Assert-RejectedMutation -Name 'bottom tab button role removed' -Permission $permission -Splash $splash -Dance $dance -BottomTab ($script:bottomTab -replace '\.accessibilityRole\(AccessibilityRoleType\.BUTTON\)', '')
+Assert-RejectedMutation -Name 'bottom tab wide-window cap removed' -Permission $permission -Splash $splash -Dance $dance -BottomTab ($script:bottomTab -replace ',\s*maxWidth:\s*bottomTabBarMaxWidthVp', '')
+Assert-RejectedMutation -Name 'bottom tab max width changed' -Permission $permission -Splash $splash -Dance $dance -BottomTabLayoutSpec ($script:bottomTabLayoutSpec -replace 'bottomTabBarMaxWidthVp:\s*number\s*=\s*500', 'bottomTabBarMaxWidthVp: number = 501')

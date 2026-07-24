@@ -1,6 +1,7 @@
 import { describe, expect, it } from '@ohos/hypium';
 import {
   bottomTabBarMinHeightVp,
+  bottomTabBarMaxWidthVp,
   bottomTabItemMinHeightVp
 } from '../main/ets/common/data/BottomTabBarLayoutSpec';
 import { experienceHeaderMinHeightVp } from '../main/ets/common/data/ExperienceHeaderBranding';
@@ -23,6 +24,7 @@ export default function experienceFontScaleUnitTest(): void {
       expect(experienceStickyTitleThresholdVp).assertEqual(76);
       expect(bottomTabItemMinHeightVp).assertEqual(50);
       expect(bottomTabBarMinHeightVp).assertEqual(62);
+      expect(bottomTabBarMaxWidthVp).assertEqual(500);
     });
 
     it('derivesStickyTransitionFromMeasuredHeaderAndStickyHeights', 0, () => {
