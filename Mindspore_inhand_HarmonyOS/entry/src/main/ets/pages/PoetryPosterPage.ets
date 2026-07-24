@@ -1,4 +1,5 @@
 import { common } from '@kit.AbilityKit';
+import { FrameCallback, window } from '@kit.ArkUI';
 import { image } from '@kit.ImageKit';
 import componentSnapshot from '@ohos.arkui.componentSnapshot';
 import router from '@ohos.router';
@@ -26,11 +27,25 @@ import {
   shouldStartPoetryPosterAction
 } from '../services/poetry/PoetryPosterService';
 
+class PosterStatusRevealFrameCallback extends FrameCallback {
+  private readonly revealStatus: () => void;
+
+  constructor(revealStatus: () => void) {
+    super();
+    this.revealStatus = revealStatus;
+  }
+
+  onFrame(_frameTimeInNano: number): void {
+    this.revealStatus();
+  }
+
+  onIdle(_timeLeftInNano: number): void {
+  }
+}
+
 interface PoetryPosterPageParams {
   poem?: string;
 }
-
-const posterActionBottomSafePadding: number = AppSpacing.xl * 2;
 
 @Entry
 @Component
@@ -38,10 +53,29 @@ struct PoetryPosterPage {
   @State poemText: string = '';
   @State statusKey: AppStringKey = 'empty';
   @State actionInFlight: boolean = false;
+  @State bottomNavigationInsetVp: number = 0;
+  private posterScroller: Scroller = new Scroller();
+  private hostWindow?: window.Window;
+  private observingBottomNavigationInset: boolean = false;
 
-  aboutToAppear() {
+  private readonly handleAvoidAreaChange = (options: window.AvoidAreaOptions): void => {
+    if (options.type === window.AvoidAreaType.TYPE_NAVIGATION_INDICATOR) {
+      this.updateBottomNavigationInset(options.area);
+    }
+  };
+
+  aboutToAppear(): void {
     const params = router.getParams() as PoetryPosterPageParams;
     this.poemText = poetryPosterTextFromParam(params?.poem);
+    this.startObservingBottomNavigationInset();
+  }
+
+  aboutToDisappear(): void {
+    this.observingBottomNavigationInset = false;
+    if (this.hostWindow) {
+      this.hostWindow.off('avoidAreaChange', this.handleAvoidAreaChange);
+      this.hostWindow = undefined;
+    }
   }
 
   private uiAbilityContext(): common.UIAbilityContext | undefined {
@@ -50,6 +84,43 @@ struct PoetryPosterPage {
       return undefined;
     }
     return context as common.UIAbilityContext;
+  }
+
+  private updateBottomNavigationInset(avoidArea: window.AvoidArea): void {
+    this.bottomNavigationInsetVp = avoidArea.visible ?
+      this.getUIContext().px2vp(avoidArea.bottomRect.height) : 0;
+  }
+
+  private startObservingBottomNavigationInset(): void {
+    const context = this.uiAbilityContext();
+    if (context === undefined) {
+      return;
+    }
+    this.observingBottomNavigationInset = true;
+    window.getLastWindow(context)
+      .then((hostWindow: window.Window) => {
+        if (!this.observingBottomNavigationInset) {
+          return;
+        }
+        this.hostWindow = hostWindow;
+        this.updateBottomNavigationInset(
+          hostWindow.getWindowAvoidArea(window.AvoidAreaType.TYPE_NAVIGATION_INDICATOR)
+        );
+        hostWindow.on('avoidAreaChange', this.handleAvoidAreaChange);
+      })
+      .catch(() => {
+        this.bottomNavigationInsetVp = 0;
+      });
+  }
+
+  private setStatusAndReveal(statusKey: AppStringKey): void {
+    this.statusKey = statusKey;
+    this.getUIContext().postFrameCallback(new PosterStatusRevealFrameCallback(() => {
+      try {
+        this.posterScroller.scrollEdge(Edge.Bottom, { velocity: 1200 });
+      } catch (_) {
+      }
+    }));
   }
 
   private async posterPixelMap(): Promise<image.PixelMap | undefined> {
@@ -78,13 +149,13 @@ struct PoetryPosterPage {
       return;
     }
     this.actionInFlight = true;
-    this.statusKey = 'poem_save_in_progress';
+    this.setStatusAndReveal('poem_save_in_progress');
     this.savePosterImage()
       .then((result: ResultImageSaveResult) => {
-        this.statusKey = result.ok ? 'poem_save_success' : result.messageKey;
+        this.setStatusAndReveal(result.ok ? 'poem_save_success' : result.messageKey);
       })
       .catch(() => {
-        this.statusKey = 'poem_save_failed';
+        this.setStatusAndReveal('poem_save_failed');
       })
       .finally(() => {
         this.actionInFlight = false;
@@ -97,11 +168,11 @@ struct PoetryPosterPage {
     }
     const context = this.uiAbilityContext();
     if (context === undefined) {
-      this.statusKey = 'poem_share_failed';
+      this.setStatusAndReveal('poem_share_failed');
       return;
     }
     this.actionInFlight = true;
-    this.statusKey = 'poem_share_in_progress';
+    this.setStatusAndReveal('poem_share_in_progress');
     this.savePosterImage()
       .then((saveResult: ResultImageSaveResult) => {
         if (!saveResult.ok) {
@@ -110,10 +181,10 @@ struct PoetryPosterPage {
         return this.shareSavedPosterImage(context, saveResult.uri);
       })
       .then((shareResult: ShareImageResult) => {
-        this.statusKey = shareResult.messageKey;
+        this.setStatusAndReveal(shareResult.messageKey);
       })
       .catch(() => {
-        this.statusKey = 'poem_share_failed';
+        this.setStatusAndReveal('poem_share_failed');
       })
       .finally(() => {
         this.actionInFlight = false;
@@ -187,7 +258,7 @@ struct PoetryPosterPage {
         onBack: () => router.back()
       })
 
-      Scroll() {
+      Scroll(this.posterScroller) {
         Column() {
           this.posterCard()
 
@@ -205,7 +276,7 @@ struct PoetryPosterPage {
                   this.savePoster();
                   return;
                 }
-                this.statusKey = 'poem_save_failed';
+                this.setStatusAndReveal('poem_save_failed');
               })
 
             Button(appString('poem_share_poster'))
@@ -234,7 +305,7 @@ struct PoetryPosterPage {
           left: AppSpacing.page,
           right: AppSpacing.page,
           top: AppSpacing.page,
-          bottom: posterActionBottomSafePadding
+          bottom: AppSpacing.page + this.bottomNavigationInsetVp
         })
       }
       .layoutWeight(1)

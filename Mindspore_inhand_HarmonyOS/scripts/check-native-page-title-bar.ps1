@@ -290,6 +290,32 @@ function Assert-PoetryPosterNativeShellContract([string]$Source) {
   $saveImage = Get-PoetryPosterMethodSlice $cleanSource 'savePosterImage'
   $save = Get-PoetryPosterMethodSlice $cleanSource 'savePoster'
   $share = Get-PoetryPosterMethodSlice $cleanSource 'sharePoster'
+  $statusReveal = Get-ArkTsMethodSlice `
+    $cleanSource `
+    'private\s+setStatusAndReveal\s*\(' `
+    'PoetryPosterPage is missing setStatusAndReveal()' `
+    'PoetryPosterPage setStatusAndReveal() is missing an opening brace' `
+    'PoetryPosterPage setStatusAndReveal() is missing a closing brace'
+  $updateBottomInset = Get-ArkTsMethodSlice `
+    $cleanSource `
+    'private\s+updateBottomNavigationInset\s*\(' `
+    'PoetryPosterPage is missing updateBottomNavigationInset()' `
+    'PoetryPosterPage updateBottomNavigationInset() is missing an opening brace' `
+    'PoetryPosterPage updateBottomNavigationInset() is missing a closing brace'
+  $observeBottomInset = Get-ArkTsMethodSlice `
+    $cleanSource `
+    'private\s+startObservingBottomNavigationInset\s*\(' `
+    'PoetryPosterPage is missing startObservingBottomNavigationInset()' `
+    'PoetryPosterPage startObservingBottomNavigationInset() is missing an opening brace' `
+    'PoetryPosterPage startObservingBottomNavigationInset() is missing a closing brace'
+  $literalObserveBottomInset = Get-ArkTsMethodSlice `
+    $literalSource `
+    'private\s+startObservingBottomNavigationInset\s*\(' `
+    'PoetryPosterPage is missing startObservingBottomNavigationInset()' `
+    'PoetryPosterPage startObservingBottomNavigationInset() is missing an opening brace' `
+    'PoetryPosterPage startObservingBottomNavigationInset() is missing a closing brace'
+  $disappear = Get-PoetryPosterMethodSlice $cleanSource 'aboutToDisappear'
+  $literalDisappear = Get-PoetryPosterMethodSlice $literalSource 'aboutToDisappear'
   $build = Get-PoetryPosterMethodSlice $cleanSource 'build'
   $literalBuild = Get-PoetryPosterMethodSlice $literalSource 'build'
 
@@ -311,8 +337,16 @@ function Assert-PoetryPosterNativeShellContract([string]$Source) {
     @{ Slice = $share.Text; Pattern = 'return\s+this\.shareSavedPosterImage\('; Message = 'sharePoster must return the system share promise before release' },
     @{ Slice = $share.Text; Pattern = '\.finally\(\(\)\s*=>\s*\{\s*this\.actionInFlight\s*=\s*false;\s*\}\)'; Message = 'sharePoster must release its action gate in finally' },
     @{ Slice = $build.Text; Pattern = 'Column\(\{\s*space:\s*AppSpacing\.md\s*\}\)'; Message = 'Poster actions must be a single vertical column' },
-    @{ Slice = $cleanSource; Pattern = 'const\s+posterActionBottomSafePadding\s*:\s*number\s*=\s*AppSpacing\.xl\s*\*\s*2\s*;'; Message = 'Poster actions must declare semantic bottom safe-area padding' },
-    @{ Slice = $build.Text; Pattern = '\.padding\(\{\s*left:\s*AppSpacing\.page,\s*right:\s*AppSpacing\.page,\s*top:\s*AppSpacing\.page,\s*bottom:\s*posterActionBottomSafePadding\s*\}\)'; Message = 'Poster Scroll content must keep a scrollable bottom safe area after its status text' },
+    @{ Slice = $cleanSource; Pattern = 'posterScroller\s*:\s*Scroller\s*=\s*new\s+Scroller\(\)'; Message = 'Poster status reveal must own a Scroller' },
+    @{ Slice = $build.Text; Pattern = 'Scroll\(this\.posterScroller\)'; Message = 'Poster Scroll must bind the status reveal Scroller' },
+    @{ Slice = $statusReveal.Text; Pattern = 'this\.statusKey\s*=\s*statusKey'; Message = 'Poster status updates must flow through setStatusAndReveal' },
+    @{ Slice = $statusReveal.Text; Pattern = 'postFrameCallback\s*\('; Message = 'Poster status reveal must wait for a rendered frame' },
+    @{ Slice = $statusReveal.Text; Pattern = 'this\.posterScroller\.scrollEdge\(Edge\.Bottom'; Message = 'Poster status reveal must scroll the rendered feedback above the bottom edge' },
+    @{ Slice = $observeBottomInset.Text; Pattern = 'AvoidAreaType\.TYPE_NAVIGATION_INDICATOR'; Message = 'Poster must query the navigation-indicator avoid area' },
+    @{ Slice = $literalObserveBottomInset.Text; Pattern = "\.on\('avoidAreaChange',\s*this\.handleAvoidAreaChange\)"; Message = 'Poster must observe navigation-indicator changes' },
+    @{ Slice = $updateBottomInset.Text; Pattern = 'px2vp\(avoidArea\.bottomRect\.height\)'; Message = 'Poster must convert the navigation inset from px to vp' },
+    @{ Slice = $literalDisappear.Text; Pattern = "\.off\('avoidAreaChange',\s*this\.handleAvoidAreaChange\)"; Message = 'Poster must remove its avoid-area observer' },
+    @{ Slice = $build.Text; Pattern = 'bottom:\s*AppSpacing\.page\s*\+\s*this\.bottomNavigationInsetVp'; Message = 'Poster Scroll content must trail its status with the live navigation-indicator inset' },
     @{ Slice = $literalBuild.Text; Pattern = 'SaveButton\([\s\S]*?\.width\(''100%''\)\s*\.height\(48\)\s*\.enabled\(!this\.actionInFlight\)'; Message = 'SaveButton must be full-width, 48vp, and disabled in flight' },
     @{ Slice = $literalBuild.Text; Pattern = 'Button\(appString\(''poem_share_poster''\)\)[\s\S]*?\.width\(''100%''\)\s*\.height\(48\)\s*\.enabled\(!this\.actionInFlight\)'; Message = 'Share button must be full-width, 48vp, and disabled in flight' }
   )) {
@@ -322,6 +356,10 @@ function Assert-PoetryPosterNativeShellContract([string]$Source) {
   }
   if ($literalPoster.Text -match '\.lineHeight\(28\)|SaveButton\s*\(|Button\s*\(|Text\(appString\(this\.statusKey\)\)') {
     throw 'Poster snapshot region must exclude fixed line height, actions, and status text'
+  }
+  $sourceOutsideStatusReveal = $cleanSource.Remove($statusReveal.Start, $statusReveal.Length)
+  if ($sourceOutsideStatusReveal -match 'this\.statusKey\s*=') {
+    throw 'Poster state transitions must reveal status through setStatusAndReveal'
   }
   if (@([regex]::Matches($cleanSource, '\.id\(poetryPosterComponentId\)')).Count -ne 1) {
     throw 'PoetryPosterPage must contain exactly one poetryPosterComponentId outside comments and string literals'

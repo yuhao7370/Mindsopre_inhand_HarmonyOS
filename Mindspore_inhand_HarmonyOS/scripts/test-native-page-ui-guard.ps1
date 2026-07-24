@@ -309,7 +309,14 @@ Assert-PoetryPosterRejected 'save button moved into poster card' ($poetryPosterS
 Assert-PoetryPosterRejected 'snapshot wait removed' ($poetryPosterSource -replace 'waitUntilRenderFinished:\s*true', 'waitUntilRenderFinished: false')
 Assert-PoetryPosterRejected 'save finally removed' ([regex]::Replace($poetryPosterSource, '(?s)(private savePoster\(\): void \{.*?\.finally\(\(\) => \{)\s*this\.actionInFlight = false;\s*(\}\))', '$1$2', 1))
 Assert-PoetryPosterRejected 'share finally removed' ([regex]::Replace($poetryPosterSource, '(?s)(private sharePoster\(\): void \{.*?\.finally\(\(\) => \{)\s*this\.actionInFlight = false;\s*(\}\))', '$1$2', 1))
-Assert-PoetryPosterRejected 'poster bottom safe area reduced to a regular page inset' ($poetryPosterSource -replace 'bottom:\s*posterActionBottomSafePadding', 'bottom: AppSpacing.page')
-Assert-PoetryPosterRejected 'poster action safe-area padding contract removed' ($poetryPosterSource -replace 'const\s+posterActionBottomSafePadding\s*:\s*number\s*=\s*AppSpacing\.xl\s*\*\s*2\s*;', '')
+Assert-PoetryPosterRejected 'poster Scroll controller binding removed' ($poetryPosterSource -replace 'Scroll\(this\.posterScroller\)', 'Scroll()')
+Assert-PoetryPosterRejected 'poster status reveal no longer waits for layout' ($poetryPosterSource -replace 'postFrameCallback', 'runScopedTask')
+Assert-PoetryPosterRejected 'poster status reveal scrolls to the wrong edge' ($poetryPosterSource -replace 'scrollEdge\(Edge\.Bottom', 'scrollEdge(Edge.Top')
+Assert-PoetryPosterRejected 'poster status bypasses reveal helper' ($poetryPosterSource -replace "this\.setStatusAndReveal\('poem_save_in_progress'\);", "this.statusKey = 'poem_save_in_progress';")
+Assert-PoetryPosterRejected 'poster navigation-indicator avoid area changed to system gesture' ($poetryPosterSource -replace 'TYPE_NAVIGATION_INDICATOR', 'TYPE_SYSTEM_GESTURE')
+Assert-PoetryPosterRejected 'poster navigation inset px-to-vp conversion removed' ($poetryPosterSource -replace 'this\.getUIContext\(\)\.px2vp\(avoidArea\.bottomRect\.height\)', 'avoidArea.bottomRect.height')
+Assert-PoetryPosterRejected 'poster avoid-area observer removed' ($poetryPosterSource -replace "hostWindow\.on\('avoidAreaChange', this\.handleAvoidAreaChange\);", '')
+Assert-PoetryPosterRejected 'poster avoid-area observer cleanup removed' ($poetryPosterSource -replace "this\.hostWindow\.off\('avoidAreaChange', this\.handleAvoidAreaChange\);", '')
+Assert-PoetryPosterRejected 'poster bottom inset changed to a fixed constant' ($poetryPosterSource -replace 'AppSpacing\.page \+ this\.bottomNavigationInsetVp', 'AppSpacing.xl')
 
 Write-Host 'Native page UI guard mutation tests passed'
