@@ -1,6 +1,10 @@
-import { abilityAccessCtrl, common, PermissionRequestResult, Permissions } from '@kit.AbilityKit';
+import { abilityAccessCtrl, common, PermissionRequestResult, Permissions, Want } from '@kit.AbilityKit';
 import { FeaturePermissionKind, FeatureWorkflow } from '../../features/runtime/FeatureWorkflowCatalog';
 
+export const harmonySettingsBundleName = 'com.huawei.hmos.settings';
+export const harmonySettingsModuleName = 'phone_settings';
+export const harmonySettingsAbilityName = 'com.huawei.hmos.settings.MainAbility';
+export const appDetailsSettingsAction = 'action.settings.app.info';
 export const cameraPermissionName: Permissions = 'ohos.permission.CAMERA';
 export const mediaPermissionName: Permissions = 'ohos.permission.READ_IMAGEVIDEO';
 export const internetPermissionName: Permissions = 'ohos.permission.INTERNET';
@@ -24,6 +28,18 @@ export interface OpenPermissionSettingsAction {
   readonly permissions: Array<Permissions>;
 }
 
+export function harmonySettingsFallbackWant(bundleName: string): Want {
+  return {
+    bundleName: harmonySettingsBundleName,
+    moduleName: harmonySettingsModuleName,
+    abilityName: harmonySettingsAbilityName,
+    action: appDetailsSettingsAction,
+    parameters: {
+      settingsParamBundleName: bundleName
+    }
+  };
+}
+
 export function permissionRequestSummary(
   permissionNames: Array<Permissions>,
   authResults: Array<number>
@@ -39,6 +55,10 @@ export function permissionRequestSummary(
     requested: permissionNames,
     denied: denied
   };
+}
+
+export function shouldOpenHarmonySettingsFallback(summary: PermissionRequestSummary): boolean {
+  return !summary.ok && summary.denied.length > 0;
 }
 
 export function runtimeOpenPermissionSettingsAction(
@@ -126,13 +146,25 @@ export class PermissionService {
     const manager = abilityAccessCtrl.createAtManager();
     try {
       const result: Array<number> = await manager.requestPermissionOnSetting(context, action.permissions);
-      return permissionRequestSummary(action.permissions, result);
+      const summary = permissionRequestSummary(action.permissions, result);
+      if (shouldOpenHarmonySettingsFallback(summary)) {
+        await this.openHarmonySettingsFallback(context);
+      }
+      return summary;
     } catch (_) {
+      await this.openHarmonySettingsFallback(context);
       return {
         ok: false,
         requested: action.permissions,
         denied: action.permissions
       };
+    }
+  }
+
+  private async openHarmonySettingsFallback(context: common.UIAbilityContext): Promise<void> {
+    try {
+      await context.startAbility(harmonySettingsFallbackWant(context.applicationInfo.name));
+    } catch (_) {
     }
   }
 

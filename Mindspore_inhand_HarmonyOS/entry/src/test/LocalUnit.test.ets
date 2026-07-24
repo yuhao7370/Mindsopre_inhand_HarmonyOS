@@ -472,11 +472,13 @@ import {
 import { featureRuntimeOverlayPreviewImageOrientationFromRotationDegrees } from '../main/ets/features/runtime/FeatureRuntimeOverlayPreview';
 import {
   declaredPermissionNames,
+  harmonySettingsFallbackWant,
   permissionRequestSummary,
   runtimeOpenPermissionSettingsAction,
   runtimePermissionRecoveryActionForWorkflow,
   runtimePermissionRunActionForWorkflow,
-  runtimePermissionNamesForWorkflow
+  runtimePermissionNamesForWorkflow,
+  shouldOpenHarmonySettingsFallback
 } from '../main/ets/services/permissions/PermissionService';
 import {
   shouldConsumeIndexBackPress
@@ -9457,6 +9459,16 @@ export default function localUnitTest() {
       expect(JSON.stringify(runtimeSettingsAction.permissions))
         .assertEqual('["ohos.permission.READ_IMAGEVIDEO"]');
       expect(runtimeOpenPermissionSettingsAction([]).openSettings).assertFalse();
+      const fallbackWant = harmonySettingsFallbackWant('com.example.mindspore');
+      expect(fallbackWant.bundleName).assertEqual('com.huawei.hmos.settings');
+      expect(fallbackWant.moduleName).assertEqual('phone_settings');
+      expect(fallbackWant.abilityName).assertEqual('com.huawei.hmos.settings.MainAbility');
+      expect(JSON.stringify(fallbackWant.parameters))
+        .assertEqual('{"settingsParamBundleName":"com.example.mindspore"}');
+      expect(shouldOpenHarmonySettingsFallback(deniedSummary)).assertTrue();
+      expect(shouldOpenHarmonySettingsFallback(
+        permissionRequestSummary(['ohos.permission.CAMERA'], [0])
+      )).assertFalse();
       liveCameraRouteNames.forEach((routeName: string) => {
         const workflow: FeatureWorkflow = workflowForRoute(routeName)!;
         expect(runtimePermissionRecoveryActionForWorkflow(
