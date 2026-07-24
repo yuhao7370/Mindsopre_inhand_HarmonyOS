@@ -108,7 +108,10 @@ function New-ValidFixture([string]$Root) {
               .maxFontScale(1.6)
               .onClick(() => this.openRuntimePermissionSettings())
           }
+          .width('calc(100% - 24vp)')
+          .padding(AppSpacing.md)
         }
+        .width('calc(100% - 40vp)')
       }
       .width('100%')
       .height('100%')
@@ -307,6 +310,18 @@ try {
   Assert-Rejected $valid 'unbounded-settings-scale' `
     "            Button(appString('app_permission_by_hand'), { type: ButtonType.Normal })`n              .constraintSize({ minHeight: 48 })`n              .maxFontScale(1.6)" `
     "            Button(appString('app_permission_by_hand'), { type: ButtonType.Normal })`n              .constraintSize({ minHeight: 48 })"
+  Assert-Rejected $valid 'runtime-title-string-font-scale-decoy' `
+    "      Text(appString(this.titleKey))`n        .layoutWeight(1)`n        .maxFontScale(1.6)`n        .maxLines(2)" `
+    "      Text(appString(this.titleKey))`n        .layoutWeight(1)`n        .accessibilityDescription('.maxFontScale(1.6)')`n        .maxLines(2)"
+  Assert-Rejected $valid 'status-template-font-scale-decoy' `
+    "    Text(appString(this.statusKey))`n      .maxFontScale(1.6)" `
+    "    Text(appString(this.statusKey))`n      .accessibilityDescription(``.maxFontScale(1.6)``)"
+  Assert-Rejected $valid 'recovery-message-string-font-scale-decoy' `
+    "            Text(appString(this.statusKey))`n              .maxFontScale(1.6)" `
+    "            Text(appString(this.statusKey))`n              .accessibilityDescription('.maxFontScale(1.6)')"
+  Assert-Rejected $valid 'recovery-card-percentage-clipping' `
+    "          .width('calc(100% - 24vp)')`n          .padding(AppSpacing.md)`n        }`n        .width('calc(100% - 40vp)')" `
+    "          .width('100%')`n          .padding(AppSpacing.md)`n        }`n        .width('100%')`n        .margin(AppSpacing.page)"
   Assert-Rejected $valid 'swap-recovery-handlers' `
     'this.retryRuntimePermission()' `
     'this.openRuntimePermissionSettings()'

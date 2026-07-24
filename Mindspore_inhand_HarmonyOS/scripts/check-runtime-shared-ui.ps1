@@ -36,14 +36,24 @@ function Assert-NotContains([string]$Text, [string]$Pattern, [string]$Message) {
   }
 }
 
+function Assert-CodeLineCount([string]$Text, [string]$Line, [int]$Expected, [string]$Message) {
+  $pattern = "(?m)^[\t ]*$([regex]::Escape($Line))[\t ]*$"
+  $actual = [regex]::Matches($Text, $pattern).Count
+  if ($actual -ne $Expected) {
+    throw "Runtime shared UI guard failed: $Message Expected $Expected, found $actual."
+  }
+}
+
 $toolbar = Get-Builder 'runtimeActionToolbar(showActions: boolean) {' 'runtimeStatusBar() {'
 Assert-Contains $toolbar '\.constraintSize\(\{\s*minHeight:\s*56\s*\}\)' 'runtime title bar must be content-driven with a 56vp minimum.'
-Assert-Contains $toolbar 'Text\(appString\(this\.titleKey\)\)[\s\S]*?\.maxFontScale\(1\.6\)[\s\S]*?\.maxLines\(2\)' 'runtime title must cap extreme font scaling and allow two lines.'
+Assert-Contains $toolbar 'Text\(appString\(this\.titleKey\)\)(?:(?!\bif\s*\()[\s\S])*?\.maxFontScale\(1\.6\)(?:(?!\bif\s*\()[\s\S])*?\.maxLines\(2\)' 'runtime title must cap extreme font scaling and allow two lines.'
+Assert-CodeLineCount $toolbar '.maxFontScale(1.6)' 1 'runtime title must own one executable font-scale cap.'
 Assert-NotContains $toolbar '\.height\(56\)' 'runtime title bar must not have a fixed 56vp height.'
 
 $status = Get-Builder 'runtimeStatusBar() {' 'runtimeCameraSwitchAction() {'
 Assert-Contains $status 'Text\(appString\(this\.statusKey\)\)' 'shared status bar must expose the current status.'
 Assert-Contains $status 'Text\(appString\(this\.statusKey\)\)[\s\S]*?\.maxFontScale\(1\.6\)' 'shared status bar must remain bounded at extreme font scale.'
+Assert-CodeLineCount $status '.maxFontScale(1.6)' 1 'shared status bar must own one executable font-scale cap.'
 Assert-Contains $status "(?m)^[\t ]*\.backgroundColor\('#B31F2937'\)[\t ]*$" 'shared status bar must use a bounded high-contrast surface.'
 Assert-Contains $status '\.constraintSize\(\{\s*minHeight:\s*44\s*\}\)' 'shared status bar must remain readable at large font scale.'
 Assert-NotContains $status '\.height\(' 'shared status bar must be content-driven.'
@@ -58,9 +68,13 @@ Assert-Contains $recovery "(?m)^[\t ]*\.backgroundColor\('#66000000'\)[\t ]*$" '
 Assert-Contains $recovery '\.hitTestBehavior\(HitTestMode\.Default\)' 'permission recovery must keep child actions interactive while blocking underlying sibling targets.'
 Assert-NotContains $recovery '\.hitTestBehavior\(HitTestMode\.Block\)' 'permission recovery must not block its own child actions.'
 Assert-Contains $recovery 'Scroll\(\)\s*\{' 'permission recovery card must be scrollable/content-driven.'
+Assert-Contains $recovery "\.width\('calc\(100% - 40vp\)'\)" 'permission recovery card must reserve both 20vp page insets before child percentage sizing.'
+Assert-Contains $recovery "Column\(\)\s*\{[\s\S]*?\.width\('calc\(100% - 24vp\)'\)[\s\S]*?\.padding\(AppSpacing\.md\)" 'permission recovery content must reserve both 12vp paddings inside the card width.'
+Assert-NotContains $recovery '\.margin\(AppSpacing\.page\)' 'permission recovery must not clip a 100%-wide card by applying outer margin after percentage sizing.'
 Assert-Contains $recovery 'Text\(appString\(this\.statusKey\)\)(?:(?!Button\()[\s\S])*?\.maxFontScale\(1\.6\)' 'permission recovery message must not clip at extreme font scale.'
 Assert-Contains $recovery "Button\(appString\('splash_permission_retry'\)\)(?:(?!\.onClick)[\s\S])*?\.constraintSize\(\{\s*minHeight:\s*48\s*\}\)(?:(?!\.onClick)[\s\S])*?\.maxFontScale\(1\.6\)(?:(?!\.onClick)[\s\S])*?\.onClick\(\(\)\s*=>\s*this\.retryRuntimePermission\(\)\)" 'Retry must remain the primary 48vp action with bounded text and its handler.'
 Assert-Contains $recovery "Button\(appString\('app_permission_by_hand'\),\s*\{\s*type:\s*ButtonType\.Normal\s*\}\)(?:(?!\.onClick)[\s\S])*?\.constraintSize\(\{\s*minHeight:\s*48\s*\}\)(?:(?!\.onClick)[\s\S])*?\.maxFontScale\(1\.6\)(?:(?!\.onClick)[\s\S])*?\.onClick\(\(\)\s*=>\s*this\.openRuntimePermissionSettings\(\)\)" 'Settings must remain the secondary 48vp action with bounded text and its handler.'
+Assert-CodeLineCount $recovery '.maxFontScale(1.6)' 3 'permission recovery message and two actions must own executable font-scale caps.'
 $retryIndex = $recovery.IndexOf("Button(appString('splash_permission_retry'))", [StringComparison]::Ordinal)
 $settingsIndex = $recovery.IndexOf("Button(appString('app_permission_by_hand')", [StringComparison]::Ordinal)
 if ($retryIndex -lt 0 -or $settingsIndex -lt 0 -or $retryIndex -ge $settingsIndex) {
@@ -70,7 +84,8 @@ Assert-NotContains $recovery '\.height\(36\)' 'permission recovery actions must 
 
 $portrait = Get-Builder 'portraitSegmentationToolbar() {' 'portraitSegmentationComposite() {'
 Assert-Contains $portrait '\.constraintSize\(\{\s*minHeight:\s*56\s*\}\)' 'portrait title bar must be content-driven with a 56vp minimum.'
-Assert-Contains $portrait 'Text\(appString\(this\.titleKey\)\)[\s\S]*?\.maxFontScale\(1\.6\)[\s\S]*?\.maxLines\(2\)' 'portrait title must cap extreme font scaling and allow two lines.'
+Assert-Contains $portrait 'Text\(appString\(this\.titleKey\)\)(?:(?!\bif\s*\()[\s\S])*?\.maxFontScale\(1\.6\)(?:(?!\bif\s*\()[\s\S])*?\.maxLines\(2\)' 'portrait title must cap extreme font scaling and allow two lines.'
+Assert-CodeLineCount $portrait '.maxFontScale(1.6)' 1 'portrait title must own one executable font-scale cap.'
 Assert-Contains $portrait "\.accessibilityText\(\`$r\('app\.string\.action_back'\)\)" 'portrait back action must have a localized semantic name.'
 Assert-Contains $portrait "if \(this\.liveCameraSwitchAvailable\)[\s\S]*?\.width\(48\)[\s\S]*?\.height\(48\)[\s\S]*?\.accessibilityText\(appString\('feature_runtime_switch_camera'\) as Resource\)[\s\S]*?this\.switchLiveCamera\(\)" 'portrait camera switch must retain its policy and handler in a 48vp semantic target.'
 Assert-Contains $portrait "SaveButton\([\s\S]*?\.width\(48\)[\s\S]*?\.height\(48\)[\s\S]*?compositeSegmentationSaveReady\([\s\S]*?this\.saveResultComponentImage\(segmentationBackgroundReplacementComponentId\)" 'portrait save action must retain its 48vp native control and readiness gate.'

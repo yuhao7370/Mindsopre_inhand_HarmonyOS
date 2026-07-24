@@ -661,6 +661,15 @@ foreach ($state in $states) {
     if (-not [string]::IsNullOrWhiteSpace($label) -and ($bounds.Width -le 0 -or $bounds.Height -le 0)) {
       Fail "state '$name' contains a hidden/clipped label."
     }
+    if (-not [string]::IsNullOrWhiteSpace($label)) {
+      $originalBoundsText = Attr $node 'origBounds'
+      $originalBounds = Parse-Bounds $originalBoundsText
+      if ($null -eq $originalBounds -or
+        $originalBounds.Left -ne $bounds.Left -or $originalBounds.Top -ne $bounds.Top -or
+        $originalBounds.Right -ne $bounds.Right -or $originalBounds.Bottom -ne $bounds.Bottom) {
+        Fail "state '$name' contains a visibly clipped label."
+      }
+    }
     if ((Attr $node 'clickable') -eq 'true') {
       if (($bounds.Width / $density) -lt $minTargetVp -or ($bounds.Height / $density) -lt $minTargetVp) {
         Fail "state '$name' contains an undersized clickable target."

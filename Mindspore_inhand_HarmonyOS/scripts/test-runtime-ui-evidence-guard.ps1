@@ -46,6 +46,7 @@ function Attrs(
     pagePath = ''
     type = $Type
     bounds = $Bounds
+    origBounds = $Bounds
     text = $Text
     originalText = $Text
     description = ''
@@ -341,6 +342,42 @@ $mainHap = Join-Path $PSScriptRoot '..\entry\build\default\outputs\default\entry
   return $manifestPath
 }
 
+function Convert-FixtureToNestedProject([string]$ManifestPath) {
+  $manifest = Get-Content -LiteralPath $ManifestPath -Raw -Encoding utf8 | ConvertFrom-Json
+  $gitRoot = [string]$manifest.repositoryRoot
+  $projectName = 'Mindspore_inhand_HarmonyOS'
+  $projectRoot = Join-Path $gitRoot $projectName
+  Invoke-Git $gitRoot @('restore', '--', 'entry/src/main/ets/pages/Candidate.ets') | Out-Null
+  [IO.File]::WriteAllText((Join-Path $gitRoot '.gitignore'), "**/entry/build/`n", $utf8)
+  [IO.Directory]::CreateDirectory($projectRoot) | Out-Null
+  Invoke-Git $gitRoot @('mv', 'entry', 'scripts', $projectName) | Out-Null
+  Invoke-Git $gitRoot @('add', '--', '.gitignore') | Out-Null
+  Invoke-Git $gitRoot @('commit', '--quiet', '-m', 'nest fixture project') | Out-Null
+
+  $candidateFile = Join-Path $projectRoot 'entry/src/main/ets/pages/Candidate.ets'
+  [IO.File]::WriteAllText($candidateFile, "candidate change`n", $utf8)
+  $candidateDiffPath = [string]$manifest.candidateDiffPath
+  [IO.File]::WriteAllText(
+    $candidateDiffPath,
+    (Invoke-Git $projectRoot @('diff', '--binary', 'HEAD', '--')),
+    $utf8
+  )
+  $hapPath = Join-Path $projectRoot 'entry/build/default/outputs/default/entry-default-unsigned.hap'
+  Write-Hap $hapPath
+  $receiptWriterPath = Join-Path $projectRoot 'scripts/write-runtime-ui-build-receipt.ps1'
+  & $receiptWriterPath -HapPath $hapPath | Out-Null
+
+  $manifest.repositoryRoot = $projectRoot
+  $manifest.candidateDiffSha256 =
+    (Get-FileHash -LiteralPath $candidateDiffPath -Algorithm SHA256).Hash.ToLowerInvariant()
+  $manifest.hapPath = $hapPath
+  $manifest.hapSha256 =
+    (Get-FileHash -LiteralPath $hapPath -Algorithm SHA256).Hash.ToLowerInvariant()
+  $manifest.buildReceiptPath = "$hapPath.runtime-ui-build.json"
+  [IO.File]::WriteAllText($ManifestPath, ($manifest | ConvertTo-Json -Depth 20), $utf8)
+  return $ManifestPath
+}
+
 function Assert-Rejected([string]$Name, [scriptblock]$Mutation) {
   $root = Join-Path $tempRoot $Name
   $manifestPath = New-Fixture $root
@@ -358,6 +395,18 @@ function Assert-Rejected([string]$Name, [scriptblock]$Mutation) {
 try {
   $validPath = New-Fixture (Join-Path $tempRoot 'valid')
   & $guardPath -ManifestPath $validPath | Out-Null
+  $nestedValidPath = Convert-FixtureToNestedProject (
+    New-Fixture (Join-Path $tempRoot 'nested-valid')
+  )
+  & $guardPath -ManifestPath $nestedValidPath | Out-Null
+  $nestedManifest = Get-Content -LiteralPath $nestedValidPath -Raw -Encoding utf8 | ConvertFrom-Json
+  $nestedManifest.repositoryRoot = Split-Path -Parent ([string]$nestedManifest.repositoryRoot)
+  [IO.File]::WriteAllText($nestedValidPath, ($nestedManifest | ConvertTo-Json -Depth 20), $utf8)
+  $nestedWrongRootRejected = $false
+  try { & $guardPath -ManifestPath $nestedValidPath | Out-Null } catch { $nestedWrongRootRejected = $true }
+  if (-not $nestedWrongRootRejected) {
+    throw 'Runtime evidence guard accepted a nested-project manifest bound to the Git root.'
+  }
 
   Assert-Rejected 'task' { param($m, $l, $r) $m.task = 0 }
   Assert-Rejected 'repository-root' { param($m, $l, $r) $m.repositoryRoot = $r }
@@ -497,6 +546,11 @@ try {
   Assert-Rejected 'undersized-target' {
     param($m, $l, $r)
     $l.children[0].children[0].children[0].children[2].attributes.bounds = '[70,2100][210,2240]'
+    $l.children[0].children[0].children[0].children[2].attributes.origBounds = '[70,2100][210,2240]'
+  }
+  Assert-Rejected 'clipped-required-action-orig-bounds' {
+    param($m, $l, $r)
+    $l.children[0].children[0].children[0].children[2].attributes.origBounds = '[70,2100][700,2280]'
   }
   Assert-Rejected 'outside-app' {
     param($m, $l, $r)

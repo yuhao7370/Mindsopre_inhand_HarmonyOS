@@ -3308,14 +3308,13 @@ struct FeatureRuntimePage {
               .margin({ top: AppSpacing.sm })
               .onClick(() => this.openRuntimePermissionSettings())
           }
-          .width('100%')
+          .width('calc(100% - 24vp)')
           .padding(AppSpacing.md)
         }
-        .width('100%')
+        .width('calc(100% - 40vp)')
         .constraintSize({ maxWidth: 520, maxHeight: 520 })
         .backgroundColor(AppColor.cardBackground)
         .borderRadius(AppRadius.card)
-        .margin(AppSpacing.page)
       }
       .width('100%')
       .height('100%')
