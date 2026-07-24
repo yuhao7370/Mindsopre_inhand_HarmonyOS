@@ -1,4 +1,5 @@
 import { common } from '@kit.AbilityKit';
+import { window } from '@kit.ArkUI';
 import router from '@ohos.router';
 import { NativePageTitleBar } from '../common/components/NativePageTitleBar';
 import { AppStringKey, appString } from '../common/i18n/AppStrings';
@@ -27,10 +28,28 @@ struct QrCodePage {
   @State statusKey: AppStringKey = 'empty';
   @State showSaveSheet: boolean = false;
   @State saveInFlight: boolean = false;
+  @State bottomNavigationInsetVp: number = 0;
+  private hostWindow?: window.Window;
+  private observingBottomNavigationInset: boolean = false;
 
-  aboutToAppear() {
+  private readonly handleAvoidAreaChange = (options: window.AvoidAreaOptions): void => {
+    if (options.type === window.AvoidAreaType.TYPE_NAVIGATION_INDICATOR) {
+      this.updateBottomNavigationInset(options.area);
+    }
+  };
+
+  aboutToAppear(): void {
     const params = router.getParams() as QrCodePageParams;
     this.titleKey = params?.titleKey ?? 'me_my_qr_code';
+    this.startObservingBottomNavigationInset();
+  }
+
+  aboutToDisappear(): void {
+    this.observingBottomNavigationInset = false;
+    if (this.hostWindow) {
+      this.hostWindow.off('avoidAreaChange', this.handleAvoidAreaChange);
+      this.hostWindow = undefined;
+    }
   }
 
   private uiAbilityContext(): common.UIAbilityContext | undefined {
@@ -39,6 +58,33 @@ struct QrCodePage {
       return undefined;
     }
     return context as common.UIAbilityContext;
+  }
+
+  private updateBottomNavigationInset(avoidArea: window.AvoidArea): void {
+    this.bottomNavigationInsetVp = avoidArea.visible ?
+      this.getUIContext().px2vp(avoidArea.bottomRect.height) : 0;
+  }
+
+  private startObservingBottomNavigationInset(): void {
+    const context = this.uiAbilityContext();
+    if (context === undefined) {
+      return;
+    }
+    this.observingBottomNavigationInset = true;
+    window.getLastWindow(context)
+      .then((hostWindow: window.Window) => {
+        if (!this.observingBottomNavigationInset) {
+          return;
+        }
+        this.hostWindow = hostWindow;
+        this.updateBottomNavigationInset(
+          hostWindow.getWindowAvoidArea(window.AvoidAreaType.TYPE_NAVIGATION_INDICATOR)
+        );
+        hostWindow.on('avoidAreaChange', this.handleAvoidAreaChange);
+      })
+      .catch(() => {
+        this.bottomNavigationInsetVp = 0;
+      });
   }
 
   private saveQrCodeImage(): Promise<QrCodeSaveResult> {
@@ -115,12 +161,17 @@ struct QrCodePage {
         .width('100%')
         .height(48)
         .backgroundColor(Color.Transparent)
-        .fontColor(AppColor.accent)
+        .fontColor(AppColor.textPrimary)
         .border({ width: 1, color: AppColor.accent, radius: AppRadius.button })
         .onClick(() => this.applySaveSheetAction('cancel'))
     }
     .width('100%')
-    .padding({ left: AppSpacing.md, right: AppSpacing.md, top: AppSpacing.md, bottom: AppSpacing.xl })
+    .padding({
+      left: AppSpacing.md,
+      right: AppSpacing.md,
+      top: AppSpacing.md,
+      bottom: AppSpacing.md + this.bottomNavigationInsetVp
+    })
   }
 
   build() {

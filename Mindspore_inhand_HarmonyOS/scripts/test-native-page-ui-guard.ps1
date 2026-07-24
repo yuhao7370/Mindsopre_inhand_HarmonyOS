@@ -174,6 +174,39 @@ struct QrCodePage {
   @State showSaveSheet: boolean = false;
   @State saveInFlight: boolean = false;
   @State statusKey: AppStringKey = 'empty';
+  @State bottomNavigationInsetVp: number = 0;
+  private hostWindow?: window.Window;
+
+  private readonly handleAvoidAreaChange = (options: window.AvoidAreaOptions): void => {
+    if (options.type === window.AvoidAreaType.TYPE_NAVIGATION_INDICATOR) {
+      this.updateBottomNavigationInset(options.area);
+    }
+  };
+
+  aboutToAppear(): void {
+    this.startObservingBottomNavigationInset();
+  }
+
+  aboutToDisappear(): void {
+    if (this.hostWindow) {
+      this.hostWindow.off('avoidAreaChange', this.handleAvoidAreaChange);
+    }
+  }
+
+  private updateBottomNavigationInset(avoidArea: window.AvoidArea): void {
+    this.bottomNavigationInsetVp = avoidArea.visible ?
+      this.getUIContext().px2vp(avoidArea.bottomRect.height) : 0;
+  }
+
+  private startObservingBottomNavigationInset(): void {
+    window.getLastWindow(this.uiAbilityContext()).then((hostWindow: window.Window) => {
+      this.hostWindow = hostWindow;
+      this.updateBottomNavigationInset(
+        hostWindow.getWindowAvoidArea(window.AvoidAreaType.TYPE_NAVIGATION_INDICATOR)
+      );
+      hostWindow.on('avoidAreaChange', this.handleAvoidAreaChange);
+    });
+  }
 
   private applySaveSheetAction(_action: QrCodeSaveSheetAction): void {}
 
@@ -187,10 +220,16 @@ struct QrCodePage {
       }
       Button(appString('app_cancel'))
         .backgroundColor(Color.Transparent)
-        .fontColor(AppColor.accent)
+        .fontColor(AppColor.textPrimary)
         .border({ width: 1, color: AppColor.accent, radius: AppRadius.button })
+        .onClick(() => this.applySaveSheetAction('cancel'))
     }
-    .padding({ left: AppSpacing.md, right: AppSpacing.md, top: AppSpacing.md, bottom: AppSpacing.xl })
+    .padding({
+      left: AppSpacing.md,
+      right: AppSpacing.md,
+      top: AppSpacing.md,
+      bottom: AppSpacing.md + this.bottomNavigationInsetVp
+    })
   }
 
   build() {
@@ -236,7 +275,14 @@ Assert-QrCodeRejected 'dismiss reason mapping removed' ($qrFixture -replace 'qrC
 Assert-QrCodeRejected 'QR accessible name resource cast removed' ($qrFixture -replace 'appString\(this\.titleKey\) as Resource', 'appString(this.titleKey)')
 Assert-QrCodeRejected 'cancel changed back to a primary action' ($qrFixture -replace '\.backgroundColor\(Color\.Transparent\)', '.backgroundColor(AppColor.primary)')
 Assert-QrCodeRejected 'cancel outline removed' ($qrFixture -replace '\.border\(\{ width: 1, color: AppColor\.accent, radius: AppRadius\.button \}\)', '')
-Assert-QrCodeRejected 'sheet bottom safe-area padding reduced to regular padding' ($qrFixture -replace 'bottom: AppSpacing\.xl', 'bottom: AppSpacing.md')
+Assert-QrCodeRejected 'cancel label changed to another localized action' ($qrFixture -replace "appString\('app_cancel'\)", "appString('poem_share_poster')")
+Assert-QrCodeRejected 'navigation-indicator avoid area changed to system gesture' ($qrFixture -replace 'TYPE_NAVIGATION_INDICATOR', 'TYPE_SYSTEM_GESTURE')
+Assert-QrCodeRejected 'navigation inset px-to-vp conversion removed' ($qrFixture -replace 'this\.getUIContext\(\)\.px2vp\(avoidArea\.bottomRect\.height\)', 'avoidArea.bottomRect.height')
+Assert-QrCodeRejected 'avoid-area observer removed' ($qrFixture -replace "hostWindow\.on\('avoidAreaChange', this\.handleAvoidAreaChange\);", '')
+Assert-QrCodeRejected 'avoid-area observer cleanup removed' ($qrFixture -replace "this\.hostWindow\.off\('avoidAreaChange', this\.handleAvoidAreaChange\);", '')
+Assert-QrCodeRejected 'sheet bottom inset changed to a fixed constant' ($qrFixture -replace 'AppSpacing\.md \+ this\.bottomNavigationInsetVp', 'AppSpacing.xl')
+$qrReorderedCancelStyle = $qrFixture -replace '(?s)(\.backgroundColor\(Color\.Transparent\)\s*)(\.fontColor\(AppColor\.textPrimary\)\s*)', '$2$1'
+Assert-QrCodePageNativeShellContract $qrReorderedCancelStyle
 
 function Assert-PoetryPosterRejected([string]$Name, [string]$Source) {
   try {

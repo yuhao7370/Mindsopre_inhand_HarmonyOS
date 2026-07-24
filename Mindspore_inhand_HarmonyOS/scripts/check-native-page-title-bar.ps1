@@ -198,6 +198,20 @@ function Assert-QrCodePageNativeShellContract([string]$Source) {
     'QrCodePage saveActionSheet() is missing an opening brace' `
     'QrCodePage saveActionSheet() is missing a closing brace'
 
+  $literalCancel = [regex]::Match(
+    $literalSheet.Text,
+    "Button\s*\(\s*appString\(\s*'app_cancel'\s*\)\s*\)"
+  )
+  if (-not $literalCancel.Success) {
+    throw 'QrCodePage native sheet must use app_cancel for its Cancel action'
+  }
+  $cancelOnClickIndex = $sheet.Text.IndexOf('.onClick', $literalCancel.Index)
+  if ($cancelOnClickIndex -lt 0) {
+    throw 'QrCodePage Cancel action must define an onClick callback'
+  }
+  $cancelStyle = $sheet.Text.Substring($literalCancel.Index, $cancelOnClickIndex - $literalCancel.Index)
+  $literalCancelTail = $literalSheet.Text.Substring($literalCancel.Index)
+
   foreach ($requirement in @(
     @{ Pattern = 'NativePageTitleBar\s*\('; Message = 'QrCodePage build() must use NativePageTitleBar' },
     @{ Pattern = 'showMore\s*:\s*true'; Message = 'QrCodePage title bar must expose the more action' },
@@ -217,9 +231,7 @@ function Assert-QrCodePageNativeShellContract([string]$Source) {
   }
   foreach ($requirement in @(
     @{ Pattern = 'SaveButton\s*\('; Message = 'QrCodePage native sheet must use SaveButton' },
-    @{ Pattern = '\.enabled\(\s*!this\.saveInFlight\s*\)'; Message = 'QrCodePage SaveButton must disable while saving' },
-    @{ Pattern = 'Button\s*\(\s*appString\(\s*''\s*''\s*\)\s*\)[\s\S]*?\.backgroundColor\(Color\.Transparent\)[\s\S]*?\.fontColor\(AppColor\.accent\)[\s\S]*?\.border\(\{\s*width:\s*1,\s*color:\s*AppColor\.accent,\s*radius:\s*AppRadius\.button\s*\}\)'; Message = 'QrCodePage Cancel action must remain a transparent outlined secondary action' },
-    @{ Pattern = '\.padding\(\{\s*left:\s*AppSpacing\.md,\s*right:\s*AppSpacing\.md,\s*top:\s*AppSpacing\.md,\s*bottom:\s*AppSpacing\.xl\s*\}\)'; Message = 'QrCodePage native sheet must reserve explicit bottom safe-area padding' }
+    @{ Pattern = '\.enabled\(\s*!this\.saveInFlight\s*\)'; Message = 'QrCodePage SaveButton must disable while saving' }
   )) {
     if ($sheet.Text -notmatch $requirement.Pattern) {
       throw $requirement.Message
@@ -227,6 +239,36 @@ function Assert-QrCodePageNativeShellContract([string]$Source) {
   }
   if ($literalSheet.Text -notmatch "appString\('image_save_failed'\)") {
     throw 'QrCodePage native sheet must show save failures'
+  }
+  foreach ($requirement in @(
+    @{ Pattern = '\.backgroundColor\(Color\.Transparent\)'; Message = 'QrCodePage Cancel action must remain transparent' },
+    @{ Pattern = '\.fontColor\(AppColor\.textPrimary\)'; Message = 'QrCodePage Cancel action must use readable primary text' },
+    @{ Pattern = '\.border\(\{\s*width:\s*1,\s*color:\s*AppColor\.accent,\s*radius:\s*AppRadius\.button\s*\}\)'; Message = 'QrCodePage Cancel action must remain outlined' }
+  )) {
+    if ($cancelStyle -notmatch $requirement.Pattern) {
+      throw $requirement.Message
+    }
+  }
+  if ($literalCancelTail -notmatch "\.onClick\(\(\)\s*=>\s*this\.applySaveSheetAction\('cancel'\)\)") {
+    throw 'QrCodePage Cancel action must retain its reducer callback'
+  }
+  foreach ($requirement in @(
+    @{ Pattern = 'window\.getLastWindow\s*\('; Message = 'QrCodePage must resolve its native host window' },
+    @{ Pattern = 'getWindowAvoidArea\(window\.AvoidAreaType\.TYPE_NAVIGATION_INDICATOR\)'; Message = 'QrCodePage must read the native navigation-indicator avoid area' },
+    @{ Pattern = 'this\.getUIContext\(\)\.px2vp\(avoidArea\.bottomRect\.height\)'; Message = 'QrCodePage must convert the native bottom avoid area from px to vp' },
+    @{ Pattern = 'bottom:\s*AppSpacing\.md\s*\+\s*this\.bottomNavigationInsetVp'; Message = 'QrCodePage sheet padding must include the live navigation-indicator inset' }
+  )) {
+    if ($cleanSource -notmatch $requirement.Pattern) {
+      throw $requirement.Message
+    }
+  }
+  foreach ($requirement in @(
+    @{ Pattern = "\.on\('avoidAreaChange',\s*this\.handleAvoidAreaChange\)"; Message = 'QrCodePage must observe native avoid-area changes' },
+    @{ Pattern = "\.off\('avoidAreaChange',\s*this\.handleAvoidAreaChange\)"; Message = 'QrCodePage must release its native avoid-area observer' }
+  )) {
+    if ($literalSource -notmatch $requirement.Pattern) {
+      throw $requirement.Message
+    }
   }
 }
 
