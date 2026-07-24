@@ -1888,19 +1888,6 @@ struct FeatureRuntimePage {
     return this.runtimePermissionRecoveryAction() !== 'none';
   }
 
-  private runPoseNetSampleDetection(): void {
-    const workflow = workflowForRoute(this.routeName);
-    if (!usesAndroidPoseNetStillLayout(workflow)) {
-      return;
-    }
-    const action = workflow === undefined ? undefined : initialPreviewActionForWorkflow(workflow);
-    if (action === undefined) {
-      return;
-    }
-    this.applyPickResult({ ok: true, uri: action.uri }, action.readyKey, action.inputKind, false);
-    this.runWorkflow();
-  }
-
   private runPrimaryAction(): void {
     if (this.runtimePermissionRunAction() === 'retryCameraInput') {
       this.prepareInput('camera');
@@ -2587,6 +2574,18 @@ struct FeatureRuntimePage {
       return 1;
     }
     return this.poseImageWidth / this.poseImageHeight;
+  }
+
+  private poseNetStillPreviewWidthPercent(): number {
+    const sourceAspect = this.poseAspectRatio();
+    const cardAspect = 4 / 3;
+    return sourceAspect >= cardAspect ? 100 : sourceAspect / cardAspect * 100;
+  }
+
+  private poseNetStillPreviewHeightPercent(): number {
+    const sourceAspect = this.poseAspectRatio();
+    const cardAspect = 4 / 3;
+    return sourceAspect >= cardAspect ? cardAspect / sourceAspect * 100 : 100;
   }
 
   private objectDetectionAspectRatio(): number {
@@ -3573,7 +3572,7 @@ struct FeatureRuntimePage {
               ForEach(this.resultRows, (row: AiRunResultRow) => {
                 Text() {
                   Span(appString(row.labelKey))
-                  Span('\uFF1A')
+                  Span(appString('feature_runtime_result_separator'))
                   Span(this.resultRowValue(row))
                 }
                 .fontSize(14)
@@ -4213,7 +4212,7 @@ struct FeatureRuntimePage {
 
   @Builder
   poseNetStillAndroidPreview() {
-    Stack({ alignContent: Alignment.TopStart }) {
+    Stack({ alignContent: Alignment.Center }) {
       if (this.poseImageUri.length > 0 && this.posePoints.length > 0) {
         Stack({ alignContent: Alignment.TopStart }) {
           Image(this.poseNetStillImageSource(this.poseImageUri))
@@ -4228,87 +4227,138 @@ struct FeatureRuntimePage {
             this.poseNetStillPosePoint(point)
           }, (point: PosePoint) => `${point.type}-${point.x}-${point.y}-${point.score}`)
         }
-        .width('100%')
-        .aspectRatio(this.poseAspectRatio())
+        .width(this.percentLength(this.poseNetStillPreviewWidthPercent()))
+        .height(this.percentLength(this.poseNetStillPreviewHeightPercent()))
         .clip(true)
       } else if (this.imageInputUri.length > 0) {
         Image(this.poseNetStillImageSource(this.imageInputUri))
           .width('100%')
+          .height('100%')
           .objectFit(ImageFit.Contain)
       }
     }
     .width('100%')
-    .layoutWeight(9)
+    .height('100%')
     .clip(true)
-    .backgroundColor('#E6E6E6')
+    .backgroundColor(AppColor.cardBackground)
   }
 
   @Builder
   poseNetStillAndroidLayout() {
-    Stack({ alignContent: Alignment.TopStart }) {
-      Column() {
-        this.runtimeActionToolbar(false)
-        Row() {
-        }
-        .width('100%')
-        .height(1)
-        .backgroundColor('#E4E4E4')
-        this.poseNetStillAndroidPreview()
-        Row() {
-          Button(appString('feature_input_photo_android'), { type: ButtonType.Normal })
-            .layoutWeight(1)
-            .height(37)
-            .margin({ left: 20, right: 5 })
-            .fontSize(14)
-            .fontWeight(FontWeight.Normal)
-            .fontColor('#666666')
-            .backgroundColor('#F4F3F8')
-            .borderRadius(5)
-            .onClick(() => this.prepareInput('photo'))
-          Button(appString('feature_input_camera_android'), { type: ButtonType.Normal })
-            .layoutWeight(1)
-            .height(37)
-            .margin({ left: 5, right: 5 })
-            .fontSize(14)
-            .fontWeight(FontWeight.Normal)
-            .fontColor('#666666')
-            .backgroundColor('#F4F3F8')
-            .borderRadius(5)
-            .onClick(() => this.prepareInput('camera'))
-          Button(appString('feature_runtime_go_live_android_hms'), { type: ButtonType.Normal })
-            .layoutWeight(1)
-            .height(37)
-            .margin({ left: 5, right: 5 })
-            .fontSize(14)
-            .fontWeight(FontWeight.Normal)
-            .fontColor('#666666')
-            .backgroundColor('#F4F3F8')
-            .borderRadius(5)
+    Column() {
+      this.runtimeActionToolbar(false)
+      Scroll() {
+        Column({ space: AppSpacing.md }) {
+          Stack({ alignContent: Alignment.Center }) {
+            this.poseNetStillAndroidPreview()
+          }
+          .width('100%')
+          .aspectRatio(4 / 3)
+          .constraintSize({ minHeight: 220, maxHeight: 420 })
+          .clip(true)
+          .backgroundColor(AppColor.cardBackground)
+          .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
+          Row({ space: AppSpacing.sm }) {
+            if (this.workflowRunning) {
+              LoadingProgress()
+                .width(24)
+                .height(24)
+            }
+            Text(appString(this.statusKey))
+              .fontSize(14)
+              .fontColor(AppColor.textSecondary)
+              .maxFontScale(1.6)
+              .layoutWeight(1)
+          }
+          .width('100%')
+          .constraintSize({ minHeight: 48 })
+          .padding(AppSpacing.md)
+          .alignItems(VerticalAlign.Center)
+          .backgroundColor(AppColor.cardBackground)
+          .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
+          Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.SpaceBetween }) {
+            Button(appString('feature_input_photo_android'), { type: ButtonType.Normal })
+              .width('calc(50% - 4vp)')
+              .constraintSize({ minHeight: 48 })
+              .maxFontScale(1.6)
+              .fontColor(AppColor.accent)
+              .backgroundColor(AppColor.cardBackground)
+              .border({ width: 1, color: AppColor.divider, radius: AppRadius.button })
+              .margin({ bottom: AppSpacing.sm })
+              .enabled(!this.workflowRunning)
+              .onClick(() => this.prepareInput('photo'))
+            Button(appString('feature_input_camera_android'), { type: ButtonType.Normal })
+              .width('calc(50% - 4vp)')
+              .constraintSize({ minHeight: 48 })
+              .maxFontScale(1.6)
+              .fontColor(AppColor.accent)
+              .backgroundColor(AppColor.cardBackground)
+              .border({ width: 1, color: AppColor.divider, radius: AppRadius.button })
+              .margin({ bottom: AppSpacing.sm })
+              .enabled(!this.workflowRunning)
+              .onClick(() => this.prepareInput('camera'))
+            Button(appString('feature_runtime_go_live_android_hms'), { type: ButtonType.Normal })
+              .width('calc(50% - 4vp)')
+              .constraintSize({ minHeight: 48 })
+              .maxFontScale(1.6)
+              .fontColor(AppColor.accent)
+              .backgroundColor(AppColor.cardBackground)
+              .border({ width: 1, color: AppColor.divider, radius: AppRadius.button })
+              .margin({ bottom: AppSpacing.sm })
+              .enabled(!this.workflowRunning)
             .onClick(() => this.openLinkedLiveRoute())
-          Button(appString('feature_runtime_pose_detect_android'), { type: ButtonType.Normal })
-            .layoutWeight(1)
-            .height(37)
-            .margin({ left: 5, right: 5 })
-            .fontSize(14)
-            .fontWeight(FontWeight.Normal)
-            .fontColor('#666666')
-            .backgroundColor('#F4F3F8')
-            .borderRadius(5)
-            .enabled(this.runActionEnabled())
-            .onClick(() => this.runPoseNetSampleDetection())
+            Button(appString(this.statusKey === 'feature_runtime_pose_failed' ||
+              this.statusKey === 'feature_runtime_run_failed' ?
+              'web_retry' : 'feature_runtime_pose_detect_android'))
+              .width('calc(50% - 4vp)')
+              .constraintSize({ minHeight: 48 })
+              .maxFontScale(1.6)
+              .fontColor(Color.White)
+              .backgroundColor(AppColor.accent)
+              .borderRadius(AppRadius.button)
+              .margin({ bottom: AppSpacing.sm })
+              .enabled(this.runActionEnabled())
+              .onClick(() => this.runPrimaryAction())
+          }
+          .width('100%')
+          if (this.resultRows.length > 0) {
+            Column({ space: AppSpacing.sm }) {
+              Text(appString(workflowResultTitleKey(workflowForRoute(this.routeName))))
+                .fontSize(16)
+                .fontWeight(FontWeight.Medium)
+                .fontColor(AppColor.textPrimary)
+                .maxFontScale(1.6)
+                .width('100%')
+              ForEach(this.resultRows, (row: AiRunResultRow) => {
+                Text() {
+                  Span(appString(row.labelKey))
+                  Span(appString('feature_runtime_result_separator'))
+                  Span(this.resultRowValue(row))
+                }
+                .fontSize(14)
+                .fontColor(AppColor.textSecondary)
+                .maxFontScale(1.6)
+                .width('100%')
+              }, (row: AiRunResultRow, index: number) => `${index}-${row.labelKey}-${row.value}`)
+            }
+            .width('100%')
+            .padding(AppSpacing.md)
+            .alignItems(HorizontalAlign.Start)
+            .backgroundColor(AppColor.cardBackground)
+            .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
+          }
         }
         .width('100%')
-        .layoutWeight(1)
-        .margin({ top: 14 })
-        .alignItems(VerticalAlign.Center)
+        .padding({ left: AppSpacing.page, right: AppSpacing.page, top: AppSpacing.md, bottom: AppSpacing.xl })
       }
       .width('100%')
-      .height('100%')
-      .backgroundColor(Color.White)
+      .layoutWeight(1)
+      .align(Alignment.TopStart)
+      .scrollBar(BarState.Auto)
     }
     .width('100%')
     .height('100%')
-    .backgroundColor(Color.White)
+    .backgroundColor(AppColor.pageBackground)
   }
 
   @Builder

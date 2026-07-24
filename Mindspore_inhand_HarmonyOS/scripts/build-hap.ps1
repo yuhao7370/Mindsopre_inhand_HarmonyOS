@@ -45,6 +45,7 @@ $env:PATH = (Join-Path $devEcoRoot 'jbr\bin') + ';' + $env:PATH
 & (Join-Path $PSScriptRoot 'check-text-translation-input-parity.ps1')
 & (Join-Path $PSScriptRoot 'check-static-gesture-layout-parity.ps1')
 & (Join-Path $PSScriptRoot 'check-posenet-still-layout-parity.ps1')
+& (Join-Path $PSScriptRoot 'test-posenet-still-layout-guard.ps1')
 & (Join-Path $PSScriptRoot 'check-posenet-runtime-contract.ps1')
 & (Join-Path $PSScriptRoot 'check-object-photo-layout-parity.ps1')
 & (Join-Path $PSScriptRoot 'test-object-photo-layout-parity-guard.ps1')

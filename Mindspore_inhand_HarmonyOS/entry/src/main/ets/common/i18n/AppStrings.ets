@@ -270,6 +270,7 @@ export type AppStringKey =
   'feature_runtime_result_points' |
   'feature_runtime_result_similarity' |
   'feature_runtime_result_execution_time' |
+  'feature_runtime_result_separator' |
   'feature_runtime_result_image' |
   'feature_runtime_result_model' |
   'feature_runtime_result_content_image' |
@@ -593,6 +594,7 @@ const APP_STRING_KEYS: AppStringKey[] = [
   'feature_runtime_result_points',
   'feature_runtime_result_similarity',
   'feature_runtime_result_execution_time',
+  'feature_runtime_result_separator',
   'feature_runtime_result_image',
   'feature_runtime_result_model',
   'feature_runtime_result_content_image',
@@ -1191,6 +1193,8 @@ export function appString(key: AppStringKey): ResourceStr {
       return $r('app.string.feature_runtime_result_similarity');
     case 'feature_runtime_result_execution_time':
       return $r('app.string.feature_runtime_result_execution_time');
+    case 'feature_runtime_result_separator':
+      return $r('app.string.feature_runtime_result_separator');
     case 'feature_runtime_result_image':
       return $r('app.string.feature_runtime_result_image');
     case 'feature_runtime_result_model':

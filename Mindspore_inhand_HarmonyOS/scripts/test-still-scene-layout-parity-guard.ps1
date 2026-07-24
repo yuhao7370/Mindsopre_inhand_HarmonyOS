@@ -316,7 +316,7 @@ export function sceneDetectionOverlayRows(result: SceneDetectionResult): Array<S
             ForEach(this.resultRows, (row: AiRunResultRow) => {
               Text() {
                 Span(appString(row.labelKey))
-                Span('\uFF1A')
+                Span(appString('feature_runtime_result_separator'))
                 Span(this.resultRowValue(row))
               }
               .maxFontScale(1.6)
@@ -463,8 +463,8 @@ try {
   Assert-MutationRejected $validRoot 'combined-scene-rows' $aiPath `
     "rows.push(resultRow('feature_runtime_scene_overlay_scene', scene.label));" `
     "rows.push(resultRow('feature_runtime_result_scenes', scene.label));"
-  Assert-MutationRejected $validRoot 'missing-android-colon' $pagePath `
-    "Span('\uFF1A')" `
+  Assert-MutationRejected $validRoot 'missing-localized-result-separator' $pagePath `
+    "Span(appString('feature_runtime_result_separator'))" `
     "Span('')"
   Assert-MutationRejected $validRoot 'missing-runtime-provenance' $scenePath `
     "failureKind: 'runtime'" `

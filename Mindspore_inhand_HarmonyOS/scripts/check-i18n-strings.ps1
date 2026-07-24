@@ -116,7 +116,8 @@ $visibleAndroidZhStringExpectations = @{
   feature_runtime_result_scene_count = (Decode-Utf8Base64 '5Zy65pmv6K6h5pWw')
   feature_runtime_scene_overlay_count = (Decode-Utf8Base64 '5Zy65pmv6K6h5pWw')
   feature_runtime_scene_overlay_score = (Decode-Utf8Base64 '5b6X5YiG')
-  feature_runtime_result_execution_time = (Decode-Utf8Base64 '5o6o55CG5pe26Ze077ya')
+  feature_runtime_result_execution_time = (Decode-Utf8Base64 '5o6o55CG5pe26Ze0')
+  feature_runtime_result_separator = (Decode-Utf8Base64 '77ya')
   title_source = (Decode-Utf8Base64 '5Luj56CB')
 }
 
@@ -147,7 +148,8 @@ $visibleAndroidStringExpectations = @{
     feature_runtime_result_scene_count = 'Scene Count'
     feature_runtime_scene_overlay_count = 'Scene Count'
     feature_runtime_scene_overlay_score = 'Score'
-    feature_runtime_result_execution_time = 'Inference Time:'
+    feature_runtime_result_execution_time = 'Inference Time'
+    feature_runtime_result_separator = ': '
     title_source = 'Code'
   }
 }

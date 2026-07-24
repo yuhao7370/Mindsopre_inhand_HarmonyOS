@@ -181,7 +181,7 @@ foreach ($line in @(
   'ForEach(this.resultRows, (row: AiRunResultRow) => {',
   'Text() {',
   'Span(appString(row.labelKey))',
-  "Span('\uFF1A')",
+  "Span(appString('feature_runtime_result_separator'))",
   'Span(this.resultRowValue(row))',
   '.padding({ left: AppSpacing.page, right: AppSpacing.page, top: AppSpacing.md, bottom: AppSpacing.xl })',
   '.scrollBar(BarState.Auto)',
