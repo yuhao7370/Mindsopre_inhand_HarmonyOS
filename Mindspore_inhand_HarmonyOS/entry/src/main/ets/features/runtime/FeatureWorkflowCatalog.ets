@@ -50,6 +50,7 @@ export type FeatureResultKind =
 
 export type FeaturePermissionKind = 'camera' | 'media' | 'internet';
 export type LiveClassificationRetryAction = 'none' | 'restartCamera' | 'restartInference';
+export type LiveObjectDetectionRetryAction = 'none' | 'restartCamera' | 'restartInference';
 
 export interface FeatureWorkflow {
   readonly routeName: string;
@@ -763,6 +764,34 @@ export function liveClassificationEmptyPromptKey(workflow: FeatureWorkflow | und
   return shouldShowLiveClassificationCameraOverlay(workflow) ? 'feature_runtime_live_classification_keep' : undefined;
 }
 
+export function liveObjectDetectionRetryActionForStatus(
+  workflow: FeatureWorkflow | undefined,
+  statusKey: AppStringKey
+): LiveObjectDetectionRetryAction {
+  if (!shouldShowLiveObjectDetectionCameraOverlay(workflow)) {
+    return 'none';
+  }
+  if (statusKey === 'feature_runtime_live_camera_failed' ||
+    statusKey === 'feature_runtime_live_camera_surface_missing' ||
+    statusKey === 'feature_runtime_permission_denied') {
+    return 'restartCamera';
+  }
+  if (statusKey === 'feature_runtime_live_frame_failed' ||
+    statusKey === 'feature_runtime_run_failed' ||
+    statusKey === 'feature_runtime_pending_adapter' ||
+    statusKey === 'feature_runtime_object_detection_failed') {
+    return 'restartInference';
+  }
+  return 'none';
+}
+
+export function shouldPublishLiveObjectDetectionPreparingStatus(
+  workflow: FeatureWorkflow | undefined,
+  hasObjectDetections: boolean
+): boolean {
+  return !shouldShowLiveObjectDetectionCameraOverlay(workflow) || !hasObjectDetections;
+}
+
 export function liveClassificationRetryActionForStatus(
   workflow: FeatureWorkflow | undefined,
   statusKey: AppStringKey
@@ -867,7 +896,8 @@ export function shouldPreserveRuntimeTextResultOnAiResult(
   resultOk: boolean
 ): boolean {
   return (usesAndroidStillSceneLayout(workflow) || usesAndroidObjectPhotoLayout(workflow) ||
-    shouldShowLiveClassificationCameraOverlay(workflow)) && !resultOk;
+    shouldShowLiveClassificationCameraOverlay(workflow) ||
+    shouldShowLiveObjectDetectionCameraOverlay(workflow)) && !resultOk;
 }
 
 export function shouldPreserveRuntimeVisualResultOnAiResult(

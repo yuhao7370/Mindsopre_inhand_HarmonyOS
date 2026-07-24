@@ -308,7 +308,8 @@ import {
   ObjectDetectionService,
   ObjectDetectionInput,
   ObjectDetectionInputPreprocessor,
-  ObjectDetectionLiveLabelOffset,
+  ObjectDetectionLiveOverlayBox,
+  ObjectDetectionLiveLabelPlacement,
   LocalMnnObjectDetectionRunner,
   ObjectDetectionMnnRuntime,
   ObjectDetectionMindSporeRunner,
@@ -316,7 +317,7 @@ import {
   ObjectDetectionTensorRunner,
   objectDetectionBoxPercent,
   objectDetectionLiveOverlayBox,
-  objectDetectionLiveLabelOffset,
+  objectDetectionLiveLabelPlacement,
   decodeNanoDetObjectDetections,
   decodeSsdObjectDetections,
   generateObjectDetectionDefaultBoxes,
@@ -430,6 +431,8 @@ import {
   shouldShowLiveClassificationCameraOverlay,
   liveClassificationRetryActionForStatus,
   shouldPublishLiveClassificationPreparingStatus,
+  liveObjectDetectionRetryActionForStatus,
+  shouldPublishLiveObjectDetectionPreparingStatus,
   shouldShowLiveGestureCameraOverlay,
   shouldShowLiveObjectDetectionCameraOverlay,
   shouldShowLivePoseCameraOverlay,
@@ -7462,22 +7465,40 @@ export default function localUnitTest() {
       expect(box.height.toFixed(1)).assertEqual('100.0');
     });
 
-    it('positionsLiveObjectDetectionLabelsLikeAndroidUsingMeasuredOverlayHeight', 0, () => {
-      const belowThreshold: ObjectDetectionLiveLabelOffset = objectDetectionLiveLabelOffset(3.9, 500);
-      expect(belowThreshold.x).assertEqual(5);
-      expect(belowThreshold.y).assertEqual(20);
+    it('keepsLiveObjectDetectionLabelsInsideEveryCanvasEdge', 0, () => {
+      const topEdge: ObjectDetectionLiveLabelPlacement = objectDetectionLiveLabelPlacement(
+        { left: 8, top: 2, width: 80, height: 60 },
+        360,
+        640,
+        12
+      );
+      expect(topEdge.left >= 0).assertTrue();
+      expect(topEdge.top >= 0).assertTrue();
+      expect(topEdge.left + topEdge.maxWidth <= 360).assertTrue();
+      expect(topEdge.top + topEdge.estimatedHeight <= 640).assertTrue();
+      expect(topEdge.top >= 66).assertTrue();
 
-      const atThreshold: ObjectDetectionLiveLabelOffset = objectDetectionLiveLabelOffset(4, 500);
-      expect(atThreshold.x).assertEqual(0);
-      expect(atThreshold.y).assertEqual(-10);
+      const bottomRight: ObjectDetectionLiveLabelPlacement = objectDetectionLiveLabelPlacement(
+        { left: 342, top: 612, width: 40, height: 40 },
+        360,
+        640,
+        36
+      );
+      expect(bottomRight.left >= 0).assertTrue();
+      expect(bottomRight.top >= 0).assertTrue();
+      expect(bottomRight.left + bottomRight.maxWidth <= 360).assertTrue();
+      expect(bottomRight.top + bottomRight.estimatedHeight <= 640).assertTrue();
+    });
 
-      const aboveThreshold: ObjectDetectionLiveLabelOffset = objectDetectionLiveLabelOffset(4.1, 500);
-      expect(aboveThreshold.x).assertEqual(0);
-      expect(aboveThreshold.y).assertEqual(-10);
+    it('allocatesNaturalHeightForLongLiveObjectLabels', 0, () => {
+      const box: ObjectDetectionLiveOverlayBox = { left: 100, top: 280, width: 80, height: 120 };
+      const shortLabel = objectDetectionLiveLabelPlacement(box, 360, 640, 8);
+      const longLabel = objectDetectionLiveLabelPlacement(box, 360, 640, 48);
 
-      const unmeasuredOverlay: ObjectDetectionLiveLabelOffset = objectDetectionLiveLabelOffset(80, 0);
-      expect(unmeasuredOverlay.x).assertEqual(5);
-      expect(unmeasuredOverlay.y).assertEqual(20);
+      expect(longLabel.estimatedHeight > shortLabel.estimatedHeight).assertTrue();
+      expect(longLabel.left + longLabel.maxWidth <= 360).assertTrue();
+      expect(longLabel.top + longLabel.estimatedHeight <= 640).assertTrue();
+      expect(objectDetectionLiveLabelPlacement(box, 0, 640, 8).maxWidth).assertEqual(0);
     });
 
     it('usesAndroidObjectDetectionOverlayPaletteByResultOrder', 0, () => {
@@ -10121,6 +10142,42 @@ export default function localUnitTest() {
       expect(shouldPreserveRuntimeVisualResultOnLiveFrameFailure(
         workflowForRoute(AppRoute.TEXT_RECOGNITION.name)
       )).assertFalse();
+    });
+
+    it('offersExplicitLiveObjectRetryOnlyForCameraAndInferenceFailures', 0, () => {
+      const objectCamera = workflowForRoute(AppRoute.OBJECT_CAMERA.name);
+      const imageCamera = workflowForRoute(AppRoute.IMAGE_CAMERA.name);
+
+      expect(liveObjectDetectionRetryActionForStatus(objectCamera, 'feature_runtime_live_camera_failed'))
+        .assertEqual('restartCamera');
+      expect(liveObjectDetectionRetryActionForStatus(objectCamera, 'feature_runtime_live_camera_surface_missing'))
+        .assertEqual('restartCamera');
+      expect(liveObjectDetectionRetryActionForStatus(objectCamera, 'feature_runtime_permission_denied'))
+        .assertEqual('restartCamera');
+      expect(liveObjectDetectionRetryActionForStatus(objectCamera, 'feature_runtime_live_frame_failed'))
+        .assertEqual('restartInference');
+      expect(liveObjectDetectionRetryActionForStatus(objectCamera, 'feature_runtime_run_failed'))
+        .assertEqual('restartInference');
+      expect(liveObjectDetectionRetryActionForStatus(objectCamera, 'feature_runtime_pending_adapter'))
+        .assertEqual('restartInference');
+      expect(liveObjectDetectionRetryActionForStatus(objectCamera, 'feature_runtime_object_detection_failed'))
+        .assertEqual('restartInference');
+      expect(liveObjectDetectionRetryActionForStatus(objectCamera, 'feature_runtime_object_detection_done'))
+        .assertEqual('none');
+      expect(liveObjectDetectionRetryActionForStatus(imageCamera, 'feature_runtime_run_failed'))
+        .assertEqual('none');
+      expect(liveObjectDetectionRetryActionForStatus(undefined, 'feature_runtime_live_camera_failed'))
+        .assertEqual('none');
+    });
+
+    it('keepsLiveObjectStatusVisibleBetweenAutomaticFrames', 0, () => {
+      const objectCamera = workflowForRoute(AppRoute.OBJECT_CAMERA.name);
+      const imageCamera = workflowForRoute(AppRoute.IMAGE_CAMERA.name);
+
+      expect(shouldPublishLiveObjectDetectionPreparingStatus(objectCamera, false)).assertTrue();
+      expect(shouldPublishLiveObjectDetectionPreparingStatus(objectCamera, true)).assertFalse();
+      expect(shouldPublishLiveObjectDetectionPreparingStatus(imageCamera, true)).assertTrue();
+      expect(shouldPublishLiveObjectDetectionPreparingStatus(undefined, true)).assertTrue();
     });
 
     it('samplesLiveObjectFrameLogsWithoutGrowingAtFrameRateForever', 0, () => {

@@ -6,6 +6,7 @@ import {
   FeaturePermissionKind,
   FeatureWorkflow,
   LiveClassificationRetryAction,
+  LiveObjectDetectionRetryAction,
   autoStartInputKindForWorkflow,
   fixedLiveCameraPositionForWorkflow,
   inputKindReplacesPrimaryInput,
@@ -69,6 +70,8 @@ import {
   liveClassificationEmptyPromptKey,
   liveClassificationRetryActionForStatus,
   shouldPublishLiveClassificationPreparingStatus,
+  liveObjectDetectionRetryActionForStatus,
+  shouldPublishLiveObjectDetectionPreparingStatus,
   shouldShowLiveGestureCameraOverlay,
   shouldShowLiveObjectDetectionCameraOverlay,
   shouldShowLivePoseCameraOverlay,
@@ -190,10 +193,10 @@ import {
   ObjectDetection,
   ObjectDetectionBoxPercent,
   ObjectDetectionLiveOverlayBox,
-  ObjectDetectionLiveLabelOffset,
+  ObjectDetectionLiveLabelPlacement,
   objectDetectionBoxPercent,
   objectDetectionLiveOverlayBox,
-  objectDetectionLiveLabelOffset,
+  objectDetectionLiveLabelPlacement,
   objectDetectionOverlayColor,
   objectDetectionOverlayLabel,
   objectDetectionOverlayTextColor,
@@ -1092,6 +1095,31 @@ struct FeatureRuntimePage {
     this.runWorkflow();
   }
 
+  private liveObjectDetectionRetryAction(): LiveObjectDetectionRetryAction {
+    return liveObjectDetectionRetryActionForStatus(workflowForRoute(this.routeName), this.statusKey);
+  }
+
+  private retryLiveObjectDetection(): void {
+    const workflow = workflowForRoute(this.routeName);
+    const action = liveObjectDetectionRetryActionForStatus(workflow, this.statusKey);
+    if (action === 'restartCamera') {
+      this.liveCameraInputSelected = true;
+      this.startLiveCameraPreview();
+      return;
+    }
+    if (action !== 'restartInference' || workflow === undefined) {
+      return;
+    }
+    this.statusKey = 'feature_runtime_status_preparing';
+    this.stopLiveRuntimeLoop();
+    if (this.liveCameraInputSelected && this.liveCameraActive) {
+      this.startLiveRuntimeLoop(workflow);
+      return;
+    }
+    this.liveCameraInputSelected = true;
+    this.startLiveCameraPreview();
+  }
+
   private liveClassificationRetryAction(): LiveClassificationRetryAction {
     return liveClassificationRetryActionForStatus(workflowForRoute(this.routeName), this.statusKey);
   }
@@ -1203,7 +1231,12 @@ struct FeatureRuntimePage {
       return;
     }
     if (shouldPublishLiveClassificationPreparingStatus(workflow, this.resultRows.length > 0)) {
-      this.statusKey = 'feature_runtime_status_preparing';
+      if (shouldPublishLiveObjectDetectionPreparingStatus(
+        workflow,
+        this.resultRows.length > 0 || this.liveObjectDetectionRetryAction() !== 'none'
+      )) {
+        this.statusKey = 'feature_runtime_status_preparing';
+      }
     }
     if (shouldClearRuntimeResultAtWorkflowStart(workflow)) {
       this.resultText = '';
@@ -1943,9 +1976,19 @@ struct FeatureRuntimePage {
     return this.runtimePermissionRecoveryAction() !== 'none';
   }
 
+  private retryRuntimeCameraInput(): void {
+    const workflow = workflowForRoute(this.routeName);
+    if (liveRuntimeModeForWorkflow(workflow)) {
+      this.liveCameraInputSelected = true;
+      this.startLiveCameraPreview();
+      return;
+    }
+    this.prepareInput('camera');
+  }
+
   private runPrimaryAction(): void {
     if (this.runtimePermissionRunAction() === 'retryCameraInput') {
-      this.prepareInput('camera');
+      this.retryRuntimeCameraInput();
       return;
     }
     this.runWorkflow();
@@ -1954,7 +1997,7 @@ struct FeatureRuntimePage {
   private retryRuntimePermission(): void {
     const action = this.runtimePermissionRecoveryAction();
     if (action === 'retryCameraInput') {
-      this.prepareInput('camera');
+      this.retryRuntimeCameraInput();
       return;
     }
     if (action === 'retryRun') {
@@ -2827,16 +2870,6 @@ struct FeatureRuntimePage {
     );
   }
 
-  private liveObjectDetectionLabelOffset(detection: ObjectDetection): ObjectDetectionLiveLabelOffset {
-    const style = this.liveObjectDetectionBoxStyle(detection);
-    const topPercent = this.liveObjectDetectionOverlayHeightVp > 0 ?
-      style.top * 100 / this.liveObjectDetectionOverlayHeightVp : 0;
-    return objectDetectionLiveLabelOffset(
-      topPercent,
-      this.liveObjectDetectionOverlayHeightVp
-    );
-  }
-
   private liveObjectDetectionBoxStyle(detection: ObjectDetection): ObjectDetectionLiveOverlayBox {
     return objectDetectionLiveOverlayBox(
       detection,
@@ -2845,6 +2878,18 @@ struct FeatureRuntimePage {
       this.liveObjectDetectionOverlayWidthVp,
       this.liveObjectDetectionOverlayHeightVp,
       this.liveCameraPreviewRotationDegrees
+    );
+  }
+
+  private liveObjectDetectionLabelPlacement(
+    detection: ObjectDetection,
+    index: number
+  ): ObjectDetectionLiveLabelPlacement {
+    return objectDetectionLiveLabelPlacement(
+      this.liveObjectDetectionBoxStyle(detection),
+      this.liveObjectDetectionOverlayWidthVp,
+      this.liveObjectDetectionOverlayHeightVp,
+      this.objectDetectionLabel(detection, index).length
     );
   }
 
@@ -3312,24 +3357,28 @@ struct FeatureRuntimePage {
     Stack({ alignContent: Alignment.TopStart }) {
       Column() {
       }
-      .width('100%')
-      .height('100%')
+      .width(this.liveObjectDetectionBoxStyle(detection).width)
+      .height(this.liveObjectDetectionBoxStyle(detection).height)
       .border({ width: 2, color: objectDetectionOverlayColor(index), radius: 2 })
+      .position({
+        x: this.liveObjectDetectionBoxStyle(detection).left,
+        y: this.liveObjectDetectionBoxStyle(detection).top
+      })
       Text(this.objectDetectionLabel(detection, index))
-        .fontSize(16)
-        .fontColor(objectDetectionOverlayColor(index))
-        .maxLines(1)
+        .width(this.liveObjectDetectionLabelPlacement(detection, index).maxWidth)
+        .fontSize(13)
+        .fontColor(objectDetectionOverlayTextColor(index))
+        .maxFontScale(1.6)
+        .padding({ left: 6, right: 6, top: 4, bottom: 4 })
+        .backgroundColor(objectDetectionOverlayColor(index))
+        .borderRadius(4)
         .position({
-          x: this.liveObjectDetectionLabelOffset(detection).x,
-          y: this.liveObjectDetectionLabelOffset(detection).y
+          x: this.liveObjectDetectionLabelPlacement(detection, index).left,
+          y: this.liveObjectDetectionLabelPlacement(detection, index).top
         })
     }
-    .width(this.liveObjectDetectionBoxStyle(detection).width)
-    .height(this.liveObjectDetectionBoxStyle(detection).height)
-    .position({
-      x: this.liveObjectDetectionBoxStyle(detection).left,
-      y: this.liveObjectDetectionBoxStyle(detection).top
-    })
+    .width('100%')
+    .height('100%')
   }
 
   @Builder
@@ -3983,23 +4032,55 @@ struct FeatureRuntimePage {
   }
 
   @Builder
+  liveObjectDetectionStatusOverlay() {
+    Row({ space: AppSpacing.sm }) {
+      Row({ space: AppSpacing.xs }) {
+        if (this.statusKey === 'feature_runtime_status_preparing') {
+          LoadingProgress()
+            .width(20)
+            .height(20)
+            .color(Color.White)
+        }
+        Text(appString(this.statusKey))
+          .fontSize(13)
+          .fontColor('#F3F4F6')
+          .maxFontScale(1.6)
+          .layoutWeight(1)
+      }
+      .layoutWeight(1)
+      .constraintSize({ minHeight: 48 })
+      .alignItems(VerticalAlign.Center)
+      if (this.liveObjectDetectionRetryAction() !== 'none') {
+        Button(appString('web_retry'), { type: ButtonType.Normal })
+          .constraintSize({ minWidth: 72, minHeight: 48 })
+          .fontSize(14)
+          .fontColor(Color.White)
+          .maxFontScale(1.6)
+          .backgroundColor(Color.Transparent)
+          .border({ width: 1, color: '#99FFFFFF', radius: AppRadius.button })
+          .onClick(() => this.retryLiveObjectDetection())
+      }
+    }
+    .width('calc(100% - 32vp)')
+    .constraintSize({ maxWidth: 520 })
+    .padding({ left: AppSpacing.md, right: AppSpacing.md, top: AppSpacing.xs, bottom: AppSpacing.xs })
+    .backgroundColor('#B31F2937')
+    .borderRadius(AppRadius.card)
+  }
+
+  @Builder
   objectDetectionAndroidLiveLayout() {
     Column() {
       this.runtimeActionToolbar(true)
+      Row() {
+        this.liveObjectDetectionStatusOverlay()
+      }
+      .width('100%')
+      .padding({ top: AppSpacing.sm, bottom: AppSpacing.sm })
+      .justifyContent(FlexAlign.Center)
+      .backgroundColor('#111827')
       Stack({ alignContent: Alignment.TopStart }) {
         this.liveCameraSurfaceContent()
-        Column() {
-          Button(appString(workflowInputLabelKey(workflowForRoute(this.routeName), 'modelFile')))
-            .fontSize(16)
-            .fontColor(Color.White)
-            .backgroundColor('#33B5E5')
-            .onClick(() => this.prepareInput('modelFile'))
-        }
-        .width('100%')
-        .height('100%')
-        .padding({ right: 16, bottom: 16 })
-        .justifyContent(FlexAlign.End)
-        .alignItems(HorizontalAlign.End)
       }
       .width('100%')
       .layoutWeight(1)

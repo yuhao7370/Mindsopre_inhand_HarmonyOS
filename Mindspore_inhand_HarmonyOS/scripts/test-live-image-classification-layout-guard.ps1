@@ -62,6 +62,39 @@ function Mutate-And-Accept([string]$Name, [string]$RelativePath, [string]$From, 
   }
 }
 
+function Mutate-Section-And-Reject(
+  [string]$Name,
+  [string]$RelativePath,
+  [string]$SectionStart,
+  [string]$SectionEnd,
+  [string]$From,
+  [string]$To
+) {
+  $fixture = Copy-Fixture
+  $path = Join-Path $fixture $RelativePath
+  $text = ([IO.File]::ReadAllText($path)).Replace("`r`n", "`n").Replace("`r", "`n")
+  $startIndex = $text.IndexOf($SectionStart, [StringComparison]::Ordinal)
+  $endIndex = $text.IndexOf($SectionEnd, $startIndex + $SectionStart.Length, [StringComparison]::Ordinal)
+  if ($startIndex -lt 0 -or $endIndex -lt 0) {
+    throw "Live classification fixture '$Name' could not isolate its section."
+  }
+  $section = $text.Substring($startIndex, $endIndex - $startIndex)
+  $mutatedSection = Replace-Once $section $From $To $Name
+  [IO.File]::WriteAllText(
+    $path,
+    $text.Substring(0, $startIndex) + $mutatedSection + $text.Substring($endIndex)
+  )
+  $rejected = $false
+  try {
+    & $guard -SourceRoot $fixture *> $null
+  } catch {
+    $rejected = $true
+  }
+  if (-not $rejected) {
+    throw "Live classification section mutation fixture '$Name' was incorrectly accepted."
+  }
+}
+
 try {
   [IO.Directory]::CreateDirectory($tempRoot) | Out-Null
   & $guard -SourceRoot $sourceRoot
@@ -97,10 +130,17 @@ try {
   $frameUnconditionalClear = '      const workflow = workflowForRoute(this.routeName);' +
     "`n      if (true) {`n        this.resultText = '';"
   $preparingGate = '    if (shouldPublishLiveClassificationPreparingStatus(workflow, this.resultRows.length > 0)) {' +
-    "`n      this.statusKey = 'feature_runtime_status_preparing';`n    }"
+    "`n      if (shouldPublishLiveObjectDetectionPreparingStatus(" +
+    "`n        workflow," +
+    "`n        this.resultRows.length > 0 || this.liveObjectDetectionRetryAction() !== 'none'" +
+    "`n      )) {" +
+    "`n        this.statusKey = 'feature_runtime_status_preparing';" +
+    "`n      }" +
+    "`n    }"
   $alwaysPreparing = "    this.statusKey = 'feature_runtime_status_preparing';"
   $preserveClassification = '(usesAndroidStillSceneLayout(workflow) || usesAndroidObjectPhotoLayout(workflow) ||' +
-    "`n    shouldShowLiveClassificationCameraOverlay(workflow)) && !resultOk;"
+    "`n    shouldShowLiveClassificationCameraOverlay(workflow) ||" +
+    "`n    shouldShowLiveObjectDetectionCameraOverlay(workflow)) && !resultOk;"
   $fixedBack = "  if (workflow.routeName === AppRoute.IMAGE_CAMERA.name ||" +
     "`n    workflow.routeName === AppRoute.OBJECT_CAMERA.name) {`n    return 'back';`n  }"
   $fixedFront = "  if (workflow.routeName === AppRoute.IMAGE_CAMERA.name ||" +
@@ -113,36 +153,50 @@ try {
   $templateDecoy = '      const classificationTemplateDecoy = ' +
     '`this.runtimeCameraSwitchAction(); .height(100)`;' + "`n" +
     $labelFrom
+  $classificationOwnerPrefix = "    .constraintSize({ maxWidth: 520 })" +
+    "`n    .padding({ left: AppSpacing.md, right: AppSpacing.md, top: AppSpacing.sm, bottom: AppSpacing.sm })"
 
   Mutate-And-Reject 'remove-overlay' $page `
     '        this.liveClassificationStatusOverlay()' `
     '        this.runtimeStatusBar()'
   Mutate-And-Reject 'fixed-overlay-height' $page `
-    "    .constraintSize({ maxWidth: 520 })`n    .padding" `
-    "    .constraintSize({ maxWidth: 520 })`n    .height(96)`n    .padding"
+    $classificationOwnerPrefix `
+    ("    .constraintSize({ maxWidth: 520 })`n    .height(96)" +
+      "`n    .padding({ left: AppSpacing.md, right: AppSpacing.md, top: AppSpacing.sm, bottom: AppSpacing.sm })")
   Mutate-And-Reject 'fixed-overlay-max-height' $page `
-    '    .constraintSize({ maxWidth: 520 })' `
-    '    .constraintSize({ maxWidth: 520, maxHeight: 100 })'
+    $classificationOwnerPrefix `
+    ("    .constraintSize({ maxWidth: 520, maxHeight: 100 })" +
+      "`n    .padding({ left: AppSpacing.md, right: AppSpacing.md, top: AppSpacing.sm, bottom: AppSpacing.sm })")
   Mutate-And-Reject 'truncate-long-label' $page $labelFrom $labelTruncated
   Mutate-And-Reject 'ellipsis-long-label' $page $labelTail $labelEllipsis
   Mutate-And-Reject 'add-switch-inside-overlay' $page $overlayStart $overlayWithSwitch
   Mutate-And-Reject 'wrong-retry-callback' $page `
     '.onClick(() => this.retryLiveClassification())' `
     '.onClick(() => this.runPrimaryAction())'
-  Mutate-And-Reject 'surface-retry-through-cleared-id-gate' $page $cameraRetry $cameraRetryThroughInput
-  Mutate-And-Reject 'restart-live-loop-without-stop' $page `
+  Mutate-Section-And-Reject 'surface-retry-through-cleared-id-gate' $page `
+    '  private retryLiveClassification(): void {' `
+    '  private runWorkflow(): void {' `
+    $cameraRetry $cameraRetryThroughInput
+  Mutate-Section-And-Reject 'restart-live-loop-without-stop' $page `
+    '  private retryLiveClassification(): void {' `
+    '  private runWorkflow(): void {' `
     "    this.stopLiveRuntimeLoop();`n    if (this.liveCameraInputSelected && this.liveCameraActive) {" `
     '    if (this.liveCameraInputSelected && this.liveCameraActive) {'
   Mutate-And-Reject 'hide-success-behind-next-frame-preparing' $page $preparingGate $alwaysPreparing
-  Mutate-And-Reject 'retry-without-preparing-feedback' $page `
+  Mutate-Section-And-Reject 'retry-without-preparing-feedback' $page `
+    '  private retryLiveClassification(): void {' `
+    '  private runWorkflow(): void {' `
     "    this.statusKey = 'feature_runtime_status_preparing';`n    this.stopLiveRuntimeLoop();" `
     '    this.stopLiveRuntimeLoop();'
   Mutate-And-Reject 'clear-result-on-camera-restart' $page $previewClearGate $previewUnconditionalClear
   Mutate-And-Reject 'clear-result-on-frame-failure' $page $frameClearGate $frameUnconditionalClear
   Mutate-And-Reject 'drop-transient-result-preservation' $catalog $preserveClassification `
-    '(usesAndroidStillSceneLayout(workflow) || usesAndroidObjectPhotoLayout(workflow)) && !resultOk;'
+    ('(usesAndroidStillSceneLayout(workflow) || usesAndroidObjectPhotoLayout(workflow) ||' +
+      "`n    shouldShowLiveObjectDetectionCameraOverlay(workflow)) && !resultOk;")
   Mutate-And-Reject 'change-fixed-camera-to-front' $catalog $fixedBack $fixedFront
-  Mutate-And-Reject 'remove-camera-failure-retry' $catalog `
+  Mutate-Section-And-Reject 'remove-camera-failure-retry' $catalog `
+    'export function liveClassificationRetryActionForStatus(' `
+    'export function shouldPublishLiveClassificationPreparingStatus(' `
     "statusKey === 'feature_runtime_live_camera_failed'" `
     "statusKey === 'feature_runtime_live_camera_ready'"
   Mutate-And-Reject 'always-publish-preparing-status' $catalog `
