@@ -54,6 +54,7 @@ export type LiveObjectDetectionRetryAction = 'none' | 'restartCamera' | 'restart
 export type LiveSegmentationRetryAction = 'none' | 'restartCamera' | 'restartInference';
 export type LiveGestureRetryAction = 'none' | 'restartCamera' | 'restartInference';
 export type LiveSceneRetryAction = 'none' | 'restartCamera' | 'restartInference';
+export type LiveSkeletonRetryAction = 'none' | 'restartCamera' | 'restartInference';
 
 export interface FeatureWorkflow {
   readonly routeName: string;
@@ -289,7 +290,8 @@ export function workflowForRoute(routeName: string): FeatureWorkflow | undefined
   return featureWorkflows.find((workflow: FeatureWorkflow) => workflow.routeName === routeName);
 }
 
-export type SpecializedAndroidLiveLayout = 'imageClassification' | 'objectDetection' | 'segmentation' | 'gesture' | 'scene';
+export type SpecializedAndroidLiveLayout =
+  'imageClassification' | 'objectDetection' | 'segmentation' | 'gesture' | 'scene' | 'skeleton';
 
 export function specializedAndroidLiveLayoutForWorkflow(
   workflow: FeatureWorkflow | undefined
@@ -309,12 +311,14 @@ export function specializedAndroidLiveLayoutForWorkflow(
   if (usesAndroidLiveSceneLayout(workflow)) {
     return 'scene';
   }
+  if (usesAndroidLiveSkeletonLayout(workflow)) {
+    return 'skeleton';
+  }
   return undefined;
 }
 
 export function usesSimpleAndroidLiveLayout(workflow: FeatureWorkflow | undefined): boolean {
-  const routeName = workflow?.routeName ?? '';
-  return routeName === AppRoute.LIVE_SKELETON.name;
+  return false;
 }
 
 export function usesAndroidPortraitSegmentationLayout(workflow: FeatureWorkflow | undefined): boolean {
@@ -571,6 +575,9 @@ export function initialLiveCameraPositionForWorkflow(
   if (workflow.routeName === AppRoute.GESTURE_LIVE.name) {
     return 'back';
   }
+  if (workflow.routeName === AppRoute.LIVE_SKELETON.name) {
+    return 'back';
+  }
   return 'back';
 }
 
@@ -757,11 +764,22 @@ export function usesAndroidLiveSceneLayout(workflow: FeatureWorkflow | undefined
   return workflow?.routeName === AppRoute.SCENE_LIVE.name;
 }
 
+export function usesAndroidLiveSkeletonLayout(workflow: FeatureWorkflow | undefined): boolean {
+  return workflow?.routeName === AppRoute.LIVE_SKELETON.name;
+}
+
 export function shouldMirrorLiveGestureCameraOverlay(
   workflow: FeatureWorkflow | undefined,
   liveCameraPosition: LiveCameraPosition
 ): boolean {
   return shouldShowLiveGestureCameraOverlay(workflow) && liveCameraPosition === 'front';
+}
+
+export function shouldMirrorLivePoseCameraOverlay(
+  workflow: FeatureWorkflow | undefined,
+  liveCameraPosition: LiveCameraPosition
+): boolean {
+  return shouldShowLivePoseCameraOverlay(workflow) && liveCameraPosition === 'front';
 }
 
 export function shouldShowLiveObjectDetectionCameraOverlay(workflow: FeatureWorkflow | undefined): boolean {
@@ -873,6 +891,27 @@ export function liveSceneRetryActionForStatus(
   return 'none';
 }
 
+export function liveSkeletonRetryActionForStatus(
+  workflow: FeatureWorkflow | undefined,
+  statusKey: AppStringKey
+): LiveSkeletonRetryAction {
+  if (!usesAndroidLiveSkeletonLayout(workflow)) {
+    return 'none';
+  }
+  if (statusKey === 'feature_runtime_live_camera_failed' ||
+    statusKey === 'feature_runtime_live_camera_surface_missing' ||
+    statusKey === 'feature_runtime_permission_denied') {
+    return 'restartCamera';
+  }
+  if (statusKey === 'feature_runtime_live_frame_failed' ||
+    statusKey === 'feature_runtime_run_failed' ||
+    statusKey === 'feature_runtime_pending_adapter' ||
+    statusKey === 'feature_runtime_pose_failed') {
+    return 'restartInference';
+  }
+  return 'none';
+}
+
 export function shouldPublishLiveSegmentationPreparingStatus(
   workflow: FeatureWorkflow | undefined,
   hasForegroundOrRetry: boolean
@@ -892,6 +931,13 @@ export function shouldPublishLiveScenePreparingStatus(
   hasSceneOverlayOrRetry: boolean
 ): boolean {
   return !usesAndroidLiveSceneLayout(workflow) || !hasSceneOverlayOrRetry;
+}
+
+export function shouldPublishLiveSkeletonPreparingStatus(
+  workflow: FeatureWorkflow | undefined,
+  hasPoseOverlayOrRetry: boolean
+): boolean {
+  return !usesAndroidLiveSkeletonLayout(workflow) || !hasPoseOverlayOrRetry;
 }
 
 export function shouldPublishLiveObjectDetectionPreparingStatus(
@@ -935,6 +981,7 @@ export function shouldClearRuntimeResultAtWorkflowStart(workflow: FeatureWorkflo
     !usesAndroidLiveSegmentationLayout(workflow) &&
     !usesAndroidLiveGestureLayout(workflow) &&
     !usesAndroidLiveSceneLayout(workflow) &&
+    !usesAndroidLiveSkeletonLayout(workflow) &&
     workflow?.routeName !== AppRoute.PORTRAIT_SEGMENTATION.name &&
     !usesAndroidObjectPhotoLayout(workflow) &&
     !usesAndroidStyleTransferLayout(workflow) &&
@@ -1012,7 +1059,8 @@ export function shouldPreserveRuntimeTextResultOnAiResult(
     shouldShowLiveObjectDetectionCameraOverlay(workflow) ||
     usesAndroidLiveSegmentationLayout(workflow) ||
     usesAndroidLiveGestureLayout(workflow) ||
-    usesAndroidLiveSceneLayout(workflow)) && !resultOk;
+    usesAndroidLiveSceneLayout(workflow) ||
+    usesAndroidLiveSkeletonLayout(workflow)) && !resultOk;
 }
 
 export function shouldPreserveRuntimeVisualResultOnAiResult(
@@ -1031,6 +1079,9 @@ export function shouldPreserveRuntimeVisualResultOnAiResult(
   }
   if (usesAndroidLiveGestureLayout(workflow)) {
     return !resultOk || dataKind === 'gesture';
+  }
+  if (usesAndroidLiveSkeletonLayout(workflow)) {
+    return !resultOk || dataKind === 'pose';
   }
   if (usesAndroidObjectPhotoLayout(workflow)) {
     return !resultOk || dataKind === 'objectDetections';
@@ -1053,7 +1104,8 @@ export function shouldPreserveRuntimeVisualResultOnLiveFrameFailure(
 }
 
 export function shouldPreserveLiveCameraInputOnFailure(workflow: FeatureWorkflow | undefined): boolean {
-  return usesAndroidLiveGestureLayout(workflow) || usesAndroidLiveSceneLayout(workflow);
+  return usesAndroidLiveSkeletonLayout(workflow) || usesAndroidLiveGestureLayout(workflow) ||
+    usesAndroidLiveSceneLayout(workflow);
 }
 
 export function runtimeSegmentationBackgroundImageUri(

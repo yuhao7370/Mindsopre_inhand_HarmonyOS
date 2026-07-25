@@ -237,8 +237,10 @@ Assert-Contains $textPreservation 'usesAndroidLiveGestureLayout(workflow)' 'gest
 Assert-Contains $visualPreservation 'if (usesAndroidLiveGestureLayout(workflow)) {' 'gesture visual preservation is missing.'
 Assert-Contains $visualPreservation "return !resultOk || dataKind === 'gesture';" 'gesture failures must retain the last valid overlay.'
 Assert-Contains $updateGesture "if (!result.ok) {`n        return;`n      }" 'gesture failure must not clear the last valid overlay.'
-Assert-Contains $cameraInputPreservation 'return usesAndroidLiveGestureLayout(workflow) || usesAndroidLiveSceneLayout(workflow);' `
-  'live gesture and scene failures must preserve their active camera input.'
+Assert-Contains $cameraInputPreservation 'return usesAndroidLiveSkeletonLayout(workflow) || usesAndroidLiveGestureLayout(workflow) ||' `
+  'live skeleton, gesture, and scene failures must preserve their active camera input.'
+Assert-Contains $cameraInputPreservation 'usesAndroidLiveSceneLayout(workflow);' `
+  'live skeleton, gesture, and scene failures must preserve their active camera input.'
 foreach ($marker in @(
   'const preserveCameraInput = shouldPreserveLiveCameraInputOnFailure(workflow);',
   'if (result.ok || !preserveCameraInput) {',

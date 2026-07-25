@@ -393,6 +393,7 @@ import {
   usesAndroidTextRecognitionLayout,
   usesAndroidTextTranslationLayout,
   usesAndroidLiveSceneLayout,
+  usesAndroidLiveSkeletonLayout,
   usesSimpleAndroidLiveLayout,
   shouldShowPrimaryImageInputPreview,
   sampleImageUriForWorkflow,
@@ -10267,17 +10268,19 @@ export default function localUnitTest() {
 
     });
 
-    it('usesSimpleAndroidLiveLayoutOnlyForMatchingAndroidActivities', 0, () => {
-      const simpleLiveRouteNames: Array<string> = [
-        AppRoute.LIVE_SKELETON.name
-      ];
-      expect(new Set<string>(simpleLiveRouteNames).size).assertEqual(1);
-
+    it('keepsGenericLiveLayoutUnusedAfterSkeletonGetsItsOwnRuntime', 0, () => {
       featureWorkflows.forEach((workflow: FeatureWorkflow) => {
-        expect(usesSimpleAndroidLiveLayout(workflow))
-          .assertEqual(simpleLiveRouteNames.indexOf(workflow.routeName) >= 0);
+        expect(usesSimpleAndroidLiveLayout(workflow)).assertFalse();
       });
       expect(usesSimpleAndroidLiveLayout(undefined)).assertFalse();
+    });
+
+    it('usesAndroidLiveSkeletonLayoutOnlyForLiveSkeleton', 0, () => {
+      featureWorkflows.forEach((workflow: FeatureWorkflow) => {
+        expect(usesAndroidLiveSkeletonLayout(workflow))
+          .assertEqual(workflow.routeName === AppRoute.LIVE_SKELETON.name);
+      });
+      expect(usesAndroidLiveSkeletonLayout(undefined)).assertFalse();
     });
 
     it('usesAndroidPortraitSegmentationLayoutOnlyForPortrait', 0, () => {
@@ -10716,7 +10719,7 @@ export default function localUnitTest() {
       expect(shouldShowGestureStillFailureToast(undefined, true)).assertFalse();
     });
 
-    it('selectsSpecializedAndroidLiveLayoutForImageObjectSegmentationGestureAndSceneCamera', 0, () => {
+    it('selectsSpecializedAndroidLiveLayoutForEveryRouteSpecificCameraWorkflow', 0, () => {
       featureWorkflows.forEach((workflow: FeatureWorkflow) => {
         let expectedLayout: string | undefined = undefined;
         if (workflow.routeName === AppRoute.IMAGE_CAMERA.name) {
@@ -10729,6 +10732,8 @@ export default function localUnitTest() {
           expectedLayout = 'gesture';
         } else if (workflow.routeName === AppRoute.SCENE_LIVE.name) {
           expectedLayout = 'scene';
+        } else if (workflow.routeName === AppRoute.LIVE_SKELETON.name) {
+          expectedLayout = 'skeleton';
         }
         expect(specializedAndroidLiveLayoutForWorkflow(workflow)).assertEqual(expectedLayout);
       });
@@ -10752,6 +10757,7 @@ export default function localUnitTest() {
         specializedAndroidLiveLayoutForWorkflow(workflow) === 'segmentation',
         specializedAndroidLiveLayoutForWorkflow(workflow) === 'gesture',
         specializedAndroidLiveLayoutForWorkflow(workflow) === 'scene',
+        specializedAndroidLiveLayoutForWorkflow(workflow) === 'skeleton',
         usesSimpleAndroidLiveLayout(workflow)
       ].filter((matches: boolean) => matches).length;
 

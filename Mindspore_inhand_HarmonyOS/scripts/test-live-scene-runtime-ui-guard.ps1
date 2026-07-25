@@ -179,8 +179,8 @@ try {
     'return false;' `
     "function unusedPreservationDecoy(): boolean { return !resultOk || dataKind === 'scenes'; }"
   Assert-MutationRejected $validRoot 'failure-clears-camera-input' $catalogPath `
-    'return usesAndroidLiveGestureLayout(workflow) || usesAndroidLiveSceneLayout(workflow);' `
-    'return usesAndroidLiveGestureLayout(workflow);'
+    "return usesAndroidLiveSkeletonLayout(workflow) || usesAndroidLiveGestureLayout(workflow) ||`n    usesAndroidLiveSceneLayout(workflow);" `
+    "return usesAndroidLiveSkeletonLayout(workflow) || usesAndroidLiveGestureLayout(workflow);"
   Assert-MutationRejected $validRoot 'missing-production-build-wire' $buildPath `
     "& (Join-Path `$PSScriptRoot 'check-live-scene-runtime-ui.ps1')" `
     "# & (Join-Path `$PSScriptRoot 'check-live-scene-runtime-ui.ps1')"

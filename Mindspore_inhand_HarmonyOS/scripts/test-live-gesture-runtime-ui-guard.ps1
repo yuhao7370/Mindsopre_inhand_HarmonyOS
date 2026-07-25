@@ -102,6 +102,9 @@ try {
   Assert-Rejected 'camera-memory-string-decoy' 'entry\src\main\ets\features\runtime\FeatureWorkflowCatalog.ets' `
     'return rememberedPosition ?? initialLiveCameraPositionForWorkflow(workflow);' `
     "const decoy = 'return rememberedPosition ?? initialLiveCameraPositionForWorkflow(workflow);';`n  return initialLiveCameraPositionForWorkflow(workflow);"
+  Assert-Rejected 'drop-skeleton-camera-input-preservation' 'entry\src\main\ets\features\runtime\FeatureWorkflowCatalog.ets' `
+    'return usesAndroidLiveSkeletonLayout(workflow) || usesAndroidLiveGestureLayout(workflow) ||' `
+    'return usesAndroidLiveGestureLayout(workflow) ||'
   Assert-Rejected 'long-label-one-line' 'entry\src\main\ets\pages\FeatureRuntimePage.ets' `
     "Text(this.gestureLabelResource(gesture))`n          .fontSize(12)`n          .fontColor(Color.White)`n          .fontWeight(FontWeight.Medium)`n          .maxFontScale(3.2)`n          .maxLines(2)" `
     "Text(this.gestureLabelResource(gesture))`n          .fontSize(12)`n          .fontColor(Color.White)`n          .fontWeight(FontWeight.Medium)`n          .maxFontScale(3.2)`n          .maxLines(1)"
@@ -120,8 +123,8 @@ try {
     "if (this.liveGestureRetryAction() !== 'none') {" `
     "if (false) {`n        const retryDecoy = ``this.liveGestureRetryAction() !== 'none'``;"
   Assert-Rejected 'clear-last-overlay' 'entry\src\main\ets\pages\FeatureRuntimePage.ets' `
-    "if (!result.ok) {`n        return;`n      }" `
-    "if (!result.ok) {`n        this.applyLiveGestureResultState({ generation: this.liveRuntimeGeneration, imageUri: '', detections: [], imageWidth: 0, imageHeight: 0 });`n        return;`n      }"
+    "if (shouldShowLiveGestureCameraOverlay(workflowForRoute(this.routeName))) {`n      if (!result.ok) {`n        return;`n      }" `
+    "if (shouldShowLiveGestureCameraOverlay(workflowForRoute(this.routeName))) {`n      if (!result.ok) {`n        this.applyLiveGestureResultState({ generation: this.liveRuntimeGeneration, imageUri: '', detections: [], imageWidth: 0, imageHeight: 0 });`n        return;`n      }"
   Assert-RejectedWithUnusedSibling 'clear-camera-input-unused-sibling-decoy' 'entry\src\main\ets\pages\FeatureRuntimePage.ets' `
     "if (!preserveCameraInput) {`n        this.liveCameraInputSelected = false;`n      }" `
     'this.liveCameraInputSelected = false;' `

@@ -62,6 +62,8 @@ struct FeatureRuntimePage {
       this.gestureAndroidLiveLayout()
     } else if (specializedAndroidLiveLayoutForWorkflow(workflowForRoute(this.routeName)) === 'scene') {
       this.sceneAndroidLiveLayout()
+    } else if (specializedAndroidLiveLayoutForWorkflow(workflowForRoute(this.routeName)) === 'skeleton') {
+      this.skeletonAndroidLiveLayout()
     } else if (specializedAndroidLiveLayoutForWorkflow(workflowForRoute(this.routeName)) === 'imageClassification') {
       this.imageClassificationAndroidLiveLayout()
     } else if (specializedAndroidLiveLayoutForWorkflow(workflowForRoute(this.routeName)) === 'objectDetection') {
@@ -190,6 +192,52 @@ try {
     Replace-Once (Join-Path $root $pagePath) `
       "    } else if (specializedAndroidLiveLayoutForWorkflow(workflowForRoute(this.routeName)) === 'objectDetection') {" `
       '    } else {'
+  }
+
+  Assert-GuardRejectsMutation $validRoot 'missing-skeleton-branch' {
+    param($root)
+    Replace-Once (Join-Path $root $pagePath) @'
+    } else if (specializedAndroidLiveLayoutForWorkflow(workflowForRoute(this.routeName)) === 'skeleton') {
+      this.skeletonAndroidLiveLayout()
+'@ ''
+  }
+
+  Assert-GuardRejectsMutation $validRoot 'skeleton-branch-comment-decoy' {
+    param($root)
+    Replace-Once (Join-Path $root $pagePath) `
+      "    } else if (specializedAndroidLiveLayoutForWorkflow(workflowForRoute(this.routeName)) === 'skeleton') {" `
+      "    // } else if (specializedAndroidLiveLayoutForWorkflow(workflowForRoute(this.routeName)) === 'skeleton') {"
+  }
+
+  Assert-GuardRejectsMutation $validRoot 'skeleton-builder-string-decoy' {
+    param($root)
+    Replace-Once (Join-Path $root $pagePath) `
+      '      this.skeletonAndroidLiveLayout()' `
+      "      const skeletonBuilderDecoy = 'this.skeletonAndroidLiveLayout()'"
+  }
+
+  Assert-GuardRejectsMutation $validRoot 'skeleton-builder-template-decoy' {
+    param($root)
+    Replace-Once (Join-Path $root $pagePath) `
+      '      this.skeletonAndroidLiveLayout()' `
+      '      const skeletonBuilderDecoy = `this.skeletonAndroidLiveLayout()`'
+  }
+
+  Assert-GuardRejectsMutation $validRoot 'skeleton-unused-sibling-decoy' {
+    param($root)
+    $path = Join-Path $root $pagePath
+    Replace-Once $path '      this.skeletonAndroidLiveLayout()' '      this.sceneAndroidLiveLayout()'
+    Replace-Once $path @'
+  build() {
+    Stack({ alignContent: Alignment.TopStart }) {
+'@ @'
+  private unusedSkeletonLayoutDecoy() {
+    this.skeletonAndroidLiveLayout()
+  }
+
+  build() {
+    Stack({ alignContent: Alignment.TopStart }) {
+'@
   }
 
   Assert-GuardRejectsMutation $validRoot 'quoted-builder-decoy' {

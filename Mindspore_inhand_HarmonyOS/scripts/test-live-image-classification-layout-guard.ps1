@@ -146,7 +146,12 @@ try {
     "`n              workflow," +
     "`n              this.sceneOverlayRows.length > 0 || this.liveSceneRetryAction() !== 'none'" +
     "`n            )) {" +
-    "`n              this.statusKey = 'feature_runtime_status_preparing';" +
+    "`n              if (shouldPublishLiveSkeletonPreparingStatus(" +
+    "`n                workflow," +
+    "`n                this.posePoints.length > 0 || this.liveSkeletonRetryAction() !== 'none'" +
+    "`n              )) {" +
+    "`n                this.statusKey = 'feature_runtime_status_preparing';" +
+    "`n              }" +
     "`n            }" +
     "`n          }" +
     "`n        }" +
@@ -158,7 +163,8 @@ try {
     "`n    shouldShowLiveObjectDetectionCameraOverlay(workflow) ||" +
     "`n    usesAndroidLiveSegmentationLayout(workflow) ||" +
     "`n    usesAndroidLiveGestureLayout(workflow) ||" +
-    "`n    usesAndroidLiveSceneLayout(workflow)) && !resultOk;"
+    "`n    usesAndroidLiveSceneLayout(workflow) ||" +
+    "`n    usesAndroidLiveSkeletonLayout(workflow)) && !resultOk;"
   $fixedBack = "  if (workflow.routeName === AppRoute.IMAGE_CAMERA.name ||" +
     "`n    workflow.routeName === AppRoute.OBJECT_CAMERA.name) {`n    return 'back';`n  }"
   $fixedFront = "  if (workflow.routeName === AppRoute.IMAGE_CAMERA.name ||" +
@@ -213,7 +219,8 @@ try {
        "`n    shouldShowLiveObjectDetectionCameraOverlay(workflow) ||" +
        "`n    usesAndroidLiveSegmentationLayout(workflow) ||" +
        "`n    usesAndroidLiveGestureLayout(workflow) ||" +
-       "`n    usesAndroidLiveSceneLayout(workflow)) && !resultOk;")
+       "`n    usesAndroidLiveSceneLayout(workflow) ||" +
+       "`n    usesAndroidLiveSkeletonLayout(workflow)) && !resultOk;")
   Mutate-And-Reject 'change-fixed-camera-to-front' $catalog $fixedBack $fixedFront
   Mutate-Section-And-Reject 'remove-camera-failure-retry' $catalog `
     'export function liveClassificationRetryActionForStatus(' `

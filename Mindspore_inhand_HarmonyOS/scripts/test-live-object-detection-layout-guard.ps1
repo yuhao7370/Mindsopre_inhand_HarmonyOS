@@ -97,14 +97,17 @@ try {
     "`n            workflow,`n            this.gestureDetections.length > 0 || this.liveGestureRetryAction() !== 'none'" +
     "`n          )) {`n            if (shouldPublishLiveScenePreparingStatus(" +
     "`n              workflow,`n              this.sceneOverlayRows.length > 0 || this.liveSceneRetryAction() !== 'none'" +
-    "`n            )) {`n              this.statusKey = 'feature_runtime_status_preparing';`n            }`n          }`n        }`n      }"
+    "`n            )) {`n              if (shouldPublishLiveSkeletonPreparingStatus(" +
+    "`n                workflow,`n                this.posePoints.length > 0 || this.liveSkeletonRetryAction() !== 'none'" +
+    "`n              )) {`n                this.statusKey = 'feature_runtime_status_preparing';`n              }`n            }`n          }`n        }`n      }"
   $fixedBack = "  if (workflow.routeName === AppRoute.IMAGE_CAMERA.name ||" +
     "`n    workflow.routeName === AppRoute.OBJECT_CAMERA.name) {`n    return 'back';`n  }"
   $preserve = '    shouldShowLiveClassificationCameraOverlay(workflow) ||' +
     "`n    shouldShowLiveObjectDetectionCameraOverlay(workflow) ||" +
     "`n    usesAndroidLiveSegmentationLayout(workflow) ||" +
     "`n    usesAndroidLiveGestureLayout(workflow) ||" +
-    "`n    usesAndroidLiveSceneLayout(workflow)) && !resultOk;"
+    "`n    usesAndroidLiveSceneLayout(workflow) ||" +
+    "`n    usesAndroidLiveSkeletonLayout(workflow)) && !resultOk;"
 
   Mutate-And-Run 'remove-status-overlay' $page `
     '        this.liveObjectDetectionStatusOverlay()' '        this.runtimeStatusBar()'
@@ -156,7 +159,8 @@ try {
       ('    shouldShowLiveClassificationCameraOverlay(workflow) ||' +
       "`n    usesAndroidLiveSegmentationLayout(workflow) ||" +
       "`n    usesAndroidLiveGestureLayout(workflow) ||" +
-      "`n    usesAndroidLiveSceneLayout(workflow)) && !resultOk;")
+      "`n    usesAndroidLiveSceneLayout(workflow) ||" +
+      "`n    usesAndroidLiveSkeletonLayout(workflow)) && !resultOk;")
   Mutate-And-Run 'front-camera' $catalog $fixedBack ($fixedBack.Replace("return 'back';", "return 'front';"))
   Mutate-And-Run 'drop-right-clamp' $service `
     'Math.max(0, overlayWidth - maxWidth)' 'overlayWidth'
