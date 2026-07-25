@@ -1,0 +1,8 @@
+# Task 14 鈥?Portrait segmentation runtime
+- Portrait uses front camera by default, remembers switches, and exposes presets, custom background picking, cancellation preservation, retry preservation, and localized save feedback.
+- Composite foreground/background previews use `Contain` and a unique snapshot id; saving is readiness-gated and single-flight.
+- Production evidence covers the public live-segmentation route only. The hidden portrait route remains absent from `FeatureCatalog` and is never exposed by this task.
+- Hidden-route verification uses two independent working-tree HAPs, one at 1.0x and one at 3.2x. Each immutable HAP and receipt binds the exact route/state harness diff; the harness may select auditable input/service states but does not replace production layout or claim production success.
+- The runtime evidence checker enforces this split-source contract and rejects a false source, public route, missing state, mismatched capture source, unbound harness diff, or mismatched receipt kind.
+- Canonical final artifacts and manifests live outside the product candidate under the Task 14 final evidence directory. Their hashes are recorded in the final implementation/fix report, not duplicated here.
+- Final verification includes focused guards/mutations, LocalUnit, required builds, both evidence manifests, production HAP restoration, and clean product/default/3.2x worktrees.

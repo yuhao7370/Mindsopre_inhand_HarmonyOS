@@ -24,9 +24,7 @@ export function imageRotationDegreesFromOrientationProperty(orientation: string)
 
 export async function imageRotationDegreesFromImageSource(imageSource: image.ImageSource): Promise<number> {
   try {
-    const orientation = await imageSource.getImageProperty(image.PropertyKey.ORIENTATION, {
-      defaultValue: 'Top-left'
-    });
+    const orientation = await imageSource.getImageProperty(image.PropertyKey.ORIENTATION);
     return imageRotationDegreesFromOrientationProperty(orientation);
   } catch (_) {
     return 0;

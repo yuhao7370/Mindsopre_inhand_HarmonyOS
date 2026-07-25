@@ -215,6 +215,7 @@
     { "name": "feature_runtime_text_translation_failed", "value": "文本翻译失败。" },
     { "name": "feature_runtime_segmentation_done", "value": "人像分割已完成。" },
     { "name": "feature_runtime_segmentation_failed", "value": "人像分割失败。" },
+    { "name": "feature_runtime_segmentation_no_subject", "value": "未检测到人物，请将人物置于取景框内。" },
     { "name": "feature_runtime_pose_done", "value": "姿态检测已完成。" },
     { "name": "feature_runtime_pose_failed", "value": "姿态检测失败。" },
     { "name": "feature_runtime_permission_denied", "value": "所需权限被拒绝。" },

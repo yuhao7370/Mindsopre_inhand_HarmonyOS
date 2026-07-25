@@ -215,6 +215,7 @@
     { "name": "feature_runtime_text_translation_failed", "value": "Text translation failed." },
     { "name": "feature_runtime_segmentation_done", "value": "Portrait segmentation completed." },
     { "name": "feature_runtime_segmentation_failed", "value": "Portrait segmentation failed." },
+    { "name": "feature_runtime_segmentation_no_subject", "value": "No person detected. Place a person within the frame." },
     { "name": "feature_runtime_pose_done", "value": "Pose detection completed." },
     { "name": "feature_runtime_pose_failed", "value": "Pose detection failed." },
     { "name": "feature_runtime_permission_denied", "value": "Required permission was denied." },

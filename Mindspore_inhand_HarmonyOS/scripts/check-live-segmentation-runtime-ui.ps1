@@ -123,10 +123,12 @@ function Balanced-Section-UsingBounds(
 }
 
 function Assert-Contains([string]$Text, [string]$Marker, [string]$Message) {
+  $Marker = $Marker.Replace("`r`n", "`n").Replace("`r", "`n")
   if ($Text.IndexOf($Marker, [StringComparison]::Ordinal) -lt 0) { Fail $Message }
 }
 
 function Assert-Excludes([string]$Text, [string]$Marker, [string]$Message) {
+  $Marker = $Marker.Replace("`r`n", "`n").Replace("`r", "`n")
   if ($Text.IndexOf($Marker, [StringComparison]::Ordinal) -ge 0) { Fail $Message }
 }
 
@@ -275,7 +277,8 @@ foreach ($status in @(
   'feature_runtime_live_frame_failed',
   'feature_runtime_run_failed',
   'feature_runtime_pending_adapter',
-  'feature_runtime_segmentation_failed'
+  'feature_runtime_segmentation_failed',
+  'feature_runtime_segmentation_no_subject'
 )) { Assert-Contains $retryMappingWithLiterals "'$status'" "segmentation retry mapping is missing $status." }
 Assert-Contains $retryMapping 'if (!usesAndroidLiveSegmentationLayout(workflow)) {' `
   'segmentation Retry must remain route specific.'

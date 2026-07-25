@@ -23,6 +23,13 @@ function Require-AbsoluteFile([string]$Path, [string]$Label) {
   }
 }
 
+function Test-PathInside([string]$Path, [string]$Directory) {
+  $resolvedPath = [IO.Path]::GetFullPath($Path).TrimEnd('\', '/')
+  $resolvedDirectory = [IO.Path]::GetFullPath($Directory).TrimEnd('\', '/')
+  return $resolvedPath.StartsWith($resolvedDirectory + [IO.Path]::DirectorySeparatorChar,
+    [StringComparison]::OrdinalIgnoreCase)
+}
+
 function Normalize-Text([string]$Text) {
   return $Text.Replace("`r`n", "`n").Replace("`r", "`n").TrimEnd("`n")
 }
@@ -284,6 +291,7 @@ function Get-PreservationHash([object]$Node) {
 
 $ManifestPath = [IO.Path]::GetFullPath($ManifestPath)
 Require-AbsoluteFile $ManifestPath 'ManifestPath'
+$manifestDirectory = Split-Path -Parent $ManifestPath
 try {
   $manifest = Get-Content -LiteralPath $ManifestPath -Raw -Encoding utf8 | ConvertFrom-Json
 } catch {
@@ -324,12 +332,19 @@ if ($expectedProjectRoot -cne $repositoryRoot) {
 }
 $candidateDiffPath = [string](Require-Property $manifest 'candidateDiffPath')
 Require-AbsoluteFile $candidateDiffPath 'candidateDiffPath'
+if ($task -eq 14 -and -not (Test-PathInside $candidateDiffPath $manifestDirectory)) {
+  Fail 'task 14 candidateDiffPath must be an immutable artifact inside the evidence directory.'
+}
 if ((Get-FileHash -LiteralPath $candidateDiffPath -Algorithm SHA256).Hash.ToLowerInvariant() -cne
   $candidateHash.ToLowerInvariant()) {
   Fail 'candidateDiffSha256 does not match candidateDiffPath.'
 }
+$declaredSourceKind = [string](Require-Property $manifest 'source')
 $commitSha = [string](Require-Property $manifest 'commitSha')
 if ($commitSha -ne '' -and $commitSha -notmatch '^[0-9a-f]{40}$') { Fail 'commitSha must be empty or 40 hex characters.' }
+if ($task -eq 14 -and $declaredSourceKind -eq 'production' -and $commitSha -eq '') {
+  Fail 'task 14 production evidence must bind a non-empty amended commit SHA.'
+}
 $headSha = Normalize-Text (
   (& git -c core.autocrlf=false -c core.safecrlf=false -C $repositoryRoot `
       rev-parse HEAD 2>$null) -join "`n"
@@ -372,7 +387,10 @@ $candidateIdentitySha256 = if ($candidateKind -eq 'workingTree') {
 $hapPath = [string](Require-Property $manifest 'hapPath')
 Require-AbsoluteFile $hapPath 'hapPath'
 $canonicalHapPath = Join-Path $repositoryRoot 'entry\build\default\outputs\default\entry-default-unsigned.hap'
-if ([IO.Path]::GetFullPath($hapPath) -ine [IO.Path]::GetFullPath($canonicalHapPath)) {
+if ($task -eq 14 -and -not (Test-PathInside $hapPath $manifestDirectory)) {
+  Fail 'task 14 hapPath must be an immutable HAP inside the evidence directory.'
+}
+if ($task -ne 14 -and [IO.Path]::GetFullPath($hapPath) -ine [IO.Path]::GetFullPath($canonicalHapPath)) {
   Fail 'hapPath must be the canonical HAP output of the bound repository.'
 }
 $hapHash = [string](Require-Property $manifest 'hapSha256')
@@ -404,6 +422,9 @@ $buildReceiptPath = [string](Require-Property $manifest 'buildReceiptPath')
 Require-AbsoluteFile $buildReceiptPath 'buildReceiptPath'
 if ([IO.Path]::GetFullPath($buildReceiptPath) -ine [IO.Path]::GetFullPath("$hapPath.runtime-ui-build.json")) {
   Fail 'buildReceiptPath must be the canonical sidecar of hapPath.'
+}
+if ($task -eq 14 -and -not (Test-PathInside $buildReceiptPath $manifestDirectory)) {
+  Fail 'task 14 buildReceiptPath must be an immutable receipt inside the evidence directory.'
 }
 try {
   $buildReceipt = Get-Content -LiteralPath $buildReceiptPath -Raw -Encoding utf8 | ConvertFrom-Json
@@ -464,7 +485,7 @@ $routeName = [string](Require-Property $manifest 'routeName')
 if ($runtimeRoutes -cnotcontains $routeName) { Fail 'routeName is not an exact FeatureRuntime AppRoute name.' }
 $fontScale = [double](Require-Property $manifest 'fontScale')
 if ($fontScale -notin @(1.0, 3.2)) { Fail 'fontScale must be 1.0 or 3.2.' }
-$sourceKind = [string](Require-Property $manifest 'source')
+$sourceKind = $declaredSourceKind
 if ($sourceKind -notin @('production', 'harness')) { Fail 'source must be production or harness.' }
 $harnessPagePath = Join-Path $repositoryRoot 'entry\src\main\ets\pages\RuntimeHarnessPage.ets'
 $entryAbilityPath = Join-Path $repositoryRoot 'entry\src\main\ets\entryability\EntryAbility.ets'
@@ -483,6 +504,18 @@ $derivedSource = if ($hasHarnessPage -and $candidateKind -eq 'workingTree' -and
 if ($sourceKind -cne $derivedSource) {
   Fail 'source must be derived from the bound production or isolated harness candidate.'
 }
+if ($task -eq 14 -and $sourceKind -eq 'harness') {
+  $harnessDisclosure = Require-Property $manifest 'harnessDisclosure'
+  if ([string](Require-Property $harnessDisclosure 'kind') -cne 'auditableRouteStateHarness' -or
+    [string](Require-Property $harnessDisclosure 'productionSuccessClaim') -cne 'none') {
+    Fail 'task 14 harness evidence must disclose auditable route/state scope and no production success claim.'
+  }
+  $harnessDisclosurePath = [string](Require-Property $harnessDisclosure 'path')
+  Require-AbsoluteFile $harnessDisclosurePath 'task 14 harness disclosure'
+  if (-not (Test-PathInside $harnessDisclosurePath $manifestDirectory)) {
+    Fail 'task 14 harness disclosure must be stored inside the immutable evidence directory.'
+  }
+}
 $derivedFontScale = 1.0
 if ($derivedSource -eq 'harness') {
   Require-AbsoluteFile $entryAbilityPath 'harness EntryAbility'
@@ -494,10 +527,13 @@ if ($derivedSource -eq 'harness') {
   }
   if ($entryAbility -match '\.setFontSizeScale\(3\.2\)') { $derivedFontScale = 3.2 }
 }
-if ($fontScale -ne $derivedFontScale -or
-  (($fontScale -eq 3.2 -or $routeName -eq '/custommodel/CustomModelMainActivity') -and
+if (($fontScale -ne $derivedFontScale) -or
+  ((($fontScale -eq 3.2) -or $routeName -eq '/custommodel/CustomModelMainActivity') -and
     $derivedSource -ne 'harness')) {
   Fail 'fontScale/hidden-route claims do not match the bound production or harness source.'
+}
+if ($task -eq 14 -and $sourceKind -eq 'production' -and $fontScale -ne 1.0) {
+  Fail 'task 14 production evidence must use the real 1.0 font-scale capture.'
 }
 $displayDumpPath = [string](Require-Property $manifest 'displayDumpPath')
 Require-AbsoluteFile $displayDumpPath 'displayDumpPath'
@@ -583,6 +619,38 @@ $stateData = @{}
 foreach ($state in $states) {
   $name = [string](Require-Property $state 'name')
   if ([string]::IsNullOrWhiteSpace($name) -or $stateData.ContainsKey($name)) { Fail 'state names must be unique and non-empty.' }
+  $evidenceStatus = if ($state.PSObject.Properties.Name -contains 'evidenceStatus') {
+    [string]$state.evidenceStatus
+  } else {
+    'captured'
+  }
+  if ($evidenceStatus -notin @('captured', 'parked')) {
+    Fail "state '$name' has an invalid evidenceStatus."
+  }
+  if ($evidenceStatus -eq 'parked') {
+    $parkingReason = [string](Require-Property $state 'parkingReason')
+    if ([string]::IsNullOrWhiteSpace($parkingReason) -or
+      $state.PSObject.Properties.Name -contains 'layout' -or $state.PSObject.Properties.Name -contains 'screenshot') {
+      Fail "parked state '$name' must document its reason without claiming a captured layout or screenshot."
+    }
+    $stateData[$name] = [pscustomobject]@{
+      PreserveFrom = ''
+      Selectors = @()
+      Hashes = @{}
+      VisualRegions = @{}
+      EvidenceStatus = $evidenceStatus
+      CaptureSource = ''
+    }
+    continue
+  }
+  $captureSource = if ($state.PSObject.Properties.Name -contains 'captureSource') {
+    [string]$state.captureSource
+  } else {
+    ''
+  }
+  if ($task -eq 14 -and $captureSource -ne $sourceKind) {
+    Fail "task 14 state '$name' captureSource must match the manifest source."
+  }
   $layoutPath = [string](Require-Property $state 'layout')
   $screenshotPath = [string](Require-Property $state 'screenshot')
   Require-AbsoluteFile $layoutPath "state '$name' layout"
@@ -663,8 +731,8 @@ foreach ($state in $states) {
   foreach ($entry in $scrollReachableEntries) {
     $selector = [string](Require-Property $entry 'selector')
     $scrollSelector = [string](Require-Property $entry 'scrollSelector')
-    if ($selector -notmatch '^text:.+' -or $scrollSelector -ne 'type:Scroll') {
-      Fail "state '$name' scroll-reachable evidence must name one text selector and its Scroll ancestor."
+    if ($selector -notmatch '^text:.+' -or $scrollSelector -notin @('type:Scroll', 'type:List')) {
+      Fail "state '$name' scroll-reachable evidence must name one text selector and its Scroll or List ancestor."
     }
     $matches = @(Find-NodesWithAncestors $routeRoot[0] $selector)
     if ($matches.Count -ne 1) { Fail "state '$name' scroll-reachable selector '$selector' must identify one node." }
@@ -672,14 +740,16 @@ foreach ($state in $states) {
         Matches-NodeSelector $_ $scrollSelector
       })
     if ($scrollAncestors.Count -ne 1 -or (Attr $scrollAncestors[0] 'scrollable') -ne 'true') {
-      Fail "state '$name' scroll-reachable selector '$selector' must have one scrollable Scroll ancestor."
+      Fail "state '$name' scroll-reachable selector '$selector' must have one scrollable ancestor."
     }
     $reachableBounds = Parse-Bounds (Attr $matches[0].Node 'bounds')
     $reachableOriginalBounds = Parse-Bounds (Attr $matches[0].Node 'origBounds')
     $scrollBounds = Parse-Bounds (Attr $scrollAncestors[0] 'bounds')
+    $horizontalReachability = $scrollSelector -eq 'type:List'
     if ($null -eq $reachableBounds -or $null -eq $reachableOriginalBounds -or $null -eq $scrollBounds -or
-      $reachableOriginalBounds.Bottom -le $scrollBounds.Bottom) {
-      Fail "state '$name' scroll-reachable selector '$selector' must prove text extends below its Scroll viewport."
+      ($horizontalReachability -and $reachableOriginalBounds.Right -le $scrollBounds.Right) -or
+      (-not $horizontalReachability -and $reachableOriginalBounds.Bottom -le $scrollBounds.Bottom)) {
+      Fail "state '$name' scroll-reachable selector '$selector' must prove text extends beyond its scroll viewport."
     }
     $afterLayoutPath = [string](Require-Property $entry 'afterScrollLayout')
     $afterScreenshotPath = [string](Require-Property $entry 'afterScrollScreenshot')
@@ -711,8 +781,10 @@ foreach ($state in $states) {
     $afterScrollBounds = Parse-Bounds (Attr $afterScrollAncestors[0] 'bounds')
     if ($afterScrollAncestors.Count -ne 1 -or (Attr $afterScrollAncestors[0] 'scrollable') -ne 'true' -or
       $null -eq $afterOriginalBounds -or $null -eq $afterScrollBounds -or
-      $afterOriginalBounds.Bottom -gt $afterScrollBounds.Bottom) {
-      Fail "state '$name' after-scroll evidence must retain the same text in a scrollable Scroll ancestor."
+      ($horizontalReachability -and ($afterOriginalBounds.Left -lt $afterScrollBounds.Left -or
+        $afterOriginalBounds.Right -gt $afterScrollBounds.Right)) -or
+      (-not $horizontalReachability -and $afterOriginalBounds.Bottom -gt $afterScrollBounds.Bottom)) {
+      Fail "state '$name' after-scroll evidence must retain the same text within its scrollable ancestor."
     }
     $beforePixels = Get-VisualRegionData $screenshotPath $scrollBounds $name $selector
     $afterPixels = Get-VisualRegionData $afterScreenshotPath $afterScrollBounds $name $selector
@@ -837,6 +909,45 @@ foreach ($state in $states) {
     Selectors = $preservedSelectors
     Hashes = $preservedHashes
     VisualRegions = $preservedVisualRegions
+    EvidenceStatus = $evidenceStatus
+    CaptureSource = $captureSource
+  }
+}
+
+if ($task -eq 14 -and $sourceKind -eq 'production') {
+  $requiredTask14States = @(
+    'front-no-subject', 'retry-no-subject', 'rear-person-success', 'rear-person-reentry'
+  )
+  foreach ($requiredState in $requiredTask14States) {
+    if (-not $stateData.ContainsKey($requiredState)) {
+      Fail "task 14 production evidence is missing required state '$requiredState'."
+    }
+  }
+  foreach ($capturedState in $requiredTask14States) {
+    if ($stateData[$capturedState].EvidenceStatus -ne 'captured' -or
+      $stateData[$capturedState].CaptureSource -ne 'production') {
+      Fail "task 14 state '$capturedState' must be a real production capture."
+    }
+  }
+}
+if ($task -eq 14 -and $sourceKind -eq 'harness') {
+  if ($routeName -cne '/hms/PortraitSegmentationActivity') {
+    Fail 'task 14 harness evidence must exercise only the hidden portrait route.'
+  }
+  $requiredTask14States = @(
+    'initial', 'preset-selected', 'custom-background-cancel', 'rear-camera', 'reentry',
+    'save-failure', 'save-success', 'transient-failure', 'retry-success'
+  )
+  foreach ($requiredState in $requiredTask14States) {
+    if (-not $stateData.ContainsKey($requiredState) -or
+      $stateData[$requiredState].EvidenceStatus -ne 'captured' -or
+      $stateData[$requiredState].CaptureSource -ne 'harness') {
+      Fail "task 14 harness evidence is missing captured state '$requiredState'."
+    }
+  }
+  $cancelState = @($states | Where-Object { [string]$_.name -ceq 'custom-background-cancel' })[0]
+  if ([string](Require-Property $cancelState 'preservedBoundsHashFrom') -eq '') {
+    Fail 'task 14 custom picker cancellation must preserve a captured composite hash.'
   }
 }
 

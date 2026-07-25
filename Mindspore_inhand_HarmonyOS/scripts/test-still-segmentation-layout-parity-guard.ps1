@@ -212,12 +212,12 @@ try {
     "(usesAndroidStillSegmentationLayout(workflow) && inputKind === 'photo') ||"
   Assert-GuardRejects 'clear-on-failure' $catalog `
     'if (usesAndroidStillSegmentationLayout(workflow)) {' `
-    'return workflow?.routeName === AppRoute.PORTRAIT_SEGMENTATION.name' `
+    '  return false;' `
     "return !resultOk || dataKind === 'segmentation';" `
     "return dataKind === 'segmentation';"
   Assert-GuardRejects 'preserve-wrong-success-kind' $catalog `
     'if (usesAndroidStillSegmentationLayout(workflow)) {' `
-    'return workflow?.routeName === AppRoute.PORTRAIT_SEGMENTATION.name' `
+    '  return false;' `
     "return !resultOk || dataKind === 'segmentation';" 'return true;'
   Assert-GuardRejects 'remove-save-ready-running-gate' $catalog `
     'export function compositeSegmentationSaveReady' `

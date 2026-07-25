@@ -1738,11 +1738,16 @@ struct FeatureRuntimePage {
     const workflow = workflowForRoute(this.routeName);
     const stillSegmentation = usesAndroidStillSegmentationLayout(workflow);
     const liveSegmentation = usesAndroidLiveSegmentationLayout(workflow);
+    const portraitSegmentation = usesAndroidPortraitSegmentationLayout(workflow);
     const rgba = result.foregroundImageRgba;
     const width = result.foregroundImageWidth ?? 0;
     const height = result.foregroundImageHeight ?? 0;
     if (rgba === undefined || rgba.byteLength === 0 || width <= 0 || height <= 0) {
       if (stillSegmentation || liveSegmentation) {
+        this.segmentationForegroundPixelMapOwner.invalidatePendingReplacement();
+        this.statusKey = 'feature_runtime_segmentation_failed';
+        this.showStillSegmentationFailureToastIfNeeded(false);
+      } else if (portraitSegmentation) {
         this.segmentationForegroundPixelMapOwner.invalidatePendingReplacement();
         this.statusKey = 'feature_runtime_segmentation_failed';
         this.showStillSegmentationFailureToastIfNeeded(false);
@@ -1766,6 +1771,10 @@ struct FeatureRuntimePage {
       if (this.runtimeRequestGeneration.isCurrent(runtimeRequestId) &&
         this.segmentationForegroundPixelMapOwner.isCurrent(requestId)) {
         if (stillSegmentation || liveSegmentation) {
+          this.segmentationForegroundPixelMapOwner.invalidatePendingReplacement();
+          this.statusKey = 'feature_runtime_segmentation_failed';
+          this.showStillSegmentationFailureToastIfNeeded(false);
+        } else if (portraitSegmentation) {
           this.segmentationForegroundPixelMapOwner.invalidatePendingReplacement();
           this.statusKey = 'feature_runtime_segmentation_failed';
           this.showStillSegmentationFailureToastIfNeeded(false);
@@ -2300,6 +2309,7 @@ struct FeatureRuntimePage {
   private saveResultComponentImage(componentId: string): void {
     this.saveResultComponentImageAsync(componentId).catch(() => {
       this.statusKey = 'feature_runtime_save_image_failed';
+      this.showRuntimeToast(this.statusKey);
     });
   }
 
@@ -2366,6 +2376,7 @@ struct FeatureRuntimePage {
       await withCallerOwnedPixelMap(pixelMap, async (snapshot: image.PixelMap | undefined): Promise<void> => {
         await this.performResultPixelMapSave(snapshot);
       });
+      this.showRuntimeToast(this.statusKey);
     } finally {
       this.resultImageSaveInFlight = false;
     }
@@ -3925,11 +3936,12 @@ struct FeatureRuntimePage {
         .enabled(compositeSegmentationSaveReady(this.workflowRunning,
           this.segmentationForegroundPixelMap !== undefined, this.resultImageSaveInFlight))
         .onClick((_event: ClickEvent, result: SaveButtonOnClickResult) => {
-          if (result === SaveButtonOnClickResult.SUCCESS) {
-            this.saveResultComponentImage(segmentationBackgroundReplacementComponentId);
-            return;
-          }
-          this.statusKey = 'feature_runtime_save_image_failed';
+        if (result === SaveButtonOnClickResult.SUCCESS) {
+          this.saveResultComponentImage(segmentationBackgroundReplacementComponentId);
+          return;
+        }
+        this.statusKey = 'feature_runtime_save_image_failed';
+        this.showRuntimeToast(this.statusKey);
         })
     }
     .width('100%')
@@ -3946,12 +3958,12 @@ struct FeatureRuntimePage {
         .orientation(this.segmentationBackgroundImageOrientation)
         .width('100%')
         .height('100%')
-        .objectFit(ImageFit.Fill)
+        .objectFit(ImageFit.Contain)
       if (this.segmentationForegroundPixelMap !== undefined) {
         Image(this.segmentationForegroundPixelMap)
           .width('100%')
           .height('100%')
-          .objectFit(ImageFit.Fill)
+          .objectFit(ImageFit.Contain)
           .scale({ x: this.segmentationForegroundMirrorScaleX(), y: 1 })
       }
     }
@@ -3961,39 +3973,128 @@ struct FeatureRuntimePage {
   }
 
   @Builder
-  portraitSegmentationBackgroundStrip() {
-    Column() {
-      Divider()
-        .strokeWidth(5)
-        .color(AppColor.divider)
-        .width('100%')
-      List({ space: 0 }) {
-        ForEach(portraitSegmentationBackgroundPresets, (preset: PortraitSegmentationBackgroundPreset) => {
-          ListItem() {
-            Image(portraitSegmentationBackgroundUri(preset))
-              .width(95)
-              .height(120)
-              .objectFit(ImageFit.Fill)
-              .onClick(() => this.selectPortraitBackgroundPreset(preset))
-          }
-        }, (preset: PortraitSegmentationBackgroundPreset) => preset.id)
-        ListItem() {
-          Image($r('app.media.icon_default'))
-            .width(95)
-            .height(120)
-            .objectFit(ImageFit.Fill)
-            .onClick(() => this.prepareInput('backgroundImage'))
+  portraitSegmentationStatus() {
+    Row({ space: AppSpacing.sm }) {
+      Row({ space: AppSpacing.xs }) {
+        if (this.workflowRunning) {
+          LoadingProgress()
+            .width(20)
+            .height(20)
+            .color(AppColor.accent)
         }
+        Text(appString(this.statusKey))
+          .fontSize(13)
+          .fontColor(AppColor.textPrimary)
+          .maxFontScale(3.2)
+          .maxLines(2)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+          .layoutWeight(1)
       }
-      .listDirection(Axis.Horizontal)
-      .scrollBar(BarState.Off)
-      .width('100%')
-      .height(100)
-      .clip(true)
+      .layoutWeight(1)
+      .constraintSize({ minHeight: 48 })
+      .alignItems(VerticalAlign.Center)
+      if (this.liveSegmentationRetryAction() !== 'none') {
+        Button(appString('web_retry'), { type: ButtonType.Normal })
+          .constraintSize({ minWidth: 72, minHeight: 48 })
+          .fontSize(14)
+          .maxFontScale(3.2)
+          .fontColor(AppColor.accent)
+          .backgroundColor(AppColor.cardBackground)
+          .border({ width: 1, color: AppColor.divider, radius: AppRadius.button })
+          .onClick(() => this.retryLiveSegmentation())
+      }
+    }
+    .width('calc(100% - 32vp)')
+    .constraintSize({ maxWidth: 520 })
+    .padding({ left: AppSpacing.md, right: AppSpacing.md, top: AppSpacing.xs, bottom: AppSpacing.xs })
+    .backgroundColor(AppColor.cardBackground)
+    .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
+    .borderRadius(AppRadius.card)
+  }
+
+  @Builder
+  portraitSegmentationBackgroundStrip() {
+    List({ space: AppSpacing.sm }) {
+      ForEach(portraitSegmentationBackgroundPresets, (preset: PortraitSegmentationBackgroundPreset) => {
+        ListItem() {
+          Stack({ alignContent: Alignment.TopEnd }) {
+            Column({ space: AppSpacing.xs }) {
+              Image(portraitSegmentationBackgroundUri(preset))
+                .width(72)
+                .height(72)
+                .objectFit(ImageFit.Cover)
+              Text(appString(preset.titleKey))
+                .fontSize(12)
+                .fontColor(AppColor.textSecondary)
+                .textAlign(TextAlign.Center)
+                .maxFontScale(3.2)
+                .maxLines(2)
+                .width('100%')
+            }
+            .width(88)
+            if (this.selectedPortraitBackgroundPresetId === preset.id) {
+              SymbolGlyph($r('sys.symbol.checkmark'))
+                .fontSize(16)
+                .fontColor([Color.White])
+                .padding({ left: AppSpacing.xs, right: AppSpacing.xs })
+                .backgroundColor(AppColor.accent)
+                .borderRadius(AppRadius.button)
+            }
+          }
+          .width(96)
+          .padding(AppSpacing.xs)
+          .backgroundColor(this.selectedPortraitBackgroundPresetId === preset.id ? '#F0F3FF' : AppColor.cardBackground)
+          .border({
+            width: 1,
+            color: this.selectedPortraitBackgroundPresetId === preset.id ? AppColor.accent : AppColor.divider,
+            radius: AppRadius.card
+          })
+          .onClick(() => this.selectPortraitBackgroundPreset(preset))
+        }
+      }, (preset: PortraitSegmentationBackgroundPreset) => preset.id)
+      ListItem() {
+        Stack({ alignContent: Alignment.TopEnd }) {
+          Column({ space: AppSpacing.xs }) {
+            Image($r('app.media.icon_default'))
+              .width(72)
+              .height(72)
+              .objectFit(ImageFit.Contain)
+            Text(appString('feature_runtime_portrait_background_custom'))
+              .fontSize(12)
+              .fontColor(AppColor.textSecondary)
+              .textAlign(TextAlign.Center)
+              .maxFontScale(3.2)
+              .maxLines(2)
+              .width('100%')
+          }
+          .width(88)
+          if (this.selectedPortraitBackgroundPresetId === portraitSegmentationCustomBackgroundId) {
+            SymbolGlyph($r('sys.symbol.checkmark'))
+              .fontSize(16)
+              .fontColor([Color.White])
+              .padding({ left: AppSpacing.xs, right: AppSpacing.xs })
+              .backgroundColor(AppColor.accent)
+              .borderRadius(AppRadius.button)
+          }
+        }
+        .width(96)
+        .padding(AppSpacing.xs)
+        .backgroundColor(this.selectedPortraitBackgroundPresetId === portraitSegmentationCustomBackgroundId ?
+          '#F0F3FF' : AppColor.cardBackground)
+        .border({
+          width: 1,
+          color: this.selectedPortraitBackgroundPresetId === portraitSegmentationCustomBackgroundId ?
+            AppColor.accent : AppColor.divider,
+          radius: AppRadius.card
+        })
+        .onClick(() => this.prepareInput('backgroundImage'))
+      }
     }
     .width('100%')
-    .height(105)
-    .backgroundColor(AppColor.divider)
+    .height(184)
+    .padding({ left: AppSpacing.page, right: AppSpacing.page })
+    .listDirection(Axis.Horizontal)
+    .scrollBar(BarState.Off)
   }
 
   @Builder
@@ -4145,21 +4246,22 @@ struct FeatureRuntimePage {
 
   @Builder
   portraitSegmentationAndroidLayout() {
-    Column() {
+    Column({ space: AppSpacing.sm }) {
       this.portraitSegmentationToolbar()
       Stack({ alignContent: Alignment.TopStart }) {
         this.liveCameraSurfaceContent()
         this.portraitSegmentationComposite()
-        Column() {
-          this.portraitSegmentationBackgroundStrip()
-        }
-        .width('100%')
-        .height('100%')
-        .justifyContent(FlexAlign.End)
       }
       .width('100%')
       .layoutWeight(1)
       .backgroundColor('#111827')
+      .clip(true)
+      Row() {
+        this.portraitSegmentationStatus()
+      }
+      .width('100%')
+      .justifyContent(FlexAlign.Center)
+      this.portraitSegmentationBackgroundStrip()
     }
     .width('100%')
     .height('100%')

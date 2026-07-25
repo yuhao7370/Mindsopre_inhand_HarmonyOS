@@ -450,7 +450,7 @@ export class DefaultAiService {
         ok: false,
         code: 'SEGMENTATION_FAILED',
         aiMethod: 'segmentPerson',
-        messageKey: 'feature_runtime_segmentation_failed',
+        messageKey: this.segmentationFailureMessageKey(result),
         detailText: this.segmentationSummary(result, imageUri, backgroundImageUri)
       };
     }
@@ -908,12 +908,20 @@ export class DefaultAiService {
     if (backgroundImageUri.length > 0) {
       lines.push(`background=${this.lastPathSegment(backgroundImageUri)}`);
     }
+    if (result.failureReason !== undefined) {
+      lines.push(`failureReason=${result.failureReason}`);
+    }
     result.rectangles.forEach((rectangle: SegmentationRectangle, index: number) => {
       lines.push(`${index + 1}. [` +
         `${rectangle.left.toFixed(0)},${rectangle.top.toFixed(0)},` +
         `${rectangle.width.toFixed(0)},${rectangle.height.toFixed(0)}]`);
     });
     return lines.join('\n');
+  }
+
+  private segmentationFailureMessageKey(result: SegmentationResult): AppStringKey {
+    return result.failureReason === 'noSubject' ?
+      'feature_runtime_segmentation_no_subject' : 'feature_runtime_segmentation_failed';
   }
 
   private textRecognitionSummary(result: TextRecognitionResult, imageUri: string): string {

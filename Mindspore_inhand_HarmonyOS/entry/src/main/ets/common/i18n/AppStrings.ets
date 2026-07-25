@@ -214,6 +214,7 @@ export type AppStringKey =
   'feature_runtime_text_translation_failed' |
   'feature_runtime_segmentation_done' |
   'feature_runtime_segmentation_failed' |
+  'feature_runtime_segmentation_no_subject' |
   'feature_runtime_pose_done' |
   'feature_runtime_pose_failed' |
   'feature_runtime_permission_denied' |
@@ -539,6 +540,7 @@ const APP_STRING_KEYS: AppStringKey[] = [
   'feature_runtime_text_translation_failed',
   'feature_runtime_segmentation_done',
   'feature_runtime_segmentation_failed',
+  'feature_runtime_segmentation_no_subject',
   'feature_runtime_pose_done',
   'feature_runtime_pose_failed',
   'feature_runtime_permission_denied',
@@ -1083,6 +1085,8 @@ export function appString(key: AppStringKey): ResourceStr {
       return $r('app.string.feature_runtime_segmentation_done');
     case 'feature_runtime_segmentation_failed':
       return $r('app.string.feature_runtime_segmentation_failed');
+    case 'feature_runtime_segmentation_no_subject':
+      return $r('app.string.feature_runtime_segmentation_no_subject');
     case 'feature_runtime_pose_done':
       return $r('app.string.feature_runtime_pose_done');
     case 'feature_runtime_pose_failed':

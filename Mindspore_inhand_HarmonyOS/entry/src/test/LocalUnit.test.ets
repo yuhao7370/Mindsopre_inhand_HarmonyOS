@@ -447,6 +447,8 @@ import {
   shouldShowLivePoseTemplateOverlay,
   shouldShowPrimaryRunAction,
   shouldShowLiveSegmentationCameraOverlay,
+  liveSegmentationRetryActionForStatus,
+  shouldPublishLiveSegmentationPreparingStatus,
   shouldRenderLiveCameraPreview,
   liveClassificationEmptyPromptKey,
   shouldMirrorSegmentationForeground,
@@ -3984,7 +3986,7 @@ export default function localUnitTest() {
       expect(portraitSegmentation.inputKinds.indexOf('photo')).assertEqual(-1);
       expect((portraitSegmentation.optionalInputKinds ?? []).indexOf('backgroundImage') >= 0).assertTrue();
       expect(portraitSegmentation.requiredPermissions.indexOf('camera') >= 0).assertTrue();
-      expect(portraitSegmentation.requiredPermissions.indexOf('media') >= 0).assertTrue();
+      expect(portraitSegmentation.requiredPermissions.indexOf('media')).assertEqual(-1);
       expect(portraitSegmentation.liveMode).assertTrue();
       expect(liveRuntimeModeForWorkflow(portraitSegmentation)).assertTrue();
       expect(shouldRenderLiveCameraPreview(portraitSegmentation, false)).assertTrue();
@@ -4302,11 +4304,21 @@ export default function localUnitTest() {
       expect(shouldPreserveRuntimeResultAfterInputReady(styleTransfer, 'styleImage')).assertTrue();
 
       expect(shouldPreserveRuntimeVisualResultOnAiResult(portraitSegmentation, true, 'segmentation')).assertTrue();
-      expect(shouldPreserveRuntimeVisualResultOnAiResult(portraitSegmentation, false, 'segmentation')).assertFalse();
+      expect(shouldPreserveRuntimeVisualResultOnAiResult(portraitSegmentation, false, 'segmentation')).assertTrue();
       expect(shouldPreserveRuntimeVisualResultOnAiResult(portraitSegmentation, true, '')).assertFalse();
       expect(shouldPreserveRuntimeVisualResultOnAiResult(stillSegmentation, true, 'segmentation')).assertTrue();
       expect(shouldPreserveRuntimeVisualResultOnAiResult(liveSegmentation, false, '')).assertTrue();
       expect(shouldPreserveRuntimeVisualResultOnAiResult(liveSegmentation, true, 'segmentation')).assertTrue();
+      expect(shouldPreserveLiveCameraInputOnFailure(portraitSegmentation)).assertTrue();
+      expect(liveSegmentationRetryActionForStatus(
+        portraitSegmentation,
+        'feature_runtime_segmentation_failed'
+      )).assertEqual('restartInference');
+      expect(liveSegmentationRetryActionForStatus(
+        portraitSegmentation,
+        'feature_runtime_segmentation_no_subject'
+      )).assertEqual('restartInference');
+      expect(shouldPublishLiveSegmentationPreparingStatus(portraitSegmentation, true)).assertFalse();
     });
 
     it('usesCurrentPortraitBackgroundWhenApplyingStaleSegmentationResult', 0, () => {
@@ -5520,6 +5532,31 @@ export default function localUnitTest() {
       expect(result.detailText.indexOf('[1,2,3,4]') >= 0).assertTrue();
     });
 
+    it('aiServiceMapsNoSubjectSegmentationFailureToLocalizedRetryStatus', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.PORTRAIT_SEGMENTATION.name);
+      expect(workflow !== undefined).assertTrue();
+      const service = new SegmentationService({
+        runner: new FixedSegmentationRunner({
+          ok: false,
+          subjectCount: 0,
+          detailCount: 0,
+          foregroundAvailable: false,
+          rectangles: [],
+          executionMs: 7,
+          failureReason: 'noSubject'
+        })
+      });
+
+      const result = await new DefaultAiService({ segmentationService: service }).run(workflow!, {
+        imageUri: 'file://selected/no-person.jpg'
+      });
+
+      expect(result.ok).assertFalse();
+      expect(result.code).assertEqual('SEGMENTATION_FAILED');
+      expect(result.messageKey).assertEqual('feature_runtime_segmentation_no_subject');
+      expect(result.detailText.indexOf('subjectCount=0') >= 0).assertTrue();
+    });
+
     it('mapsSegmentationRectangleToPercentOverlay', 0, () => {
       const rectangle: SegmentationRectangle = {
         left: 20,
@@ -5550,6 +5587,17 @@ export default function localUnitTest() {
       expect(result.ok).assertFalse();
       expect(result.code).assertEqual('SEGMENTATION_FAILED');
       expect(result.messageKey).assertEqual('feature_runtime_segmentation_failed');
+    });
+
+    it('segmentationServiceMapsRunnerExceptionToGenericFailureReason', 0, async () => {
+      const service = new SegmentationService({
+        runner: new RejectingSegmentationRunner()
+      });
+
+      const result: SegmentationResult = await service.segmentPerson('file://selected/person.jpg');
+
+      expect(result.ok).assertFalse();
+      expect(result.failureReason).assertEqual('runtimeException');
     });
 
     it('poseDetectionRequiresImageInputWhenServiceIsProvided', 0, async () => {

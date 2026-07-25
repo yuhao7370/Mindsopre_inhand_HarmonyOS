@@ -15,6 +15,8 @@ export interface SegmentationRectangle {
   readonly height: number;
 }
 
+export type SegmentationFailureReason = 'noSubject' | 'runtimeException';
+
 export interface SegmentationResult {
   readonly ok: boolean;
   readonly subjectCount: number;
@@ -27,6 +29,7 @@ export interface SegmentationResult {
   readonly imageHeight?: number;
   readonly rectangles: Array<SegmentationRectangle>;
   readonly executionMs: number;
+  readonly failureReason?: SegmentationFailureReason;
 }
 
 interface SegmentationForegroundImage {
@@ -205,7 +208,8 @@ export class SegmentationService {
         imageWidth: result.imageWidth,
         imageHeight: result.imageHeight,
         rectangles: result.rectangles,
-        executionMs: result.executionMs
+        executionMs: result.executionMs,
+        failureReason: 'runtimeException'
       };
     } catch (_) {
       return {
@@ -214,7 +218,8 @@ export class SegmentationService {
         detailCount: 0,
         foregroundAvailable: false,
         rectangles: [],
-        executionMs: Date.now() - startMs
+        executionMs: Date.now() - startMs,
+        failureReason: 'runtimeException'
       };
     }
   }
@@ -287,9 +292,22 @@ export async function segmentationResultFromCoreVision(
       rectangles.push(rectangleFromCoreVision(subject.subjectRectangle));
     });
   }
+  if (result.subjectCount === 0) {
+    return {
+      ok: false,
+      subjectCount: 0,
+      detailCount: result.subjectDetails?.length ?? 0,
+      foregroundAvailable: false,
+      imageWidth: imageWidth,
+      imageHeight: imageHeight,
+      rectangles: rectangles,
+      executionMs: executionMs,
+      failureReason: 'noSubject'
+    };
+  }
   const foreground = await foregroundImageFromSubject(result.fullSubject);
   return {
-    ok: result.subjectCount > 0,
+    ok: true,
     subjectCount: result.subjectCount,
     detailCount: result.subjectDetails?.length ?? 0,
     foregroundAvailable: foreground !== undefined,
@@ -468,7 +486,8 @@ export function localSegmentationResultFromMask(
       imageWidth: selfieSegmentationInputSize,
       imageHeight: selfieSegmentationInputSize,
       rectangles: [],
-      executionMs: executionMs
+      executionMs: executionMs,
+      failureReason: 'noSubject'
     };
   }
 

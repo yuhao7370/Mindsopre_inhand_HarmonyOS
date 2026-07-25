@@ -159,7 +159,7 @@ Assert-LiteralCodeLine $preserveInput `
 $preserveVisual = Get-TextSection $catalogWithLiterals 'export function shouldPreserveRuntimeVisualResultOnAiResult' `
   'export function shouldPreserveRuntimeVisualResultOnLiveFrameFailure' 'AI-result preservation'
 $stillVisual = Get-TextSection $preserveVisual 'if (usesAndroidStillSegmentationLayout(workflow)) {' `
-  'return workflow?.routeName === AppRoute.PORTRAIT_SEGMENTATION.name' 'still visual branch'
+  '  return false;' 'still visual branch'
 Assert-LiteralCodeLine $stillVisual "return !resultOk || dataKind === 'segmentation';" `
   'failure must preserve the old foreground and only segmentation success may replace it.'
 

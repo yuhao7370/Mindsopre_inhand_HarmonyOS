@@ -76,10 +76,27 @@ function Mutate-Section-And-Reject(
   if (-not $rejected) { throw "Live segmentation section mutation '$Name' was incorrectly accepted." }
 }
 
+function Assert-CheckoutLineEndingPortable() {
+  $fixture = Copy-Fixture
+  foreach ($relativePath in @(
+    'entry\src\main\ets\pages\FeatureRuntimePage.ets',
+    'entry\src\main\ets\features\runtime\FeatureWorkflowCatalog.ets',
+    'scripts\check-live-segmentation-runtime-ui.ps1'
+  )) {
+    $path = Join-Path $fixture $relativePath
+    $text = ([IO.File]::ReadAllText($path)).Replace("`r`n", "`n").Replace("`r", "`n")
+    [IO.File]::WriteAllText($path, $text.Replace("`n", "`r`n"))
+  }
+  $fixtureGuard = Join-Path $fixture 'scripts\check-live-segmentation-runtime-ui.ps1'
+  & $fixtureGuard -SourceRoot $fixture *> $null
+  if (-not $?) { throw 'Live segmentation guard must accept an equivalent CRLF checkout.' }
+}
+
 try {
   [IO.Directory]::CreateDirectory($tempRoot) | Out-Null
   & $guard -SourceRoot $sourceRoot
-  if ($LASTEXITCODE -ne 0) { throw 'Baseline live segmentation guard failed.' }
+  if (-not $?) { throw 'Baseline live segmentation guard failed.' }
+  Assert-CheckoutLineEndingPortable
 
   $page = 'entry\src\main\ets\pages\FeatureRuntimePage.ets'
   $catalog = 'entry\src\main\ets\features\runtime\FeatureWorkflowCatalog.ets'
@@ -87,7 +104,7 @@ try {
   $layoutStart = "  segmentationAndroidLiveLayout() {`n    Column() {"
   $overlayStart = "  liveSegmentationStatusOverlay() {`n    Row({ space: AppSpacing.sm }) {"
   $retryStart = "  private retryLiveSegmentation(): void {`n    const workflow = workflowForRoute(this.routeName);"
-  $foregroundFailure = "        this.segmentationForegroundPixelMapOwner.invalidatePendingReplacement();`n        this.statusKey = 'feature_runtime_segmentation_failed';"
+  $foregroundFailure = "      if (stillSegmentation || liveSegmentation) {`n        this.segmentationForegroundPixelMapOwner.invalidatePendingReplacement();`n        this.statusKey = 'feature_runtime_segmentation_failed';`n        this.showStillSegmentationFailureToastIfNeeded(false);`n      }"
   $initialFront = "  if (workflow.routeName === AppRoute.SEGMENTATION_LIVE.name ||`n    workflow.routeName === AppRoute.PORTRAIT_SEGMENTATION.name ||`n    workflow.routeName === AppRoute.SCENE_LIVE.name) {`n    return 'front';"
   $memoryWrite = '  rememberedLiveCameraPositions.set(routeName, position);'
   $switchHorizontalInset = '.padding({ left: AppSpacing.md, right: AppSpacing.md })'
@@ -106,11 +123,15 @@ try {
   Mutate-And-Run 'drop-per-route-memory' $catalog $memoryWrite '    return;'
   Mutate-Section-And-Reject 'remove-segmentation-failure-retry-mapping' $catalog `
     $retryMappingStart $retryMappingEnd `
-    "    statusKey === 'feature_runtime_segmentation_failed') {" "    statusKey === 'feature_runtime_text_recognition_failed') {"
-  Mutate-And-Run 'remove-retry' $page '.onClick(() => this.retryLiveSegmentation())' '.onClick(() => this.runPrimaryAction())'
-  Mutate-Section-And-Reject 'clear-last-foreground' $page `
-    '  private async updateSegmentationForegroundPreview(' `
-    '  private updatePosePreview(' `
+    "    statusKey === 'feature_runtime_segmentation_failed' ||" "    statusKey === 'feature_runtime_text_recognition_failed' ||"
+  Mutate-Section-And-Reject 'remove-no-subject-retry-mapping' $catalog `
+    $retryMappingStart $retryMappingEnd `
+    "    statusKey === 'feature_runtime_segmentation_no_subject') {" "    statusKey === 'feature_runtime_text_recognition_failed') {"
+  Mutate-Section-And-Reject 'remove-retry' $page `
+    '  liveSegmentationStatusOverlay() {' `
+    '  liveGestureStatusOverlay() {' `
+    '.onClick(() => this.retryLiveSegmentation())' '.onClick(() => this.runPrimaryAction())'
+  Mutate-And-Run 'clear-last-foreground' $page `
     $foregroundFailure ($foregroundFailure + "`n        this.segmentationForegroundPixelMapOwner.clear();`n        this.segmentationForegroundPixelMap = undefined;")
   Mutate-And-Run 'comment-decoy' $page $layoutStart ($layoutStart + "`n      // this.runtimeCameraSwitchAction();") $false
   Mutate-And-Run 'string-decoy' $page $layoutStart ($layoutStart + "`n      const ignored = 'this.runtimeCameraSwitchAction();';") $false

@@ -342,6 +342,100 @@ $mainHap = Join-Path $PSScriptRoot '..\entry\build\default\outputs\default\entry
   return $manifestPath
 }
 
+function Convert-FixtureToTask14Harness([string]$ManifestPath, [double]$FontScale) {
+  $manifest = Get-Content -LiteralPath $ManifestPath -Raw -Encoding utf8 | ConvertFrom-Json
+  $repositoryRoot = [string]$manifest.repositoryRoot
+  $fixtureRoot = Split-Path -Parent $repositoryRoot
+  $candidateFile = Join-Path $repositoryRoot 'entry/src/main/ets/pages/Candidate.ets'
+  Invoke-Git $repositoryRoot @('restore', '--', 'entry/src/main/ets/pages/Candidate.ets') | Out-Null
+
+  $entryAbilityPath = Join-Path $repositoryRoot 'entry/src/main/ets/entryability/EntryAbility.ets'
+  [IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($entryAbilityPath)) | Out-Null
+  [IO.File]::WriteAllText($entryAbilityPath, "baseline entry ability`n", $utf8)
+  Invoke-Git $repositoryRoot @('add', '--', 'entry/src/main/ets/entryability/EntryAbility.ets') | Out-Null
+  Invoke-Git $repositoryRoot @('commit', '--quiet', '-m', 'fixture harness baseline') | Out-Null
+
+  $fontScaleLine = if ($FontScale -eq 3.2) { "    windowStage.setFontSizeScale(3.2)`n" } else { '' }
+  [IO.File]::WriteAllText(
+    $entryAbilityPath,
+    "export default class EntryAbility {`n  onWindowStageCreate(windowStage: any): void {`n" +
+      $fontScaleLine + "    windowStage.loadContent('pages/RuntimeHarnessPage')`n  }`n}`n",
+    $utf8
+  )
+  $harnessPagePath = Join-Path $repositoryRoot 'entry/src/main/ets/pages/RuntimeHarnessPage.ets'
+  [IO.File]::WriteAllText(
+    $harnessPagePath,
+    "@Entry`n@Component`nstruct RuntimeHarnessPage {`n  build() {`n    FeatureRuntimePage()`n  }`n}`n",
+    $utf8
+  )
+  Invoke-Git $repositoryRoot @('add', '-N', '--', 'entry/src/main/ets/pages/RuntimeHarnessPage.ets') | Out-Null
+
+  $candidateDiffPath = Join-Path $fixtureRoot 'candidate.diff'
+  [IO.File]::WriteAllText(
+    $candidateDiffPath,
+    (Invoke-Git $repositoryRoot @('diff', '--binary', 'HEAD', '--')),
+    $utf8
+  )
+  $canonicalHap = Join-Path $repositoryRoot 'entry/build/default/outputs/default/entry-default-unsigned.hap'
+  Write-Hap $canonicalHap
+  $receiptWriterPath = Join-Path $repositoryRoot 'scripts/write-runtime-ui-build-receipt.ps1'
+  & $receiptWriterPath -HapPath $canonicalHap | Out-Null
+  $frozenHap = Join-Path $fixtureRoot 'task14-harness.hap'
+  Copy-Item -LiteralPath $canonicalHap -Destination $frozenHap
+  Copy-Item -LiteralPath "$canonicalHap.runtime-ui-build.json" -Destination "$frozenHap.runtime-ui-build.json"
+
+  $layoutPath = [string]$manifest.states[0].layout
+  $layout = Get-Content -LiteralPath $layoutPath -Raw -Encoding utf8 | ConvertFrom-Json
+  $layout.children[0].children[0].attributes.key = '/hms/PortraitSegmentationActivity'
+  [IO.File]::WriteAllText($layoutPath, ($layout | ConvertTo-Json -Depth 20), $utf8)
+  $baseState = $manifest.states[0]
+  $baseState | Add-Member -NotePropertyName captureSource -NotePropertyValue 'harness'
+  $states = @()
+  foreach ($name in @(
+      'initial', 'preset-selected', 'custom-background-cancel', 'rear-camera', 'reentry',
+      'save-failure', 'save-success', 'transient-failure', 'retry-success'
+    )) {
+    $state = $baseState | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+    $state.name = $name
+    if ($name -eq 'custom-background-cancel') {
+      $state.preservedBoundsHashFrom = 'initial'
+    }
+    $states += $state
+  }
+  $disclosurePath = Join-Path $fixtureRoot 'harness-disclosure.md'
+  [IO.File]::WriteAllText($disclosurePath, 'Route/state-only Task 14 harness; no production success claim.', $utf8)
+  $manifest.task = 14
+  $manifest.candidateDiffPath = $candidateDiffPath
+  $manifest.candidateDiffSha256 =
+    (Get-FileHash -LiteralPath $candidateDiffPath -Algorithm SHA256).Hash.ToLowerInvariant()
+  $manifest.hapPath = $frozenHap
+  $manifest.hapSha256 = (Get-FileHash -LiteralPath $frozenHap -Algorithm SHA256).Hash.ToLowerInvariant()
+  $manifest.buildReceiptPath = "$frozenHap.runtime-ui-build.json"
+  $manifest.commitSha = ''
+  $manifest.routeName = '/hms/PortraitSegmentationActivity'
+  $manifest.fontScale = $FontScale
+  $manifest.source = 'harness'
+  $manifest | Add-Member -NotePropertyName harnessDisclosure -NotePropertyValue ([ordered]@{
+    kind = 'auditableRouteStateHarness'
+    productionSuccessClaim = 'none'
+    path = $disclosurePath
+  })
+  $manifest.states = $states
+  [IO.File]::WriteAllText($ManifestPath, ($manifest | ConvertTo-Json -Depth 20), $utf8)
+  return $ManifestPath
+}
+
+function Assert-Task14HarnessRejected([string]$Name, [scriptblock]$Mutation) {
+  $root = Join-Path $tempRoot $Name
+  $manifestPath = Convert-FixtureToTask14Harness (New-Fixture $root) 1.0
+  $manifest = Get-Content -LiteralPath $manifestPath -Raw -Encoding utf8 | ConvertFrom-Json
+  & $Mutation $manifest $root
+  [IO.File]::WriteAllText($manifestPath, ($manifest | ConvertTo-Json -Depth 20), $utf8)
+  $rejected = $false
+  try { & $guardPath -ManifestPath $manifestPath | Out-Null } catch { $rejected = $true }
+  if (-not $rejected) { throw "Runtime evidence guard accepted Task 14 harness mutation: $Name" }
+}
+
 function Convert-FixtureToNestedProject([string]$ManifestPath) {
   $manifest = Get-Content -LiteralPath $ManifestPath -Raw -Encoding utf8 | ConvertFrom-Json
   $gitRoot = [string]$manifest.repositoryRoot
@@ -446,6 +540,10 @@ try {
   & $guardPath -ManifestPath $validPath | Out-Null
   $scrollReachableValidPath = New-ScrollReachableFixture (Join-Path $tempRoot 'scroll-reachable-valid')
   & $guardPath -ManifestPath $scrollReachableValidPath | Out-Null
+  $task14DefaultPath = Convert-FixtureToTask14Harness (New-Fixture (Join-Path $tempRoot 'task14-harness-default-valid')) 1.0
+  & $guardPath -ManifestPath $task14DefaultPath | Out-Null
+  $task14Font32Path = Convert-FixtureToTask14Harness (New-Fixture (Join-Path $tempRoot 'task14-harness-font32-valid')) 3.2
+  & $guardPath -ManifestPath $task14Font32Path | Out-Null
   $nestedValidPath = Convert-FixtureToNestedProject (
     New-Fixture (Join-Path $tempRoot 'nested-valid')
   )
@@ -486,7 +584,40 @@ try {
   Assert-Rejected 'font-scale-proof' { param($m, $l, $r) $m.fontScale = 3.2; $m.source = 'harness' }
   Assert-Rejected 'source-proof' { param($m, $l, $r) $m.source = 'harness' }
   Assert-Rejected 'density-proof' { param($m, $l, $r) $m.density = 2.0 }
-  Assert-Rejected 'coordinated-environment-claims' {
+  Assert-Task14HarnessRejected 'task14-source-binding' {
+    param($m, $r)
+    $m.source = 'production'
+  }
+  Assert-Task14HarnessRejected 'task14-route-binding' {
+    param($m, $r)
+    $m.routeName = '/hms/ImageSegmentationLiveAnalyseActivity'
+  }
+  Assert-Task14HarnessRejected 'task14-disclosure-binding' {
+    param($m, $r)
+    $m.harnessDisclosure.kind = 'deterministicLayoutHarness'
+  }
+  Assert-Task14HarnessRejected 'task14-capture-source-binding' {
+    param($m, $r)
+    $m.states[0].captureSource = 'production'
+  }
+  Assert-Task14HarnessRejected 'task14-required-state-binding' {
+    param($m, $r)
+    $m.states = @($m.states | Where-Object { $_.name -ne 'save-success' })
+  }
+  Assert-Task14HarnessRejected 'task14-harness-diff-binding' {
+    param($m, $r)
+    $page = Join-Path ([string]$m.repositoryRoot) 'entry/src/main/ets/pages/RuntimeHarnessPage.ets'
+    [IO.File]::WriteAllText($page, "@Entry
+@Component
+struct WrongHarnessPage {}
+", $utf8)
+  }
+  Assert-Task14HarnessRejected 'task14-receipt-kind-binding' {
+    param($m, $r)
+    $receipt = Get-Content -LiteralPath ([string]$m.buildReceiptPath) -Raw -Encoding utf8 | ConvertFrom-Json
+    $receipt.candidateKind = 'commit'
+    [IO.File]::WriteAllText([string]$m.buildReceiptPath, ($receipt | ConvertTo-Json -Depth 10), $utf8)
+  }  Assert-Rejected 'coordinated-environment-claims' {
     param($m, $l, $r)
     $m.source = 'harness'
     $m.fontScale = 3.2
