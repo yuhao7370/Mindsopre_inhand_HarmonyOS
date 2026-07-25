@@ -163,6 +163,8 @@ $rawExpectedLines = @(
   'this.portraitSegmentationAndroidLayout()',
   '} else if (specializedAndroidLiveLayoutForWorkflow(workflowForRoute(this.routeName)) === ''segmentation'') {',
   'this.segmentationAndroidLiveLayout()',
+  '} else if (specializedAndroidLiveLayoutForWorkflow(workflowForRoute(this.routeName)) === ''gesture'') {',
+  'this.gestureAndroidLiveLayout()',
   '} else if (specializedAndroidLiveLayoutForWorkflow(workflowForRoute(this.routeName)) === ''imageClassification'') {',
   'this.imageClassificationAndroidLiveLayout()',
   '} else if (specializedAndroidLiveLayoutForWorkflow(workflowForRoute(this.routeName)) === ''objectDetection'') {',

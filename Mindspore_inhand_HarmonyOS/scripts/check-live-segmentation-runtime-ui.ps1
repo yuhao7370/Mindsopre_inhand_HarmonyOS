@@ -200,8 +200,7 @@ foreach ($marker in @(
   'export type SpecializedAndroidLiveLayout =',
   "return 'segmentation';",
   'export type LiveSegmentationRetryAction =',
-  'usesAndroidLiveSegmentationLayout(workflow)',
-  'return routeName === AppRoute.GESTURE_LIVE.name'
+  'usesAndroidLiveSegmentationLayout(workflow)'
 )) { Assert-Contains $catalogWithLiterals $marker "missing route-isolated segmentation layout marker: $marker" }
 Assert-Excludes $simpleLayout 'routeName === AppRoute.SEGMENTATION_LIVE.name' `
   'segmentation must leave the shared simple-layout route set.'

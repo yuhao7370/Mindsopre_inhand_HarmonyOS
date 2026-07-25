@@ -431,9 +431,13 @@ import {
   shouldShowLiveClassificationCameraOverlay,
   liveClassificationRetryActionForStatus,
   shouldPublishLiveClassificationPreparingStatus,
+  liveGestureRetryActionForStatus,
+  shouldPublishLiveGesturePreparingStatus,
+  shouldPreserveLiveCameraInputOnFailure,
   liveObjectDetectionRetryActionForStatus,
   shouldPublishLiveObjectDetectionPreparingStatus,
   shouldShowLiveGestureCameraOverlay,
+  usesAndroidLiveGestureLayout,
   shouldShowLiveObjectDetectionCameraOverlay,
   shouldShowLivePoseCameraOverlay,
   shouldShowLivePoseTemplateOverlay,
@@ -10004,6 +10008,32 @@ export default function localUnitTest() {
         .assertFalse();
     });
 
+    it('keepsLiveGestureOverlayCameraAndRetryStatePerRoute', 0, () => {
+      const gestureLive: FeatureWorkflow = workflowForRoute(AppRoute.GESTURE_LIVE.name)!;
+      const sceneLive: FeatureWorkflow = workflowForRoute(AppRoute.SCENE_LIVE.name)!;
+
+      expect(usesAndroidLiveGestureLayout(gestureLive)).assertTrue();
+      expect(usesAndroidLiveGestureLayout(sceneLive)).assertFalse();
+      expect(liveGestureRetryActionForStatus(gestureLive, 'feature_runtime_live_camera_failed'))
+        .assertEqual('restartCamera');
+      expect(liveGestureRetryActionForStatus(gestureLive, 'feature_runtime_run_failed'))
+        .assertEqual('restartInference');
+      expect(liveGestureRetryActionForStatus(gestureLive, 'feature_runtime_gesture_failed'))
+        .assertEqual('restartInference');
+      expect(liveGestureRetryActionForStatus(gestureLive, 'feature_runtime_status_idle')).assertEqual('none');
+      expect(liveGestureRetryActionForStatus(sceneLive, 'feature_runtime_run_failed')).assertEqual('none');
+      expect(shouldPublishLiveGesturePreparingStatus(gestureLive, false)).assertTrue();
+      expect(shouldPublishLiveGesturePreparingStatus(gestureLive, true)).assertFalse();
+      expect(shouldPublishLiveGesturePreparingStatus(sceneLive, true)).assertTrue();
+      expect(shouldClearRuntimeResultAtWorkflowStart(gestureLive)).assertFalse();
+      expect(shouldPreserveRuntimeTextResultOnAiResult(gestureLive, false)).assertTrue();
+      expect(shouldPreserveRuntimeVisualResultOnAiResult(gestureLive, false, '')).assertTrue();
+      expect(shouldPreserveRuntimeVisualResultOnAiResult(gestureLive, true, 'gesture')).assertTrue();
+      expect(shouldPreserveRuntimeVisualResultOnAiResult(gestureLive, true, 'classification')).assertFalse();
+      expect(shouldPreserveLiveCameraInputOnFailure(gestureLive)).assertTrue();
+      expect(shouldPreserveLiveCameraInputOnFailure(sceneLive)).assertFalse();
+    });
+
     it('showsObjectBoxesOnOnlyTheAndroidStyleLiveObjectPreview', 0, () => {
       expect(shouldShowLiveObjectDetectionCameraOverlay(workflowForRoute(AppRoute.OBJECT_CAMERA.name)))
         .assertTrue();
@@ -10209,11 +10239,10 @@ export default function localUnitTest() {
 
     it('usesSimpleAndroidLiveLayoutOnlyForMatchingAndroidActivities', 0, () => {
       const simpleLiveRouteNames: Array<string> = [
-        AppRoute.GESTURE_LIVE.name,
         AppRoute.SCENE_LIVE.name,
         AppRoute.LIVE_SKELETON.name
       ];
-      expect(new Set<string>(simpleLiveRouteNames).size).assertEqual(3);
+      expect(new Set<string>(simpleLiveRouteNames).size).assertEqual(2);
 
       featureWorkflows.forEach((workflow: FeatureWorkflow) => {
         expect(usesSimpleAndroidLiveLayout(workflow))
@@ -10658,7 +10687,7 @@ export default function localUnitTest() {
       expect(shouldShowGestureStillFailureToast(undefined, true)).assertFalse();
     });
 
-    it('selectsSpecializedAndroidLiveLayoutForImageObjectAndSegmentationCamera', 0, () => {
+    it('selectsSpecializedAndroidLiveLayoutForImageObjectSegmentationAndGestureCamera', 0, () => {
       featureWorkflows.forEach((workflow: FeatureWorkflow) => {
         let expectedLayout: string | undefined = undefined;
         if (workflow.routeName === AppRoute.IMAGE_CAMERA.name) {
@@ -10667,6 +10696,8 @@ export default function localUnitTest() {
           expectedLayout = 'objectDetection';
         } else if (workflow.routeName === AppRoute.SEGMENTATION_LIVE.name) {
           expectedLayout = 'segmentation';
+        } else if (workflow.routeName === AppRoute.GESTURE_LIVE.name) {
+          expectedLayout = 'gesture';
         }
         expect(specializedAndroidLiveLayoutForWorkflow(workflow)).assertEqual(expectedLayout);
       });
@@ -10688,6 +10719,7 @@ export default function localUnitTest() {
         specializedAndroidLiveLayoutForWorkflow(workflow) === 'imageClassification',
         specializedAndroidLiveLayoutForWorkflow(workflow) === 'objectDetection',
         specializedAndroidLiveLayoutForWorkflow(workflow) === 'segmentation',
+        specializedAndroidLiveLayoutForWorkflow(workflow) === 'gesture',
         usesSimpleAndroidLiveLayout(workflow)
       ].filter((matches: boolean) => matches).length;
 
@@ -10819,14 +10851,18 @@ export default function localUnitTest() {
       resetRememberedLiveCameraPositionsForTests();
       const segmentationLive: FeatureWorkflow = workflowForRoute(AppRoute.SEGMENTATION_LIVE.name)!;
       const sceneLive: FeatureWorkflow = workflowForRoute(AppRoute.SCENE_LIVE.name)!;
+      const gestureLive: FeatureWorkflow = workflowForRoute(AppRoute.GESTURE_LIVE.name)!;
 
       expect(rememberedLiveCameraPositionForWorkflow(segmentationLive)).assertEqual('front');
       expect(rememberedLiveCameraPositionForWorkflow(sceneLive)).assertEqual('front');
+      expect(rememberedLiveCameraPositionForWorkflow(gestureLive)).assertEqual('back');
 
       rememberLiveCameraPositionForRoute(segmentationLive.routeName, 'back');
+      rememberLiveCameraPositionForRoute(gestureLive.routeName, 'front');
 
       expect(rememberedLiveCameraPositionForWorkflow(segmentationLive)).assertEqual('back');
       expect(rememberedLiveCameraPositionForWorkflow(sceneLive)).assertEqual('front');
+      expect(rememberedLiveCameraPositionForWorkflow(gestureLive)).assertEqual('front');
       expect(rememberedLiveCameraPositionForWorkflow(undefined)).assertEqual('back');
       resetRememberedLiveCameraPositionsForTests();
     });

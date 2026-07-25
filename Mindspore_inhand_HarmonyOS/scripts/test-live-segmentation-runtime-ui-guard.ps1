@@ -97,11 +97,11 @@ try {
   Mutate-And-Run 'forced-rear-camera' $catalog $initialFront ($initialFront.Replace("return 'front';", "return 'back';"))
   Mutate-Section-And-Reject 'remove-camera-switch' $page `
     '  segmentationAndroidLiveLayout() {' `
-    '  liveObjectDetectionStatusOverlay() {' `
+    '  gestureAndroidLiveLayout() {' `
     '            this.runtimeCameraSwitchAction()' '            this.runtimeStatusBar()'
   Mutate-Section-And-Reject 'remove-switch-horizontal-inset' $page `
     '  segmentationAndroidLiveLayout() {' `
-    '  liveObjectDetectionStatusOverlay() {' `
+    '  gestureAndroidLiveLayout() {' `
     $switchHorizontalInset ''
   Mutate-And-Run 'drop-per-route-memory' $catalog $memoryWrite '    return;'
   Mutate-Section-And-Reject 'remove-segmentation-failure-retry-mapping' $catalog `
@@ -119,7 +119,7 @@ try {
     ("  liveSegmentationStatusOverlay() {`n  }`n`n  @Builder`n  unusedLiveSegmentationStatusOverlay() {`n    Row({ space: AppSpacing.sm }) {")
   Mutate-Section-And-Reject 'retry-through-cleared-surface-gate' $page `
     '  private retryLiveSegmentation(): void {' `
-    '  private retryLiveClassification(): void {' `
+    '  private retryLiveGesture(): void {' `
     "    if (action === 'restartCamera') {`n      this.liveCameraInputSelected = true;`n      this.startLiveCameraPreview();" `
     "    if (action === 'restartCamera') {`n      this.prepareInput('camera');"
   Mutate-And-Run 'comment-production-wire' $build `

@@ -6,6 +6,7 @@ import {
   FeaturePermissionKind,
   FeatureWorkflow,
   LiveClassificationRetryAction,
+  LiveGestureRetryAction,
   LiveObjectDetectionRetryAction,
   LiveSegmentationRetryAction,
   autoStartInputKindForWorkflow,
@@ -72,10 +73,14 @@ import {
   liveClassificationEmptyPromptKey,
   liveClassificationRetryActionForStatus,
   shouldPublishLiveClassificationPreparingStatus,
+  shouldPublishLiveGesturePreparingStatus,
   liveObjectDetectionRetryActionForStatus,
   shouldPublishLiveObjectDetectionPreparingStatus,
   liveSegmentationRetryActionForStatus,
   shouldPublishLiveSegmentationPreparingStatus,
+  liveGestureRetryActionForStatus,
+  shouldPreserveLiveCameraInputOnFailure,
+  usesAndroidLiveGestureLayout,
   shouldShowLiveGestureCameraOverlay,
   shouldShowLiveObjectDetectionCameraOverlay,
   shouldShowLivePoseCameraOverlay,
@@ -382,6 +387,7 @@ struct FeatureRuntimePage {
   @State gestureImageHeight: number = 0;
   @State gestureStillOverlayWidthVp: number = 0;
   @State gestureStillOverlayHeightVp: number = 0;
+  @State liveGestureOverlayWidthVp: number = 0;
   @State textRecognitionImageOrientation: ImageRotateOrientation = ImageRotateOrientation.UP;
   @State sceneOverlayRows: Array<SceneDetectionOverlayRow> = [];
   @State helpUrl: string = '';
@@ -828,12 +834,15 @@ struct FeatureRuntimePage {
   }
 
   private applyLiveCameraPreviewResult(result: LiveCameraPreviewResult): void {
+    const workflow = workflowForRoute(this.routeName);
+    const preserveCameraInput = shouldPreserveLiveCameraInputOnFailure(workflow);
     this.statusKey = result.messageKey;
     this.liveCameraActive = result.ok;
-    this.liveCameraSurfaceId = result.surfaceId;
-    this.liveCameraPreviewRotationDegrees = result.previewRotationDegrees ?? 0;
-    this.selectedInputSummary = result.surfaceId;
-    const workflow = workflowForRoute(this.routeName);
+    if (result.ok || !preserveCameraInput) {
+      this.liveCameraSurfaceId = result.surfaceId;
+      this.liveCameraPreviewRotationDegrees = result.previewRotationDegrees ?? 0;
+      this.selectedInputSummary = result.surfaceId;
+    }
     if (result.ok && shouldShowLiveObjectDetectionCameraOverlay(workflow)) {
       hilog.info(
         runtimeLogDomain,
@@ -844,7 +853,9 @@ struct FeatureRuntimePage {
     }
     if (!result.ok) {
       this.pendingPickTextInputVisible = undefined;
-      this.liveCameraInputSelected = false;
+      if (!preserveCameraInput) {
+        this.liveCameraInputSelected = false;
+      }
       this.stopLiveRuntimeLoop();
       return;
     }
@@ -1132,9 +1143,34 @@ struct FeatureRuntimePage {
     return liveSegmentationRetryActionForStatus(workflowForRoute(this.routeName), this.statusKey);
   }
 
+  private liveGestureRetryAction(): LiveGestureRetryAction {
+    return liveGestureRetryActionForStatus(workflowForRoute(this.routeName), this.statusKey);
+  }
+
   private retryLiveSegmentation(): void {
     const workflow = workflowForRoute(this.routeName);
     const action = liveSegmentationRetryActionForStatus(workflow, this.statusKey);
+    if (action === 'restartCamera') {
+      this.liveCameraInputSelected = true;
+      this.startLiveCameraPreview();
+      return;
+    }
+    if (action !== 'restartInference' || workflow === undefined) {
+      return;
+    }
+    this.statusKey = 'feature_runtime_status_preparing';
+    this.stopLiveRuntimeLoop();
+    if (this.liveCameraInputSelected && this.liveCameraActive) {
+      this.startLiveRuntimeLoop(workflow);
+      return;
+    }
+    this.liveCameraInputSelected = true;
+    this.startLiveCameraPreview();
+  }
+
+  private retryLiveGesture(): void {
+    const workflow = workflowForRoute(this.routeName);
+    const action = liveGestureRetryActionForStatus(workflow, this.statusKey);
     if (action === 'restartCamera') {
       this.liveCameraInputSelected = true;
       this.startLiveCameraPreview();
@@ -1268,7 +1304,12 @@ struct FeatureRuntimePage {
           workflow,
           this.segmentationForegroundPixelMap !== undefined || this.liveSegmentationRetryAction() !== 'none'
         )) {
-          this.statusKey = 'feature_runtime_status_preparing';
+          if (shouldPublishLiveGesturePreparingStatus(
+            workflow,
+            this.gestureDetections.length > 0 || this.liveGestureRetryAction() !== 'none'
+          )) {
+            this.statusKey = 'feature_runtime_status_preparing';
+          }
         }
       }
     }
@@ -1680,6 +1721,9 @@ struct FeatureRuntimePage {
 
   private updateGesturePreview(result: AiRunResult): void {
     if (shouldShowLiveGestureCameraOverlay(workflowForRoute(this.routeName))) {
+      if (!result.ok) {
+        return;
+      }
       const state = projectLiveGestureResult(result, this.liveRuntimeGeneration, this.liveRuntimeGeneration);
       if (state !== undefined) {
         this.applyLiveGestureResultState(state);
@@ -2569,7 +2613,7 @@ struct FeatureRuntimePage {
     if (this.visibleGestureDetections().length > 0 &&
       shouldShowLiveGestureCameraOverlay(workflowForRoute(this.routeName))) {
       ForEach(this.visibleGestureDetections(), (gesture: GestureDetection) => {
-        this.gestureBox(gesture)
+        this.liveGestureBox(gesture)
       }, (gesture: GestureDetection) =>
         `${gesture.category}-${gesture.score}-${gesture.rect?.left}-${gesture.rect?.top}`)
     }
@@ -2947,6 +2991,19 @@ struct FeatureRuntimePage {
     );
   }
 
+  private liveGestureLabelLeft(gesture: GestureDetection): string {
+    if (shouldMirrorLiveGestureCameraOverlay(workflowForRoute(this.routeName), this.liveCameraPosition)) {
+      return 'calc(100% - 176vp)';
+    }
+    const canvasWidth = this.liveGestureOverlayWidthVp;
+    if (canvasWidth <= 176) {
+      return '0vp';
+    }
+    const labelLeft = this.gestureBoxStyle(gesture).left * canvasWidth / 100;
+    const clampedLabelLeft = Math.min(Math.max(labelLeft, 0), canvasWidth - 176);
+    return `${clampedLabelLeft}vp`;
+  }
+
   private visibleGestureDetections(): Array<GestureDetection> {
     return this.gestureDetections.filter((gesture: GestureDetection) => gesture.rect !== undefined);
   }
@@ -3305,6 +3362,47 @@ struct FeatureRuntimePage {
       .position({
         x: this.percentLength(this.gestureStillLabelPosition(gesture).left),
         y: this.percentLength(this.gestureStillLabelPosition(gesture).top)
+      })
+    }
+    .width('100%')
+    .height('100%')
+  }
+
+  @Builder
+  liveGestureBox(gesture: GestureDetection) {
+    Stack({ alignContent: Alignment.TopStart }) {
+      Column() {
+      }
+      .width(this.percentLength(this.gestureBoxStyle(gesture).width))
+      .height(this.percentLength(this.gestureBoxStyle(gesture).height))
+      .border({ width: 2, color: AppColor.accent, radius: 2 })
+      .position({
+        x: this.percentLength(this.gestureBoxStyle(gesture).left),
+        y: this.percentLength(this.gestureBoxStyle(gesture).top)
+      })
+      Column({ space: 2 }) {
+        Text(this.gestureLabelResource(gesture))
+          .fontSize(12)
+          .fontColor(Color.White)
+          .fontWeight(FontWeight.Medium)
+          .maxFontScale(3.2)
+          .maxLines(2)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+          .width('100%')
+        Text(this.gestureScoreLabel(gesture))
+          .fontSize(11)
+          .fontColor('#E5E7EB')
+          .maxFontScale(3.2)
+          .maxLines(1)
+      }
+      .constraintSize({ maxWidth: 176 })
+      .width(176)
+      .padding({ left: AppSpacing.xs, right: AppSpacing.xs, top: 2, bottom: 2 })
+      .backgroundColor('#B31F2937')
+      .borderRadius(AppRadius.button)
+      .position({
+        x: this.liveGestureLabelLeft(gesture),
+        y: this.percentLength(this.gestureBoxStyle(gesture).top)
       })
     }
     .width('100%')
@@ -4082,6 +4180,45 @@ struct FeatureRuntimePage {
   }
 
   @Builder
+  liveGestureStatusOverlay() {
+    Row({ space: AppSpacing.sm }) {
+      Row({ space: AppSpacing.xs }) {
+        if (this.statusKey === 'feature_runtime_status_preparing') {
+          LoadingProgress()
+            .width(20)
+            .height(20)
+            .color(Color.White)
+        }
+        Text(appString(this.statusKey))
+          .fontSize(13)
+          .fontColor('#F3F4F6')
+          .maxFontScale(3.2)
+          .maxLines(2)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+          .layoutWeight(1)
+      }
+      .layoutWeight(1)
+      .constraintSize({ minHeight: 48 })
+      .alignItems(VerticalAlign.Center)
+      if (this.liveGestureRetryAction() !== 'none') {
+        Button(appString('web_retry'), { type: ButtonType.Normal })
+          .constraintSize({ minWidth: 72, minHeight: 48 })
+          .fontSize(14)
+          .fontColor(Color.White)
+          .maxFontScale(3.2)
+          .backgroundColor(Color.Transparent)
+          .border({ width: 1, color: '#99FFFFFF', radius: AppRadius.button })
+          .onClick(() => this.retryLiveGesture())
+      }
+    }
+    .width('calc(100% - 32vp)')
+    .constraintSize({ maxWidth: 520 })
+    .padding({ left: AppSpacing.md, right: AppSpacing.md, top: AppSpacing.xs, bottom: AppSpacing.xs })
+    .backgroundColor('#B31F2937')
+    .borderRadius(AppRadius.card)
+  }
+
+  @Builder
   imageClassificationAndroidLiveLayout() {
     Column() {
       this.runtimeActionToolbar(true)
@@ -4134,6 +4271,45 @@ struct FeatureRuntimePage {
       .width('100%')
       .layoutWeight(1)
       .backgroundColor('#111827')
+    }
+    .width('100%')
+    .height('100%')
+    .backgroundColor(AppColor.pageBackground)
+  }
+
+  @Builder
+  gestureAndroidLiveLayout() {
+    Column() {
+      this.runtimeActionToolbar(true)
+      Stack({ alignContent: Alignment.TopStart }) {
+        this.liveCameraSurfaceContent()
+        Column({ space: AppSpacing.md }) {
+          Row() {
+            if (this.liveCameraSwitchAvailable) {
+              this.runtimeCameraSwitchAction()
+            }
+          }
+          .width('100%')
+          .padding({ left: AppSpacing.md, right: AppSpacing.md })
+          .justifyContent(FlexAlign.End)
+          Row() {
+            this.liveGestureStatusOverlay()
+          }
+          .width('100%')
+          .justifyContent(FlexAlign.Center)
+        }
+        .width('100%')
+        .height('100%')
+        .padding({ top: AppSpacing.sm, bottom: AppSpacing.md })
+        .justifyContent(FlexAlign.SpaceBetween)
+      }
+      .width('100%')
+      .layoutWeight(1)
+      .backgroundColor('#111827')
+      .onAreaChange((_previousArea: Area, currentArea: Area) => {
+        const width = Number(currentArea.width);
+        this.liveGestureOverlayWidthVp = Number.isFinite(width) && width > 0 ? width : 0;
+      })
     }
     .width('100%')
     .height('100%')
@@ -5423,6 +5599,8 @@ struct FeatureRuntimePage {
       this.portraitSegmentationAndroidLayout()
     } else if (specializedAndroidLiveLayoutForWorkflow(workflowForRoute(this.routeName)) === 'segmentation') {
       this.segmentationAndroidLiveLayout()
+    } else if (specializedAndroidLiveLayoutForWorkflow(workflowForRoute(this.routeName)) === 'gesture') {
+      this.gestureAndroidLiveLayout()
     } else if (specializedAndroidLiveLayoutForWorkflow(workflowForRoute(this.routeName)) === 'imageClassification') {
       this.imageClassificationAndroidLiveLayout()
     } else if (specializedAndroidLiveLayoutForWorkflow(workflowForRoute(this.routeName)) === 'objectDetection') {

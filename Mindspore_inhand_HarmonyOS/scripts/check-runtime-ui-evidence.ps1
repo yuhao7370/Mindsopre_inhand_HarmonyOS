@@ -609,7 +609,11 @@ foreach ($state in $states) {
   $requiredTexts = @(Require-Property $state 'requiredTexts')
   $forbiddenTexts = @(Require-Property $state 'forbiddenTexts')
   $requiredClickableTexts = @(Require-Property $state 'requiredClickableTexts')
-  if ($requiredTexts.Count -eq 0 -or $requiredClickableTexts.Count -eq 0) {
+  $requiredClickableSelectors = if ($state.PSObject.Properties.Name -contains 'requiredClickableSelectors') {
+    @($state.requiredClickableSelectors)
+  } else { @() }
+  if ($requiredTexts.Count -eq 0 -or
+    ($requiredClickableTexts.Count -eq 0 -and $requiredClickableSelectors.Count -eq 0)) {
     Fail "state '$name' must declare required state text and actions."
   }
   $labels = @($nodes | Where-Object { Is-Visible $_ } | ForEach-Object { Node-Label $_ })
@@ -701,6 +705,18 @@ foreach ($state in $states) {
     $bounds = Parse-Bounds (Attr $matches[0] 'bounds')
     if (($bounds.Width / $density) -lt $minPrimaryTargetVp -or ($bounds.Height / $density) -lt $minPrimaryTargetVp) {
       Fail "state '$name' primary control '$text' is undersized."
+    }
+    $requiredControls += $bounds
+  }
+  foreach ($selector in $requiredClickableSelectors) {
+    $control = Get-PreservationNode $nodes ([string]$selector) $name
+    if (-not (Is-Visible $control) -or (Attr $control 'clickable') -ne 'true' -or
+      (Attr $control 'enabled') -eq 'false') {
+      Fail "state '$name' required control '$selector' must be visible, enabled, and clickable."
+    }
+    $bounds = Parse-Bounds (Attr $control 'bounds')
+    if (($bounds.Width / $density) -lt $minPrimaryTargetVp -or ($bounds.Height / $density) -lt $minPrimaryTargetVp) {
+      Fail "state '$name' primary control '$selector' is undersized."
     }
     $requiredControls += $bounds
   }

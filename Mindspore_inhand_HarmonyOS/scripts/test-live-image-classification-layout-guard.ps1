@@ -138,7 +138,12 @@ try {
     "`n          workflow," +
     "`n          this.segmentationForegroundPixelMap !== undefined || this.liveSegmentationRetryAction() !== 'none'" +
     "`n        )) {" +
-    "`n          this.statusKey = 'feature_runtime_status_preparing';" +
+    "`n          if (shouldPublishLiveGesturePreparingStatus(" +
+    "`n            workflow," +
+    "`n            this.gestureDetections.length > 0 || this.liveGestureRetryAction() !== 'none'" +
+    "`n          )) {" +
+    "`n            this.statusKey = 'feature_runtime_status_preparing';" +
+    "`n          }" +
     "`n        }" +
     "`n      }" +
     "`n    }"
@@ -146,7 +151,8 @@ try {
   $preserveClassification = '(usesAndroidStillSceneLayout(workflow) || usesAndroidObjectPhotoLayout(workflow) ||' +
     "`n    shouldShowLiveClassificationCameraOverlay(workflow) ||" +
     "`n    shouldShowLiveObjectDetectionCameraOverlay(workflow) ||" +
-    "`n    usesAndroidLiveSegmentationLayout(workflow)) && !resultOk;"
+    "`n    usesAndroidLiveSegmentationLayout(workflow) ||" +
+    "`n    usesAndroidLiveGestureLayout(workflow)) && !resultOk;"
   $fixedBack = "  if (workflow.routeName === AppRoute.IMAGE_CAMERA.name ||" +
     "`n    workflow.routeName === AppRoute.OBJECT_CAMERA.name) {`n    return 'back';`n  }"
   $fixedFront = "  if (workflow.routeName === AppRoute.IMAGE_CAMERA.name ||" +
@@ -199,7 +205,8 @@ try {
   Mutate-And-Reject 'drop-transient-result-preservation' $catalog $preserveClassification `
     ('(usesAndroidStillSceneLayout(workflow) || usesAndroidObjectPhotoLayout(workflow) ||' +
       "`n    shouldShowLiveObjectDetectionCameraOverlay(workflow) ||" +
-      "`n    usesAndroidLiveSegmentationLayout(workflow)) && !resultOk;")
+      "`n    usesAndroidLiveSegmentationLayout(workflow) ||" +
+      "`n    usesAndroidLiveGestureLayout(workflow)) && !resultOk;")
   Mutate-And-Reject 'change-fixed-camera-to-front' $catalog $fixedBack $fixedFront
   Mutate-Section-And-Reject 'remove-camera-failure-retry' $catalog `
     'export function liveClassificationRetryActionForStatus(' `
