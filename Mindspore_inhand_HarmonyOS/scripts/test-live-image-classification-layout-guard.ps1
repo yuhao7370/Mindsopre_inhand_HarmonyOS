@@ -142,7 +142,12 @@ try {
     "`n            workflow," +
     "`n            this.gestureDetections.length > 0 || this.liveGestureRetryAction() !== 'none'" +
     "`n          )) {" +
-    "`n            this.statusKey = 'feature_runtime_status_preparing';" +
+    "`n            if (shouldPublishLiveScenePreparingStatus(" +
+    "`n              workflow," +
+    "`n              this.sceneOverlayRows.length > 0 || this.liveSceneRetryAction() !== 'none'" +
+    "`n            )) {" +
+    "`n              this.statusKey = 'feature_runtime_status_preparing';" +
+    "`n            }" +
     "`n          }" +
     "`n        }" +
     "`n      }" +
@@ -152,7 +157,8 @@ try {
     "`n    shouldShowLiveClassificationCameraOverlay(workflow) ||" +
     "`n    shouldShowLiveObjectDetectionCameraOverlay(workflow) ||" +
     "`n    usesAndroidLiveSegmentationLayout(workflow) ||" +
-    "`n    usesAndroidLiveGestureLayout(workflow)) && !resultOk;"
+    "`n    usesAndroidLiveGestureLayout(workflow) ||" +
+    "`n    usesAndroidLiveSceneLayout(workflow)) && !resultOk;"
   $fixedBack = "  if (workflow.routeName === AppRoute.IMAGE_CAMERA.name ||" +
     "`n    workflow.routeName === AppRoute.OBJECT_CAMERA.name) {`n    return 'back';`n  }"
   $fixedFront = "  if (workflow.routeName === AppRoute.IMAGE_CAMERA.name ||" +
@@ -204,9 +210,10 @@ try {
   Mutate-And-Reject 'clear-result-on-frame-failure' $page $frameClearGate $frameUnconditionalClear
   Mutate-And-Reject 'drop-transient-result-preservation' $catalog $preserveClassification `
     ('(usesAndroidStillSceneLayout(workflow) || usesAndroidObjectPhotoLayout(workflow) ||' +
-      "`n    shouldShowLiveObjectDetectionCameraOverlay(workflow) ||" +
-      "`n    usesAndroidLiveSegmentationLayout(workflow) ||" +
-      "`n    usesAndroidLiveGestureLayout(workflow)) && !resultOk;")
+       "`n    shouldShowLiveObjectDetectionCameraOverlay(workflow) ||" +
+       "`n    usesAndroidLiveSegmentationLayout(workflow) ||" +
+       "`n    usesAndroidLiveGestureLayout(workflow) ||" +
+       "`n    usesAndroidLiveSceneLayout(workflow)) && !resultOk;")
   Mutate-And-Reject 'change-fixed-camera-to-front' $catalog $fixedBack $fixedFront
   Mutate-Section-And-Reject 'remove-camera-failure-retry' $catalog `
     'export function liveClassificationRetryActionForStatus(' `

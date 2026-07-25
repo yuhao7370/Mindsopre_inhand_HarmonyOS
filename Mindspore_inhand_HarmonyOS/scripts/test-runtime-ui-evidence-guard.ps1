@@ -392,9 +392,60 @@ function Assert-Rejected([string]$Name, [scriptblock]$Mutation) {
   if (-not $rejected) { throw "Runtime evidence guard accepted mutation: $Name" }
 }
 
+function New-ScrollReachableFixture([string]$Root) {
+  $manifestPath = New-Fixture $Root
+  $manifest = Get-Content -LiteralPath $manifestPath -Raw -Encoding utf8 | ConvertFrom-Json
+  $layoutPath = [string]$manifest.states[0].layout
+  $layout = Get-Content -LiteralPath $layoutPath -Raw -Encoding utf8 | ConvertFrom-Json
+  $scroll = $layout.children[0].children[0].children[0]
+  $longResult = [pscustomobject]@{
+    attributes = (Attrs 'Text' '[70,1120][1250,1300]' 'Long scroll result')
+    children = @()
+  }
+  $longResult.attributes.origBounds = '[70,1120][1250,3000]'
+  $scroll.children += $longResult
+  [IO.File]::WriteAllText($layoutPath, ($layout | ConvertTo-Json -Depth 20), $utf8)
+
+  $afterLayoutPath = Join-Path $Root 'after-scroll.json'
+  $afterScreenshotPath = Join-Path $Root 'after-scroll.jpeg'
+  $afterLayout = $layout | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+  $afterLongResult = $afterLayout.children[0].children[0].children[0].children[4]
+  $afterLongResult.attributes.bounds = '[70,500][1250,1300]'
+  $afterLongResult.attributes.origBounds = '[70,-800][1250,1300]'
+  [IO.File]::WriteAllText($afterLayoutPath, ($afterLayout | ConvertTo-Json -Depth 20), $utf8)
+  Write-Jpeg $afterScreenshotPath 1320 2856 'changed'
+  $manifest.states[0].requiredTexts = @('Initial', 'Long scroll result')
+  $manifest.states[0] | Add-Member -NotePropertyName scrollReachableTexts -NotePropertyValue @(
+    [pscustomobject]@{
+      selector = 'text:Long scroll result'
+      scrollSelector = 'type:Scroll'
+      afterScrollLayout = $afterLayoutPath
+      afterScrollScreenshot = $afterScreenshotPath
+    }
+  )
+  [IO.File]::WriteAllText($manifestPath, ($manifest | ConvertTo-Json -Depth 20), $utf8)
+  return $manifestPath
+}
+
+function Assert-ScrollReachableRejected([string]$Name, [scriptblock]$Mutation) {
+  $root = Join-Path $tempRoot $Name
+  $manifestPath = New-ScrollReachableFixture $root
+  $manifest = Get-Content -LiteralPath $manifestPath -Raw -Encoding utf8 | ConvertFrom-Json
+  $layoutPath = [string]$manifest.states[0].layout
+  $layout = Get-Content -LiteralPath $layoutPath -Raw -Encoding utf8 | ConvertFrom-Json
+  & $Mutation $manifest $layout $root
+  [IO.File]::WriteAllText($layoutPath, ($layout | ConvertTo-Json -Depth 20), $utf8)
+  [IO.File]::WriteAllText($manifestPath, ($manifest | ConvertTo-Json -Depth 20), $utf8)
+  $rejected = $false
+  try { & $guardPath -ManifestPath $manifestPath | Out-Null } catch { $rejected = $true }
+  if (-not $rejected) { throw "Runtime evidence guard accepted scroll-reachable mutation: $Name" }
+}
+
 try {
   $validPath = New-Fixture (Join-Path $tempRoot 'valid')
   & $guardPath -ManifestPath $validPath | Out-Null
+  $scrollReachableValidPath = New-ScrollReachableFixture (Join-Path $tempRoot 'scroll-reachable-valid')
+  & $guardPath -ManifestPath $scrollReachableValidPath | Out-Null
   $nestedValidPath = Convert-FixtureToNestedProject (
     New-Fixture (Join-Path $tempRoot 'nested-valid')
   )
@@ -598,6 +649,23 @@ try {
     $state.screenshot = $secondShot
     $state.preservedBoundsHashFrom = 'initial'
     $m.states = @($m.states[0], $state)
+  }
+  Assert-ScrollReachableRejected 'scroll-reachable-no-scroll' {
+    param($m, $l, $r)
+    $l.children[0].children[0].children[0].attributes.scrollable = 'false'
+  }
+  Assert-ScrollReachableRejected 'scroll-reachable-missing-pair' {
+    param($m, $l, $r)
+    $m.states[0].scrollReachableTexts[0].PSObject.Properties.Remove('afterScrollScreenshot')
+  }
+  Assert-ScrollReachableRejected 'scroll-reachable-unchanged-screenshot' {
+    param($m, $l, $r)
+    $afterScreenshot = [string]$m.states[0].scrollReachableTexts[0].afterScrollScreenshot
+    Copy-Item -LiteralPath ([string]$m.states[0].screenshot) -Destination $afterScreenshot -Force
+  }
+  Assert-ScrollReachableRejected 'scroll-reachable-no-global-exemption' {
+    param($m, $l, $r)
+    $l.children[0].children[0].children[0].children[1].attributes.origBounds = '[70,1120][1250,1600]'
   }
 
   Write-Output 'Runtime UI evidence guard mutation fixtures passed.'

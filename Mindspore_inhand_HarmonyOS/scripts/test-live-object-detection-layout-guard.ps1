@@ -95,13 +95,16 @@ try {
     "`n          workflow,`n          this.segmentationForegroundPixelMap !== undefined || this.liveSegmentationRetryAction() !== 'none'" +
     "`n        )) {`n          if (shouldPublishLiveGesturePreparingStatus(" +
     "`n            workflow,`n            this.gestureDetections.length > 0 || this.liveGestureRetryAction() !== 'none'" +
-    "`n          )) {`n            this.statusKey = 'feature_runtime_status_preparing';`n          }`n        }`n      }"
+    "`n          )) {`n            if (shouldPublishLiveScenePreparingStatus(" +
+    "`n              workflow,`n              this.sceneOverlayRows.length > 0 || this.liveSceneRetryAction() !== 'none'" +
+    "`n            )) {`n              this.statusKey = 'feature_runtime_status_preparing';`n            }`n          }`n        }`n      }"
   $fixedBack = "  if (workflow.routeName === AppRoute.IMAGE_CAMERA.name ||" +
     "`n    workflow.routeName === AppRoute.OBJECT_CAMERA.name) {`n    return 'back';`n  }"
   $preserve = '    shouldShowLiveClassificationCameraOverlay(workflow) ||' +
     "`n    shouldShowLiveObjectDetectionCameraOverlay(workflow) ||" +
     "`n    usesAndroidLiveSegmentationLayout(workflow) ||" +
-    "`n    usesAndroidLiveGestureLayout(workflow)) && !resultOk;"
+    "`n    usesAndroidLiveGestureLayout(workflow) ||" +
+    "`n    usesAndroidLiveSceneLayout(workflow)) && !resultOk;"
 
   Mutate-And-Run 'remove-status-overlay' $page `
     '        this.liveObjectDetectionStatusOverlay()' '        this.runtimeStatusBar()'
@@ -150,9 +153,10 @@ try {
   Mutate-And-Run 'always-preparing' $page $preparing `
     "      this.statusKey = 'feature_runtime_status_preparing';"
   Mutate-And-Run 'drop-object-text-preservation' $catalog $preserve `
-    ('    shouldShowLiveClassificationCameraOverlay(workflow) ||' +
+      ('    shouldShowLiveClassificationCameraOverlay(workflow) ||' +
       "`n    usesAndroidLiveSegmentationLayout(workflow) ||" +
-      "`n    usesAndroidLiveGestureLayout(workflow)) && !resultOk;")
+      "`n    usesAndroidLiveGestureLayout(workflow) ||" +
+      "`n    usesAndroidLiveSceneLayout(workflow)) && !resultOk;")
   Mutate-And-Run 'front-camera' $catalog $fixedBack ($fixedBack.Replace("return 'back';", "return 'front';"))
   Mutate-And-Run 'drop-right-clamp' $service `
     'Math.max(0, overlayWidth - maxWidth)' 'overlayWidth'

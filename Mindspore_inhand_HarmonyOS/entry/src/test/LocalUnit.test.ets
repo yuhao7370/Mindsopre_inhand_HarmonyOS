@@ -392,6 +392,7 @@ import {
   usesAndroidPoseNetStillLayout,
   usesAndroidTextRecognitionLayout,
   usesAndroidTextTranslationLayout,
+  usesAndroidLiveSceneLayout,
   usesSimpleAndroidLiveLayout,
   shouldShowPrimaryImageInputPreview,
   sampleImageUriForWorkflow,
@@ -433,6 +434,8 @@ import {
   shouldPublishLiveClassificationPreparingStatus,
   liveGestureRetryActionForStatus,
   shouldPublishLiveGesturePreparingStatus,
+  liveSceneRetryActionForStatus,
+  shouldPublishLiveScenePreparingStatus,
   shouldPreserveLiveCameraInputOnFailure,
   liveObjectDetectionRetryActionForStatus,
   shouldPublishLiveObjectDetectionPreparingStatus,
@@ -10031,7 +10034,34 @@ export default function localUnitTest() {
       expect(shouldPreserveRuntimeVisualResultOnAiResult(gestureLive, true, 'gesture')).assertTrue();
       expect(shouldPreserveRuntimeVisualResultOnAiResult(gestureLive, true, 'classification')).assertFalse();
       expect(shouldPreserveLiveCameraInputOnFailure(gestureLive)).assertTrue();
-      expect(shouldPreserveLiveCameraInputOnFailure(sceneLive)).assertFalse();
+      expect(shouldPreserveLiveCameraInputOnFailure(sceneLive)).assertTrue();
+    });
+
+    it('keepsLiveSceneLabelsCameraAndRetryStatePerRoute', 0, () => {
+      const sceneLive: FeatureWorkflow = workflowForRoute(AppRoute.SCENE_LIVE.name)!;
+      const gestureLive: FeatureWorkflow = workflowForRoute(AppRoute.GESTURE_LIVE.name)!;
+
+      expect(usesAndroidLiveSceneLayout(sceneLive)).assertTrue();
+      expect(usesAndroidLiveSceneLayout(gestureLive)).assertFalse();
+      expect(liveSceneRetryActionForStatus(sceneLive, 'feature_runtime_live_camera_failed'))
+        .assertEqual('restartCamera');
+      expect(liveSceneRetryActionForStatus(sceneLive, 'feature_runtime_run_failed'))
+        .assertEqual('restartInference');
+      expect(liveSceneRetryActionForStatus(sceneLive, 'feature_runtime_scene_runner_unavailable'))
+        .assertEqual('restartInference');
+      expect(liveSceneRetryActionForStatus(sceneLive, 'feature_runtime_scene_failed'))
+        .assertEqual('restartInference');
+      expect(liveSceneRetryActionForStatus(sceneLive, 'feature_runtime_status_idle')).assertEqual('none');
+      expect(liveSceneRetryActionForStatus(gestureLive, 'feature_runtime_run_failed')).assertEqual('none');
+      expect(shouldPublishLiveScenePreparingStatus(sceneLive, false)).assertTrue();
+      expect(shouldPublishLiveScenePreparingStatus(sceneLive, true)).assertFalse();
+      expect(shouldPublishLiveScenePreparingStatus(gestureLive, true)).assertTrue();
+      expect(shouldClearRuntimeResultAtWorkflowStart(sceneLive)).assertFalse();
+      expect(shouldPreserveRuntimeTextResultOnAiResult(sceneLive, false)).assertTrue();
+      expect(shouldPreserveRuntimeVisualResultOnAiResult(sceneLive, false, '')).assertTrue();
+      expect(shouldPreserveRuntimeVisualResultOnAiResult(sceneLive, true, 'scenes')).assertTrue();
+      expect(shouldPreserveRuntimeVisualResultOnAiResult(sceneLive, true, 'gesture')).assertFalse();
+      expect(shouldPreserveLiveCameraInputOnFailure(sceneLive)).assertTrue();
     });
 
     it('showsObjectBoxesOnOnlyTheAndroidStyleLiveObjectPreview', 0, () => {
@@ -10239,10 +10269,9 @@ export default function localUnitTest() {
 
     it('usesSimpleAndroidLiveLayoutOnlyForMatchingAndroidActivities', 0, () => {
       const simpleLiveRouteNames: Array<string> = [
-        AppRoute.SCENE_LIVE.name,
         AppRoute.LIVE_SKELETON.name
       ];
-      expect(new Set<string>(simpleLiveRouteNames).size).assertEqual(2);
+      expect(new Set<string>(simpleLiveRouteNames).size).assertEqual(1);
 
       featureWorkflows.forEach((workflow: FeatureWorkflow) => {
         expect(usesSimpleAndroidLiveLayout(workflow))
@@ -10379,7 +10408,7 @@ export default function localUnitTest() {
 
       expect(shouldPreserveRuntimeTextResultOnAiResult(stillScene, false)).assertTrue();
       expect(shouldPreserveRuntimeTextResultOnAiResult(stillScene, true)).assertFalse();
-      expect(shouldPreserveRuntimeTextResultOnAiResult(liveScene, false)).assertFalse();
+      expect(shouldPreserveRuntimeTextResultOnAiResult(liveScene, false)).assertTrue();
       expect(shouldPreserveRuntimeTextResultOnAiResult(stillSegmentation, false)).assertFalse();
       expect(shouldPreserveRuntimeTextResultOnAiResult(styleTransfer, false)).assertFalse();
       expect(shouldPreserveRuntimeTextResultOnAiResult(objectPhoto, false)).assertTrue();
@@ -10405,7 +10434,7 @@ export default function localUnitTest() {
       expect(shouldPreserveRuntimeResultAfterInputReady(objectPhoto, 'camera')).assertFalse();
       expect(shouldClearRuntimeResultAtWorkflowStart(stillScene)).assertFalse();
       expect(shouldClearRuntimeResultAtWorkflowStart(objectPhoto)).assertFalse();
-      expect(shouldClearRuntimeResultAtWorkflowStart(liveScene)).assertTrue();
+      expect(shouldClearRuntimeResultAtWorkflowStart(liveScene)).assertFalse();
 
       expect(shouldAllowRuntimeInputChange(stillScene, 'photo', true)).assertFalse();
       expect(shouldAllowRuntimeInputChange(stillScene, 'camera', true)).assertFalse();
@@ -10687,7 +10716,7 @@ export default function localUnitTest() {
       expect(shouldShowGestureStillFailureToast(undefined, true)).assertFalse();
     });
 
-    it('selectsSpecializedAndroidLiveLayoutForImageObjectSegmentationAndGestureCamera', 0, () => {
+    it('selectsSpecializedAndroidLiveLayoutForImageObjectSegmentationGestureAndSceneCamera', 0, () => {
       featureWorkflows.forEach((workflow: FeatureWorkflow) => {
         let expectedLayout: string | undefined = undefined;
         if (workflow.routeName === AppRoute.IMAGE_CAMERA.name) {
@@ -10698,6 +10727,8 @@ export default function localUnitTest() {
           expectedLayout = 'segmentation';
         } else if (workflow.routeName === AppRoute.GESTURE_LIVE.name) {
           expectedLayout = 'gesture';
+        } else if (workflow.routeName === AppRoute.SCENE_LIVE.name) {
+          expectedLayout = 'scene';
         }
         expect(specializedAndroidLiveLayoutForWorkflow(workflow)).assertEqual(expectedLayout);
       });
@@ -10720,6 +10751,7 @@ export default function localUnitTest() {
         specializedAndroidLiveLayoutForWorkflow(workflow) === 'objectDetection',
         specializedAndroidLiveLayoutForWorkflow(workflow) === 'segmentation',
         specializedAndroidLiveLayoutForWorkflow(workflow) === 'gesture',
+        specializedAndroidLiveLayoutForWorkflow(workflow) === 'scene',
         usesSimpleAndroidLiveLayout(workflow)
       ].filter((matches: boolean) => matches).length;
 

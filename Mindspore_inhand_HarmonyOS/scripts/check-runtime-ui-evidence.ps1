@@ -181,6 +181,35 @@ function Get-PreservationNode([object[]]$Nodes, [string]$Selector, [string]$Stat
   return $matches[0]
 }
 
+function Matches-NodeSelector([object]$Node, [string]$Selector) {
+  $separator = $Selector.IndexOf(':', [StringComparison]::Ordinal)
+  if ($separator -le 0 -or $separator -eq $Selector.Length - 1) { return $false }
+  $kind = $Selector.Substring(0, $separator)
+  $value = $Selector.Substring($separator + 1)
+  switch ($kind) {
+    'id' { return (Attr $Node 'id') -ceq $value }
+    'key' { return (Attr $Node 'key') -ceq $value }
+    'text' { return (Node-Label $Node) -ceq $value }
+    'type' { return (Attr $Node 'type') -ceq $value }
+    'bounds' { return (Attr $Node 'bounds') -ceq $value }
+    default { return $false }
+  }
+}
+
+function Find-NodesWithAncestors([object]$Node, [string]$Selector, [object[]]$Ancestors = @()) {
+  $matches = [Collections.Generic.List[object]]::new()
+  if ($null -eq $Node) { return $matches }
+  if (Matches-NodeSelector $Node $Selector) {
+    $matches.Add([pscustomobject]@{ Node = $Node; Ancestors = $Ancestors })
+  }
+  foreach ($child in @($Node.children)) {
+    foreach ($match in @(Find-NodesWithAncestors $child $Selector (@($Ancestors) + @($Node)))) {
+      $matches.Add($match)
+    }
+  }
+  return $matches
+}
+
 function Get-VisualRegionData(
   [string]$ScreenshotPath,
   [object]$Bounds,
@@ -627,6 +656,72 @@ foreach ($state in $states) {
       Fail "state '$name' contains forbidden text '$text'."
     }
   }
+  $scrollReachableEntries = if ($state.PSObject.Properties.Name -contains 'scrollReachableTexts') {
+    @($state.scrollReachableTexts)
+  } else { @() }
+  $scrollReachableNodes = [Collections.Generic.List[object]]::new()
+  foreach ($entry in $scrollReachableEntries) {
+    $selector = [string](Require-Property $entry 'selector')
+    $scrollSelector = [string](Require-Property $entry 'scrollSelector')
+    if ($selector -notmatch '^text:.+' -or $scrollSelector -ne 'type:Scroll') {
+      Fail "state '$name' scroll-reachable evidence must name one text selector and its Scroll ancestor."
+    }
+    $matches = @(Find-NodesWithAncestors $routeRoot[0] $selector)
+    if ($matches.Count -ne 1) { Fail "state '$name' scroll-reachable selector '$selector' must identify one node." }
+    $scrollAncestors = @($matches[0].Ancestors | Where-Object {
+        Matches-NodeSelector $_ $scrollSelector
+      })
+    if ($scrollAncestors.Count -ne 1 -or (Attr $scrollAncestors[0] 'scrollable') -ne 'true') {
+      Fail "state '$name' scroll-reachable selector '$selector' must have one scrollable Scroll ancestor."
+    }
+    $reachableBounds = Parse-Bounds (Attr $matches[0].Node 'bounds')
+    $reachableOriginalBounds = Parse-Bounds (Attr $matches[0].Node 'origBounds')
+    $scrollBounds = Parse-Bounds (Attr $scrollAncestors[0] 'bounds')
+    if ($null -eq $reachableBounds -or $null -eq $reachableOriginalBounds -or $null -eq $scrollBounds -or
+      $reachableOriginalBounds.Bottom -le $scrollBounds.Bottom) {
+      Fail "state '$name' scroll-reachable selector '$selector' must prove text extends below its Scroll viewport."
+    }
+    $afterLayoutPath = [string](Require-Property $entry 'afterScrollLayout')
+    $afterScreenshotPath = [string](Require-Property $entry 'afterScrollScreenshot')
+    Require-AbsoluteFile $afterLayoutPath "state '$name' after-scroll layout"
+    Require-AbsoluteFile $afterScreenshotPath "state '$name' after-scroll screenshot"
+    if ([IO.Path]::GetExtension($afterScreenshotPath).ToLowerInvariant() -notin @('.jpg', '.jpeg')) {
+      Fail "state '$name' after-scroll screenshot must be JPEG."
+    }
+    try {
+      $afterLayout = Get-Content -LiteralPath $afterLayoutPath -Raw -Encoding utf8 | ConvertFrom-Json
+      $afterScreenshot = [Drawing.Image]::FromFile($afterScreenshotPath)
+      $afterScreenshotWidth = $afterScreenshot.Width
+      $afterScreenshotHeight = $afterScreenshot.Height
+      $afterScreenshot.Dispose()
+    } catch {
+      Fail "state '$name' after-scroll layout/screenshot must be readable."
+    }
+    if ($afterScreenshotWidth -ne $displayWidthPx -or $afterScreenshotHeight -ne $displayHeightPx) {
+      Fail "state '$name' after-scroll screenshot dimensions do not match the captured display."
+    }
+    $afterRoute = @((Flatten-Nodes $afterLayout) | Where-Object { (Attr $_ 'key') -ceq $routeName })
+    if ($afterRoute.Count -ne 1) { Fail "state '$name' after-scroll layout must bind the same runtime route." }
+    $afterMatches = @(Find-NodesWithAncestors $afterRoute[0] $selector)
+    if ($afterMatches.Count -ne 1) { Fail "state '$name' after-scroll selector '$selector' is not reachable." }
+    $afterScrollAncestors = @($afterMatches[0].Ancestors | Where-Object {
+        Matches-NodeSelector $_ $scrollSelector
+      })
+    $afterOriginalBounds = Parse-Bounds (Attr $afterMatches[0].Node 'origBounds')
+    $afterScrollBounds = Parse-Bounds (Attr $afterScrollAncestors[0] 'bounds')
+    if ($afterScrollAncestors.Count -ne 1 -or (Attr $afterScrollAncestors[0] 'scrollable') -ne 'true' -or
+      $null -eq $afterOriginalBounds -or $null -eq $afterScrollBounds -or
+      $afterOriginalBounds.Bottom -gt $afterScrollBounds.Bottom) {
+      Fail "state '$name' after-scroll evidence must retain the same text in a scrollable Scroll ancestor."
+    }
+    $beforePixels = Get-VisualRegionData $screenshotPath $scrollBounds $name $selector
+    $afterPixels = Get-VisualRegionData $afterScreenshotPath $afterScrollBounds $name $selector
+    if ($beforePixels.LumaStandardDeviation -lt 2.0 -or $afterPixels.LumaStandardDeviation -lt 2.0 -or
+      (Get-VisualRegionMeanAbsoluteError $beforePixels $afterPixels) -le 2.0) {
+      Fail "state '$name' after-scroll evidence must visibly differ from the top-of-scroll capture."
+    }
+    $scrollReachableNodes.Add($matches[0].Node)
+  }
   if ($routeName -in @('/imageobject/ObjectCameraActivity', '/imageobject/ImageCameraActivity') -and
     ($labels -contains $switchCameraZh -or $labels -contains 'Switch camera')) {
     Fail "state '$name' exposes a camera switch on a fixed-camera route."
@@ -665,7 +760,7 @@ foreach ($state in $states) {
     if (-not [string]::IsNullOrWhiteSpace($label) -and ($bounds.Width -le 0 -or $bounds.Height -le 0)) {
       Fail "state '$name' contains a hidden/clipped label."
     }
-    if (-not [string]::IsNullOrWhiteSpace($label)) {
+    if (-not [string]::IsNullOrWhiteSpace($label) -and -not $scrollReachableNodes.Contains($node)) {
       $originalBoundsText = Attr $node 'origBounds'
       $originalBounds = Parse-Bounds $originalBoundsText
       if ($null -eq $originalBounds -or
