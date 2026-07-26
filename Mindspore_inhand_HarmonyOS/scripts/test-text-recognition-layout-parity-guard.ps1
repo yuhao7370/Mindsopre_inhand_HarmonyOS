@@ -5,6 +5,10 @@ $guard = Join-Path $PSScriptRoot 'check-text-recognition-layout-parity.ps1'
 $tempPrefix = [IO.Path]::GetFullPath([IO.Path]::GetTempPath())
 $tempRoot = Join-Path $tempPrefix ('mih-ocr-guard-' + [Guid]::NewGuid().ToString('N'))
 
+function Read-Normalized([string]$Path) {
+  return [IO.File]::ReadAllText($Path).Replace("`r`n", "`n").Replace("`r", "`n")
+}
+
 function Copy-Fixture() {
   $fixture = Join-Path $tempRoot ([Guid]::NewGuid().ToString('N'))
   [IO.Directory]::CreateDirectory((Join-Path $fixture 'entry\src\main\ets\pages')) | Out-Null
@@ -22,13 +26,15 @@ function Copy-Fixture() {
     (Join-Path $sourceRoot 'scripts\build-hap.ps1'),
     (Join-Path $fixture 'scripts\build-hap.ps1')
   )
+  $pagePath = Join-Path $fixture 'entry\src\main\ets\pages\FeatureRuntimePage.ets'
+  [IO.File]::WriteAllText($pagePath, ([IO.File]::ReadAllText($pagePath).Replace("`r`n", "`n").Replace("`r", "`n").Replace("`n", "`r`n")))
   return $fixture
 }
 
 function Mutate-And-Reject([string]$Name, [string]$RelativePath, [string]$From, [string]$To) {
   $fixture = Copy-Fixture
   $path = Join-Path $fixture $RelativePath
-  $text = [IO.File]::ReadAllText($path)
+  $text = Read-Normalized $path
   if ($text.IndexOf($From, [StringComparison]::Ordinal) -lt 0) {
     throw "Text recognition mutation fixture '$Name' could not find source marker."
   }
@@ -47,7 +53,7 @@ function Mutate-And-Reject([string]$Name, [string]$RelativePath, [string]$From, 
 function Mutate-And-Accept([string]$Name, [string]$RelativePath, [string]$From, [string]$To) {
   $fixture = Copy-Fixture
   $path = Join-Path $fixture $RelativePath
-  $text = [IO.File]::ReadAllText($path)
+  $text = Read-Normalized $path
   if ($text.IndexOf($From, [StringComparison]::Ordinal) -lt 0) {
     throw "Text recognition decoy fixture '$Name' could not find source marker."
   }
@@ -69,7 +75,7 @@ function Mutate-Two-And-Reject(
 ) {
   $fixture = Copy-Fixture
   $path = Join-Path $fixture $RelativePath
-  $text = [IO.File]::ReadAllText($path)
+  $text = Read-Normalized $path
   foreach ($marker in @($FromOne, $FromTwo)) {
     if ($text.IndexOf($marker, [StringComparison]::Ordinal) -lt 0) {
       throw "Text recognition mutation fixture '$Name' could not find source marker."
