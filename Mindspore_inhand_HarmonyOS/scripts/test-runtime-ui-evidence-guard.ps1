@@ -1,6 +1,25 @@
+param(
+  [ValidateSet('All', 'Positive', 'Core')]
+  [string]$Mode = 'All'
+)
+
 $ErrorActionPreference = 'Stop'
 
 $guardPath = Join-Path $PSScriptRoot 'check-runtime-ui-evidence.ps1'
+$captureRunnerPath = Join-Path $PSScriptRoot 'capture-runtime-ui-run.ps1'
+$productionGuardPath = $guardPath
+$productionCaptureRunnerPath = $captureRunnerPath
+$reviewerPublicKeyPath = Join-Path $PSScriptRoot 'runtime-evidence-reviewer-public.pem'
+$templateRoot = Join-Path $PSScriptRoot 'runtime-evidence-templates'
+if (-not [IO.File]::Exists($captureRunnerPath)) {
+  throw 'Trusted runtime evidence capture runner is missing.'
+}
+if (-not [IO.File]::Exists($reviewerPublicKeyPath)) {
+  throw 'Pinned runtime evidence reviewer public key is missing.'
+}
+if (-not [IO.Directory]::Exists($templateRoot)) {
+  throw 'Trusted runtime evidence producer templates are missing.'
+}
 $tempParent = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\', '/')
 $tempRoot = [IO.Path]::GetFullPath((Join-Path $tempParent ("mindspore-runtime-evidence-" + [guid]::NewGuid().ToString('N'))))
 $tempPrefix = $tempParent + [IO.Path]::DirectorySeparatorChar
@@ -29,6 +48,99 @@ function Get-BytesSha256([byte[]]$Bytes) {
     return ([BitConverter]::ToString($sha.ComputeHash($Bytes))).Replace('-', '').ToLowerInvariant()
   } finally {
     $sha.Dispose()
+  }
+}
+
+function Join-ByteArrays([object[]]$Arrays) {
+  $stream = [IO.MemoryStream]::new()
+  try {
+    foreach ($array in $Arrays) {
+      $bytes = [byte[]]$array
+      $stream.Write($bytes, 0, $bytes.Length)
+    }
+    return $stream.ToArray()
+  } finally {
+    $stream.Dispose()
+  }
+}
+
+function New-DerValue([byte]$Tag, [byte[]]$Value) {
+  if ($Value.Length -lt 128) {
+    $length = [byte[]]@([byte]$Value.Length)
+  } else {
+    $lengthBytes = [Collections.Generic.List[byte]]::new()
+    $remaining = $Value.Length
+    while ($remaining -gt 0) {
+      $lengthBytes.Insert(0, [byte]($remaining -band 0xff))
+      $remaining = $remaining -shr 8
+    }
+    $length = [byte[]]@([byte](0x80 -bor $lengthBytes.Count)) + $lengthBytes.ToArray()
+  }
+  return Join-ByteArrays @([byte[]]@($Tag), $length, $Value)
+}
+
+function New-DerInteger([byte[]]$Value) {
+  if (($Value[0] -band 0x80) -ne 0) { $Value = [byte[]]@(0) + $Value }
+  return New-DerValue 0x02 $Value
+}
+
+function Export-TestReviewerPublicKey([Security.Cryptography.RSA]$Rsa, [string]$Path) {
+  $parameters = $Rsa.ExportParameters($false)
+  $rsaPublic = New-DerValue 0x30 (Join-ByteArrays @(
+      (New-DerInteger $parameters.Modulus),
+      (New-DerInteger $parameters.Exponent)
+    ))
+  $algorithm = [Convert]::FromBase64String('MA0GCSqGSIb3DQEBAQUA')
+  $spki = New-DerValue 0x30 (Join-ByteArrays @(
+      $algorithm,
+      (New-DerValue 0x03 ([byte[]]@(0) + $rsaPublic))
+  ))
+  $base64 = [Convert]::ToBase64String($spki, [Base64FormattingOptions]::InsertLineBreaks)
+  $normalizedBase64 = $base64.Replace("`r`n", "`n")
+  [IO.File]::WriteAllText(
+    $Path,
+    "-----BEGIN PUBLIC KEY-----`n$normalizedBase64`n-----END PUBLIC KEY-----`n",
+    $utf8
+  )
+}
+
+function Get-TestCanonicalRunRoot([object]$RunReceipt) {
+  return ([ordered]@{
+      schemaVersion = 1
+      domain = 'com.yuhaofeng.mih/runtime-ui-run-root/v1'
+      trustDomain = [string]$RunReceipt.trustDomain
+      runId = [string]$RunReceipt.runId
+      runnerSha256 = [string]$RunReceipt.captureRunner.sha256
+      hdcPath = [string]$RunReceipt.hdc.path
+      hdcSha256 = [string]$RunReceipt.hdc.sha256
+      startedUtc = [string]$RunReceipt.startedUtc
+      endedUtc = [string]$RunReceipt.endedUtc
+      hapSha256 = [string]$RunReceipt.hapSha256
+      buildReceiptSha256 = [string]$RunReceipt.buildReceiptSha256
+      candidateDiffSha256 = [string]$RunReceipt.candidateDiffSha256
+      candidateIdentitySha256 = [string]$RunReceipt.candidateIdentitySha256
+      gitHead = [string]$RunReceipt.gitHead
+      routeName = [string]$RunReceipt.routeName
+      fontScale = [string]$RunReceipt.fontScale
+      density = [string]$RunReceipt.density
+      displayDumpSha256 = [string]$RunReceipt.displayDumpSha256
+      foregroundAaSha256 = [string]$RunReceipt.foregroundAaSha256
+      device = $RunReceipt.device
+      steps = @($RunReceipt.steps)
+      transcriptSha256 = [string]$RunReceipt.transcriptSha256
+      transcriptLength = [int64]$RunReceipt.transcriptLength
+      eventCount = [int]$RunReceipt.eventCount
+      finalLineSha256 = [string]$RunReceipt.finalLineSha256
+      stateReceiptSha256 = @($RunReceipt.stateReceiptSha256)
+      stateChainRootSha256 = [string]$RunReceipt.stateChainRootSha256
+    } | ConvertTo-Json -Compress -Depth 30)
+}
+
+function Invoke-EvidenceGuard([string]$ManifestPath, [switch]$ProductionTrust) {
+  if ($ProductionTrust) {
+    & $productionGuardPath -ManifestPath $ManifestPath
+  } else {
+    & $guardPath -ManifestPath $ManifestPath
   }
 }
 
@@ -93,6 +205,17 @@ function Write-Jpeg(
             35
           )
         }
+        if ($Variant -ne 'initial') {
+          $variantCode = @($Variant.ToCharArray() | ForEach-Object { [int]$_ } |
+              Measure-Object -Sum).Sum
+          $marker = [Drawing.Color]::FromArgb(
+            255,
+            40 + ($variantCode % 180),
+            40 + (($variantCode * 3) % 180),
+            40 + (($variantCode * 7) % 180)
+          )
+          $graphics.FillRectangle([Drawing.SolidBrush]::new($marker), 70, 1550, 1180, 700)
+        }
       }
     } finally {
       $graphics.Dispose()
@@ -145,6 +268,146 @@ function Write-Hap(
     if ($null -ne $archive) { $archive.Dispose() }
     $file.Dispose()
   }
+}
+
+function New-MockHdc([string]$Path) {
+  $source = @'
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.IO;
+
+public static class MockHdc {
+  static string Q(string value) { return value.Replace("\\", "\\\\").Replace("\"", "\\\""); }
+  static void Emit(string run, string state, string type, int index, double offsetSeconds, string fields) {
+    Console.WriteLine("MIH_RUNTIME_EVENT {\"runId\":\"" + Q(run) + "\",\"type\":\"" +
+      type + "\",\"eventId\":\"preloaded-runtime-" +
+      index + "\"" + fields + "}");
+  }
+  public static int Main(string[] args) {
+    Console.OutputEncoding = new System.Text.UTF8Encoding(false);
+    Console.InputEncoding = new System.Text.UTF8Encoding(false);
+    string run = Environment.GetEnvironmentVariable("RUNTIME_EVIDENCE_RUN_ID") ?? "";
+    string state = Environment.GetEnvironmentVariable("RUNTIME_EVIDENCE_STATE") ?? "";
+    string joined = String.Join(" ", args);
+    if (joined == "list targets -v") {
+      Console.WriteLine("127.0.0.1:5555\t\tTCP\tConnected\tlocalhost\thdc");
+      return 0;
+    }
+    if (joined.EndsWith("shell aa dump -a")) {
+      string capture = Environment.GetEnvironmentVariable("RUNTIME_EVIDENCE_CAPTURE_NAME") ?? "";
+      string evidence = Environment.GetEnvironmentVariable("RUNTIME_EVIDENCE_DIRECTORY") ?? "";
+      string waitMarker = Path.Combine(evidence, "mock-permission-ready.txt");
+      if (capture == "permission-wait" && !File.Exists(waitMarker)) {
+        File.WriteAllText(waitMarker, "next poll is ready");
+        Console.WriteLine("Mission app name [com.yuhaofeng.mih] main name [EntryAbility] state #FOREGROUND");
+      } else if (capture == "permission-dialog" || capture == "permission-wait") {
+        Console.WriteLine(
+          "  ExtensionRecords:\n" +
+          "    uri [/com.huawei.hmos.security.privacycenter/permissionmanager/PermissionGrantAbility3]\n" +
+          "      AbilityRecord ID #36   state #FOREGROUND\n" +
+          "      main name [PermissionGrantAbility]\n" +
+          "      bundle name [com.huawei.hmos.security.privacycenter]\n" +
+          "      ability type [UIEXTENSION]\n" +
+          "      app state #FOREGROUND\n" +
+          "        isKeepAlive: false\n" +
+          "    PendingWantRecords:");
+      } else {
+        Console.WriteLine(capture == "picker-intermediate"
+          ? "app name [com.ohos.medialibrary.medialibrarydata] main name [MediaPicker] state #FOREGROUND"
+          : "app name [com.yuhaofeng.mih] main name [EntryAbility] state #FOREGROUND");
+      }
+      return 0;
+    }
+    if (joined.EndsWith("shell hidumper -s DisplayManagerService -a -a")) {
+      Console.WriteLine("width=1320 height=2856 density=3.5");
+      return 0;
+    }
+    if (joined.EndsWith("shell atm dump -t -b com.yuhaofeng.mih")) {
+      string evidence = Environment.GetEnvironmentVariable("RUNTIME_EVIDENCE_DIRECTORY") ?? "";
+      int camera = state == "save-success" ||
+        File.Exists(Path.Combine(evidence, "mock-camera-granted.txt")) ? 0 : -1;
+      Console.WriteLine("{\"bundleName\":\"com.yuhaofeng.mih\",\"permStateList\":[" +
+        "{\"permissionName\":\"ohos.permission.CAMERA\",\"grantStatus\":" + camera + "}," +
+        "{\"permissionName\":\"ohos.permission.READ_IMAGEVIDEO\",\"grantStatus\":-1}]}");
+      return 0;
+    }
+    if (joined.Contains(" file recv ")) {
+      string destination = args[args.Length - 1];
+      string capture = Environment.GetEnvironmentVariable("RUNTIME_EVIDENCE_CAPTURE_NAME") ?? "";
+      string templateRoot = Environment.GetEnvironmentVariable("RUNTIME_EVIDENCE_MOCK_TEMPLATE_DIR") ?? "";
+      if (destination.EndsWith("save-success-asset.jpg", StringComparison.OrdinalIgnoreCase)) {
+        File.Copy(Path.Combine(templateRoot, "save-success.jpeg"), destination, false);
+        Console.WriteLine("FileTransfer finish");
+        return 0;
+      }
+      if (capture == "picker-intermediate" &&
+        destination.EndsWith(".json", StringComparison.OrdinalIgnoreCase)) {
+        File.WriteAllBytes(destination, new byte[0]);
+        Console.WriteLine("FileTransfer finish");
+        return 0;
+      }
+      string templateName = capture == "reentry-launcher" ? "launcher" : capture;
+      string extension = destination.EndsWith(".json", StringComparison.OrdinalIgnoreCase)
+        ? ".json"
+        : (destination.EndsWith(".png", StringComparison.OrdinalIgnoreCase) ? ".png" : ".jpeg");
+      string source = Path.Combine(templateRoot, templateName + extension);
+      File.Copy(source, destination, false);
+      Console.WriteLine("FileTransfer finish");
+      return 0;
+    }
+    if (state == "save-success" && joined.Contains(" uitest uiInput click ")) {
+      string evidence = Environment.GetEnvironmentVariable("RUNTIME_EVIDENCE_DIRECTORY") ?? "";
+      File.WriteAllText(Path.Combine(evidence, "mock-media-created.txt"), "created");
+      Console.WriteLine("No Error");
+      return 0;
+    }
+    if (state == "initial" && joined.Contains(" uitest uiInput click ") &&
+      (Environment.GetEnvironmentVariable("RUNTIME_EVIDENCE_CAPTURE_NAME") ?? "") ==
+        "permission-dialog") {
+      string evidence = Environment.GetEnvironmentVariable("RUNTIME_EVIDENCE_DIRECTORY") ?? "";
+      File.WriteAllText(Path.Combine(evidence, "mock-camera-granted.txt"), "granted");
+      Console.WriteLine("No Error");
+      return 0;
+    }
+    if (joined.Contains(" shell mediatool ls -l ")) {
+      string evidence = Environment.GetEnvironmentVariable("RUNTIME_EVIDENCE_DIRECTORY") ?? "";
+      string directory = args[args.Length - 1];
+      const string mediaRoot = "/storage/media/100/local/files/Photo";
+      if (directory == mediaRoot) {
+        Console.WriteLine("drwxr-xr-x 0 Camera");
+      } else if (directory == mediaRoot + "/Camera" &&
+        File.Exists(Path.Combine(evidence, "mock-media-created.txt"))) {
+        string templateRoot = Environment.GetEnvironmentVariable("RUNTIME_EVIDENCE_MOCK_TEMPLATE_DIR") ?? "";
+        long size = new FileInfo(Path.Combine(templateRoot, "save-success.jpeg")).Length;
+        Console.WriteLine("-rw-r--r-- " + size + " task14-saved.jpg");
+      }
+      return 0;
+    }
+    if (joined.Contains(" shell mediatool recv ")) {
+      Console.WriteLine("No Error");
+      return 0;
+    }
+    if (joined.EndsWith("shell hilog -x -T MIH_RUNTIME_EVIDENCE")) {
+      Console.WriteLine("07-27 04:00:00.000 1 1 I MIH_RUNTIME_EVIDENCE: " +
+        "MIH_RUNTIME_EVENT {\"runId\":\"historical-run\",\"stateName\":\"historical-state\"," +
+        "\"type\":\"service.success\",\"eventId\":\"historical-event\",\"utc\":\"" +
+        DateTime.UtcNow.AddMinutes(-5).ToString("o", CultureInfo.InvariantCulture) + "\"}");
+      var events = new List<Tuple<string,string,double>>();
+      events.Add(Tuple.Create("camera.position.observed", ",\"cameraPosition\":\"back\"", -4.0));
+      events.Add(Tuple.Create("camera.restore", ",\"cameraPosition\":\"back\"", -3.0));
+      events.Add(Tuple.Create("service.failure", ",\"errorCode\":\"SEGMENTATION_FAILED\",\"preservedResultFingerprint\":\"real-before\"", -2.0));
+      events.Add(Tuple.Create("service.success", ",\"resultFingerprint\":\"real-after\"", -1.0));
+      for (int i = 0; i < events.Count; i++) Emit(run, "preloaded", events[i].Item1, i, events[i].Item3, events[i].Item2);
+      return 0;
+    }
+    Console.WriteLine("No Error");
+    return 0;
+  }
+}
+'@
+  Add-Type -TypeDefinition $source -Language CSharp -OutputAssembly $Path -OutputType ConsoleApplication
+  return $Path
 }
 
 function Write-DisplayDump([string]$Path, [double]$Density = 3.5) {
@@ -290,7 +553,21 @@ $mainHap = Join-Path $PSScriptRoot '..\entry\build\default\outputs\default\entry
                   [ordered]@{ attributes = $imageAttrs; children = @() },
                   [ordered]@{ attributes = (Attrs 'Text' '[70,1120][1250,1300]' 'Initial'); children = @() },
                   [ordered]@{ attributes = (Attrs 'Button' '[70,2100][630,2280]' 'Retry' 'true'); children = @() },
-                  [ordered]@{ attributes = (Attrs 'Button' '[700,2550][1260,2750]' 'Settings' 'true'); children = @() }
+                  [ordered]@{ attributes = (Attrs 'Button' '[700,2550][1260,2750]' 'Settings' 'true'); children = @() },
+                  [ordered]@{
+                    attributes = (Attrs 'List' '[70,1350][1260,1530]' '' 'false' 'true')
+                    children = @(
+                      [ordered]@{ attributes = (Attrs 'Button' '[70,1350][350,1530]' 'Background 2' 'true'); children = @() },
+                      [ordered]@{ attributes = (Attrs 'Button' '[900,1350][1260,1530]' 'Custom background' 'true'); children = @() }
+                    )
+                  },
+                  [ordered]@{
+                    attributes = (Attrs 'Row' '[830,1700][1260,1880]')
+                    children = @(
+                      [ordered]@{ attributes = (Attrs 'Row' '[830,1700][1040,1880]' '' 'true'); children = @() },
+                      [ordered]@{ attributes = (Attrs 'SaveButton' '[1050,1700][1260,1880]' '' 'true'); children = @() }
+                    )
+                  }
                 )
               }
             )
@@ -299,6 +576,12 @@ $mainHap = Join-Path $PSScriptRoot '..\entry\build\default\outputs\default\entry
       }
     )
   }
+  $fixtureControls = $layout.children[0].children[0].children[0].children
+  $fixtureControls[2].attributes.id = 'portrait-retry'
+  $fixtureControls[4].children[0].attributes.id = 'portrait-preset-2'
+  $fixtureControls[4].children[1].attributes.id = 'portrait-custom-background'
+  $fixtureControls[5].children[0].attributes.id = 'portrait-switch-camera'
+  $fixtureControls[5].children[1].attributes.id = 'portrait-save'
   [IO.File]::WriteAllText($layoutPath, ($layout | ConvertTo-Json -Depth 20), $utf8)
   $manifest = [ordered]@{
     task = 1
@@ -350,25 +633,97 @@ function Convert-FixtureToTask14Harness([string]$ManifestPath, [double]$FontScal
   Invoke-Git $repositoryRoot @('restore', '--', 'entry/src/main/ets/pages/Candidate.ets') | Out-Null
 
   $entryAbilityPath = Join-Path $repositoryRoot 'entry/src/main/ets/entryability/EntryAbility.ets'
+  $featurePagePath = Join-Path $repositoryRoot 'entry/src/main/ets/pages/FeatureRuntimePage.ets'
   [IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($entryAbilityPath)) | Out-Null
   [IO.File]::WriteAllText($entryAbilityPath, "baseline entry ability`n", $utf8)
-  Invoke-Git $repositoryRoot @('add', '--', 'entry/src/main/ets/entryability/EntryAbility.ets') | Out-Null
+  [IO.File]::WriteAllText(
+    $featurePagePath,
+    "@Component`nstruct FeatureRuntimePage {`n" +
+      "  private statusKey: string = 'ready';`n" +
+      "  aboutToAppear(): void {`n" +
+      "    const params = router.getParams() as FeatureRuntimeParams;`n  }`n" +
+      "  private async runWorkflowAsync(): Promise<void> {`n    try {`n" +
+      "      if (!this.isRuntimeRequestCurrent(runtimeRequestId)) { return; }`n" +
+      "      const result: AiRunResult = await aiService.run(workflow, this.aiRunInputs());`n" +
+      "    } catch (_) {}`n  }`n" +
+      "  private applyLiveCameraPreviewResult(result: object): void {`n" +
+      "    if (!result.ok) { return; }`n" +
+      "    this.pendingPickTextInputVisible = undefined;`n" +
+      "    if (shouldAutoRunLiveRuntimeAfterPreview(workflow)) {`n" +
+      "      this.startLiveRuntimeLoop(workflow);`n    }`n  }`n" +
+      "  private retryLiveSegmentation(): void {`n" +
+      "    if (action !== 'restartInference') { return; }`n" +
+      "    this.statusKey = 'preparing';`n" +
+      "    this.startLiveRuntimeLoop(workflow);`n  }`n" +
+      "  private portraitSegmentationAndroidLayout(): void {`n    Column() {}`n  }`n" +
+      "  private async applyAiResult(result: object): Promise<void> {`n" +
+      "    this.statusKey = 'ready';`n  }`n" +
+      "}`n",
+    $utf8
+  )
+  Invoke-Git $repositoryRoot @(
+    'add', '--',
+    'entry/src/main/ets/entryability/EntryAbility.ets',
+    'entry/src/main/ets/pages/FeatureRuntimePage.ets'
+  ) | Out-Null
   Invoke-Git $repositoryRoot @('commit', '--quiet', '-m', 'fixture harness baseline') | Out-Null
 
-  $fontScaleLine = if ($FontScale -eq 3.2) { "    windowStage.setFontSizeScale(3.2)`n" } else { '' }
-  [IO.File]::WriteAllText(
-    $entryAbilityPath,
-    "export default class EntryAbility {`n  onWindowStageCreate(windowStage: any): void {`n" +
-      $fontScaleLine + "    windowStage.loadContent('pages/RuntimeHarnessPage')`n  }`n}`n",
-    $utf8
+  $featureSource = [IO.File]::ReadAllText($featurePagePath)
+  $featureSource = "import { RuntimeHarnessAdapter } from '../runtime/RuntimeHarnessAdapter';`n" +
+    $featureSource
+  $featureSource = $featureSource.Replace(
+    "  private statusKey: string = 'ready';",
+    "  private statusKey: string = 'ready';`n" +
+      "  private runtimeHarnessAdapter: RuntimeHarnessAdapter | undefined = undefined;"
   )
+  $featureSource = $featureSource.Replace(
+    "    const params = router.getParams() as FeatureRuntimeParams;",
+    "    const params = router.getParams() as FeatureRuntimeParams;`n" +
+      "    // RUNTIME_UI_HARNESS_ROUTE_HOOK_BEGIN`n" +
+      "    this.runtimeHarnessAdapter = RuntimeHarnessAdapter.fromParams(params);`n" +
+      "    // RUNTIME_UI_HARNESS_ROUTE_HOOK_END"
+  )
+  $featureSource = $featureSource.Replace(
+    "      const result: AiRunResult = await aiService.run(workflow, this.aiRunInputs());",
+    "      // RUNTIME_UI_HARNESS_SERVICE_HOOK_BEGIN`n" +
+      "      const result: AiRunResult = this.runtimeHarnessAdapter === undefined ?`n" +
+      "        await aiService.run(workflow, this.aiRunInputs()) :`n" +
+      "        await this.runtimeHarnessAdapter.run(aiService, workflow, this.aiRunInputs());`n" +
+      "      // RUNTIME_UI_HARNESS_SERVICE_HOOK_END"
+  )
+  $featureSource = $featureSource.Replace(
+    "    this.pendingPickTextInputVisible = undefined;",
+    "    this.pendingPickTextInputVisible = undefined;`n" +
+      "    // RUNTIME_UI_HARNESS_CAMERA_HOOK_BEGIN`n" +
+      "    this.runtimeHarnessAdapter?.observeCamera(this.liveCameraPosition);`n" +
+      "    // RUNTIME_UI_HARNESS_CAMERA_HOOK_END"
+  )
+  $featureSource = $featureSource.Replace(
+    "    this.statusKey = 'preparing';",
+    "    // RUNTIME_UI_HARNESS_RETRY_HOOK_BEGIN`n" +
+      "    this.runtimeHarnessAdapter?.allowRetry();`n" +
+      "    // RUNTIME_UI_HARNESS_RETRY_HOOK_END`n" +
+      "    this.statusKey = 'preparing';"
+  )
+  [IO.File]::WriteAllText($featurePagePath, $featureSource, $utf8)
+  $adapterPath = Join-Path $repositoryRoot `
+    'entry/src/main/ets/runtime/RuntimeHarnessAdapter.ets'
+  [IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($adapterPath)) | Out-Null
+  Copy-Item -LiteralPath (Join-Path $templateRoot 'RuntimeHarnessAdapter.ets') `
+    -Destination $adapterPath
+  Invoke-Git $repositoryRoot @(
+    'add', '-N', '--',
+    'entry/src/main/ets/runtime/RuntimeHarnessAdapter.ets'
+  ) | Out-Null
+  $entryTemplate = if ($FontScale -eq 3.2) { 'EntryAbility.font32.ets' } else { 'EntryAbility.default.ets' }
+  Copy-Item -LiteralPath (Join-Path $templateRoot $entryTemplate) -Destination $entryAbilityPath
   $harnessPagePath = Join-Path $repositoryRoot 'entry/src/main/ets/pages/RuntimeHarnessPage.ets'
-  [IO.File]::WriteAllText(
-    $harnessPagePath,
-    "@Entry`n@Component`nstruct RuntimeHarnessPage {`n  build() {`n    FeatureRuntimePage()`n  }`n}`n",
-    $utf8
-  )
+  Copy-Item -LiteralPath (Join-Path $templateRoot 'RuntimeHarnessPage.ets') -Destination $harnessPagePath
+  $mainPagesPath = Join-Path $repositoryRoot 'entry/src/main/resources/base/profile/main_pages.json'
+  [IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($mainPagesPath)) | Out-Null
+  Copy-Item -LiteralPath (Join-Path $templateRoot 'main_pages.json') -Destination $mainPagesPath
   Invoke-Git $repositoryRoot @('add', '-N', '--', 'entry/src/main/ets/pages/RuntimeHarnessPage.ets') | Out-Null
+  Invoke-Git $repositoryRoot @('add', '-N', '--', 'entry/src/main/resources/base/profile/main_pages.json') | Out-Null
 
   $candidateDiffPath = Join-Path $fixtureRoot 'candidate.diff'
   [IO.File]::WriteAllText(
@@ -390,17 +745,197 @@ function Convert-FixtureToTask14Harness([string]$ManifestPath, [double]$FontScal
   [IO.File]::WriteAllText($layoutPath, ($layout | ConvertTo-Json -Depth 20), $utf8)
   $baseState = $manifest.states[0]
   $baseState | Add-Member -NotePropertyName captureSource -NotePropertyValue 'harness'
+  $launcherLayoutPath = Join-Path $fixtureRoot 'launcher.json'
+  $launcherLayout = [ordered]@{
+    attributes = (Attrs 'root' '[0,0][1320,2856]')
+    children = @(
+      [ordered]@{
+        attributes = (Attrs 'Button' '[70,310][630,490]' 'Open portrait' 'true')
+        children = @()
+      }
+    )
+  }
+  $launcherLayout.attributes.key = 'pages/RuntimeHarnessPage'
+  $launcherLayout.children[0].attributes.id = 'harness-portrait-route'
+  [IO.File]::WriteAllText($launcherLayoutPath, ($launcherLayout | ConvertTo-Json -Depth 20), $utf8)
+  $saveFailedZh = -join @(0x4FDD, 0x5B58, 0x5931, 0x8D25 | ForEach-Object { [char]$_ })
+  $saveSucceededZh = -join @(0x4FDD, 0x5B58, 0x6210, 0x529F | ForEach-Object { [char]$_ })
+  $stateOrder = @(
+    'initial', 'preset-selected', 'custom-background-cancel', 'rear-camera', 'reentry',
+    'transient-failure', 'retry-success', 'save-success'
+  )
+  $predecessors = @{
+    'initial' = ''
+    'preset-selected' = 'initial'
+    'custom-background-cancel' = 'preset-selected'
+    'rear-camera' = 'custom-background-cancel'
+    'reentry' = 'rear-camera'
+    'transient-failure' = 'reentry'
+    'retry-success' = 'transient-failure'
+    'save-success' = 'retry-success'
+  }
+  $actionTypes = @{
+    'initial' = 'open-route'
+    'preset-selected' = 'select-preset'
+    'custom-background-cancel' = 'cancel-background-picker'
+    'rear-camera' = 'switch-camera'
+    'reentry' = 'leave-and-reenter'
+    'transient-failure' = 'audited-segmentation-failure'
+    'retry-success' = 'retry-segmentation'
+    'save-success' = 'save-success'
+  }
   $states = @()
-  foreach ($name in @(
-      'initial', 'preset-selected', 'custom-background-cancel', 'rear-camera', 'reentry',
-      'save-failure', 'save-success', 'transient-failure', 'retry-success'
-    )) {
+  $stateLayouts = @{}
+  $stateCaptureEvents = @{}
+  $stateInputEvents = @{}
+  foreach ($name in $stateOrder) {
     $state = $baseState | ConvertTo-Json -Depth 20 | ConvertFrom-Json
     $state.name = $name
+    $state.layout = Join-Path $fixtureRoot "$name.json"
+    $state.screenshot = Join-Path $fixtureRoot "$name.jpeg"
+    $stateLayout = $layout | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+    $statusText = switch ($name) {
+      'initial' { 'Ready' }
+      'preset-selected' { 'Preset selected' }
+      'custom-background-cancel' { 'Preset selected after cancel' }
+      'rear-camera' { 'Rear camera' }
+      'reentry' { 'Rear camera' }
+      'transient-failure' { 'Segmentation failed' }
+      'retry-success' { 'Segmentation complete' }
+      'save-success' { $saveSucceededZh }
+    }
+    $stateLayout.children[0].children[0].children[0].children[1].attributes.text = $statusText
+    $stateLayout.children[0].children[0].children[0].children[1].attributes.originalText = $statusText
+    $state.requiredTexts = @($statusText)
+    if ($name -notin @('initial')) {
+      $stateLayout.children[0].children[0].children[0].children[4].children[0].attributes |
+        Add-Member -NotePropertyName selected -NotePropertyValue 'true'
+    }
+    if ($name -eq 'save-success') {
+      $stateLayout.children[0].children[0].children[0].children += [pscustomobject]@{
+        attributes = (Attrs 'Text' '[70,2300][630,2450]' $saveSucceededZh)
+        children = @()
+      }
+    }
+    [IO.File]::WriteAllText([string]$state.layout, ($stateLayout | ConvertTo-Json -Depth 20), $utf8)
     if ($name -eq 'custom-background-cancel') {
-      $state.preservedBoundsHashFrom = 'initial'
+      Copy-Item -LiteralPath (Join-Path $fixtureRoot 'preset-selected.jpeg') `
+        -Destination ([string]$state.screenshot)
+    } elseif ($name -eq 'reentry') {
+      Copy-Item -LiteralPath (Join-Path $fixtureRoot 'rear-camera.jpeg') `
+        -Destination ([string]$state.screenshot)
+    } elseif ($name -ne 'initial') {
+      Write-Jpeg ([string]$state.screenshot) 1320 2856 $name
+    }
+    $stateLayouts[$name] = [string]$state.layout
+    $state | Add-Member -NotePropertyName hdcActionReceiptPath -NotePropertyValue (
+      Join-Path $fixtureRoot "$name-action-receipt.json"
+    )
+    if ($name -eq 'custom-background-cancel') {
+      $state.preservedBoundsHashFrom = 'preset-selected'
+    } elseif ($name -eq 'transient-failure') {
+      $state.preservedBoundsHashFrom = 'reentry'
     }
     $states += $state
+  }
+  foreach ($state in $states) {
+    $name = [string]$state.name
+    $predecessor = [string]$predecessors[$name]
+    $beforeLayoutPath = if ($name -eq 'initial') {
+      $launcherLayoutPath
+    } else {
+      [string]$stateLayouts[$predecessor]
+    }
+    $afterLayoutPath = [string]$state.layout
+    $events = @(switch ($name) {
+      'initial' {
+        @([pscustomobject][ordered]@{
+            command = 'hdc shell uitest uiInput click 350 400'
+            kind = 'click'
+            x = 350
+            y = 400
+            targetSelector = 'text:Open portrait'
+            targetLayoutPath = $launcherLayoutPath
+            targetLayoutSha256 = (Get-FileHash -LiteralPath $launcherLayoutPath -Algorithm SHA256).Hash.ToLowerInvariant()
+          })
+      }
+      'preset-selected' {
+        @([pscustomobject][ordered]@{
+            command = 'hdc shell uitest uiInput click 200 1440'
+            kind = 'click'
+            x = 200
+            y = 1440
+            targetSelector = 'text:Background 2'
+            targetLayoutPath = $beforeLayoutPath
+            targetLayoutSha256 = (Get-FileHash -LiteralPath $beforeLayoutPath -Algorithm SHA256).Hash.ToLowerInvariant()
+          })
+      }
+      'custom-background-cancel' {
+        @(
+          [pscustomobject][ordered]@{
+            command = 'hdc shell uitest uiInput click 550 1440'
+            kind = 'click'
+            x = 550
+            y = 1440
+            targetSelector = 'text:Custom background'
+            targetLayoutPath = $beforeLayoutPath
+            targetLayoutSha256 = (Get-FileHash -LiteralPath $beforeLayoutPath -Algorithm SHA256).Hash.ToLowerInvariant()
+          },
+          [pscustomobject][ordered]@{ command = 'hdc shell uitest uiInput keyEvent Back'; kind = 'key'; key = 'Back' }
+        )
+      }
+      'rear-camera' {
+        @([pscustomobject][ordered]@{
+            command = 'hdc shell uitest uiInput click 1000 1440'
+            kind = 'click'
+            x = 1000
+            y = 1440
+            targetSelector = 'text:Switch camera'
+            targetLayoutPath = $beforeLayoutPath
+            targetLayoutSha256 = (Get-FileHash -LiteralPath $beforeLayoutPath -Algorithm SHA256).Hash.ToLowerInvariant()
+          })
+      }
+      'reentry' {
+        @(
+          [pscustomobject][ordered]@{ command = 'hdc shell uitest uiInput keyEvent Back'; kind = 'key'; key = 'Back' },
+          [pscustomobject][ordered]@{
+            command = 'hdc shell uitest uiInput click 350 400'
+            kind = 'click'
+            x = 350
+            y = 400
+            targetSelector = 'text:Open portrait'
+            targetLayoutPath = $launcherLayoutPath
+            targetLayoutSha256 = (Get-FileHash -LiteralPath $launcherLayoutPath -Algorithm SHA256).Hash.ToLowerInvariant()
+          }
+        )
+      }
+      'transient-failure' {
+        @()
+      }
+      'retry-success' {
+        @([pscustomobject][ordered]@{
+            command = 'hdc shell uitest uiInput click 350 2190'
+            kind = 'click'
+            x = 350
+            y = 2190
+            targetSelector = 'text:Retry'
+            targetLayoutPath = $beforeLayoutPath
+            targetLayoutSha256 = (Get-FileHash -LiteralPath $beforeLayoutPath -Algorithm SHA256).Hash.ToLowerInvariant()
+          })
+      }
+      'save-success' {
+        @([pscustomobject][ordered]@{
+            command = 'hdc shell uitest uiInput click 1155 1790'
+            kind = 'click'
+            x = 1155
+            y = 1790
+            targetSelector = 'structural:portrait-toolbar/save-button'
+            targetLayoutPath = $beforeLayoutPath
+            targetLayoutSha256 = (Get-FileHash -LiteralPath $beforeLayoutPath -Algorithm SHA256).Hash.ToLowerInvariant()
+          })
+      }
+    })
+    $stateInputEvents[$name] = @($events)
   }
   $disclosurePath = Join-Path $fixtureRoot 'harness-disclosure.md'
   [IO.File]::WriteAllText($disclosurePath, 'Route/state-only Task 14 harness; no production success claim.', $utf8)
@@ -421,19 +956,1011 @@ function Convert-FixtureToTask14Harness([string]$ManifestPath, [double]$FontScal
     path = $disclosurePath
   })
   $manifest.states = $states
+
+  $runId = [guid]::NewGuid().ToString('N')
+  $transcriptPath = Join-Path $fixtureRoot 'capture-transcript.jsonl'
+  $pickerLayoutPath = Join-Path $fixtureRoot 'picker-intermediate.json'
+  $pickerShotPath = Join-Path $fixtureRoot 'picker-intermediate.jpeg'
+  $pickerAaPath = Join-Path $fixtureRoot 'picker-intermediate-aa.txt'
+  $permissionDialogPath = Join-Path $fixtureRoot 'permission-dialog.json'
+  [IO.File]::WriteAllText($pickerLayoutPath, '{"attributes":{"type":"Picker","bounds":"[0,0][1320,2856]"},"children":[]}', $utf8)
+  [IO.File]::WriteAllText(
+    $permissionDialogPath,
+    '{"attributes":{"bundleName":"com.huawei.hmos.security.privacycenter",' +
+      '"pagePath":"pages/permissionGrantDialog/PermissionGrantDialog","type":"root"},' +
+      '"children":[{"attributes":{"bounds":"[689,1599][1208,1739]",' +
+      '"clickable":"true","enabled":"true","id":"permission_dialog_allow_button",' +
+      '"key":"permission_dialog_allow_button","type":"Button","visible":"true"},' +
+      '"children":[]}],"broken":"unterminated}',
+    $utf8
+  )
+  $permissionFixtureParsed = $true
+  try { [void]([IO.File]::ReadAllText($permissionDialogPath) | ConvertFrom-Json) }
+  catch { $permissionFixtureParsed = $false }
+  if ($permissionFixtureParsed) {
+    throw 'Permission dialog fixture must remain intentionally invalid JSON.'
+  }
+  Write-Jpeg $pickerShotPath 1320 2856 'picker'
+  Write-Jpeg (Join-Path $fixtureRoot 'launcher.jpeg') 1320 2856 'launcher'
+  Write-Jpeg (Join-Path $fixtureRoot 'permission-dialog.jpeg') 1320 2856 'permission-dialog'
+  [IO.File]::WriteAllText($pickerAaPath, 'com.ohos.photos PickerAbility state #FOREGROUND', $utf8)
+  Copy-Item -LiteralPath (Join-Path $fixtureRoot 'preset-selected.json') `
+    -Destination (Join-Path $fixtureRoot 'custom-background-swiped.json')
+  Copy-Item -LiteralPath (Join-Path $fixtureRoot 'preset-selected.jpeg') `
+    -Destination (Join-Path $fixtureRoot 'custom-background-swiped.jpeg')
+  Add-Type -AssemblyName System.Drawing
+  foreach ($jpegTemplate in @(Get-ChildItem -LiteralPath $fixtureRoot -Filter '*.jpeg')) {
+    $pngTemplate = [IO.Path]::ChangeExtension($jpegTemplate.FullName, '.png')
+    $templateImage = [Drawing.Image]::FromFile($jpegTemplate.FullName)
+    try {
+      $templateImage.Save($pngTemplate, [Drawing.Imaging.ImageFormat]::Png)
+    } finally {
+      $templateImage.Dispose()
+    }
+  }
+  $env:RUNTIME_EVIDENCE_MOCK_TEMPLATE_DIR = $fixtureRoot
+  [IO.File]::Delete((Join-Path $fixtureRoot 'permission-before.json'))
+  [IO.File]::Delete((Join-Path $fixtureRoot 'permission-after.json'))
+  & $captureRunnerPath -RunId $runId -OutputPath $transcriptPath `
+    -EvidenceDirectory $fixtureRoot -HapPath $frozenHap -HdcPath $script:mockHdcPath | Out-Null
+  $manifest.permissionBeforePath = Join-Path $fixtureRoot 'permission-before.json'
+  $manifest.permissionAfterPath = Join-Path $fixtureRoot 'permission-after.json'
+  $runnerHash = (Get-FileHash -LiteralPath $captureRunnerPath -Algorithm SHA256).Hash.ToLowerInvariant()
+  $rawTranscriptLines = @([IO.File]::ReadAllLines($transcriptPath))
+  $transcriptEvents = @($rawTranscriptLines | ForEach-Object { $_ | ConvertFrom-Json })
+  $deviceEvent = @($transcriptEvents | Where-Object { $_.type -eq 'run.device' })[0]
+  $device = [ordered]@{
+    transportId = '127.0.0.1:5555'
+    serial = '127.0.0.1:5555'
+    fingerprint = "127.0.0.1:5555`tTCP`tConnected`tlocalhost`thdc"
+    packageFingerprint = 'com.yuhaofeng.mih:entry'
+  }
+  $runEvents = @($transcriptEvents | Where-Object {
+      [string]$_.type -like 'run.*' -and $_.type -ne 'run.device' -and
+      $_.PSObject.Properties.Name -notcontains 'stateName'
+    })
+  $launcherCapture = @($transcriptEvents | Where-Object {
+      $_.type -eq 'capture' -and $_.captureName -eq 'launcher'
+    })[0]
+  foreach ($state in $states) {
+    $capture = @($transcriptEvents | Where-Object {
+        $_.type -eq 'capture' -and $_.captureName -eq [string]$state.name
+      })[0]
+    $state.layout = [string]$capture.layoutPath
+    $state.screenshot = [string]$capture.screenshotPath
+    $stateLayouts[[string]$state.name] = [string]$capture.layoutPath
+    $stateCaptureEvents[[string]$state.name] = $capture
+  }
+  $stateRawLines = @{}
+  $stateRangeStarts = @{}
+  $offset = 0
+  for ($lineIndex = 0; $lineIndex -lt $rawTranscriptLines.Count; $lineIndex++) {
+    $line = $rawTranscriptLines[$lineIndex]
+    $event = $transcriptEvents[$lineIndex]
+    $lineLength = $utf8.GetByteCount($line + "`n")
+    if ($event.PSObject.Properties.Name -contains 'stateName') {
+      $eventState = [string]$event.stateName
+      if (-not $stateRawLines.ContainsKey($eventState)) {
+        $stateRawLines[$eventState] = @()
+        $stateRangeStarts[$eventState] = $offset
+      }
+      $stateRawLines[$eventState] += $line
+    }
+    $offset += $lineLength
+  }
+  $previousReceiptHash = ''
+  $stateReceiptHashes = @()
+  $semanticTypes = @{
+    'initial' = @()
+    'preset-selected' = @()
+    'custom-background-cancel' = @()
+    'rear-camera' = @('camera.position.observed')
+    'reentry' = @('camera.restore')
+    'transient-failure' = @('service.failure')
+    'retry-success' = @('service.success')
+    'save-success' = @()
+  }
+  $launcherLayoutPath = [string]$launcherCapture.layoutPath
+  $launcherShot = [string]$launcherCapture.screenshotPath
+  for ($sequence = 0; $sequence -lt $states.Count; $sequence++) {
+    $state = $states[$sequence]
+    $name = [string]$state.name
+    $segmentEvents = @($transcriptEvents | Where-Object { [string]$_.stateName -ceq $name })
+    $commands = @($segmentEvents | Where-Object { [string]$_.type -ceq 'command' })
+    $runtimeEvents = @($segmentEvents | Where-Object { [string]$_.type -in @($semanticTypes[$name]) })
+    $segmentText = (@($stateRawLines[$name]) -join "`n") + "`n"
+    $segmentBytes = $utf8.GetBytes($segmentText)
+    $rangeStart = [int]$stateRangeStarts[$name]
+
+
+    $predecessor = [string]$predecessors[$name]
+    $beforeLayout = if ($predecessor -eq '') { $launcherLayoutPath } else {
+      [string]$stateLayouts[$predecessor]
+    }
+    $beforeScreenshot = if ($predecessor -eq '') { $launcherShot } else {
+      [string](@($states | Where-Object { $_.name -eq $predecessor })[0].screenshot)
+    }
+    $beforeCapture = if ($predecessor -eq '') { $launcherCapture } else {
+      $stateCaptureEvents[$predecessor]
+    }
+    $afterCapture = $stateCaptureEvents[$name]
+    $receipt = [ordered]@{
+      schemaVersion = 1
+      runId = $runId
+      stateName = $name
+      sequence = $sequence
+      predecessorState = $predecessor
+      previousReceiptSha256 = $previousReceiptHash
+      actionType = [string]$actionTypes[$name]
+      bindings = [ordered]@{
+        hapSha256 = [string]$manifest.hapSha256
+        candidateDiffSha256 = [string]$manifest.candidateDiffSha256
+        candidateIdentitySha256 = [string](
+          (Get-Content -LiteralPath $manifest.buildReceiptPath -Raw | ConvertFrom-Json).candidateIdentitySha256
+        )
+        gitHead = Invoke-Git $repositoryRoot @('rev-parse', 'HEAD')
+        routeName = [string]$manifest.routeName
+        fontScale = $FontScale
+      }
+      before = [ordered]@{
+        captureEventId = [string]$beforeCapture.eventId
+        layoutPath = $beforeLayout
+        layoutSha256 = (Get-FileHash -LiteralPath $beforeLayout -Algorithm SHA256).Hash.ToLowerInvariant()
+        screenshotPath = $beforeScreenshot
+        screenshotSha256 = (Get-FileHash -LiteralPath $beforeScreenshot -Algorithm SHA256).Hash.ToLowerInvariant()
+      }
+      after = [ordered]@{
+        captureEventId = [string]$afterCapture.eventId
+        layoutPath = [string]$state.layout
+        layoutSha256 = (Get-FileHash -LiteralPath ([string]$state.layout) -Algorithm SHA256).Hash.ToLowerInvariant()
+        screenshotPath = [string]$state.screenshot
+        screenshotSha256 =
+          (Get-FileHash -LiteralPath ([string]$state.screenshot) -Algorithm SHA256).Hash.ToLowerInvariant()
+      }
+      transcriptRange = [ordered]@{
+        start = $rangeStart
+        length = $segmentBytes.Length
+        sha256 = Get-BytesSha256 $segmentBytes
+      }
+      commands = @($commands)
+      runtimeEventIds = @($runtimeEvents | ForEach-Object { $_.eventId })
+    }
+    if ($name -eq 'custom-background-cancel') {
+      $pickerCapture = @($segmentEvents | Where-Object { $_.type -eq 'picker.capture' })[0]
+      $receipt.intermediate = [ordered]@{
+        captureEventId = [string]$pickerCapture.eventId
+        layoutAvailable = [bool]$pickerCapture.layoutAvailable
+        layoutPath = [string]$pickerCapture.layoutPath
+        layoutSha256 = [string]$pickerCapture.layoutSha256
+        layoutDumpOutcomePath = [string]$pickerCapture.layoutDumpOutcomePath
+        layoutDumpOutcomeSha256 = [string]$pickerCapture.layoutDumpOutcomeSha256
+        screenshotPath = [string]$pickerCapture.screenshotPath
+        screenshotSha256 = [string]$pickerCapture.screenshotSha256
+        foregroundAaPath = [string]$pickerCapture.foregroundAaPath
+        foregroundAaSha256 = [string]$pickerCapture.foregroundAaSha256
+      }
+    }
+    [IO.File]::WriteAllText([string]$state.hdcActionReceiptPath, ($receipt | ConvertTo-Json -Depth 30), $utf8)
+    $receiptHash = (Get-FileHash -LiteralPath ([string]$state.hdcActionReceiptPath) -Algorithm SHA256).Hash.ToLowerInvariant()
+    $state | Add-Member -NotePropertyName hdcActionReceiptSha256 -NotePropertyValue $receiptHash
+    $stateReceiptHashes += $receiptHash
+    $previousReceiptHash = $receiptHash
+  }
+  $buildReceiptHash =
+    (Get-FileHash -LiteralPath ([string]$manifest.buildReceiptPath) -Algorithm SHA256).Hash.ToLowerInvariant()
+  $runReceipt = [ordered]@{
+    schemaVersion = 1
+    trustDomain = 'production'
+    runId = $runId
+    captureRunner = [ordered]@{ path = $captureRunnerPath; version = 1; sha256 = $runnerHash }
+    hdc = [ordered]@{
+      path = [IO.Path]::GetFullPath($script:mockHdcPath)
+      sha256 = (Get-FileHash -LiteralPath $script:mockHdcPath -Algorithm SHA256).Hash.ToLowerInvariant()
+    }
+    startedUtc = (@($transcriptEvents | ForEach-Object { [datetime]$_.utc }) |
+      Sort-Object | Select-Object -First 1).ToUniversalTime().ToString('o')
+    endedUtc = (@($transcriptEvents | ForEach-Object {
+          if ($_.PSObject.Properties.Name -contains 'endedUtc') { [datetime]$_.endedUtc } else { [datetime]$_.utc }
+        }) | Sort-Object | Select-Object -Last 1).ToUniversalTime().ToString('o')
+    hapSha256 = [string]$manifest.hapSha256
+    buildReceiptSha256 = $buildReceiptHash
+    candidateDiffSha256 = [string]$manifest.candidateDiffSha256
+    candidateIdentitySha256 = [string](
+      (Get-Content -LiteralPath $manifest.buildReceiptPath -Raw | ConvertFrom-Json).candidateIdentitySha256
+    )
+    gitHead = Invoke-Git $repositoryRoot @('rev-parse', 'HEAD')
+    routeName = [string]$manifest.routeName
+    fontScale = $FontScale
+    density = [double]$manifest.density
+    displayDumpSha256 =
+      (Get-FileHash -LiteralPath ([string]$manifest.displayDumpPath) -Algorithm SHA256).Hash.ToLowerInvariant()
+    foregroundAaSha256 =
+      (Get-FileHash -LiteralPath ([string]$manifest.aaDumpPath) -Algorithm SHA256).Hash.ToLowerInvariant()
+    device = $device
+    transcriptPath = $transcriptPath
+    transcriptSha256 =
+      (Get-FileHash -LiteralPath $transcriptPath -Algorithm SHA256).Hash.ToLowerInvariant()
+    transcriptLength = [IO.FileInfo]::new($transcriptPath).Length
+    eventCount = $transcriptEvents.Count
+    finalLineSha256 = Get-BytesSha256 $utf8.GetBytes($rawTranscriptLines[-1] + "`n")
+    steps = @($runEvents | ForEach-Object {
+        [ordered]@{
+          eventId = $_.eventId
+          eventSha256 = Get-TextSha256 ($_ | ConvertTo-Json -Compress -Depth 20)
+          exitCode = $_.exitCode
+        }
+      })
+    stateReceiptSha256 = $stateReceiptHashes
+    stateChainRootSha256 = $stateReceiptHashes[-1]
+  }
+  $runReceiptPath = Join-Path $fixtureRoot 'run-receipt.json'
+  [IO.File]::WriteAllText($runReceiptPath, ($runReceipt | ConvertTo-Json -Depth 30), $utf8)
+  $rootPath = Join-Path $fixtureRoot 'run-root.cjson'
+  $rootText = Get-TestCanonicalRunRoot $runReceipt
+  [IO.File]::WriteAllText($rootPath, $rootText, $utf8)
+  $rootBytes = $utf8.GetBytes($rootText)
+  $prefix = $utf8.GetBytes("runtime-ui-run-root-v1`0")
+  $signedBytes = Join-ByteArrays @($prefix, $rootBytes)
+  $signature = $script:testReviewerRsa.SignData(
+    $signedBytes,
+    [Security.Cryptography.HashAlgorithmName]::SHA256,
+    [Security.Cryptography.RSASignaturePadding]::Pss
+  )
+  $testPem = ([IO.File]::ReadAllText($script:testReviewerPublicKeyPath) -replace
+    '-----[^-]+-----', '' -replace '\s', '')
+  $signatureEnvelope = [ordered]@{
+    schemaVersion = 1
+    algorithm = 'RSA-PSS-SHA256-MGF1-SHA256-SALT32'
+    keyFingerprint = Get-BytesSha256 ([Convert]::FromBase64String($testPem))
+    rootSha256 = Get-BytesSha256 $rootBytes
+    signatureBase64 = [Convert]::ToBase64String($signature)
+  }
+  $signaturePath = Join-Path $fixtureRoot 'run-root-signature.json'
+  [IO.File]::WriteAllText($signaturePath, ($signatureEnvelope | ConvertTo-Json -Compress), $utf8)
+  $manifest | Add-Member -NotePropertyName runReceiptPath -NotePropertyValue $runReceiptPath
+  $manifest | Add-Member -NotePropertyName runReceiptSha256 -NotePropertyValue (
+    (Get-FileHash -LiteralPath $runReceiptPath -Algorithm SHA256).Hash.ToLowerInvariant()
+  )
+  $manifest | Add-Member -NotePropertyName runRootPath -NotePropertyValue $rootPath
+  $manifest | Add-Member -NotePropertyName runRootSha256 -NotePropertyValue (
+    (Get-FileHash -LiteralPath $rootPath -Algorithm SHA256).Hash.ToLowerInvariant()
+  )
+  $manifest | Add-Member -NotePropertyName runRootSignaturePath -NotePropertyValue $signaturePath
+  $manifest | Add-Member -NotePropertyName runRootSignatureSha256 -NotePropertyValue (
+    (Get-FileHash -LiteralPath $signaturePath -Algorithm SHA256).Hash.ToLowerInvariant()
+  )
   [IO.File]::WriteAllText($ManifestPath, ($manifest | ConvertTo-Json -Depth 20), $utf8)
   return $ManifestPath
 }
 
 function Assert-Task14HarnessRejected([string]$Name, [scriptblock]$Mutation) {
+  Write-Output "[Task14 mutation] $Name"
   $root = Join-Path $tempRoot $Name
   $manifestPath = Convert-FixtureToTask14Harness (New-Fixture $root) 1.0
   $manifest = Get-Content -LiteralPath $manifestPath -Raw -Encoding utf8 | ConvertFrom-Json
   & $Mutation $manifest $root
   [IO.File]::WriteAllText($manifestPath, ($manifest | ConvertTo-Json -Depth 20), $utf8)
   $rejected = $false
-  try { & $guardPath -ManifestPath $manifestPath | Out-Null } catch { $rejected = $true }
+  try { Invoke-EvidenceGuard $manifestPath | Out-Null } catch { $rejected = $true }
   if (-not $rejected) { throw "Runtime evidence guard accepted Task 14 harness mutation: $Name" }
+}
+
+function Sign-Task14RunRoot([object]$Manifest) {
+  $runReceiptPath = [string]$Manifest.runReceiptPath
+  $runReceipt = Get-Content -LiteralPath $runReceiptPath -Raw -Encoding utf8 | ConvertFrom-Json
+  $rootText = Get-TestCanonicalRunRoot $runReceipt
+  $rootPath = [string]$Manifest.runRootPath
+  [IO.File]::WriteAllText($rootPath, $rootText, $utf8)
+  $rootBytes = $utf8.GetBytes($rootText)
+  $signedBytes = Join-ByteArrays @(
+    $utf8.GetBytes("runtime-ui-run-root-v1`0"),
+    $rootBytes
+  )
+  $signature = $script:testReviewerRsa.SignData(
+    $signedBytes,
+    [Security.Cryptography.HashAlgorithmName]::SHA256,
+    [Security.Cryptography.RSASignaturePadding]::Pss
+  )
+  $testPem = ([IO.File]::ReadAllText($script:testReviewerPublicKeyPath) -replace
+    '-----[^-]+-----', '' -replace '\s', '')
+  $signatureEnvelope = [ordered]@{
+    schemaVersion = 1
+    algorithm = 'RSA-PSS-SHA256-MGF1-SHA256-SALT32'
+    keyFingerprint = Get-BytesSha256 ([Convert]::FromBase64String($testPem))
+    rootSha256 = Get-BytesSha256 $rootBytes
+    signatureBase64 = [Convert]::ToBase64String($signature)
+  }
+  [IO.File]::WriteAllText(
+    [string]$Manifest.runRootSignaturePath,
+    ($signatureEnvelope | ConvertTo-Json -Compress),
+    $utf8
+  )
+  $Manifest.runReceiptSha256 =
+    (Get-FileHash -LiteralPath $runReceiptPath -Algorithm SHA256).Hash.ToLowerInvariant()
+  $Manifest.runRootSha256 =
+    (Get-FileHash -LiteralPath $rootPath -Algorithm SHA256).Hash.ToLowerInvariant()
+  $Manifest.runRootSignatureSha256 =
+    (Get-FileHash -LiteralPath ([string]$Manifest.runRootSignaturePath) -Algorithm SHA256).
+      Hash.ToLowerInvariant()
+}
+
+function Sync-Task14RunRoot([object]$Manifest, [bool]$Rechain = $true) {
+  $previous = ''
+  $hashes = @()
+  foreach ($state in @($Manifest.states)) {
+    $receiptPath = [string]$state.hdcActionReceiptPath
+    $receipt = Get-Content -LiteralPath $receiptPath -Raw -Encoding utf8 | ConvertFrom-Json
+    if ($Rechain) { $receipt.previousReceiptSha256 = $previous }
+    [IO.File]::WriteAllText($receiptPath, ($receipt | ConvertTo-Json -Depth 30), $utf8)
+    $hash = (Get-FileHash -LiteralPath $receiptPath -Algorithm SHA256).Hash.ToLowerInvariant()
+    $state.hdcActionReceiptSha256 = $hash
+    $hashes += $hash
+    $previous = $hash
+  }
+  $run = Get-Content -LiteralPath ([string]$Manifest.runReceiptPath) -Raw -Encoding utf8 |
+    ConvertFrom-Json
+  $run.stateReceiptSha256 = $hashes
+  $run.stateChainRootSha256 = $hashes[-1]
+  $run.transcriptSha256 =
+    (Get-FileHash -LiteralPath ([string]$run.transcriptPath) -Algorithm SHA256).Hash.ToLowerInvariant()
+  [IO.File]::WriteAllText([string]$Manifest.runReceiptPath, ($run | ConvertTo-Json -Depth 30), $utf8)
+  Sign-Task14RunRoot $Manifest
+}
+
+function Rewrite-Task14Transcript(
+  [object]$Manifest,
+  [scriptblock]$Mutation,
+  [bool]$SyncCommands = $false
+) {
+  $run = Get-Content -LiteralPath ([string]$Manifest.runReceiptPath) -Raw -Encoding utf8 |
+    ConvertFrom-Json
+  $events = @([IO.File]::ReadAllLines([string]$run.transcriptPath) | ForEach-Object {
+      $_ | ConvertFrom-Json
+    })
+  & $Mutation $events
+  $runEvents = @($events | Where-Object { $_.PSObject.Properties.Name -notcontains 'stateName' })
+  $orderedGroups = [Collections.Generic.List[object]]::new()
+  $orderedGroups.Add([pscustomobject]@{ Name = ''; Events = $runEvents })
+  foreach ($state in @($Manifest.states)) {
+    $orderedGroups.Add([pscustomobject]@{
+        Name = [string]$state.name
+        Events = @($events | Where-Object { [string]$_.stateName -ceq [string]$state.name })
+      })
+  }
+  $text = ''
+  $previousLineSha256 = ''
+  $sequence = 0
+  $segments = @{}
+  foreach ($group in $orderedGroups) {
+    $segmentStart = $utf8.GetByteCount($text)
+    $segment = ''
+    foreach ($event in @($group.Events)) {
+      $event.sequence = $sequence
+      $event.previousLineSha256 = $previousLineSha256
+      $line = ($event | ConvertTo-Json -Compress -Depth 20) + "`n"
+      $segment += $line
+      $previousLineSha256 = Get-BytesSha256 ($utf8.GetBytes($line))
+      $sequence++
+    }
+    $text += $segment
+    $segments[[string]$group.Name] = [pscustomobject]@{
+      Start = $segmentStart
+      Text = $segment
+      Events = @($group.Events)
+    }
+  }
+  foreach ($state in @($Manifest.states)) {
+    $group = $segments[[string]$state.name]
+    $stateEvents = @($group.Events)
+    $segment = [string]$group.Text
+    $receipt = Get-Content -LiteralPath ([string]$state.hdcActionReceiptPath) -Raw -Encoding utf8 |
+      ConvertFrom-Json
+    $receipt.transcriptRange.start = [int64]$group.Start
+    $receipt.transcriptRange.length = $utf8.GetByteCount($segment)
+    $receipt.transcriptRange.sha256 = Get-BytesSha256 ($utf8.GetBytes($segment))
+    if ($SyncCommands) {
+      $receipt.commands = @($stateEvents | Where-Object { [string]$_.type -eq 'command' })
+    }
+    [IO.File]::WriteAllText(
+      [string]$state.hdcActionReceiptPath,
+      ($receipt | ConvertTo-Json -Depth 30),
+      $utf8
+    )
+  }
+  [IO.File]::WriteAllText([string]$run.transcriptPath, $text, $utf8)
+  $run.transcriptSha256 =
+    (Get-FileHash -LiteralPath ([string]$run.transcriptPath) -Algorithm SHA256).Hash.ToLowerInvariant()
+  $run.transcriptLength = [IO.FileInfo]::new([string]$run.transcriptPath).Length
+  $run.eventCount = $sequence
+  $run.finalLineSha256 = $previousLineSha256
+  [IO.File]::WriteAllText(
+    [string]$Manifest.runReceiptPath,
+    ($run | ConvertTo-Json -Depth 30),
+    $utf8
+  )
+  Sync-Task14RunRoot $Manifest
+}
+
+function Sync-Task14CandidateBinding([object]$Manifest) {
+  $repositoryRoot = [string]$Manifest.repositoryRoot
+  [IO.File]::WriteAllText(
+    [string]$Manifest.candidateDiffPath,
+    (Invoke-Git $repositoryRoot @('diff', '--binary', 'HEAD', '--')),
+    $utf8
+  )
+  $Manifest.candidateDiffSha256 =
+    (Get-FileHash -LiteralPath ([string]$Manifest.candidateDiffPath) -Algorithm SHA256).
+      Hash.ToLowerInvariant()
+  $canonicalHap = Join-Path $repositoryRoot 'entry/build/default/outputs/default/entry-default-unsigned.hap'
+  & (Join-Path $repositoryRoot 'scripts/write-runtime-ui-build-receipt.ps1') `
+    -HapPath $canonicalHap | Out-Null
+  Copy-Item -LiteralPath "$canonicalHap.runtime-ui-build.json" `
+    -Destination ([string]$Manifest.buildReceiptPath) -Force
+  $build = Get-Content -LiteralPath ([string]$Manifest.buildReceiptPath) -Raw -Encoding utf8 |
+    ConvertFrom-Json
+  foreach ($state in @($Manifest.states)) {
+    $receiptPath = [string]$state.hdcActionReceiptPath
+    $receipt = Get-Content -LiteralPath $receiptPath -Raw -Encoding utf8 | ConvertFrom-Json
+    $receipt.bindings.candidateDiffSha256 = [string]$Manifest.candidateDiffSha256
+    $receipt.bindings.candidateIdentitySha256 = [string]$build.candidateIdentitySha256
+    [IO.File]::WriteAllText($receiptPath, ($receipt | ConvertTo-Json -Depth 30), $utf8)
+  }
+  $run = Get-Content -LiteralPath ([string]$Manifest.runReceiptPath) -Raw -Encoding utf8 |
+    ConvertFrom-Json
+  $run.candidateDiffSha256 = [string]$Manifest.candidateDiffSha256
+  $run.candidateIdentitySha256 = [string]$build.candidateIdentitySha256
+  $run.buildReceiptSha256 =
+    (Get-FileHash -LiteralPath ([string]$Manifest.buildReceiptPath) -Algorithm SHA256).
+      Hash.ToLowerInvariant()
+  [IO.File]::WriteAllText(
+    [string]$Manifest.runReceiptPath,
+    ($run | ConvertTo-Json -Depth 30),
+    $utf8
+  )
+  Sync-Task14RunRoot $Manifest
+}
+
+function Invoke-Task14CoreMutations {
+  Assert-Task14HarnessRejected 'task14-permission-capture-removed' {
+    param($manifest, $root)
+    Rewrite-Task14Transcript $manifest {
+      param($events)
+      @($events | Where-Object {
+          [string]$_.captureName -eq 'permission-dialog' -and [string]$_.type -eq 'capture'
+        })[0].type = 'capture.removed'
+    }
+  }
+  Assert-Task14HarnessRejected 'task14-permission-source-argv' {
+    param($manifest, $root)
+    Rewrite-Task14Transcript $manifest {
+      param($events)
+      $event = @($events | Where-Object {
+          [string]$_.type -eq 'source.permission.state-after'
+        })[0]
+      $event.argv[-1] = 'com.example.decoy'
+    }
+  }
+  Assert-Task14HarnessRejected 'task14-permission-source-before-route' {
+    param($manifest, $root)
+    Rewrite-Task14Transcript $manifest {
+      param($events)
+      $capture = @($events | Where-Object {
+          [string]$_.captureName -eq 'permission-dialog'
+        })[0]
+      $sourceId = [string]$capture.sourceCommandEventIds[0]
+      $routeIndex = -1
+      $sourceIndex = -1
+      for ($index = 0; $index -lt $events.Count; $index++) {
+        if ([string]$events[$index].controlId -eq 'harness-portrait-route' -and
+          [string]$events[$index].stateName -eq 'initial') { $routeIndex = $index }
+        if ([string]$events[$index].eventId -eq $sourceId) { $sourceIndex = $index }
+      }
+      $temporary = $events[$routeIndex]
+      $events[$routeIndex] = $events[$sourceIndex]
+      $events[$sourceIndex] = $temporary
+    } $true
+  }
+  Assert-Task14HarnessRejected 'task14-initial-source-before-permission-state' {
+    param($manifest, $root)
+    Rewrite-Task14Transcript $manifest {
+      param($events)
+      $capture = @($events | Where-Object { [string]$_.captureName -eq 'initial' })[0]
+      $sourceId = [string]$capture.sourceCommandEventIds[0]
+      $permissionIndex = -1
+      $sourceIndex = -1
+      for ($index = 0; $index -lt $events.Count; $index++) {
+        if ([string]$events[$index].type -eq 'source.permission.state-after') {
+          $permissionIndex = $index
+        }
+        if ([string]$events[$index].eventId -eq $sourceId) { $sourceIndex = $index }
+      }
+      $temporary = $events[$permissionIndex]
+      $events[$permissionIndex] = $events[$sourceIndex]
+      $events[$sourceIndex] = $temporary
+    } $true
+  }
+  Assert-Task14HarnessRejected 'task14-permission-poll-claimed-ready-too-early' {
+    param($manifest, $root)
+    Rewrite-Task14Transcript $manifest {
+      param($events)
+      $waits = @($events | Where-Object {
+          [string]$_.type -eq 'source.permission.wait-aa'
+        })
+      $waits[0].stdout = [string]$waits[-1].stdout
+      $waits[0].stdoutSha256 = Get-BytesSha256 $utf8.GetBytes([string]$waits[0].stdout)
+    }
+  }
+  Assert-Task14HarnessRejected 'task14-permission-poll-unbounded-timeout' {
+    param($manifest, $root)
+    Rewrite-Task14Transcript $manifest {
+      param($events)
+      @($events | Where-Object {
+          [string]$_.type -eq 'source.permission.wait-aa'
+        })[0].timeoutMilliseconds = 300000
+    }
+  }
+  Assert-Task14HarnessRejected 'task14-permission-duplicate-allow-target' {
+    param($manifest, $root)
+    $run = Get-Content -LiteralPath ([string]$manifest.runReceiptPath) -Raw | ConvertFrom-Json
+    $events = @([IO.File]::ReadAllLines([string]$run.transcriptPath) |
+        ForEach-Object { $_ | ConvertFrom-Json })
+    $capture = @($events | Where-Object { [string]$_.captureName -eq 'permission-dialog' })[0]
+    $path = [string]$capture.layoutPath
+    [IO.File]::AppendAllText(
+      $path,
+      ',"attributes":{"bounds":"[100,100][500,300]","clickable":"true",' +
+        '"enabled":"true","id":"permission_dialog_allow_button",' +
+        '"key":"permission_dialog_allow_button","type":"Button","visible":"true"},"children":[]',
+      $utf8
+    )
+    $hash = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
+    Rewrite-Task14Transcript $manifest {
+      param($rewritten)
+      @($rewritten | Where-Object { [string]$_.captureName -eq 'permission-dialog' })[0].
+        layoutSha256 = $hash
+      @($rewritten | Where-Object {
+          [string]$_.stateName -eq 'initial' -and
+          [string]$_.controlId -eq 'system-camera-permission-allow'
+        })[0].target.layoutSha256 = $hash
+    } $true
+  }
+  Assert-Task14HarnessRejected 'task14-permission-forged-foreground' {
+    param($manifest, $root)
+    $run = Get-Content -LiteralPath ([string]$manifest.runReceiptPath) -Raw | ConvertFrom-Json
+    $events = @([IO.File]::ReadAllLines([string]$run.transcriptPath) |
+        ForEach-Object { $_ | ConvertFrom-Json })
+    $capture = @($events | Where-Object { [string]$_.captureName -eq 'permission-dialog' })[0]
+    $path = [string]$capture.foregroundAaPath
+    $text = @"
+  ExtensionRecords:
+    uri [/com.huawei.hmos.security.privacycenter/permissionmanager/PermissionGrantAbility3]
+      AbilityRecord ID #36   state #BACKGROUND
+      main name [PermissionGrantAbility]
+      bundle name [com.huawei.hmos.security.privacycenter]
+      ability type [UIEXTENSION]
+      app state #BACKGROUND
+    uri [/com.yuhaofeng.mih/entry/EntryAbility]
+      AbilityRecord ID #35   state #FOREGROUND
+      main name [EntryAbility]
+      bundle name [com.yuhaofeng.mih]
+      app state #FOREGROUND
+    PendingWantRecords:
+"@
+    [IO.File]::WriteAllText($path, $text, $utf8)
+    $hash = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
+    Rewrite-Task14Transcript $manifest {
+      param($rewritten)
+      $permissionCapture = @($rewritten | Where-Object {
+          [string]$_.captureName -eq 'permission-dialog'
+        })[0]
+      $permissionCapture.foregroundAaSha256 = $hash
+      $aa = @($rewritten | Where-Object {
+          [string]$_.eventId -eq [string]$permissionCapture.sourceCommandEventIds[4]
+        })[0]
+      $aa.stdout = $text
+      $aa.stdoutSha256 = Get-BytesSha256 $utf8.GetBytes($text)
+    }
+  }
+  Assert-Task14HarnessRejected 'task14-permission-ability-type-downgrade' {
+    param($manifest, $root)
+    $run = Get-Content -LiteralPath ([string]$manifest.runReceiptPath) -Raw | ConvertFrom-Json
+    $events = @([IO.File]::ReadAllLines([string]$run.transcriptPath) |
+        ForEach-Object { $_ | ConvertFrom-Json })
+    $capture = @($events | Where-Object { [string]$_.captureName -eq 'permission-dialog' })[0]
+    $path = [string]$capture.foregroundAaPath
+    $text = [IO.File]::ReadAllText($path).Replace(
+      'ability type [UIEXTENSION]',
+      'ability type [SERVICE]'
+    )
+    [IO.File]::WriteAllText($path, $text, $utf8)
+    $hash = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
+    Rewrite-Task14Transcript $manifest {
+      param($rewritten)
+      $permissionCapture = @($rewritten | Where-Object {
+          [string]$_.captureName -eq 'permission-dialog'
+        })[0]
+      $permissionCapture.foregroundAaSha256 = $hash
+      $aa = @($rewritten | Where-Object {
+          [string]$_.eventId -eq [string]$permissionCapture.sourceCommandEventIds[4]
+        })[0]
+      $aa.stdout = $text
+      $aa.stdoutSha256 = Get-BytesSha256 $utf8.GetBytes($text)
+    }
+  }
+  Assert-Task14HarnessRejected 'task14-permission-click-off-center' {
+    param($manifest, $root)
+    Rewrite-Task14Transcript $manifest {
+      param($events)
+      $command = @($events | Where-Object {
+          [string]$_.stateName -eq 'initial' -and
+          [string]$_.controlId -eq 'system-camera-permission-allow'
+        })[0]
+      $command.target.x = [int]$command.target.x + 10
+      $command.argv[-2] = [string]$command.target.x
+    } $true
+  }
+  Assert-Task14HarnessRejected 'task14-permission-state-not-granted' {
+    param($manifest, $root)
+    $path = Join-Path $root 'permission-granted.json'
+    Write-PermissionProof $path -1 -1
+    $text = [IO.File]::ReadAllText($path)
+    Rewrite-Task14Transcript $manifest {
+      param($events)
+      $event = @($events | Where-Object {
+          [string]$_.type -eq 'source.permission.state-after'
+        })[0]
+      $event.stdout = $text
+      $event.stdoutSha256 = Get-BytesSha256 $utf8.GetBytes($text)
+    }
+  }
+  Assert-Task14HarnessRejected 'task14-prewritten-layout-not-from-runner' {
+    param($manifest, $root)
+    $state = $manifest.states[1]
+    $prewrittenPath = Join-Path (Split-Path -Parent ([string]$state.layout)) `
+      'prewritten-preset-layout.json'
+    Copy-Item -LiteralPath ([string]$state.layout) -Destination $prewrittenPath
+    $state.layout = $prewrittenPath
+    $receiptPath = [string]$state.hdcActionReceiptPath
+    $receipt = Get-Content -LiteralPath $receiptPath -Raw -Encoding utf8 | ConvertFrom-Json
+    $receipt.after.layoutPath = $prewrittenPath
+    $receipt.after.layoutSha256 =
+      (Get-FileHash -LiteralPath $prewrittenPath -Algorithm SHA256).Hash.ToLowerInvariant()
+    [IO.File]::WriteAllText($receiptPath, ($receipt | ConvertTo-Json -Depth 30), $utf8)
+    Sync-Task14RunRoot $manifest
+  }
+  Assert-Task14HarnessRejected 'task14-keyword-free-button-in-protected-builder' {
+    param($manifest, $root)
+    $featurePath = Join-Path ([string]$manifest.repositoryRoot) `
+      'entry/src/main/ets/pages/FeatureRuntimePage.ets'
+    $source = [IO.File]::ReadAllText($featurePath)
+    $source = $source.Replace('    Column() {}', "    Column() { Button('decoy') }")
+    [IO.File]::WriteAllText($featurePath, $source, $utf8)
+    Sync-Task14CandidateBinding $manifest
+  }
+  Assert-Task14HarnessRejected 'task14-keyword-free-state-write-in-apply-result' {
+    param($manifest, $root)
+    $featurePath = Join-Path ([string]$manifest.repositoryRoot) `
+      'entry/src/main/ets/pages/FeatureRuntimePage.ets'
+    $source = [IO.File]::ReadAllText($featurePath)
+    $source = $source.Replace(
+      "    this.statusKey = 'ready';",
+      "    this.statusKey = 'ready';`n    this.statusKey = 'idle';"
+    )
+    [IO.File]::WriteAllText($featurePath, $source, $utf8)
+    Sync-Task14CandidateBinding $manifest
+  }
+  Assert-Task14HarnessRejected 'task14-adapter-extra-fake-result' {
+    param($manifest, $root)
+    $adapterPath = Join-Path ([string]$manifest.repositoryRoot) `
+      'entry/src/main/ets/runtime/RuntimeHarnessAdapter.ets'
+    $source = [IO.File]::ReadAllText($adapterPath).Replace(
+      '    const result = await aiService.run(workflow, inputs);',
+      "    const result = fakeAiRunResult;"
+    )
+    [IO.File]::WriteAllText($adapterPath, $source, $utf8)
+    Sync-Task14CandidateBinding $manifest
+  }
+  Assert-Task14HarnessRejected 'task14-harness-page-decoy-ui' {
+    param($manifest, $root)
+    $path = Join-Path ([string]$manifest.repositoryRoot) `
+      'entry/src/main/ets/pages/RuntimeHarnessPage.ets'
+    [IO.File]::AppendAllText($path, "`n@Component struct DecoyPortrait { build() { Text('fake') } }`n", $utf8)
+    Sync-Task14CandidateBinding $manifest
+  }
+  Assert-Task14HarnessRejected 'task14-entry-ability-extra-startup-behavior' {
+    param($manifest, $root)
+    $path = Join-Path ([string]$manifest.repositoryRoot) `
+      'entry/src/main/ets/entryability/EntryAbility.ets'
+    $source = [IO.File]::ReadAllText($path).Replace(
+      "    windowStage.loadContent('pages/RuntimeHarnessPage')",
+      "    globalThis.unreviewedStartup = true;`n    windowStage.loadContent('pages/RuntimeHarnessPage')"
+    )
+    [IO.File]::WriteAllText($path, $source, $utf8)
+    Sync-Task14CandidateBinding $manifest
+  }
+  Assert-Task14HarnessRejected 'task14-retry-hook-moved-to-camera-method' {
+    param($manifest, $root)
+    $path = Join-Path ([string]$manifest.repositoryRoot) `
+      'entry/src/main/ets/pages/FeatureRuntimePage.ets'
+    $source = [IO.File]::ReadAllText($path)
+    $retryBlock = "    // RUNTIME_UI_HARNESS_RETRY_HOOK_BEGIN`n" +
+      "    this.runtimeHarnessAdapter?.allowRetry();`n" +
+      "    // RUNTIME_UI_HARNESS_RETRY_HOOK_END`n"
+    $source = $source.Replace($retryBlock, '')
+    $source = $source.Replace(
+      '    // RUNTIME_UI_HARNESS_CAMERA_HOOK_BEGIN',
+      $retryBlock + '    // RUNTIME_UI_HARNESS_CAMERA_HOOK_BEGIN'
+    )
+    [IO.File]::WriteAllText($path, $source, $utf8)
+    Sync-Task14CandidateBinding $manifest
+  }
+  Assert-Task14HarnessRejected 'task14-route-hook-before-params-within-method' {
+    param($manifest, $root)
+    $path = Join-Path ([string]$manifest.repositoryRoot) `
+      'entry/src/main/ets/pages/FeatureRuntimePage.ets'
+    $source = [IO.File]::ReadAllText($path)
+    $paramsLine = '    const params = router.getParams() as FeatureRuntimeParams;'
+    $hook = "    // RUNTIME_UI_HARNESS_ROUTE_HOOK_BEGIN`n" +
+      "    this.runtimeHarnessAdapter = RuntimeHarnessAdapter.fromParams(params);`n" +
+      "    // RUNTIME_UI_HARNESS_ROUTE_HOOK_END"
+    $source = $source.Replace("$paramsLine`n$hook", "$hook`n$paramsLine")
+    [IO.File]::WriteAllText($path, $source, $utf8)
+    Sync-Task14CandidateBinding $manifest
+  }
+  Assert-Task14HarnessRejected 'task14-service-hook-before-try-within-method' {
+    param($manifest, $root)
+    $path = Join-Path ([string]$manifest.repositoryRoot) `
+      'entry/src/main/ets/pages/FeatureRuntimePage.ets'
+    $source = [IO.File]::ReadAllText($path)
+    $hook = "      // RUNTIME_UI_HARNESS_SERVICE_HOOK_BEGIN`n" +
+      "      const result: AiRunResult = this.runtimeHarnessAdapter === undefined ?`n" +
+      "        await aiService.run(workflow, this.aiRunInputs()) :`n" +
+      "        await this.runtimeHarnessAdapter.run(aiService, workflow, this.aiRunInputs());`n" +
+      "      // RUNTIME_UI_HARNESS_SERVICE_HOOK_END`n"
+    $source = $source.Replace($hook, '')
+    $source = $source.Replace(
+      "  private async runWorkflowAsync(): Promise<void> {`n    try {",
+      "  private async runWorkflowAsync(): Promise<void> {`n$hook    try {"
+    )
+    [IO.File]::WriteAllText($path, $source, $utf8)
+    Sync-Task14CandidateBinding $manifest
+  }
+  Assert-Task14HarnessRejected 'task14-service-hook-before-stale-request-guard' {
+    param($manifest, $root)
+    $path = Join-Path ([string]$manifest.repositoryRoot) `
+      'entry/src/main/ets/pages/FeatureRuntimePage.ets'
+    $source = [IO.File]::ReadAllText($path)
+    $hook = "      // RUNTIME_UI_HARNESS_SERVICE_HOOK_BEGIN`n" +
+      "      const result: AiRunResult = this.runtimeHarnessAdapter === undefined ?`n" +
+      "        await aiService.run(workflow, this.aiRunInputs()) :`n" +
+      "        await this.runtimeHarnessAdapter.run(aiService, workflow, this.aiRunInputs());`n" +
+      "      // RUNTIME_UI_HARNESS_SERVICE_HOOK_END"
+    $source = $source.Replace("$hook`n", '')
+    $guard = '      if (!this.isRuntimeRequestCurrent(runtimeRequestId)) { return; }'
+    $source = $source.Replace($guard, "$hook`n$guard")
+    [IO.File]::WriteAllText($path, $source, $utf8)
+    Sync-Task14CandidateBinding $manifest
+  }
+  Assert-Task14HarnessRejected 'task14-camera-hook-inside-failure-guard-within-method' {
+    param($manifest, $root)
+    $path = Join-Path ([string]$manifest.repositoryRoot) `
+      'entry/src/main/ets/pages/FeatureRuntimePage.ets'
+    $source = [IO.File]::ReadAllText($path)
+    $postGuardLine = '    this.pendingPickTextInputVisible = undefined;'
+    $hook = "    // RUNTIME_UI_HARNESS_CAMERA_HOOK_BEGIN`n" +
+      "    this.runtimeHarnessAdapter?.observeCamera(this.liveCameraPosition);`n" +
+      "    // RUNTIME_UI_HARNESS_CAMERA_HOOK_END"
+    $source = $source.Replace("$postGuardLine`n$hook", "$hook`n$postGuardLine")
+    [IO.File]::WriteAllText($path, $source, $utf8)
+    Sync-Task14CandidateBinding $manifest
+  }
+  Assert-Task14HarnessRejected 'task14-retry-hook-after-trigger-within-method' {
+    param($manifest, $root)
+    $path = Join-Path ([string]$manifest.repositoryRoot) `
+      'entry/src/main/ets/pages/FeatureRuntimePage.ets'
+    $source = [IO.File]::ReadAllText($path)
+    $hook = "    // RUNTIME_UI_HARNESS_RETRY_HOOK_BEGIN`n" +
+      "    this.runtimeHarnessAdapter?.allowRetry();`n" +
+      "    // RUNTIME_UI_HARNESS_RETRY_HOOK_END`n"
+    $source = $source.Replace($hook, '')
+    $source = $source.Replace(
+      '    this.startLiveRuntimeLoop(workflow);',
+      "    this.startLiveRuntimeLoop(workflow);`n$($hook.TrimEnd("`n"))"
+    )
+    [IO.File]::WriteAllText($path, $source, $utf8)
+    Sync-Task14CandidateBinding $manifest
+  }
+  Assert-Task14HarnessRejected 'task14-hilog-obsolete-type' {
+    param($manifest, $root)
+    Rewrite-Task14Transcript $manifest {
+      param($events)
+      @($events | Where-Object { [string]$_.type -eq 'source.hilog.poll' })[0].type =
+        'source.hilog'
+    }
+  }
+  Assert-Task14HarnessRejected 'task14-hilog-wrong-argv' {
+    param($manifest, $root)
+    Rewrite-Task14Transcript $manifest {
+      param($events)
+      $poll = @($events | Where-Object { [string]$_.type -eq 'source.hilog.poll' })[0]
+      $poll.argv[-1] = 'UNREVIEWED_TAG'
+    }
+  }
+  Assert-Task14HarnessRejected 'task14-extra-app-runtime-event-type' {
+    param($manifest, $root)
+    Rewrite-Task14Transcript $manifest {
+      param($events)
+      @($events | Where-Object { [string]$_.type -eq 'service.success' })[0].type =
+        'camera.restore'
+    }
+  }
+  Assert-Task14HarnessRejected 'task14-app-payload-self-reported-utc' {
+    param($manifest, $root)
+    Rewrite-Task14Transcript $manifest {
+      param($events)
+      $runtime = @($events | Where-Object { [string]$_.type -eq 'service.success' })[0]
+      $source = @($events | Where-Object {
+          [string]$_.eventId -eq [string]$runtime.sourceCommandEventId
+        })[0]
+      $source.stdout = ([string]$source.stdout).Replace(
+        ',"resultFingerprint"',
+        ',"utc":"2026-07-27T00:00:00.0000000Z","resultFingerprint"'
+      )
+      $source.stdoutSha256 = Get-BytesSha256 $utf8.GetBytes([string]$source.stdout)
+      $rawLine = @(([string]$source.stdout -split "`r?`n") | Where-Object {
+          $_ -match [regex]::Escape([string]$runtime.eventId)
+        })[0]
+      $runtime.rawLineSha256 = Get-BytesSha256 $utf8.GetBytes([string]$rawLine)
+    }
+  }
+  Assert-Task14HarnessRejected 'task14-process-timeout-claim' {
+    param($manifest, $root)
+    Rewrite-Task14Transcript $manifest {
+      param($events)
+      @($events | Where-Object { [string]$_.type -eq 'source.capture.screen' })[0].timedOut =
+        $true
+    }
+  }
+  Assert-Task14HarnessRejected 'task14-coordinated-capture-path-rewrite' {
+    param($manifest, $root)
+    $state = $manifest.states[1]
+    $decoy = Join-Path (Split-Path -Parent ([string]$state.screenshot)) 'coordinated.jpeg'
+    Write-Jpeg $decoy 320 240 'coordinated'
+    $hash = (Get-FileHash -LiteralPath $decoy -Algorithm SHA256).Hash.ToLowerInvariant()
+    Rewrite-Task14Transcript $manifest {
+      param($events)
+      $capture = @($events | Where-Object {
+          [string]$_.type -eq 'capture' -and [string]$_.captureName -eq 'preset-selected'
+        })[0]
+      $capture.screenshotPath = $decoy
+      $capture.screenshotSha256 = $hash
+    }
+    $state.screenshot = $decoy
+    $receipt = Get-Content -LiteralPath ([string]$state.hdcActionReceiptPath) -Raw |
+      ConvertFrom-Json
+    $receipt.after.screenshotPath = $decoy
+    $receipt.after.screenshotSha256 = $hash
+    [IO.File]::WriteAllText(
+      [string]$state.hdcActionReceiptPath,
+      ($receipt | ConvertTo-Json -Depth 30),
+      $utf8
+    )
+    Sync-Task14RunRoot $manifest
+  }
+  Assert-Task14HarnessRejected 'task14-coordinated-raw-png-content-rewrite' {
+    param($manifest, $root)
+    $run = Get-Content -LiteralPath ([string]$manifest.runReceiptPath) -Raw |
+      ConvertFrom-Json
+    $events = @([IO.File]::ReadAllLines([string]$run.transcriptPath) |
+        ForEach-Object { $_ | ConvertFrom-Json })
+    $capture = @($events | Where-Object {
+        [string]$_.type -eq 'capture' -and [string]$_.captureName -eq 'preset-selected'
+      })[0]
+    $rawPath = [string]$capture.rawScreenshotPath
+    Add-Type -AssemblyName System.Drawing
+    $bitmap = [Drawing.Bitmap]::new(1320, 2856)
+    $graphics = [Drawing.Graphics]::FromImage($bitmap)
+    try {
+      $graphics.Clear([Drawing.Color]::Magenta)
+      $bitmap.Save($rawPath, [Drawing.Imaging.ImageFormat]::Png)
+    } finally {
+      $graphics.Dispose()
+      $bitmap.Dispose()
+    }
+    $rawHash = (Get-FileHash -LiteralPath $rawPath -Algorithm SHA256).Hash.ToLowerInvariant()
+    Rewrite-Task14Transcript $manifest {
+      param($rewrittenEvents)
+      $rewrittenCapture = @($rewrittenEvents | Where-Object {
+          [string]$_.type -eq 'capture' -and
+          [string]$_.captureName -eq 'preset-selected'
+        })[0]
+      $rewrittenCapture.rawScreenshotSha256 = $rawHash
+    }
+  }
+  Assert-Task14HarnessRejected 'task14-picker-false-outcome-not-from-sources' {
+    param($manifest, $root)
+    $receiptPath = [string]$manifest.states[2].hdcActionReceiptPath
+    $receipt = Get-Content -LiteralPath $receiptPath -Raw | ConvertFrom-Json
+    $outcomePath = [string]$receipt.intermediate.layoutDumpOutcomePath
+    [IO.File]::WriteAllText($outcomePath, "recvExitCode=0`n", $utf8)
+    $hash = (Get-FileHash -LiteralPath $outcomePath -Algorithm SHA256).Hash.ToLowerInvariant()
+    Rewrite-Task14Transcript $manifest {
+      param($events)
+      $capture = @($events | Where-Object { [string]$_.type -eq 'picker.capture' })[0]
+      $capture.layoutDumpOutcomeSha256 = $hash
+    }
+    $receipt = Get-Content -LiteralPath $receiptPath -Raw | ConvertFrom-Json
+    $receipt.intermediate.layoutDumpOutcomeSha256 = $hash
+    [IO.File]::WriteAllText($receiptPath, ($receipt | ConvertTo-Json -Depth 30), $utf8)
+    Sync-Task14RunRoot $manifest
+  }
+  Assert-Task14HarnessRejected 'task14-media-not-settled-three-times' {
+    param($manifest, $root)
+    Rewrite-Task14Transcript $manifest {
+      param($events)
+      $observations = @($events | Where-Object {
+          [string]$_.type -like 'source.media.after.level*' -and
+          [string]$_.mediaDirectory -like '*/Camera' -and
+          [string]$_.stdout -match 'task14-saved\.jpg'
+        })
+      $observations[2].stdout = ''
+      $observations[2].stdoutSha256 = Get-BytesSha256 $utf8.GetBytes('')
+    }
+  }
+  Assert-Task14HarnessRejected 'task14-media-one-snapshot-three-duplicate-lines' {
+    param($manifest, $root)
+    Rewrite-Task14Transcript $manifest {
+      param($events)
+      $observations = @($events | Where-Object {
+          [string]$_.type -like 'source.media.after.level*' -and
+          [string]$_.mediaDirectory -like '*/Camera' -and
+          [string]$_.stdout -match 'task14-saved\.jpg'
+        })
+      $line = ([string]$observations[0].stdout).TrimEnd("`r", "`n")
+      $observations[0].stdout = "$line`n$line`n$line`n"
+      $observations[0].stdoutSha256 =
+        Get-BytesSha256 $utf8.GetBytes([string]$observations[0].stdout)
+      foreach ($observation in @($observations[1], $observations[2])) {
+        $observation.stdout = ''
+        $observation.stdoutSha256 = Get-BytesSha256 $utf8.GetBytes('')
+      }
+    }
+  }
+  Assert-Task14HarnessRejected 'task14-media-snapshot-no-settle-interval' {
+    param($manifest, $root)
+    Rewrite-Task14Transcript $manifest {
+      param($events)
+      $roots = @($events | Where-Object {
+          [string]$_.type -eq 'source.media.after.level0'
+        })
+      $previousSnapshotEvents = @($events | Where-Object {
+          [string]$_.type -like 'source.media.after.level*' -and
+          [int]$_.sequence -lt [int]$roots[1].sequence
+        })
+      $roots[1].startedMonotonicTicks =
+        [long]$previousSnapshotEvents[-1].endedMonotonicTicks + 1
+    }
+  }
+  Assert-Task14HarnessRejected 'task14-media-size-coordinated-away-from-file' {
+    param($manifest, $root)
+    Rewrite-Task14Transcript $manifest {
+      param($events)
+      $asset = @($events | Where-Object { [string]$_.type -eq 'media.asset' })[0]
+      $wrongSize = [long]$asset.mediaSize + 1
+      $asset.mediaSize = $wrongSize
+      foreach ($listing in @($events | Where-Object {
+            [string]$_.type -like 'source.media.after.level*' -and
+            [string]$_.stdout -match 'task14-saved\.jpg'
+          })) {
+        $listing.stdout = [regex]::Replace(
+          [string]$listing.stdout,
+          '(?m)^(-rw\S*\s+)\d+(\s+task14-saved\.jpg)',
+          "`${1}$wrongSize`${2}"
+        )
+        $listing.stdoutSha256 = Get-BytesSha256 $utf8.GetBytes([string]$listing.stdout)
+      }
+    }
+  }
 }
 
 function Convert-FixtureToNestedProject([string]$ManifestPath) {
@@ -482,7 +2009,7 @@ function Assert-Rejected([string]$Name, [scriptblock]$Mutation) {
   [IO.File]::WriteAllText($layoutPath, ($layout | ConvertTo-Json -Depth 20), $utf8)
   [IO.File]::WriteAllText($manifestPath, ($manifest | ConvertTo-Json -Depth 20), $utf8)
   $rejected = $false
-  try { & $guardPath -ManifestPath $manifestPath | Out-Null } catch { $rejected = $true }
+  try { Invoke-EvidenceGuard $manifestPath | Out-Null } catch { $rejected = $true }
   if (-not $rejected) { throw "Runtime evidence guard accepted mutation: $Name" }
 }
 
@@ -503,7 +2030,7 @@ function New-ScrollReachableFixture([string]$Root) {
   $afterLayoutPath = Join-Path $Root 'after-scroll.json'
   $afterScreenshotPath = Join-Path $Root 'after-scroll.jpeg'
   $afterLayout = $layout | ConvertTo-Json -Depth 20 | ConvertFrom-Json
-  $afterLongResult = $afterLayout.children[0].children[0].children[0].children[4]
+  $afterLongResult = $afterLayout.children[0].children[0].children[0].children[-1]
   $afterLongResult.attributes.bounds = '[70,500][1250,1300]'
   $afterLongResult.attributes.origBounds = '[70,-800][1250,1300]'
   [IO.File]::WriteAllText($afterLayoutPath, ($afterLayout | ConvertTo-Json -Depth 20), $utf8)
@@ -531,28 +2058,65 @@ function Assert-ScrollReachableRejected([string]$Name, [scriptblock]$Mutation) {
   [IO.File]::WriteAllText($layoutPath, ($layout | ConvertTo-Json -Depth 20), $utf8)
   [IO.File]::WriteAllText($manifestPath, ($manifest | ConvertTo-Json -Depth 20), $utf8)
   $rejected = $false
-  try { & $guardPath -ManifestPath $manifestPath | Out-Null } catch { $rejected = $true }
+  try { Invoke-EvidenceGuard $manifestPath | Out-Null } catch { $rejected = $true }
   if (-not $rejected) { throw "Runtime evidence guard accepted scroll-reachable mutation: $Name" }
 }
 
 try {
+  [IO.Directory]::CreateDirectory($tempRoot) | Out-Null
+  $script:testReviewerRsa = [Security.Cryptography.RSACng]::new(3072)
+  $testScriptsRoot = Join-Path $tempRoot 'trusted-test-scripts'
+  [IO.Directory]::CreateDirectory($testScriptsRoot) | Out-Null
+  $script:testReviewerPublicKeyPath = Join-Path $testScriptsRoot 'runtime-evidence-reviewer-public.pem'
+  Export-TestReviewerPublicKey $script:testReviewerRsa $script:testReviewerPublicKeyPath
+  $guardPath = Join-Path $testScriptsRoot 'check-runtime-ui-evidence.ps1'
+  $captureRunnerPath = Join-Path $testScriptsRoot 'capture-runtime-ui-run.ps1'
+  Copy-Item -LiteralPath $productionCaptureRunnerPath -Destination $captureRunnerPath
+  Copy-Item -LiteralPath $templateRoot -Destination $testScriptsRoot -Recurse
+  $testPem = ([IO.File]::ReadAllText($script:testReviewerPublicKeyPath) -replace
+    '-----[^-]+-----', '' -replace '\s', '')
+  $testFingerprint = Get-BytesSha256 ([Convert]::FromBase64String($testPem))
+  $checkerText = [IO.File]::ReadAllText($productionGuardPath).Replace(
+    '8cf68478e1fcb46745e3c7b8a18235caca42c3607eff84d96e8e74dd33f979e6',
+    $testFingerprint
+  )
+  [IO.File]::WriteAllText($guardPath, $checkerText, $utf8)
+  $script:mockHdcPath = New-MockHdc (Join-Path $tempRoot 'mock-hdc.exe')
   $validPath = New-Fixture (Join-Path $tempRoot 'valid')
-  & $guardPath -ManifestPath $validPath | Out-Null
+  Invoke-EvidenceGuard $validPath | Out-Null
   $scrollReachableValidPath = New-ScrollReachableFixture (Join-Path $tempRoot 'scroll-reachable-valid')
-  & $guardPath -ManifestPath $scrollReachableValidPath | Out-Null
+  Invoke-EvidenceGuard $scrollReachableValidPath | Out-Null
   $task14DefaultPath = Convert-FixtureToTask14Harness (New-Fixture (Join-Path $tempRoot 'task14-harness-default-valid')) 1.0
-  & $guardPath -ManifestPath $task14DefaultPath | Out-Null
+  Invoke-EvidenceGuard $task14DefaultPath | Out-Null
   $task14Font32Path = Convert-FixtureToTask14Harness (New-Fixture (Join-Path $tempRoot 'task14-harness-font32-valid')) 3.2
-  & $guardPath -ManifestPath $task14Font32Path | Out-Null
+  Invoke-EvidenceGuard $task14Font32Path | Out-Null
+  if ((Get-Command $productionGuardPath).Parameters.ContainsKey('SelfTestReviewerPublicKeyPath')) {
+    throw 'Production runtime evidence checker exposes a reviewer-key override.'
+  }
+  $productionRejectedTestSignature = $false
+  try { Invoke-EvidenceGuard $task14DefaultPath -ProductionTrust | Out-Null }
+  catch { $productionRejectedTestSignature = $true }
+  if (-not $productionRejectedTestSignature) {
+    throw 'Production runtime evidence checker accepted the fixture reviewer key.'
+  }
+  if ($Mode -eq 'Positive') {
+    Write-Output 'Runtime evidence runner and signed positive fixtures passed.'
+    return
+  }
+  Invoke-Task14CoreMutations
+  if ($Mode -eq 'Core') {
+    Write-Output 'Runtime evidence signed core mutation fixtures passed.'
+    return
+  }
   $nestedValidPath = Convert-FixtureToNestedProject (
     New-Fixture (Join-Path $tempRoot 'nested-valid')
   )
-  & $guardPath -ManifestPath $nestedValidPath | Out-Null
+  Invoke-EvidenceGuard $nestedValidPath | Out-Null
   $nestedManifest = Get-Content -LiteralPath $nestedValidPath -Raw -Encoding utf8 | ConvertFrom-Json
   $nestedManifest.repositoryRoot = Split-Path -Parent ([string]$nestedManifest.repositoryRoot)
   [IO.File]::WriteAllText($nestedValidPath, ($nestedManifest | ConvertTo-Json -Depth 20), $utf8)
   $nestedWrongRootRejected = $false
-  try { & $guardPath -ManifestPath $nestedValidPath | Out-Null } catch { $nestedWrongRootRejected = $true }
+  try { Invoke-EvidenceGuard $nestedValidPath | Out-Null } catch { $nestedWrongRootRejected = $true }
   if (-not $nestedWrongRootRejected) {
     throw 'Runtime evidence guard accepted a nested-project manifest bound to the Git root.'
   }
@@ -585,39 +2149,187 @@ try {
   Assert-Rejected 'source-proof' { param($m, $l, $r) $m.source = 'harness' }
   Assert-Rejected 'density-proof' { param($m, $l, $r) $m.density = 2.0 }
   Assert-Task14HarnessRejected 'task14-source-binding' {
-    param($m, $r)
-    $m.source = 'production'
+    param($m, $r) $m.source = 'production'
   }
   Assert-Task14HarnessRejected 'task14-route-binding' {
-    param($m, $r)
-    $m.routeName = '/hms/ImageSegmentationLiveAnalyseActivity'
+    param($m, $r) $m.routeName = '/hms/ImageSegmentationLiveAnalyseActivity'
   }
-  Assert-Task14HarnessRejected 'task14-disclosure-binding' {
+  Assert-Task14HarnessRejected 'task14-missing-run-receipt' {
     param($m, $r)
-    $m.harnessDisclosure.kind = 'deterministicLayoutHarness'
+    $m.PSObject.Properties.Remove('runReceiptPath')
+    $m.PSObject.Properties.Remove('runReceiptSha256')
   }
-  Assert-Task14HarnessRejected 'task14-capture-source-binding' {
+  Assert-Task14HarnessRejected 'task14-unanchored-action-receipt-rewrite' {
     param($m, $r)
-    $m.states[0].captureSource = 'production'
+    $path = [string]$m.states[1].hdcActionReceiptPath
+    $receipt = Get-Content -LiteralPath $path -Raw -Encoding utf8 | ConvertFrom-Json
+    $receipt | Add-Member -NotePropertyName forged -NotePropertyValue $true
+    [IO.File]::WriteAllText($path, ($receipt | ConvertTo-Json -Depth 30), $utf8)
   }
-  Assert-Task14HarnessRejected 'task14-required-state-binding' {
+  Assert-Task14HarnessRejected 'task14-cross-run-hap-candidate-font-copy' {
     param($m, $r)
-    $m.states = @($m.states | Where-Object { $_.name -ne 'save-success' })
+    $path = [string]$m.states[1].hdcActionReceiptPath
+    $receipt = Get-Content -LiteralPath $path -Raw -Encoding utf8 | ConvertFrom-Json
+    $receipt.runId = ('f' * 32)
+    $receipt.bindings.hapSha256 = ('0' * 64)
+    $receipt.bindings.candidateDiffSha256 = ('1' * 64)
+    $receipt.bindings.fontScale = 3.2
+    [IO.File]::WriteAllText($path, ($receipt | ConvertTo-Json -Depth 30), $utf8)
+    Sync-Task14RunRoot $m
   }
-  Assert-Task14HarnessRejected 'task14-harness-diff-binding' {
+  Assert-Task14HarnessRejected 'task14-broken-previous-receipt-chain' {
     param($m, $r)
-    $page = Join-Path ([string]$m.repositoryRoot) 'entry/src/main/ets/pages/RuntimeHarnessPage.ets'
-    [IO.File]::WriteAllText($page, "@Entry
-@Component
-struct WrongHarnessPage {}
-", $utf8)
+    $path = [string]$m.states[3].hdcActionReceiptPath
+    $receipt = Get-Content -LiteralPath $path -Raw -Encoding utf8 | ConvertFrom-Json
+    $receipt.previousReceiptSha256 = ('0' * 64)
+    [IO.File]::WriteAllText($path, ($receipt | ConvertTo-Json -Depth 30), $utf8)
+    Sync-Task14RunRoot $m $false
   }
-  Assert-Task14HarnessRejected 'task14-receipt-kind-binding' {
+  Assert-Task14HarnessRejected 'task14-coordinated-rewrite-without-source-segment' {
     param($m, $r)
-    $receipt = Get-Content -LiteralPath ([string]$m.buildReceiptPath) -Raw -Encoding utf8 | ConvertFrom-Json
-    $receipt.candidateKind = 'commit'
-    [IO.File]::WriteAllText([string]$m.buildReceiptPath, ($receipt | ConvertTo-Json -Depth 10), $utf8)
-  }  Assert-Rejected 'coordinated-environment-claims' {
+    $path = [string]$m.states[1].hdcActionReceiptPath
+    $receipt = Get-Content -LiteralPath $path -Raw -Encoding utf8 | ConvertFrom-Json
+    $receipt.commands[0].stdout = 'forged after capture'
+    [IO.File]::WriteAllText($path, ($receipt | ConvertTo-Json -Depth 30), $utf8)
+    Sync-Task14RunRoot $m
+  }
+  Assert-Task14HarnessRejected 'task14-fake-no-error-zero-not-from-runner' {
+    param($m, $r)
+    $path = [string]$m.states[3].hdcActionReceiptPath
+    $receipt = Get-Content -LiteralPath $path -Raw -Encoding utf8 | ConvertFrom-Json
+    $receipt.commands[0].eventId = 'fake-command-not-in-transcript'
+    $receipt.commands[0].stdout = 'No Error'
+    $receipt.commands[0].exitCode = 0
+    [IO.File]::WriteAllText($path, ($receipt | ConvertTo-Json -Depth 30), $utf8)
+    Sync-Task14RunRoot $m
+  }
+  Assert-Task14HarnessRejected 'task14-identical-screenshot-synthetic-layout-marker' {
+    param($m, $r)
+    $preset = $m.states[1]
+    $retry = $m.states[6]
+    $retry.screenshot = $preset.screenshot
+    $path = [string]$retry.hdcActionReceiptPath
+    $receipt = Get-Content -LiteralPath $path -Raw -Encoding utf8 | ConvertFrom-Json
+    $receipt.after.screenshotPath = $preset.screenshot
+    $receipt.after.screenshotSha256 =
+      (Get-FileHash -LiteralPath ([string]$preset.screenshot) -Algorithm SHA256).Hash.ToLowerInvariant()
+    $layout = Get-Content -LiteralPath ([string]$retry.layout) -Raw -Encoding utf8 | ConvertFrom-Json
+    $layout | Add-Member -NotePropertyName marker -NotePropertyValue 'retry-success'
+    [IO.File]::WriteAllText([string]$retry.layout, ($layout | ConvertTo-Json -Depth 20), $utf8)
+    $receipt.after.layoutSha256 =
+      (Get-FileHash -LiteralPath ([string]$retry.layout) -Algorithm SHA256).Hash.ToLowerInvariant()
+    [IO.File]::WriteAllText($path, ($receipt | ConvertTo-Json -Depth 30), $utf8)
+    Sync-Task14RunRoot $m
+  }
+  Assert-Task14HarnessRejected 'task14-screenshot-outside-evidence' {
+    param($m, $r)
+    $state = $m.states[0]
+    $outside = Join-Path $tempRoot 'outside-task14.jpeg'
+    Copy-Item -LiteralPath ([string]$state.screenshot) -Destination $outside -Force
+    $state.screenshot = $outside
+    $path = [string]$state.hdcActionReceiptPath
+    $receipt = Get-Content -LiteralPath $path -Raw -Encoding utf8 | ConvertFrom-Json
+    $receipt.after.screenshotPath = $outside
+    $receipt.after.screenshotSha256 =
+      (Get-FileHash -LiteralPath $outside -Algorithm SHA256).Hash.ToLowerInvariant()
+    [IO.File]::WriteAllText($path, ($receipt | ConvertTo-Json -Depth 30), $utf8)
+    Sync-Task14RunRoot $m
+  }
+  Assert-Task14HarnessRejected 'task14-picker-cancel-without-intermediate' {
+    param($m, $r)
+    $path = [string]$m.states[2].hdcActionReceiptPath
+    $receipt = Get-Content -LiteralPath $path -Raw -Encoding utf8 | ConvertFrom-Json
+    $receipt.PSObject.Properties.Remove('intermediate')
+    [IO.File]::WriteAllText($path, ($receipt | ConvertTo-Json -Depth 30), $utf8)
+    Sync-Task14RunRoot $m
+  }
+  Assert-Task14HarnessRejected 'task14-decoy-control-id-ancestry' {
+    param($m, $r)
+    Rewrite-Task14Transcript $m {
+      param($events)
+      $event = @($events | Where-Object {
+          [string]$_.stateName -eq 'preset-selected' -and [string]$_.type -eq 'command'
+        })[0]
+      $event.target.controlId = 'portrait-decoy-control'
+    } $true
+  }
+  Assert-Task14HarnessRejected 'task14-harness-scope-production-save-edit' {
+    param($m, $r)
+    $repo = [string]$m.repositoryRoot
+    $feature = Join-Path $repo 'entry/src/main/ets/pages/FeatureRuntimePage.ets'
+    [IO.File]::AppendAllText(
+      $feature,
+      'private resultImageSaveBypass(): void {}' + [Environment]::NewLine,
+      $utf8
+    )
+    [IO.File]::WriteAllText(
+      [string]$m.candidateDiffPath,
+      (Invoke-Git $repo @('diff', '--binary', 'HEAD', '--')),
+      $utf8
+    )
+    $m.candidateDiffSha256 =
+      (Get-FileHash -LiteralPath ([string]$m.candidateDiffPath) -Algorithm SHA256).Hash.ToLowerInvariant()
+    $canonicalHap = Join-Path $repo 'entry/build/default/outputs/default/entry-default-unsigned.hap'
+    & (Join-Path $repo 'scripts/write-runtime-ui-build-receipt.ps1') -HapPath $canonicalHap | Out-Null
+    Copy-Item -LiteralPath "$canonicalHap.runtime-ui-build.json" `
+      -Destination ([string]$m.buildReceiptPath) -Force
+    $build = Get-Content -LiteralPath ([string]$m.buildReceiptPath) -Raw | ConvertFrom-Json
+    foreach ($state in @($m.states)) {
+      $path = [string]$state.hdcActionReceiptPath
+      $receipt = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json
+      $receipt.bindings.candidateDiffSha256 = [string]$m.candidateDiffSha256
+      $receipt.bindings.candidateIdentitySha256 = [string]$build.candidateIdentitySha256
+      [IO.File]::WriteAllText($path, ($receipt | ConvertTo-Json -Depth 30), $utf8)
+    }
+    $run = Get-Content -LiteralPath ([string]$m.runReceiptPath) -Raw | ConvertFrom-Json
+    $run.candidateDiffSha256 = [string]$m.candidateDiffSha256
+    $run.candidateIdentitySha256 = [string]$build.candidateIdentitySha256
+    $run.buildReceiptSha256 =
+      (Get-FileHash -LiteralPath ([string]$m.buildReceiptPath) -Algorithm SHA256).Hash.ToLowerInvariant()
+    [IO.File]::WriteAllText([string]$m.runReceiptPath, ($run | ConvertTo-Json -Depth 30), $utf8)
+    Sync-Task14RunRoot $m
+  }
+  Assert-Task14HarnessRejected 'task14-media-asset-empty-size' {
+    param($m, $r)
+    Rewrite-Task14Transcript $m {
+      param($events)
+      @($events | Where-Object { $_.type -eq 'media.asset' })[0].mediaSize = 0
+    }
+  }
+  Assert-Task14HarnessRejected 'task14-media-before-already-contains-saved-path' {
+    param($m, $r)
+    Rewrite-Task14Transcript $m {
+      param($events)
+      $before = @($events | Where-Object {
+          [string]$_.type -like 'source.media.before.level*' -and
+          [string]$_.mediaDirectory -like '*/Camera'
+        })[0]
+      $before.stdout = "-rw-r--r-- 128 task14-saved.jpg`n"
+      $before.stdoutSha256 = Get-BytesSha256 $utf8.GetBytes([string]$before.stdout)
+    }
+  }
+  Assert-Task14HarnessRejected 'task14-media-full-path-special-case' {
+    param($m, $r)
+    Rewrite-Task14Transcript $m {
+      param($events)
+      $after = @($events | Where-Object {
+          [string]$_.type -like 'source.media.after.level*' -and
+          [string]$_.mediaDirectory -like '*/Camera'
+        })[0]
+      $after.stdout =
+        "-rw-r--r-- 128 /storage/media/100/local/files/Photo/Camera/task14-saved.jpg`n"
+      $after.stdoutSha256 = Get-BytesSha256 $utf8.GetBytes([string]$after.stdout)
+    }
+  }
+  Assert-Task14HarnessRejected 'task14-runtime-event-nonce-run-mismatch' {
+    param($m, $r)
+    Rewrite-Task14Transcript $m {
+      param($events)
+      @($events | Where-Object { $_.type -eq 'service.failure' })[0].nonce =
+        'foreign-run-nonce'
+    }
+  }
+  Assert-Rejected 'coordinated-environment-claims' {
     param($m, $l, $r)
     $m.source = 'harness'
     $m.fontScale = 3.2
@@ -801,6 +2513,7 @@ struct WrongHarnessPage {}
 
   Write-Output 'Runtime UI evidence guard mutation fixtures passed.'
 } finally {
+  if ($null -ne $script:testReviewerRsa) { $script:testReviewerRsa.Dispose() }
   if ([IO.Directory]::Exists($tempRoot)) {
     $resolved = [IO.Path]::GetFullPath($tempRoot)
     if (-not $resolved.StartsWith($tempPrefix, [StringComparison]::OrdinalIgnoreCase)) {
