@@ -639,11 +639,18 @@ import {
   openRuntimeHelpSource
 } from '../main/ets/services/web/RuntimeHelpLinkService';
 import {
+  CollegeItem,
   collegeItems,
   collegeAdapterViewTitleKey,
   collegeSummaryDialogTitleKey,
   isCollegeItemUrlNavigable
 } from '../main/ets/common/data/CollegeCatalog';
+import {
+  CollegeLocalQuickStartSection,
+  collegeLocalQuickStartSections,
+  nextCollegeQuickStartExpandedId,
+  visibleCollegeItems
+} from '../main/ets/common/data/CollegeLocalQuickStart';
 import {
   collegeCardRadiusVp,
   collegeDialogConfirmMinHeightVp,
@@ -2622,6 +2629,33 @@ export default function localUnitTest() {
       expect(meItems.find((item: MeItem) => item.id === 'star')?.title).assertEqual('Like');
       expect(meItems.find((item: MeItem) => item.id === 'code')?.title).assertEqual('Official Code');
       expect(meItems.find((item: MeItem) => item.id === 'feedback')?.title).assertEqual('Feedback');
+    });
+
+    it('hidesBrokenCollegeRowsWithoutDeletingTheirCatalogData', 0, () => {
+      expect(collegeItems.find((item: CollegeItem) => item.id === 'quick') === undefined).assertFalse();
+      expect(collegeItems.find((item: CollegeItem) => item.id === 'faq') === undefined).assertFalse();
+      expect(visibleCollegeItems.map((item: CollegeItem) => item.id).join(','))
+        .assertEqual('summary,cloud,forum,footer');
+    });
+
+    it('keepsOnlyOneLocalQuickStartChapterExpanded', 0, () => {
+      expect(nextCollegeQuickStartExpandedId('environment', 'data')).assertEqual('data');
+      expect(nextCollegeQuickStartExpandedId('data', 'data')).assertEqual('');
+    });
+
+    it('providesFiveCompleteOfflineMindSporeTutorialChapters', 0, () => {
+      expect(collegeLocalQuickStartSections
+        .map((section: CollegeLocalQuickStartSection): string => section.id).join(','))
+        .assertEqual('environment,data,network,training,export');
+      collegeLocalQuickStartSections.forEach((section: CollegeLocalQuickStartSection) => {
+        expect(section.objective.length > 0).assertTrue();
+        expect(section.paragraphs.length > 0).assertTrue();
+        expect(section.codeBlocks.length > 0).assertTrue();
+        expect(section.measuredResult.length > 0).assertTrue();
+        const content = JSON.stringify(section);
+        expect(content.indexOf('http')).assertEqual(-1);
+        expect(content.indexOf('参考视频')).assertEqual(-1);
+      });
     });
 
     it('definesHarmonyMeLayoutMinimums', 0, () => {
