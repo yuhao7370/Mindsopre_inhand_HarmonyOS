@@ -720,6 +720,65 @@ function Test-SystemPermissionForeground([string]$AaText) {
   return $foregroundRecords.Count -eq 1
 }
 
+function Test-SystemPhotoSaveForeground([string]$AaText) {
+  $records = @([regex]::Matches(
+      $AaText,
+      '(?ms)^[ \t]*uri \[/com\.huawei\.hmos\.photos/phone_photos/' +
+        'SaveUIExtensionAbility\d+\]\s*\r?\n' +
+        '(?<body>.*?)(?=^[ \t]*uri \[|^[ \t]*PendingWantRecords:|\z)'
+    ))
+  $foregroundRecords = @($records | Where-Object {
+      $body = $_.Groups['body'].Value
+      $body -match '(?m)^[ \t]*AbilityRecord ID #[^\r\n]*state #FOREGROUND[^\r\n]*\r?$' -and
+      $body -match '(?m)^[ \t]*main name \[SaveUIExtensionAbility\][ \t]*\r?$' -and
+      $body -match '(?m)^[ \t]*bundle name \[com\.huawei\.hmos\.photos\][ \t]*\r?$' -and
+      $body -match '(?m)^[ \t]*ability type \[UIEXTENSION\][ \t]*\r?$' -and
+      $body -match '(?m)^[ \t]*app state #FOREGROUND[ \t]*\r?$' -and
+      $body -match '(?m)^[ \t]*root host bundle name \[com\.yuhaofeng\.mih\][ \t]*\r?$' -and
+      $body -match '(?m)^[ \t]*root host ability name \[EntryAbility\][ \t]*\r?$'
+    })
+  return $foregroundRecords.Count -eq 1
+}
+
+function Get-SystemPhotoSaveTarget([string]$LayoutPath) {
+  $layoutText = [Text.Encoding]::GetEncoding(28591).GetString(
+    [IO.File]::ReadAllBytes($LayoutPath)
+  )
+  $controlId = 'advanced_dialog_button_1'
+  if ([regex]::Matches($layoutText, '"type"\s*:\s*"ModalPage"').Count -ne 1 -or
+    [regex]::Matches($layoutText, '"type"\s*:\s*"UIExtensionComponent"').Count -ne 1) {
+    Fail 'task 14 photo-save capture lacks the reviewed modal UI-extension structure.'
+  }
+  $attributeObjects = @([regex]::Matches(
+      $layoutText,
+      '(?s)"attributes"\s*:\s*\{(?<attrs>[^{}]*?"id"\s*:\s*"' +
+        [regex]::Escape($controlId) + '"[^{}]*?)\}\s*,\s*"children"'
+    ))
+  if ($attributeObjects.Count -ne 1) {
+    Fail 'task 14 photo-save capture must contain one structural Allow button.'
+  }
+  $attributes = $attributeObjects[0].Groups['attrs'].Value
+  $boundsText = Get-UniqueRawAttribute $attributes 'bounds'
+  if ((Get-UniqueRawAttribute $attributes 'key') -cne $controlId -or
+    (Get-UniqueRawAttribute $attributes 'type') -cne 'Button' -or
+    (Get-UniqueRawAttribute $attributes 'clickable') -cne 'true' -or
+    (Get-UniqueRawAttribute $attributes 'enabled') -cne 'true' -or
+    (Get-UniqueRawAttribute $attributes 'visible') -cne 'true') {
+    Fail 'task 14 photo-save target is not the reviewed visible clickable system button.'
+  }
+  $bounds = Parse-Bounds $boundsText
+  if ($null -eq $bounds -or $bounds.Width -le 0 -or $bounds.Height -le 0) {
+    Fail 'task 14 photo-save target bounds are invalid.'
+  }
+  return [pscustomobject]@{
+    Bounds = $bounds
+    BoundsText = $boundsText
+    SystemBundle = 'com.huawei.hmos.photos'
+    SystemAbility = 'SaveUIExtensionAbility'
+    ControlId = $controlId
+  }
+}
+
 function Attr([object]$Node, [string]$Name) {
   if ($null -eq $Node.attributes -or $Node.attributes.PSObject.Properties.Name -notcontains $Name) { return '' }
   return [string]$Node.attributes.$Name
@@ -1554,7 +1613,7 @@ if ($task -eq 14 -and $sourceKind -eq 'harness') {
     [pscustomobject]@{ Name = 'reentry'; Pred = 'rear-camera'; Action = 'leave-and-reenter'; Controls = @('key:Back', 'harness-portrait-route'); Events = @('camera.restore'); Intermediate = $false },
     [pscustomobject]@{ Name = 'transient-failure'; Pred = 'reentry'; Action = 'audited-segmentation-failure'; Controls = @(); Events = @('service.failure'); Intermediate = $false },
     [pscustomobject]@{ Name = 'retry-success'; Pred = 'transient-failure'; Action = 'retry-segmentation'; Controls = @('portrait-retry'); Events = @('service.success'); Intermediate = $false },
-    [pscustomobject]@{ Name = 'save-success'; Pred = 'retry-success'; Action = 'save-success'; Controls = @('portrait-save'); Events = @(); Intermediate = $false }
+    [pscustomobject]@{ Name = 'save-success'; Pred = 'retry-success'; Action = 'save-success'; Controls = @('portrait-save', 'system-photo-save-allow'); Events = @(); Intermediate = $false }
   )
   $runReceiptPath = [string](Require-Property $manifest 'runReceiptPath')
   Require-AbsoluteFile $runReceiptPath 'task 14 run receipt'
@@ -1784,6 +1843,12 @@ if ($task -eq 14 -and $sourceKind -eq 'harness') {
           (@(
               '-t', [string]$device.transportId,
               'shell', 'aa', 'dump', '-a'
+            ) -join "`0")) -or
+      ($processType -ceq 'source.save-dialog.wait-aa' -and
+        ($processArgv -join "`0") -cne
+          (@(
+              '-t', [string]$device.transportId,
+              'shell', 'aa', 'dump', '-a'
             ) -join "`0"))) {
       Fail "task 14 process event '$($processEvent.eventId)' uses an unreviewed HDC argv."
     }
@@ -1800,7 +1865,7 @@ if ($task -eq 14 -and $sourceKind -eq 'harness') {
     'launcher', 'permission-dialog', 'initial', 'preset-selected',
     'custom-background-swiped', 'picker-intermediate', 'custom-background-cancel',
     'rear-camera', 'reentry-launcher', 'reentry', 'transient-failure',
-    'retry-success', 'save-success'
+    'retry-success', 'save-dialog', 'save-success'
   )
   $actualCaptureNames = @($captureEvents | ForEach-Object { [string]$_.captureName })
   $actualCaptureNameSet = (@($actualCaptureNames | Sort-Object) -join "`0")
@@ -1942,6 +2007,57 @@ if ($task -eq 14 -and $sourceKind -eq 'harness') {
     $permissionGrantedByName['ohos.permission.READ_IMAGEVIDEO'] -ne -1) {
     Fail 'task 14 system dialog must grant CAMERA only.'
   }
+  $saveDialogCapture = @($captureEvents | Where-Object {
+      [string]$_.captureName -ceq 'save-dialog' -and
+      [string]$_.stateName -ceq 'save-success'
+    })
+  $saveCommands = @($transcriptLines | Where-Object {
+      [string]$_.type -ceq 'command' -and [string]$_.stateName -ceq 'save-success'
+    })
+  $saveWaitEvents = @($transcriptLines | Where-Object {
+      [string]$_.type -ceq 'source.save-dialog.wait-aa'
+    })
+  $firstMediaAfter = @($transcriptLines | Where-Object {
+      [string]$_.type -ceq 'source.media.after.level0' -and
+      [string]$_.stateName -ceq 'save-success'
+    } | Select-Object -First 1)
+  $saveFirstSource = if ($saveDialogCapture.Count -eq 1) {
+    $eventsById[[string]@($saveDialogCapture[0].sourceCommandEventIds)[0]]
+  } else { $null }
+  $saveLastSource = if ($saveDialogCapture.Count -eq 1) {
+    $ids = @($saveDialogCapture[0].sourceCommandEventIds)
+    $eventsById[[string]$ids[-1]]
+  } else { $null }
+  if ($saveDialogCapture.Count -ne 1 -or $saveCommands.Count -ne 2 -or
+    $saveWaitEvents.Count -lt 1 -or $saveWaitEvents.Count -gt 40 -or
+    $firstMediaAfter.Count -ne 1 -or $null -eq $saveFirstSource -or
+    $null -eq $saveLastSource -or
+    @($saveWaitEvents | Where-Object {
+        [string]$_.stateName -cne 'save-success' -or
+        [int]$_.timeoutMilliseconds -lt 1 -or [int]$_.timeoutMilliseconds -gt 10000
+      }).Count -gt 0 -or
+    [string]$saveCommands[0].controlId -cne 'portrait-save' -or
+    [string]$saveCommands[1].controlId -cne 'system-photo-save-allow' -or
+    [int]$saveCommands[0].sequence -ge [int]$saveWaitEvents[0].sequence -or
+    [int]$saveWaitEvents[-1].sequence -ge [int]$saveFirstSource.sequence -or
+    [int]$saveLastSource.sequence -ge [int]$saveCommands[1].sequence -or
+    [int]$saveCommands[1].sequence -ge [int]$firstMediaAfter[0].sequence) {
+    Fail 'task 14 photo-save permission evidence is missing, reordered, or unbound.'
+  }
+  $saveWaitBeforeFinal = if ($saveWaitEvents.Count -gt 1) {
+    @($saveWaitEvents[0..($saveWaitEvents.Count - 2)])
+  } else { @() }
+  $saveWaitReady = Test-SystemPhotoSaveForeground ([string]$saveWaitEvents[-1].stdout)
+  $saveCaptureReady = Test-SystemPhotoSaveForeground (
+    [IO.File]::ReadAllText([string]$saveDialogCapture[0].foregroundAaPath)
+  )
+  if (@($saveWaitBeforeFinal | Where-Object {
+        Test-SystemPhotoSaveForeground ([string]$_.stdout)
+      }).Count -gt 0 -or
+    -not $saveWaitReady -or -not $saveCaptureReady) {
+    Fail 'task 14 photo-save readiness/capture is not the first foreground reviewed system dialog.'
+  }
+  [void](Get-SystemPhotoSaveTarget ([string]$saveDialogCapture[0].layoutPath))
   $permissionBeforeEvent = $eventsById[[string]$steps[-1].eventId]
   $expectedPermissionArgv =
     $targetPrefix + @('shell', 'atm', 'dump', '-t', '-b', 'com.yuhaofeng.mih')
@@ -2235,6 +2351,37 @@ if ($task -eq 14 -and $sourceKind -eq 'harness') {
         }
         continue
       }
+      if ($expectedControl -eq 'system-photo-save-allow') {
+        $targetCapture = $eventsById[$targetCaptureId]
+        if ([string]$targetCapture.captureName -cne 'save-dialog' -or
+          [string](Require-Property $target 'selector') -cne
+            'structural:system-photo-save-dialog/allow-button' -or
+          [string](Require-Property $target 'ancestorKey') -cne 'SaveUIExtensionAbility' -or
+          [string](Require-Property $target 'systemBundle') -cne 'com.huawei.hmos.photos' -or
+          -not (Test-SystemPhotoSaveForeground (
+              [IO.File]::ReadAllText([string]$targetCapture.foregroundAaPath)))) {
+          Fail 'task 14 photo-save command is not bound to the reviewed system dialog.'
+        }
+        $systemTarget = Get-SystemPhotoSaveTarget $targetLayout
+        $saveImage = [Drawing.Image]::FromFile([string]$targetCapture.rawScreenshotPath)
+        try {
+          if ($systemTarget.Bounds.Left -lt 0 -or $systemTarget.Bounds.Top -lt 0 -or
+            $systemTarget.Bounds.Right -gt $saveImage.Width -or
+            $systemTarget.Bounds.Bottom -gt $saveImage.Height) {
+            Fail 'task 14 photo-save target bounds are outside the signed screenshot.'
+          }
+        } finally { $saveImage.Dispose() }
+        $x = [int](Require-Property $target 'x')
+        $y = [int](Require-Property $target 'y')
+        if ([string](Require-Property $target 'bounds') -cne $systemTarget.BoundsText -or
+          $x -ne [int](($systemTarget.Bounds.Left + $systemTarget.Bounds.Right) / 2) -or
+          $y -ne [int](($systemTarget.Bounds.Top + $systemTarget.Bounds.Bottom) / 2) -or
+          ($argv -join "`0") -cne
+            (@('-t', $targetId, 'shell', 'uitest', 'uiInput', 'click', "$x", "$y") -join "`0")) {
+          Fail 'task 14 photo-save click misses the signed structural Allow target.'
+        }
+        continue
+      }
       try { $targetTree = Get-Content -LiteralPath $targetLayout -Raw -Encoding utf8 | ConvertFrom-Json } catch {
         Fail "task 14 state '$($contract.Name)' target layout is invalid."
       }
@@ -2405,13 +2552,13 @@ if ($task -eq 14 -and $sourceKind -eq 'harness') {
       $failure = $runtimeByType['service.failure'][0]
       if ([string]$failure.errorCode -cne 'SEGMENTATION_FAILED' -or
         [string]::IsNullOrWhiteSpace([string]$failure.preservedResultFingerprint)) {
-        Fail 'task 14 transient failure lacks the reviewed service error and prior real result fingerprint.'
+        Fail 'task 14 transient failure lacks the reviewed service error and prior harness result fingerprint.'
       }
     }
     if ($contract.Name -eq 'retry-success') {
       $success = $runtimeByType['service.success'][0]
       if ([string]::IsNullOrWhiteSpace([string]$success.resultFingerprint)) {
-        Fail 'task 14 Retry success lacks a fingerprint from the delegated real result.'
+        Fail 'task 14 Retry success lacks a fingerprint from the reviewed harness result.'
       }
     }
     if ($contract.Name -eq 'save-success') {
@@ -2582,8 +2729,12 @@ if ($task -eq 14 -and $sourceKind -eq 'harness') {
   }
   $hookBlocks = @{
     aboutToAppear = @('RuntimeHarnessAdapter.fromParams(params)', 'RUNTIME_UI_HARNESS_ROUTE_HOOK_BEGIN')
-    runWorkflowAsync = @('runtimeHarnessAdapter.run(aiService, workflow, this.aiRunInputs())',
-      'RUNTIME_UI_HARNESS_SERVICE_HOOK_BEGIN')
+    runWorkflowAsync = @(
+      'const frameInputReady = this.runtimeHarnessAdapter !== undefined ||',
+      'RUNTIME_UI_HARNESS_FRAME_HOOK_BEGIN',
+      'runtimeHarnessAdapter.run(aiService, workflow, this.aiRunInputs())',
+      'RUNTIME_UI_HARNESS_SERVICE_HOOK_BEGIN'
+    )
     applyLiveCameraPreviewResult = @('runtimeHarnessAdapter?.observeCamera(this.liveCameraPosition)',
       'RUNTIME_UI_HARNESS_CAMERA_HOOK_BEGIN')
     retryLiveSegmentation = @('runtimeHarnessAdapter?.allowRetry()',
@@ -2616,13 +2767,20 @@ if ($task -eq 14 -and $sourceKind -eq 'harness') {
     [StringComparison]::Ordinal)
   $serviceEnd = $serviceBlock.IndexOf('RUNTIME_UI_HARNESS_SERVICE_HOOK_END',
     [StringComparison]::Ordinal)
+  $frameBegin = $serviceBlock.IndexOf('RUNTIME_UI_HARNESS_FRAME_HOOK_BEGIN',
+    [StringComparison]::Ordinal)
+  $frameEnd = $serviceBlock.IndexOf('RUNTIME_UI_HARNESS_FRAME_HOOK_END',
+    [StringComparison]::Ordinal)
+  $frameGuardIndex = $serviceBlock.IndexOf('if (!frameInputReady)',
+    [StringComparison]::Ordinal)
   $tryIndex = $serviceBlock.IndexOf('try {', [StringComparison]::Ordinal)
   $catchIndex = $serviceBlock.LastIndexOf('catch', [StringComparison]::Ordinal)
   if (@([regex]::Matches($serviceHeadBlock, [regex]::Escape($realRun))).Count -ne 1 -or
     @([regex]::Matches($serviceBlock, [regex]::Escape($realRun))).Count -ne 1 -or
-    $tryIndex -lt 0 -or $serviceBegin -le $tryIndex -or
+    $tryIndex -lt 0 -or $frameBegin -le $tryIndex -or $frameEnd -le $frameBegin -or
+    $frameGuardIndex -le $frameEnd -or $serviceBegin -le $frameGuardIndex -or
     $serviceEnd -le $serviceBegin -or $catchIndex -le $serviceEnd) {
-    Fail 'task 14 service adapter must replace the unique real run inside its try/catch.'
+    Fail 'task 14 frame/service adapters must remain ordered inside the real try/catch.'
   }
   $cameraBlock = Get-ArkTsMethodBlock $featureCurrent 'applyLiveCameraPreviewResult' $true
   $cameraGuardIndex = $cameraBlock.IndexOf('if (!result.ok)', [StringComparison]::Ordinal)
@@ -2682,6 +2840,15 @@ if ($task -eq 14 -and $sourceKind -eq 'harness') {
     },
     [pscustomobject]@{
       Name = 'runWorkflowAsync'
+      Needle = "      // RUNTIME_UI_HARNESS_FRAME_HOOK_BEGIN`n" +
+        "      const frameInputReady = this.runtimeHarnessAdapter !== undefined ||`n" +
+        "        await this.prepareLiveFrameImageInput(context, runtimeRequestId, liveGeneration);`n" +
+        "      // RUNTIME_UI_HARNESS_FRAME_HOOK_END"
+      Replacement =
+        '      const frameInputReady = await this.prepareLiveFrameImageInput(context, runtimeRequestId, liveGeneration);'
+    },
+    [pscustomobject]@{
+      Name = 'runWorkflowAsync'
       Needle = "      // RUNTIME_UI_HARNESS_SERVICE_HOOK_BEGIN`n" +
         "      const result: AiRunResult = this.runtimeHarnessAdapter === undefined ?`n" +
         "        await aiService.run(workflow, this.aiRunInputs()) :`n" +
@@ -2705,21 +2872,24 @@ if ($task -eq 14 -and $sourceKind -eq 'harness') {
       Replacement = ''
     }
   )
-  foreach ($transform in $canonicalTransforms) {
-    $headMethod = Get-ArkTsMethodBlock $featureHead $transform.Name $true
-    $currentMethod = Get-ArkTsMethodBlock $featureCurrent $transform.Name $true
-    if (@([regex]::Matches(
-          $currentMethod,
-          [regex]::Escape([string]$transform.Needle)
-        )).Count -ne 1) {
-      Fail "task 14 canonical hook block in '$($transform.Name)' is not exact."
+  foreach ($methodTransforms in @($canonicalTransforms | Group-Object Name)) {
+    $methodName = [string]$methodTransforms.Name
+    $headMethod = Get-ArkTsMethodBlock $featureHead $methodName $true
+    $restoredMethod = Get-ArkTsMethodBlock $featureCurrent $methodName $true
+    foreach ($transform in @($methodTransforms.Group)) {
+      if (@([regex]::Matches(
+            $restoredMethod,
+            [regex]::Escape([string]$transform.Needle)
+          )).Count -ne 1) {
+        Fail "task 14 canonical hook block in '$methodName' is not exact."
+      }
+      $restoredMethod = $restoredMethod.Replace(
+        [string]$transform.Needle,
+        [string]$transform.Replacement
+      )
     }
-    $restoredMethod = $currentMethod.Replace(
-      [string]$transform.Needle,
-      [string]$transform.Replacement
-    )
     if ((Get-TextSha256 $restoredMethod) -cne (Get-TextSha256 $headMethod)) {
-      Fail "task 14 '$($transform.Name)' is not HEAD plus only its canonical hook transform."
+      Fail "task 14 '$methodName' is not HEAD plus only its canonical hook transforms."
     }
   }
   $featureSection = [regex]::Match(
@@ -2738,6 +2908,11 @@ if ($task -eq 14 -and $sourceKind -eq 'harness') {
     '+    // RUNTIME_UI_HARNESS_ROUTE_HOOK_BEGIN',
     '+    this.runtimeHarnessAdapter = RuntimeHarnessAdapter.fromParams(params);',
     '+    // RUNTIME_UI_HARNESS_ROUTE_HOOK_END',
+    '-      const frameInputReady = await this.prepareLiveFrameImageInput(context, runtimeRequestId, liveGeneration);',
+    '+      // RUNTIME_UI_HARNESS_FRAME_HOOK_BEGIN',
+    '+      const frameInputReady = this.runtimeHarnessAdapter !== undefined ||',
+    '+        await this.prepareLiveFrameImageInput(context, runtimeRequestId, liveGeneration);',
+    '+      // RUNTIME_UI_HARNESS_FRAME_HOOK_END',
     '-      const result: AiRunResult = await aiService.run(workflow, this.aiRunInputs());',
     '+      // RUNTIME_UI_HARNESS_SERVICE_HOOK_BEGIN',
     '+      const result: AiRunResult = this.runtimeHarnessAdapter === undefined ?',

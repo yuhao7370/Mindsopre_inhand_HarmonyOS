@@ -445,6 +445,99 @@ function Wait-SystemCameraPermission([string]$StateName, [int]$TimeoutSeconds = 
   Fail 'timed out waiting for the foreground system camera permission dialog.'
 }
 
+function Test-SystemPhotoSaveForeground([string]$AaText) {
+  $records = @([regex]::Matches(
+      $AaText,
+      '(?ms)^[ \t]*uri \[/com\.huawei\.hmos\.photos/phone_photos/' +
+        'SaveUIExtensionAbility\d+\]\s*\r?\n' +
+        '(?<body>.*?)(?=^[ \t]*uri \[|^[ \t]*PendingWantRecords:|\z)'
+    ))
+  $foregroundRecords = @($records | Where-Object {
+      $body = $_.Groups['body'].Value
+      $body -match '(?m)^[ \t]*AbilityRecord ID #[^\r\n]*state #FOREGROUND[^\r\n]*\r?$' -and
+      $body -match '(?m)^[ \t]*main name \[SaveUIExtensionAbility\][ \t]*\r?$' -and
+      $body -match '(?m)^[ \t]*bundle name \[com\.huawei\.hmos\.photos\][ \t]*\r?$' -and
+      $body -match '(?m)^[ \t]*ability type \[UIEXTENSION\][ \t]*\r?$' -and
+      $body -match '(?m)^[ \t]*app state #FOREGROUND[ \t]*\r?$' -and
+      $body -match "(?m)^[ \t]*root host bundle name \[$([regex]::Escape($BundleName))\][ \t]*\r?$" -and
+      $body -match "(?m)^[ \t]*root host ability name \[$([regex]::Escape($AbilityName))\][ \t]*\r?$"
+    })
+  return $foregroundRecords.Count -eq 1
+}
+
+function Wait-SystemPhotoSavePermission([string]$StateName, [int]$TimeoutSeconds = 10) {
+  $script:captureName = 'save-dialog-wait'
+  $deadline = [datetime]::UtcNow.AddSeconds($TimeoutSeconds)
+  do {
+    $remainingMilliseconds = [int][Math]::Floor(($deadline - [datetime]::UtcNow).TotalMilliseconds)
+    if ($remainingMilliseconds -le 0) { break }
+    $probe = Invoke-Hdc 'source.save-dialog.wait-aa' ($targetPrefix + @(
+        'shell', 'aa', 'dump', '-a'
+      )) $StateName $null $false ([Math]::Min($remainingMilliseconds, 10000))
+    if (Test-SystemPhotoSaveForeground $probe.Stdout) { return }
+    Start-Sleep -Milliseconds 300
+  } while ([datetime]::UtcNow -lt $deadline)
+  Fail 'timed out waiting for the foreground system photo-save permission dialog.'
+}
+
+function Resolve-SystemPhotoSaveTarget([object]$Capture) {
+  $layoutText = [Text.Encoding]::GetEncoding(28591).GetString(
+    [IO.File]::ReadAllBytes([string]$Capture.layoutPath)
+  )
+  $controlId = 'advanced_dialog_button_1'
+  if ([regex]::Matches($layoutText, '"type"\s*:\s*"ModalPage"').Count -ne 1 -or
+    [regex]::Matches($layoutText, '"type"\s*:\s*"UIExtensionComponent"').Count -ne 1) {
+    Fail 'photo-save dialog does not expose the reviewed modal UI-extension structure.'
+  }
+  $attributeObjects = @([regex]::Matches(
+      $layoutText,
+      '(?s)"attributes"\s*:\s*\{(?<attrs>[^{}]*?"id"\s*:\s*"' +
+        [regex]::Escape($controlId) + '"[^{}]*?)\}\s*,\s*"children"'
+    ))
+  if ($attributeObjects.Count -ne 1) {
+    Fail 'photo-save dialog must expose one structural Allow button.'
+  }
+  $attributes = $attributeObjects[0].Groups['attrs'].Value
+  function Save-Attribute([string]$Name) {
+    $matches = @([regex]::Matches(
+        $attributes,
+        '"' + [regex]::Escape($Name) + '"\s*:\s*"(?<value>[^"]*)"'
+      ))
+    if ($matches.Count -ne 1) { Fail "photo-save Allow button lacks unique '$Name'." }
+    return $matches[0].Groups['value'].Value
+  }
+  $boundsText = Save-Attribute 'bounds'
+  if ((Save-Attribute 'key') -cne $controlId -or
+    (Save-Attribute 'type') -cne 'Button' -or
+    (Save-Attribute 'clickable') -cne 'true' -or
+    (Save-Attribute 'enabled') -cne 'true' -or
+    (Save-Attribute 'visible') -cne 'true' -or
+    $boundsText -notmatch '^\[(\d+),(\d+)\]\[(\d+),(\d+)\]$') {
+    Fail 'photo-save Allow button is not the reviewed visible clickable system control.'
+  }
+  $left = [int]$Matches[1]; $top = [int]$Matches[2]
+  $right = [int]$Matches[3]; $bottom = [int]$Matches[4]
+  $image = [Drawing.Image]::FromFile([string]$Capture.rawScreenshotPath)
+  try {
+    if ($right -le $left -or $bottom -le $top -or
+      $left -lt 0 -or $top -lt 0 -or $right -gt $image.Width -or $bottom -gt $image.Height) {
+      Fail 'photo-save Allow button bounds are empty or outside the signed screenshot.'
+    }
+  } finally { $image.Dispose() }
+  return [ordered]@{
+    selector = 'structural:system-photo-save-dialog/allow-button'
+    controlId = 'system-photo-save-allow'
+    ancestorKey = 'SaveUIExtensionAbility'
+    systemBundle = 'com.huawei.hmos.photos'
+    bounds = $boundsText
+    x = [int](($left + $right) / 2)
+    y = [int](($top + $bottom) / 2)
+    layoutPath = [string]$Capture.layoutPath
+    layoutSha256 = [string]$Capture.layoutSha256
+    captureEventId = [string]$Capture.eventId
+  }
+}
+
 function Get-BoundsTarget(
   [object]$Node,
   [string]$LogicalId,
@@ -780,7 +873,10 @@ $actionArgv = @{
   )
   'transient-failure' = @()
   'retry-success' = @(,@('shell', 'uitest', 'uiInput', 'click', '0', '0'))
-  'save-success' = @(,@('shell', 'uitest', 'uiInput', 'click', '0', '0'))
+  'save-success' = @(
+    ,@('shell', 'uitest', 'uiInput', 'click', '0', '0'),
+    ,@('shell', 'uitest', 'uiInput', 'click', '0', '0')
+  )
 }
 $controlIds = @{
   'initial' = @('harness-portrait-route', 'system-camera-permission-allow')
@@ -792,7 +888,7 @@ $controlIds = @{
   'reentry' = @('key:Back', 'harness-portrait-route')
   'transient-failure' = @()
   'retry-success' = @('portrait-retry')
-  'save-success' = @('portrait-save')
+  'save-success' = @('portrait-save', 'system-photo-save-allow')
 }
 $background2Zh = (-join @(0x80CC, 0x666F | ForEach-Object { [char]$_ })) + ' 2'
 $customZh = -join @(0x81EA, 0x5B9A, 0x4E49 | ForEach-Object { [char]$_ })
@@ -883,6 +979,11 @@ foreach ($stateName in $stateOrder) {
       $argv[-2] = [string]$targetInfo.x
       $argv[-1] = [string]$targetInfo.y
       $extra.target = $targetInfo
+    } elseif ($controlId -eq 'system-photo-save-allow') {
+      $targetInfo = Resolve-SystemPhotoSaveTarget $currentCapture
+      $argv[-2] = [string]$targetInfo.x
+      $argv[-1] = [string]$targetInfo.y
+      $extra.target = $targetInfo
     } elseif ($controlId -eq 'portrait-switch-camera') {
       $targetInfo = Resolve-ToolbarTarget $currentCapture $controlId $false
       $argv[-2] = [string]$targetInfo.x
@@ -939,9 +1040,17 @@ foreach ($stateName in $stateOrder) {
       $currentCapture = Capture-PickerState $stateName
     } elseif ($stateName -eq 'reentry' -and $index -eq 0) {
       $currentCapture = Capture-State 'reentry-launcher' $stateName
+    } elseif ($stateName -eq 'save-success' -and $index -eq 0) {
+      Wait-SystemPhotoSavePermission $stateName
+      $currentCapture = Capture-State 'save-dialog' $stateName
+    } elseif ($stateName -eq 'save-success' -and $index -eq 1) {
+      Start-Sleep -Milliseconds 500
     }
   }
-  [void](Wait-RuntimeEvents $stateName @($expectedRuntimeEventTypes[$stateName]))
+  $runtimeEvents = @(Wait-RuntimeEvents $stateName @($expectedRuntimeEventTypes[$stateName]))
+  if ($runtimeEvents.Count -gt 0) {
+    Start-Sleep -Milliseconds 500
+  }
   if ($stateName -eq 'save-success') {
     $mediaDelta = Wait-NewMediaAsset $mediaBefore $stateName
     [void](Receive-MediaAsset $mediaDelta.Added $stateName)

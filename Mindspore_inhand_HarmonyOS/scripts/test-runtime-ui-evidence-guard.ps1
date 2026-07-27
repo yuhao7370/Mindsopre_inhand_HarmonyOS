@@ -298,6 +298,7 @@ public static class MockHdc {
       string capture = Environment.GetEnvironmentVariable("RUNTIME_EVIDENCE_CAPTURE_NAME") ?? "";
       string evidence = Environment.GetEnvironmentVariable("RUNTIME_EVIDENCE_DIRECTORY") ?? "";
       string waitMarker = Path.Combine(evidence, "mock-permission-ready.txt");
+      string saveWaitMarker = Path.Combine(evidence, "mock-save-dialog-ready.txt");
       if (capture == "permission-wait" && !File.Exists(waitMarker)) {
         File.WriteAllText(waitMarker, "next poll is ready");
         Console.WriteLine("Mission app name [com.yuhaofeng.mih] main name [EntryAbility] state #FOREGROUND");
@@ -309,8 +310,23 @@ public static class MockHdc {
           "      main name [PermissionGrantAbility]\n" +
           "      bundle name [com.huawei.hmos.security.privacycenter]\n" +
           "      ability type [UIEXTENSION]\n" +
+           "      app state #FOREGROUND\n" +
+           "        isKeepAlive: false\n" +
+           "    PendingWantRecords:");
+      } else if (capture == "save-dialog-wait" && !File.Exists(saveWaitMarker)) {
+        File.WriteAllText(saveWaitMarker, "next poll is ready");
+        Console.WriteLine("Mission app name [com.yuhaofeng.mih] main name [EntryAbility] state #FOREGROUND");
+      } else if (capture == "save-dialog" || capture == "save-dialog-wait") {
+        Console.WriteLine(
+          "  ExtensionRecords:\n" +
+          "    uri [/com.huawei.hmos.photos/phone_photos/SaveUIExtensionAbility12]\n" +
+          "      AbilityRecord ID #53   state #FOREGROUND\n" +
+          "      main name [SaveUIExtensionAbility]\n" +
+          "      bundle name [com.huawei.hmos.photos]\n" +
+          "      ability type [UIEXTENSION]\n" +
           "      app state #FOREGROUND\n" +
-          "        isKeepAlive: false\n" +
+          "      root host bundle name [com.yuhaofeng.mih]\n" +
+          "      root host ability name [EntryAbility]\n" +
           "    PendingWantRecords:");
       } else {
         Console.WriteLine(capture == "picker-intermediate"
@@ -356,7 +372,9 @@ public static class MockHdc {
       Console.WriteLine("FileTransfer finish");
       return 0;
     }
-    if (state == "save-success" && joined.Contains(" uitest uiInput click ")) {
+    if (state == "save-success" && joined.Contains(" uitest uiInput click ") &&
+      (Environment.GetEnvironmentVariable("RUNTIME_EVIDENCE_CAPTURE_NAME") ?? "") ==
+        "save-dialog") {
       string evidence = Environment.GetEnvironmentVariable("RUNTIME_EVIDENCE_DIRECTORY") ?? "";
       File.WriteAllText(Path.Combine(evidence, "mock-media-created.txt"), "created");
       Console.WriteLine("No Error");
@@ -643,6 +661,8 @@ function Convert-FixtureToTask14Harness([string]$ManifestPath, [double]$FontScal
       "  aboutToAppear(): void {`n" +
       "    const params = router.getParams() as FeatureRuntimeParams;`n  }`n" +
       "  private async runWorkflowAsync(): Promise<void> {`n    try {`n" +
+      "      const frameInputReady = await this.prepareLiveFrameImageInput(context, runtimeRequestId, liveGeneration);`n" +
+      "      if (!frameInputReady) { return; }`n" +
       "      if (!this.isRuntimeRequestCurrent(runtimeRequestId)) { return; }`n" +
       "      const result: AiRunResult = await aiService.run(workflow, this.aiRunInputs());`n" +
       "    } catch (_) {}`n  }`n" +
@@ -682,6 +702,13 @@ function Convert-FixtureToTask14Harness([string]$ManifestPath, [double]$FontScal
       "    // RUNTIME_UI_HARNESS_ROUTE_HOOK_BEGIN`n" +
       "    this.runtimeHarnessAdapter = RuntimeHarnessAdapter.fromParams(params);`n" +
       "    // RUNTIME_UI_HARNESS_ROUTE_HOOK_END"
+  )
+  $featureSource = $featureSource.Replace(
+    "      const frameInputReady = await this.prepareLiveFrameImageInput(context, runtimeRequestId, liveGeneration);",
+    "      // RUNTIME_UI_HARNESS_FRAME_HOOK_BEGIN`n" +
+      "      const frameInputReady = this.runtimeHarnessAdapter !== undefined ||`n" +
+      "        await this.prepareLiveFrameImageInput(context, runtimeRequestId, liveGeneration);`n" +
+      "      // RUNTIME_UI_HARNESS_FRAME_HOOK_END"
   )
   $featureSource = $featureSource.Replace(
     "      const result: AiRunResult = await aiService.run(workflow, this.aiRunInputs());",
@@ -963,6 +990,7 @@ function Convert-FixtureToTask14Harness([string]$ManifestPath, [double]$FontScal
   $pickerShotPath = Join-Path $fixtureRoot 'picker-intermediate.jpeg'
   $pickerAaPath = Join-Path $fixtureRoot 'picker-intermediate-aa.txt'
   $permissionDialogPath = Join-Path $fixtureRoot 'permission-dialog.json'
+  $saveDialogPath = Join-Path $fixtureRoot 'save-dialog.json'
   [IO.File]::WriteAllText($pickerLayoutPath, '{"attributes":{"type":"Picker","bounds":"[0,0][1320,2856]"},"children":[]}', $utf8)
   [IO.File]::WriteAllText(
     $permissionDialogPath,
@@ -980,9 +1008,21 @@ function Convert-FixtureToTask14Harness([string]$ManifestPath, [double]$FontScal
   if ($permissionFixtureParsed) {
     throw 'Permission dialog fixture must remain intentionally invalid JSON.'
   }
+  [IO.File]::WriteAllText(
+    $saveDialogPath,
+    '{"attributes":{"type":"root"},"children":[' +
+      '{"attributes":{"type":"ModalPage"},"children":[' +
+      '{"attributes":{"type":"UIExtensionComponent"},"children":[' +
+      '{"attributes":{"bounds":"[688,1648][1208,1788]",' +
+      '"clickable":"true","enabled":"true","id":"advanced_dialog_button_1",' +
+      '"key":"advanced_dialog_button_1","type":"Button","visible":"true"},' +
+      '"children":[]}]}]}],"broken":"unterminated}',
+    $utf8
+  )
   Write-Jpeg $pickerShotPath 1320 2856 'picker'
   Write-Jpeg (Join-Path $fixtureRoot 'launcher.jpeg') 1320 2856 'launcher'
   Write-Jpeg (Join-Path $fixtureRoot 'permission-dialog.jpeg') 1320 2856 'permission-dialog'
+  Write-Jpeg (Join-Path $fixtureRoot 'save-dialog.jpeg') 1320 2856 'save-dialog'
   [IO.File]::WriteAllText($pickerAaPath, 'com.ohos.photos PickerAbility state #FOREGROUND', $utf8)
   Copy-Item -LiteralPath (Join-Path $fixtureRoot 'preset-selected.json') `
     -Destination (Join-Path $fixtureRoot 'custom-background-swiped.json')
@@ -1613,6 +1653,62 @@ function Invoke-Task14CoreMutations {
       $event.stdoutSha256 = Get-BytesSha256 $utf8.GetBytes($text)
     }
   }
+  Assert-Task14HarnessRejected 'task14-save-dialog-capture-removed' {
+    param($manifest, $root)
+    Rewrite-Task14Transcript $manifest {
+      param($events)
+      @($events | Where-Object {
+          [string]$_.captureName -eq 'save-dialog' -and [string]$_.type -eq 'capture'
+        })[0].type = 'capture.removed'
+    }
+  }
+  Assert-Task14HarnessRejected 'task14-save-dialog-poll-argv' {
+    param($manifest, $root)
+    Rewrite-Task14Transcript $manifest {
+      param($events)
+      @($events | Where-Object {
+          [string]$_.type -eq 'source.save-dialog.wait-aa'
+        })[0].argv[-1] = '--forged'
+    }
+  }
+  Assert-Task14HarnessRejected 'task14-save-dialog-foreground-downgrade' {
+    param($manifest, $root)
+    $run = Get-Content -LiteralPath ([string]$manifest.runReceiptPath) -Raw | ConvertFrom-Json
+    $events = @([IO.File]::ReadAllLines([string]$run.transcriptPath) |
+        ForEach-Object { $_ | ConvertFrom-Json })
+    $capture = @($events | Where-Object { [string]$_.captureName -eq 'save-dialog' })[0]
+    $path = [string]$capture.foregroundAaPath
+    $text = [IO.File]::ReadAllText($path).Replace(
+      'ability type [UIEXTENSION]',
+      'ability type [SERVICE]'
+    )
+    [IO.File]::WriteAllText($path, $text, $utf8)
+    $hash = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
+    Rewrite-Task14Transcript $manifest {
+      param($rewritten)
+      $saveCapture = @($rewritten | Where-Object {
+          [string]$_.captureName -eq 'save-dialog'
+        })[0]
+      $saveCapture.foregroundAaSha256 = $hash
+      $aa = @($rewritten | Where-Object {
+          [string]$_.eventId -eq [string]$saveCapture.sourceCommandEventIds[4]
+        })[0]
+      $aa.stdout = $text
+      $aa.stdoutSha256 = Get-BytesSha256 $utf8.GetBytes($text)
+    }
+  }
+  Assert-Task14HarnessRejected 'task14-save-dialog-click-off-center' {
+    param($manifest, $root)
+    Rewrite-Task14Transcript $manifest {
+      param($events)
+      $command = @($events | Where-Object {
+          [string]$_.stateName -eq 'save-success' -and
+          [string]$_.controlId -eq 'system-photo-save-allow'
+        })[0]
+      $command.target.x = [int]$command.target.x + 10
+      $command.argv[-2] = [string]$command.target.x
+    } $true
+  }
   Assert-Task14HarnessRejected 'task14-prewritten-layout-not-from-runner' {
     param($manifest, $root)
     $state = $manifest.states[1]
@@ -1654,10 +1750,32 @@ function Invoke-Task14CoreMutations {
     $adapterPath = Join-Path ([string]$manifest.repositoryRoot) `
       'entry/src/main/ets/runtime/RuntimeHarnessAdapter.ets'
     $source = [IO.File]::ReadAllText($adapterPath).Replace(
-      '    const result = await aiService.run(workflow, inputs);',
-      "    const result = fakeAiRunResult;"
+      '    const result = this.syntheticSegmentationResult(inputs);',
+      '    const result = fakeAiRunResult;'
     )
     [IO.File]::WriteAllText($adapterPath, $source, $utf8)
+    Sync-Task14CandidateBinding $manifest
+  }
+  Assert-Task14HarnessRejected 'task14-adapter-retry-recovery-removed' {
+    param($manifest, $root)
+    $adapterPath = Join-Path ([string]$manifest.repositoryRoot) `
+      'entry/src/main/ets/runtime/RuntimeHarnessAdapter.ets'
+    $source = [IO.File]::ReadAllText($adapterPath).Replace(
+      '      this.recovered = true;',
+      '      this.recovered = false;'
+    )
+    [IO.File]::WriteAllText($adapterPath, $source, $utf8)
+    Sync-Task14CandidateBinding $manifest
+  }
+  Assert-Task14HarnessRejected 'task14-frame-bypass-leaks-to-production' {
+    param($manifest, $root)
+    $featurePath = Join-Path ([string]$manifest.repositoryRoot) `
+      'entry/src/main/ets/pages/FeatureRuntimePage.ets'
+    $source = [IO.File]::ReadAllText($featurePath).Replace(
+      '      const frameInputReady = this.runtimeHarnessAdapter !== undefined ||',
+      '      const frameInputReady = true ||'
+    )
+    [IO.File]::WriteAllText($featurePath, $source, $utf8)
     Sync-Task14CandidateBinding $manifest
   }
   Assert-Task14HarnessRejected 'task14-harness-page-decoy-ui' {

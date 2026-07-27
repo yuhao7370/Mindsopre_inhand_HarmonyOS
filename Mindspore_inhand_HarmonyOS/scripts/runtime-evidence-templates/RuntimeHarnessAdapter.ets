@@ -1,6 +1,7 @@
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { FeatureWorkflow } from '../features/runtime/FeatureWorkflowCatalog';
-import { AiRunInputs, AiRunResult, DefaultAiService } from '../services/ai/AiService';
+import { AiRunInputs, AiRunResult, AiSegmentationData, DefaultAiService } from '../services/ai/AiService';
+import { SegmentationRectangle, SegmentationResult } from '../services/ai/SegmentationService';
 import { LiveCameraPosition } from '../services/camera/LiveCameraService';
 
 interface RuntimeHarnessParams {
@@ -22,6 +23,7 @@ export class RuntimeHarnessAdapter {
   private readonly session: RuntimeSession;
   private failurePublished: boolean = false;
   private retryAllowed: boolean = false;
+  private recovered: boolean = false;
   private reentrySuccessObserved: boolean = false;
   private restorePublished: boolean = false;
   private failureDueAt: number = 0;
@@ -68,9 +70,11 @@ export class RuntimeHarnessAdapter {
     workflow: FeatureWorkflow,
     inputs: AiRunInputs
   ): Promise<AiRunResult> {
-    if (workflow.aiMethod === 'segmentPerson' && this.instance > 1 &&
-      this.reentrySuccessObserved && !this.failurePublished && !this.retryAllowed &&
-      Date.now() >= this.failureDueAt) {
+    if (workflow.aiMethod !== 'segmentPerson') {
+      return aiService.run(workflow, inputs);
+    }
+    if (this.instance > 1 && this.reentrySuccessObserved && !this.retryAllowed && !this.recovered &&
+      (this.failurePublished || Date.now() >= this.failureDueAt)) {
       const failure: AiRunResult = {
         ok: false,
         code: 'SEGMENTATION_FAILED',
@@ -78,25 +82,67 @@ export class RuntimeHarnessAdapter {
         messageKey: 'feature_runtime_segmentation_failed',
         detailText: 'Runtime evidence transient segmentation failure.'
       };
-      this.failurePublished = true;
-      this.emit('service.failure',
-        `,"errorCode":"${failure.code}","preservedResultFingerprint":"${this.session.lastSuccessFingerprint ?? ''}"`);
+      if (!this.failurePublished) {
+        this.failurePublished = true;
+        this.emit('service.failure',
+          `,"errorCode":"${failure.code}","preservedResultFingerprint":"${this.session.lastSuccessFingerprint ?? ''}"`);
+      }
       return failure;
     }
-    const result = await aiService.run(workflow, inputs);
-    if (workflow.aiMethod === 'segmentPerson' && result.ok) {
-      const fingerprint = this.resultFingerprint(result);
-      this.session.lastSuccessFingerprint = fingerprint;
-      if (this.instance > 1 && !this.reentrySuccessObserved) {
-        this.reentrySuccessObserved = true;
-        this.failureDueAt = Date.now() + 4000;
-        return result;
-      }
-      if (this.instance > 1 && this.retryAllowed) {
-        this.retryAllowed = false;
-        this.emit('service.success', `,"resultFingerprint":"${fingerprint}"`);
-      }
+    const result = this.syntheticSegmentationResult(inputs);
+    const fingerprint = this.resultFingerprint(result);
+    this.session.lastSuccessFingerprint = fingerprint;
+    if (this.instance > 1 && !this.reentrySuccessObserved) {
+      this.reentrySuccessObserved = true;
+      this.failureDueAt = Date.now() + 4000;
+      return result;
     }
+    if (this.instance > 1 && this.retryAllowed) {
+      this.retryAllowed = false;
+      this.recovered = true;
+      this.emit('service.success', `,"resultFingerprint":"${fingerprint}"`);
+    }
+    return result;
+  }
+
+  private syntheticSegmentationResult(inputs: AiRunInputs): AiRunResult {
+    const size = 16;
+    const rgba = new Uint8Array(size * size * 4);
+    for (let offset = 0; offset < rgba.length; offset += 4) {
+      const value = (offset / 4) % 2 === 0 ? 72 : 216;
+      rgba[offset] = value;
+      rgba[offset + 1] = 118;
+      rgba[offset + 2] = 255;
+      rgba[offset + 3] = 255;
+    }
+    const rectangle: SegmentationRectangle = { left: 0, top: 0, width: size, height: size };
+    const segmentation: SegmentationResult = {
+      ok: true,
+      subjectCount: 1,
+      detailCount: 1,
+      foregroundAvailable: true,
+      foregroundImageRgba: rgba.buffer as ArrayBuffer,
+      foregroundImageWidth: size,
+      foregroundImageHeight: size,
+      imageWidth: size,
+      imageHeight: size,
+      rectangles: [rectangle],
+      executionMs: 1
+    };
+    const data: AiSegmentationData = {
+      kind: 'segmentation',
+      imageUri: inputs.imageUri ?? '',
+      backgroundImageUri: inputs.backgroundImageUri ?? '',
+      result: segmentation
+    };
+    const result: AiRunResult = {
+      ok: true,
+      code: 'SEGMENTATION_DONE',
+      aiMethod: 'segmentPerson',
+      messageKey: 'feature_runtime_segmentation_done',
+      detailText: 'Runtime evidence synthetic portrait segmentation.',
+      data: data
+    };
     return result;
   }
 
