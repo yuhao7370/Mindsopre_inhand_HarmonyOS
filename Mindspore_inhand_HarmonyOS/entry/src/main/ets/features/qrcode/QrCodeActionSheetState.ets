@@ -1,5 +1,9 @@
 export type QrCodeSaveSheetAction = 'open' | 'cancel' | 'saveSuccess' | 'saveFailed' | 'backdrop' | 'back';
 
+export function qrCodeSheetActionForNativeDismiss(pressedBack: boolean): QrCodeSaveSheetAction {
+  return pressedBack ? 'back' : 'backdrop';
+}
+
 export function qrCodeSaveSheetVisibleAfterAction(
   currentVisible: boolean,
   action: QrCodeSaveSheetAction

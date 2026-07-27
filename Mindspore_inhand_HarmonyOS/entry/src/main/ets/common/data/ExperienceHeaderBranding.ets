@@ -1,1 +1,1 @@
-export const experienceHeaderHeightVp = 160;
+export const experienceHeaderMinHeightVp: number = 132;

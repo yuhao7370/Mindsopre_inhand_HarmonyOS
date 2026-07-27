@@ -173,16 +173,10 @@ export function liveFrameImageCachePath(cacheDir: string): string {
 
 export function shouldCaptureLiveFrameImage(
   liveCameraInputSelected: boolean,
-  imageInputUri: string,
-  liveCameraActive: boolean
+  _imageInputUri: string,
+  _liveCameraActive: boolean
 ): boolean {
-  if (!liveCameraInputSelected) {
-    return false;
-  }
-  if (imageInputUri.length > 0 && !liveCameraActive) {
-    return false;
-  }
-  return true;
+  return liveCameraInputSelected;
 }
 
 export function shouldRunLiveImageClassificationLoop(

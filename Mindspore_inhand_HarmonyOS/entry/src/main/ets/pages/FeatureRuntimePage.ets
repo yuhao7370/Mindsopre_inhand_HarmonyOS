@@ -5,6 +5,12 @@ import {
   FeatureInputKind,
   FeaturePermissionKind,
   FeatureWorkflow,
+  LiveClassificationRetryAction,
+  LiveGestureRetryAction,
+  LiveObjectDetectionRetryAction,
+  LiveSceneRetryAction,
+  LiveSkeletonRetryAction,
+  LiveSegmentationRetryAction,
   autoStartInputKindForWorkflow,
   fixedLiveCameraPositionForWorkflow,
   inputKindReplacesPrimaryInput,
@@ -35,6 +41,7 @@ import {
   usesAndroidPortraitSegmentationLayout,
   usesAndroidTextRecognitionLayout,
   usesAndroidTextTranslationLayout,
+  usesAndroidLiveSegmentationLayout,
   usesSimpleAndroidLiveLayout,
   visibleInputKindsForWorkflow,
   shouldShowPrimaryImageInputPreview,
@@ -59,11 +66,31 @@ import {
   shouldKeepScreenOnForWorkflow,
   shouldMirrorSegmentationForeground,
   shouldMirrorLiveGestureCameraOverlay,
+  shouldMirrorLivePoseCameraOverlay,
   shouldShowCopyTextAction,
+  textRecognitionActionEnabled,
+  textRecognitionRunActionLabelKey,
+  textTranslationRunActionLabelKey,
   shouldShowCompositeSegmentationSaveAction,
   compositeSegmentationSaveReady,
   shouldShowLiveClassificationCameraOverlay,
   liveClassificationEmptyPromptKey,
+  liveClassificationRetryActionForStatus,
+  shouldPublishLiveClassificationPreparingStatus,
+  shouldPublishLiveGesturePreparingStatus,
+  shouldPublishLiveScenePreparingStatus,
+  shouldPublishLiveSkeletonPreparingStatus,
+  liveObjectDetectionRetryActionForStatus,
+  shouldPublishLiveObjectDetectionPreparingStatus,
+  liveSegmentationRetryActionForStatus,
+  shouldPublishLiveSegmentationPreparingStatus,
+  liveGestureRetryActionForStatus,
+  liveSceneRetryActionForStatus,
+  liveSkeletonRetryActionForStatus,
+  shouldPreserveLiveCameraInputOnFailure,
+  usesAndroidLiveGestureLayout,
+  usesAndroidLiveSceneLayout,
+  usesAndroidLiveSkeletonLayout,
   shouldShowLiveGestureCameraOverlay,
   shouldShowLiveObjectDetectionCameraOverlay,
   shouldShowLivePoseCameraOverlay,
@@ -134,12 +161,17 @@ import {
   PermissionService,
   RuntimePermissionRecoveryAction,
   RuntimePermissionRunAction,
-  runtimeOpenAppSettingsAction,
+  runtimePermissionNamesForWorkflow,
   runtimePermissionRecoveryActionForWorkflow,
   runtimePermissionRunActionForWorkflow
 } from '../services/permissions/PermissionService';
 import { ClipboardService, CopyTextResult } from '../services/clipboard/ClipboardService';
-import { PickerService, PickResult, runtimeInputActionForWorkflowInput } from '../services/picker/PickerService';
+import {
+  PickerService,
+  PickResult,
+  runtimeInputActionForWorkflowInput,
+  shouldUseInlineCameraFallback
+} from '../services/picker/PickerService';
 import {
   CachedModelFileInputState,
   ModelFileCacheResult,
@@ -180,10 +212,10 @@ import {
   ObjectDetection,
   ObjectDetectionBoxPercent,
   ObjectDetectionLiveOverlayBox,
-  ObjectDetectionLiveLabelOffset,
+  ObjectDetectionLiveLabelPlacement,
   objectDetectionBoxPercent,
   objectDetectionLiveOverlayBox,
-  objectDetectionLiveLabelOffset,
+  objectDetectionLiveLabelPlacement,
   objectDetectionOverlayColor,
   objectDetectionOverlayLabel,
   objectDetectionOverlayTextColor,
@@ -239,7 +271,7 @@ import {
   HarmonyKeepScreenOnWindowProvider,
   KeepScreenOnService
 } from '../services/window/KeepScreenOnService';
-import { common, OpenLinkOptions } from '@kit.AbilityKit';
+import { common, OpenLinkOptions, Permissions } from '@kit.AbilityKit';
 import { image } from '@kit.ImageKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import {
@@ -253,6 +285,16 @@ import {
 interface FeatureRuntimeParams {
   titleKey?: AppStringKey;
   routeName?: string;
+}
+
+interface ObjectPhotoLabelPosition {
+  readonly left: number;
+  readonly top: number;
+}
+
+interface GestureStillLabelPosition {
+  readonly left: number;
+  readonly top: number;
 }
 
 const runtimeLogDomain: number = 0x0000;
@@ -330,6 +372,8 @@ struct FeatureRuntimePage {
   @State objectDetections: Array<ObjectDetection> = [];
   @State objectDetectionImageWidth: number = 0;
   @State objectDetectionImageHeight: number = 0;
+  @State objectPhotoOverlayWidthVp: number = 0;
+  @State objectPhotoOverlayHeightVp: number = 0;
   @State liveObjectDetectionOverlayWidthVp: number = 0;
   @State liveObjectDetectionOverlayHeightVp: number = 0;
   @State liveCameraPreviewRotationDegrees: number = 0;
@@ -351,6 +395,10 @@ struct FeatureRuntimePage {
   @State gestureDetections: Array<GestureDetection> = [];
   @State gestureImageWidth: number = 0;
   @State gestureImageHeight: number = 0;
+  @State gestureStillOverlayWidthVp: number = 0;
+  @State gestureStillOverlayHeightVp: number = 0;
+  @State liveGestureOverlayWidthVp: number = 0;
+  @State textRecognitionImageOrientation: ImageRotateOrientation = ImageRotateOrientation.UP;
   @State sceneOverlayRows: Array<SceneDetectionOverlayRow> = [];
   @State helpUrl: string = '';
   @State helpContentKey: AppStringKey | undefined = undefined;
@@ -363,10 +411,11 @@ struct FeatureRuntimePage {
   private liveCameraController: XComponentController = new XComponentController();
   private liveCameraService: LiveCameraPreviewService | undefined = undefined;
   private liveCameraStopTask: Promise<void> | undefined = undefined;
-  private liveCameraInputSelected: boolean = false;
+  @State liveCameraInputSelected: boolean = false;
   private liveCameraPreviewRequestId: number = 0;
   private liveRuntimeGeneration: number = 0;
   private liveObjectDetectionFrameId: number = 0;
+  private runtimeDeniedPermissionNames: Array<Permissions> = [];
   private runtimeRequestGeneration: RuntimeRequestGeneration = new RuntimeRequestGeneration();
   private inputPreparationRequestId: number = 0;
   private liveRuntimeLoopService: LiveRuntimeLoopService = new LiveRuntimeLoopService();
@@ -524,6 +573,14 @@ struct FeatureRuntimePage {
     if (inputKind === 'camera') {
       const result = await pickerService.captureImage();
       if (!isInputPreparationRequestCurrent(requestId, this.inputPreparationRequestId)) {
+        return;
+      }
+      if (shouldUseInlineCameraFallback(workflow, inputKind, result)) {
+        this.liveCameraInputSelected = true;
+        this.statusKey = 'feature_runtime_status_preparing';
+        if (this.liveCameraSurfaceId.length > 0) {
+          this.startLiveCameraPreview();
+        }
         return;
       }
       this.applyPickResult(result, 'feature_runtime_image_ready', inputKind, true, initialPick);
@@ -727,15 +784,18 @@ struct FeatureRuntimePage {
     }
 
     this.statusKey = 'feature_runtime_status_preparing';
-    this.resultRows = [];
-    this.resultText = '';
-    this.clearVisualResults();
+    if (shouldClearRuntimeResultAtWorkflowStart(workflow)) {
+      this.resultRows = [];
+      this.resultText = '';
+      this.clearVisualResults();
+    }
     try {
       const permission = await new PermissionService().requestForWorkflow(context, workflow);
       if (requestId !== this.liveCameraPreviewRequestId) {
         return;
       }
       if (!permission.ok) {
+        this.runtimeDeniedPermissionNames = permission.denied;
         this.applyLiveCameraPreviewResult({
           ok: false,
           surfaceId: '',
@@ -744,6 +804,7 @@ struct FeatureRuntimePage {
         this.resultText = permission.requested.join(', ');
         return;
       }
+      this.runtimeDeniedPermissionNames = [];
 
       const pendingStopTask = this.liveCameraStopTask;
       if (pendingStopTask !== undefined) {
@@ -783,12 +844,15 @@ struct FeatureRuntimePage {
   }
 
   private applyLiveCameraPreviewResult(result: LiveCameraPreviewResult): void {
+    const workflow = workflowForRoute(this.routeName);
+    const preserveCameraInput = shouldPreserveLiveCameraInputOnFailure(workflow);
     this.statusKey = result.messageKey;
     this.liveCameraActive = result.ok;
-    this.liveCameraSurfaceId = result.surfaceId;
-    this.liveCameraPreviewRotationDegrees = result.previewRotationDegrees ?? 0;
-    this.selectedInputSummary = result.surfaceId;
-    const workflow = workflowForRoute(this.routeName);
+    if (result.ok || !preserveCameraInput) {
+      this.liveCameraSurfaceId = result.surfaceId;
+      this.liveCameraPreviewRotationDegrees = result.previewRotationDegrees ?? 0;
+      this.selectedInputSummary = result.surfaceId;
+    }
     if (result.ok && shouldShowLiveObjectDetectionCameraOverlay(workflow)) {
       hilog.info(
         runtimeLogDomain,
@@ -799,7 +863,9 @@ struct FeatureRuntimePage {
     }
     if (!result.ok) {
       this.pendingPickTextInputVisible = undefined;
-      this.liveCameraInputSelected = false;
+      if (!preserveCameraInput) {
+        this.liveCameraInputSelected = false;
+      }
       this.stopLiveRuntimeLoop();
       return;
     }
@@ -929,6 +995,10 @@ struct FeatureRuntimePage {
     } else {
       this.imageInputUri = result.uri;
     }
+    if (usesAndroidTextRecognitionLayout(workflow) && (inputKind === 'photo' || inputKind === 'camera')) {
+      this.textRecognitionImageOrientation = ImageRotateOrientation.UP;
+      this.updateTextRecognitionImageOrientation(result.uri);
+    }
     if (shouldShowStyleOriginalAfterInputReady(workflow, inputKind)) {
       this.styleOriginalPreviewRecovered = true;
     }
@@ -1050,6 +1120,156 @@ struct FeatureRuntimePage {
     this.runWorkflow();
   }
 
+  private liveObjectDetectionRetryAction(): LiveObjectDetectionRetryAction {
+    return liveObjectDetectionRetryActionForStatus(workflowForRoute(this.routeName), this.statusKey);
+  }
+
+  private retryLiveObjectDetection(): void {
+    const workflow = workflowForRoute(this.routeName);
+    const action = liveObjectDetectionRetryActionForStatus(workflow, this.statusKey);
+    if (action === 'restartCamera') {
+      this.liveCameraInputSelected = true;
+      this.startLiveCameraPreview();
+      return;
+    }
+    if (action !== 'restartInference' || workflow === undefined) {
+      return;
+    }
+    this.statusKey = 'feature_runtime_status_preparing';
+    this.stopLiveRuntimeLoop();
+    if (this.liveCameraInputSelected && this.liveCameraActive) {
+      this.startLiveRuntimeLoop(workflow);
+      return;
+    }
+    this.liveCameraInputSelected = true;
+    this.startLiveCameraPreview();
+  }
+
+  private liveClassificationRetryAction(): LiveClassificationRetryAction {
+    return liveClassificationRetryActionForStatus(workflowForRoute(this.routeName), this.statusKey);
+  }
+
+  private liveSegmentationRetryAction(): LiveSegmentationRetryAction {
+    return liveSegmentationRetryActionForStatus(workflowForRoute(this.routeName), this.statusKey);
+  }
+
+  private liveGestureRetryAction(): LiveGestureRetryAction {
+    return liveGestureRetryActionForStatus(workflowForRoute(this.routeName), this.statusKey);
+  }
+
+  private liveSceneRetryAction(): LiveSceneRetryAction {
+    return liveSceneRetryActionForStatus(workflowForRoute(this.routeName), this.statusKey);
+  }
+
+  private liveSkeletonRetryAction(): LiveSkeletonRetryAction {
+    return liveSkeletonRetryActionForStatus(workflowForRoute(this.routeName), this.statusKey);
+  }
+
+  private retryLiveSegmentation(): void {
+    const workflow = workflowForRoute(this.routeName);
+    const action = liveSegmentationRetryActionForStatus(workflow, this.statusKey);
+    if (action === 'restartCamera') {
+      this.liveCameraInputSelected = true;
+      this.startLiveCameraPreview();
+      return;
+    }
+    if (action !== 'restartInference' || workflow === undefined) {
+      return;
+    }
+    this.statusKey = 'feature_runtime_status_preparing';
+    this.stopLiveRuntimeLoop();
+    if (this.liveCameraInputSelected && this.liveCameraActive) {
+      this.startLiveRuntimeLoop(workflow);
+      return;
+    }
+    this.liveCameraInputSelected = true;
+    this.startLiveCameraPreview();
+  }
+
+  private retryLiveGesture(): void {
+    const workflow = workflowForRoute(this.routeName);
+    const action = liveGestureRetryActionForStatus(workflow, this.statusKey);
+    if (action === 'restartCamera') {
+      this.liveCameraInputSelected = true;
+      this.startLiveCameraPreview();
+      return;
+    }
+    if (action !== 'restartInference' || workflow === undefined) {
+      return;
+    }
+    this.statusKey = 'feature_runtime_status_preparing';
+    this.stopLiveRuntimeLoop();
+    if (this.liveCameraInputSelected && this.liveCameraActive) {
+      this.startLiveRuntimeLoop(workflow);
+      return;
+    }
+    this.liveCameraInputSelected = true;
+    this.startLiveCameraPreview();
+  }
+
+  private retryLiveScene(): void {
+    const workflow = workflowForRoute(this.routeName);
+    const action = liveSceneRetryActionForStatus(workflow, this.statusKey);
+    if (action === 'restartCamera') {
+      this.liveCameraInputSelected = true;
+      this.startLiveCameraPreview();
+      return;
+    }
+    if (action !== 'restartInference' || workflow === undefined) {
+      return;
+    }
+    this.statusKey = 'feature_runtime_status_preparing';
+    this.stopLiveRuntimeLoop();
+    if (this.liveCameraInputSelected && this.liveCameraActive) {
+      this.startLiveRuntimeLoop(workflow);
+      return;
+    }
+    this.liveCameraInputSelected = true;
+    this.startLiveCameraPreview();
+  }
+
+  private retryLiveSkeleton(): void {
+    const workflow = workflowForRoute(this.routeName);
+    const action = liveSkeletonRetryActionForStatus(workflow, this.statusKey);
+    if (action === 'restartCamera') {
+      this.liveCameraInputSelected = true;
+      this.startLiveCameraPreview();
+      return;
+    }
+    if (action !== 'restartInference' || workflow === undefined) {
+      return;
+    }
+    this.statusKey = 'feature_runtime_status_preparing';
+    this.stopLiveRuntimeLoop();
+    if (this.liveCameraInputSelected && this.liveCameraActive) {
+      this.startLiveRuntimeLoop(workflow);
+      return;
+    }
+    this.liveCameraInputSelected = true;
+    this.startLiveCameraPreview();
+  }
+
+  private retryLiveClassification(): void {
+    const workflow = workflowForRoute(this.routeName);
+    const action = liveClassificationRetryActionForStatus(workflow, this.statusKey);
+    if (action === 'restartCamera') {
+      this.liveCameraInputSelected = true;
+      this.startLiveCameraPreview();
+      return;
+    }
+    if (action !== 'restartInference' || workflow === undefined) {
+      return;
+    }
+    this.statusKey = 'feature_runtime_status_preparing';
+    this.stopLiveRuntimeLoop();
+    if (this.liveCameraInputSelected && this.liveCameraActive) {
+      this.startLiveRuntimeLoop(workflow);
+      return;
+    }
+    this.liveCameraInputSelected = true;
+    this.startLiveCameraPreview();
+  }
+
   private runWorkflow(): void {
     const workflow = workflowForRoute(this.routeName);
     if (!workflow) {
@@ -1130,12 +1350,40 @@ struct FeatureRuntimePage {
     const context = this.uiAbilityContext();
     if (!context) {
       this.statusKey = 'feature_runtime_permission_denied';
-      if (!shouldPreserveRuntimeTextResultOnAiResult(workflow, false) && usesAndroidCustomModelLayout(workflow)) {
+      if (!shouldPreserveRuntimeTextResultOnAiResult(
+        workflow, false, this.resultText.length > 0) && usesAndroidCustomModelLayout(workflow)) {
         this.resultText = '';
       }
       return;
     }
-    this.statusKey = 'feature_runtime_status_preparing';
+    if (shouldPublishLiveClassificationPreparingStatus(workflow, this.resultRows.length > 0)) {
+      if (shouldPublishLiveObjectDetectionPreparingStatus(
+        workflow,
+        this.resultRows.length > 0 || this.liveObjectDetectionRetryAction() !== 'none'
+      )) {
+        if (shouldPublishLiveSegmentationPreparingStatus(
+          workflow,
+          this.segmentationForegroundPixelMap !== undefined || this.liveSegmentationRetryAction() !== 'none'
+        )) {
+          if (shouldPublishLiveGesturePreparingStatus(
+            workflow,
+            this.gestureDetections.length > 0 || this.liveGestureRetryAction() !== 'none'
+          )) {
+            if (shouldPublishLiveScenePreparingStatus(
+              workflow,
+              this.sceneOverlayRows.length > 0 || this.liveSceneRetryAction() !== 'none'
+            )) {
+              if (shouldPublishLiveSkeletonPreparingStatus(
+                workflow,
+                this.posePoints.length > 0 || this.liveSkeletonRetryAction() !== 'none'
+              )) {
+                this.statusKey = 'feature_runtime_status_preparing';
+              }
+            }
+          }
+        }
+      }
+    }
     if (shouldClearRuntimeResultAtWorkflowStart(workflow)) {
       this.resultText = '';
       this.resultRows = [];
@@ -1148,8 +1396,9 @@ struct FeatureRuntimePage {
         return;
       }
       if (!permission.ok) {
+        this.runtimeDeniedPermissionNames = permission.denied;
         this.statusKey = 'feature_runtime_permission_denied';
-        if (!shouldPreserveRuntimeTextResultOnAiResult(workflow, false)) {
+        if (!shouldPreserveRuntimeTextResultOnAiResult(workflow, false, this.resultText.length > 0)) {
           this.resultText = usesAndroidCustomModelLayout(workflow) ?
             '' : permission.requested.join(', ');
           this.resultRows = [];
@@ -1159,6 +1408,7 @@ struct FeatureRuntimePage {
         }
         return;
       }
+      this.runtimeDeniedPermissionNames = [];
       const frameInputReady = await this.prepareLiveFrameImageInput(context, runtimeRequestId, liveGeneration);
       if (!this.isRuntimeRequestCurrent(runtimeRequestId, liveGeneration)) {
         return;
@@ -1232,7 +1482,7 @@ struct FeatureRuntimePage {
       this.styleTransferResultReady = false;
     }
     this.statusKey = 'feature_runtime_run_failed';
-    if (!shouldPreserveRuntimeTextResultOnAiResult(workflow, false)) {
+    if (!shouldPreserveRuntimeTextResultOnAiResult(workflow, false, this.resultText.length > 0)) {
       this.resultText = usesAndroidCustomModelLayout(workflow) ? this.customModelTerminalFailureText() : '';
       this.resultRows = [];
     }
@@ -1276,9 +1526,11 @@ struct FeatureRuntimePage {
     }
     if (!result.ok) {
       this.statusKey = result.messageKey;
-      this.resultText = '';
-      this.resultRows = [];
       const workflow = workflowForRoute(this.routeName);
+      if (!shouldPreserveRuntimeTextResultOnAiResult(workflow, false, this.resultText.length > 0)) {
+        this.resultText = '';
+        this.resultRows = [];
+      }
       if (shouldShowLiveObjectDetectionCameraOverlay(workflow)) {
         hilog.error(
           runtimeLogDomain,
@@ -1314,7 +1566,7 @@ struct FeatureRuntimePage {
   private async applyAiResult(result: AiRunResult, runtimeRequestId: number): Promise<void> {
     const workflow = workflowForRoute(this.routeName);
     this.statusKey = result.messageKey;
-    if (!shouldPreserveRuntimeTextResultOnAiResult(workflow, result.ok)) {
+    if (!shouldPreserveRuntimeTextResultOnAiResult(workflow, result.ok, this.resultText.length > 0)) {
       this.resultText = usesAndroidCustomModelLayout(workflow) ?
         (result.ok ? result.detailText : this.customModelTerminalFailureText()) :
         result.detailText;
@@ -1458,6 +1710,11 @@ struct FeatureRuntimePage {
       return;
     }
 
+    const foregroundReady = await this.updateSegmentationForegroundPreview(data.result, runtimeRequestId);
+    if (!foregroundReady) {
+      return;
+    }
+
     this.segmentationImageUri = data.imageUri;
     this.updateSegmentationImageOrientation(data.imageUri);
     const backgroundImageUri = runtimeSegmentationBackgroundImageUri(
@@ -1474,27 +1731,30 @@ struct FeatureRuntimePage {
     this.segmentationRectangles = data.result.rectangles;
     this.segmentationImageWidth = data.result.imageWidth ?? this.segmentationSourceWidth(data.result.rectangles);
     this.segmentationImageHeight = data.result.imageHeight ?? this.segmentationSourceHeight(data.result.rectangles);
-    const foregroundUpdate = this.updateSegmentationForegroundPreview(data.result, runtimeRequestId);
-    if (usesAndroidStillSegmentationLayout(workflow)) {
-      await foregroundUpdate;
-    }
   }
 
   private async updateSegmentationForegroundPreview(
     result: SegmentationResult,
     runtimeRequestId: number
-  ): Promise<void> {
-    const stillSegmentation = usesAndroidStillSegmentationLayout(workflowForRoute(this.routeName));
+  ): Promise<boolean> {
+    const workflow = workflowForRoute(this.routeName);
+    const stillSegmentation = usesAndroidStillSegmentationLayout(workflow);
+    const liveSegmentation = usesAndroidLiveSegmentationLayout(workflow);
+    const portraitSegmentation = usesAndroidPortraitSegmentationLayout(workflow);
     const rgba = result.foregroundImageRgba;
     const width = result.foregroundImageWidth ?? 0;
     const height = result.foregroundImageHeight ?? 0;
     if (rgba === undefined || rgba.byteLength === 0 || width <= 0 || height <= 0) {
-      if (stillSegmentation) {
+      if (stillSegmentation || liveSegmentation) {
+        this.segmentationForegroundPixelMapOwner.invalidatePendingReplacement();
+        this.statusKey = 'feature_runtime_segmentation_failed';
+        this.showStillSegmentationFailureToastIfNeeded(false);
+      } else if (portraitSegmentation) {
         this.segmentationForegroundPixelMapOwner.invalidatePendingReplacement();
         this.statusKey = 'feature_runtime_segmentation_failed';
         this.showStillSegmentationFailureToastIfNeeded(false);
       }
-      return;
+      return false;
     }
 
     const requestId = this.segmentationForegroundPixelMapOwner.beginReplacement();
@@ -1502,27 +1762,36 @@ struct FeatureRuntimePage {
       const pixelMap = await styleTransferPixelMapFromRgbaOutput(rgba, width, height);
       if (!this.runtimeRequestGeneration.isCurrent(runtimeRequestId)) {
         this.segmentationForegroundPixelMapOwner.accept(requestId, pixelMap);
-        return;
+        return false;
       }
       if (this.segmentationForegroundPixelMapOwner.accept(requestId, pixelMap)) {
         this.segmentationForegroundPixelMap = pixelMap;
+        return true;
       }
+      return false;
     } catch (_) {
       if (this.runtimeRequestGeneration.isCurrent(runtimeRequestId) &&
         this.segmentationForegroundPixelMapOwner.isCurrent(requestId)) {
-        if (stillSegmentation) {
+        if (stillSegmentation || liveSegmentation) {
           this.segmentationForegroundPixelMapOwner.invalidatePendingReplacement();
           this.statusKey = 'feature_runtime_segmentation_failed';
           this.showStillSegmentationFailureToastIfNeeded(false);
-        } else {
-          this.segmentationForegroundPixelMapOwner.clear();
-          this.segmentationForegroundPixelMap = undefined;
+        } else if (portraitSegmentation) {
+          this.segmentationForegroundPixelMapOwner.invalidatePendingReplacement();
+          this.statusKey = 'feature_runtime_segmentation_failed';
+          this.showStillSegmentationFailureToastIfNeeded(false);
         }
       }
+      return false;
     }
   }
 
   private updatePosePreview(result: AiRunResult): void {
+    if (usesAndroidLiveSkeletonLayout(workflowForRoute(this.routeName))) {
+      if (!result.ok) {
+        return;
+      }
+    }
     const data = result.data;
     if (data === undefined || data.kind !== 'pose' || data.result.points.length === 0) {
       return;
@@ -1537,6 +1806,9 @@ struct FeatureRuntimePage {
 
   private updateGesturePreview(result: AiRunResult): void {
     if (shouldShowLiveGestureCameraOverlay(workflowForRoute(this.routeName))) {
+      if (!result.ok) {
+        return;
+      }
       const state = projectLiveGestureResult(result, this.liveRuntimeGeneration, this.liveRuntimeGeneration);
       if (state !== undefined) {
         this.applyLiveGestureResultState(state);
@@ -1570,6 +1842,9 @@ struct FeatureRuntimePage {
   private updateSceneOverlay(result: AiRunResult): void {
     const data = result.data;
     if (data === undefined || data.kind !== 'scenes' || !this.shouldShowLiveSceneOverlay()) {
+      return;
+    }
+    if (!result.ok) {
       return;
     }
     this.sceneOverlayRows = sceneDetectionOverlayRows(data.result);
@@ -1870,22 +2145,19 @@ struct FeatureRuntimePage {
     return this.runtimePermissionRecoveryAction() !== 'none';
   }
 
-  private runPoseNetSampleDetection(): void {
+  private retryRuntimeCameraInput(): void {
     const workflow = workflowForRoute(this.routeName);
-    if (!usesAndroidPoseNetStillLayout(workflow)) {
+    if (liveRuntimeModeForWorkflow(workflow)) {
+      this.liveCameraInputSelected = true;
+      this.startLiveCameraPreview();
       return;
     }
-    const action = workflow === undefined ? undefined : initialPreviewActionForWorkflow(workflow);
-    if (action === undefined) {
-      return;
-    }
-    this.applyPickResult({ ok: true, uri: action.uri }, action.readyKey, action.inputKind, false);
-    this.runWorkflow();
+    this.prepareInput('camera');
   }
 
   private runPrimaryAction(): void {
     if (this.runtimePermissionRunAction() === 'retryCameraInput') {
-      this.prepareInput('camera');
+      this.retryRuntimeCameraInput();
       return;
     }
     this.runWorkflow();
@@ -1894,7 +2166,7 @@ struct FeatureRuntimePage {
   private retryRuntimePermission(): void {
     const action = this.runtimePermissionRecoveryAction();
     if (action === 'retryCameraInput') {
-      this.prepareInput('camera');
+      this.retryRuntimeCameraInput();
       return;
     }
     if (action === 'retryRun') {
@@ -1903,15 +2175,22 @@ struct FeatureRuntimePage {
   }
 
   private openRuntimePermissionSettings(): void {
+    this.openRuntimePermissionSettingsAsync();
+  }
+
+  private async openRuntimePermissionSettingsAsync(): Promise<void> {
     const context = this.uiAbilityContext();
     if (context === undefined) {
       return;
     }
-    try {
-      const action = runtimeOpenAppSettingsAction(context.applicationInfo.name);
-      context.startAbility(action.want).catch(() => {
-      });
-    } catch (_) {
+    const workflow = workflowForRoute(this.routeName);
+    const deniedPermissions = this.runtimeDeniedPermissionNames.length > 0 ?
+      this.runtimeDeniedPermissionNames :
+      (workflow === undefined ? [] : runtimePermissionNamesForWorkflow(workflow));
+    const permission = await new PermissionService().requestOnSetting(context, deniedPermissions);
+    this.runtimeDeniedPermissionNames = permission.denied;
+    if (permission.ok) {
+      this.retryRuntimePermission();
     }
   }
 
@@ -1941,6 +2220,10 @@ struct FeatureRuntimePage {
 
   private styleTransferContentInputReady(): boolean {
     return this.contentImageUri.length > 0 || this.imageInputUri.length > 0;
+  }
+
+  private styleTransferRunEnabled(): boolean {
+    return !this.workflowRunning && this.styleTransferContentInputReady() && this.styleImageUri.length > 0;
   }
 
   private recoverStyleOriginalPreview(): void {
@@ -2008,7 +2291,12 @@ struct FeatureRuntimePage {
   private copyRecognizedText(): void {
     new ClipboardService().copyText(this.recognizedTextForCopy()).then((result: CopyTextResult) => {
       this.statusKey = result.ok ? 'feature_runtime_copy_done' : 'feature_runtime_copy_failed';
+      this.showRuntimeToast(this.statusKey);
     });
+  }
+
+  private translationCopyEnabled(): boolean {
+    return !this.workflowRunning && translatedTextForAiResult(this.resultRows).length > 0;
   }
 
   private copyTranslatedText(): void {
@@ -2031,6 +2319,7 @@ struct FeatureRuntimePage {
   private saveResultComponentImage(componentId: string): void {
     this.saveResultComponentImageAsync(componentId).catch(() => {
       this.statusKey = 'feature_runtime_save_image_failed';
+      this.showRuntimeToast(this.statusKey);
     });
   }
 
@@ -2067,7 +2356,8 @@ struct FeatureRuntimePage {
   }
 
   private saveStillSegmentationResultImage(): void {
-    if (this.workflowRunning) {
+    if (!compositeSegmentationSaveReady(this.workflowRunning,
+      this.segmentationForegroundPixelMap !== undefined, this.resultImageSaveInFlight)) {
       return;
     }
     this.saveStillSegmentationResultImageAsync().catch(() => {
@@ -2077,7 +2367,8 @@ struct FeatureRuntimePage {
   }
 
   private async saveStillSegmentationResultImageAsync(): Promise<void> {
-    if (this.workflowRunning || this.segmentationForegroundPixelMap === undefined) {
+    if (!compositeSegmentationSaveReady(this.workflowRunning,
+      this.segmentationForegroundPixelMap !== undefined, this.resultImageSaveInFlight)) {
       return;
     }
     await this.saveResultPixelMapAsync(this.segmentationForegroundPixelMap);
@@ -2095,6 +2386,7 @@ struct FeatureRuntimePage {
       await withCallerOwnedPixelMap(pixelMap, async (snapshot: image.PixelMap | undefined): Promise<void> => {
         await this.performResultPixelMapSave(snapshot);
       });
+      this.showRuntimeToast(this.statusKey);
     } finally {
       this.resultImageSaveInFlight = false;
     }
@@ -2125,6 +2417,16 @@ struct FeatureRuntimePage {
     this.statusKey = result.messageKey;
     if (result.ok) {
       this.selectedInputSummary = result.uri;
+    }
+  }
+
+  private styleTransferStyleAccessibilityText(style: BuiltInStyleTransferStyle): string {
+    const context = this.uiAbilityContext();
+    try {
+      const title = context?.resourceManager.getStringSync($r('app.string.feature_runtime_style_presets_title').id);
+      return `${title ?? 'Style'} ${style.id + 1}`;
+    } catch (_) {
+      return `Style ${style.id + 1}`;
     }
   }
 
@@ -2169,23 +2471,33 @@ struct FeatureRuntimePage {
           this.styleTransferCustomStyleItem()
         }
       }
-      .columnsTemplate('1fr 1fr 1fr 1fr')
-      .columnsGap(10)
-      .rowsGap(10)
+      .columnsTemplate('1fr 1fr 1fr')
+      .rowsTemplate('1fr 1fr 1fr 1fr 1fr 1fr 1fr')
+      .columnsGap(6)
+      .rowsGap(6)
       .width('100%')
-      .layoutWeight(1)
-      .scrollBar(BarState.Auto)
-      .margin({ top: 20, bottom: 20 })
+      .aspectRatio(3 / 7)
+      .scrollBar(BarState.Off)
+      .enableScrollInteraction(false)
+      .margin({ top: AppSpacing.md })
     }
     .width('100%')
-    .layoutWeight(1)
-    .margin({ left: 20, right: 20, top: 30 })
+    .padding({ bottom: AppSpacing.xl })
   }
 
   @Builder
   styleTransferStyleItem(style: BuiltInStyleTransferStyle) {
-    Column() {
+    Stack({ alignContent: Alignment.TopEnd }) {
       this.styleTransferStyleImage(style)
+      if (this.styleImageUri === builtInStyleTransferUri(style)) {
+        SymbolGlyph($r('sys.symbol.checkmark'))
+          .fontSize(16)
+          .fontColor([Color.White])
+          .padding({ left: AppSpacing.xs, right: AppSpacing.xs })
+          .backgroundColor(AppColor.accent)
+          .borderRadius(AppRadius.button)
+          .margin(6)
+      }
     }
     .width('100%')
     .aspectRatio(1)
@@ -2197,34 +2509,50 @@ struct FeatureRuntimePage {
     })
     .clip(true)
     .enabled(!this.workflowRunning)
+    .accessibilityText(this.styleTransferStyleAccessibilityText(style))
+    .accessibilityRole(AccessibilityRoleType.BUTTON)
     .onClick(() => this.selectBuiltInStyle(style))
   }
 
   @Builder
   styleTransferCustomStyleItem() {
-    Column() {
-      if (isCustomStyleTransferUri(this.styleImageUri)) {
-        Image(this.styleImageUri)
+    Stack({ alignContent: Alignment.TopEnd }) {
+      Column() {
+        if (isCustomStyleTransferUri(this.styleImageUri)) {
+          Image(this.styleImageUri)
+            .width('100%')
+            .height('72%')
+            .objectFit(ImageFit.Cover)
+        } else {
+          Image($r('app.media.icon_default'))
+            .width('100%')
+            .height('72%')
+            .objectFit(ImageFit.Contain)
+        }
+        Text(appString('feature_runtime_style_custom'))
+          .fontSize(11)
+          .fontColor(AppColor.textSecondary)
+          .maxFontScale(1.6)
+          .maxLines(2)
           .width('100%')
-          .height('72%')
-          .objectFit(ImageFit.Cover)
-      } else {
-        Image($r('app.media.icon_default'))
-          .width('100%')
-          .height('72%')
-          .objectFit(ImageFit.Contain)
+          .textAlign(TextAlign.Center)
       }
-      Text(appString('feature_runtime_style_custom'))
-        .fontSize(9)
-        .fontColor(AppColor.textSecondary)
-        .maxLines(1)
-        .width('100%')
-        .textAlign(TextAlign.Center)
+      .width('100%')
+      .height('100%')
+      .justifyContent(FlexAlign.Center)
+      if (isCustomStyleTransferUri(this.styleImageUri)) {
+        SymbolGlyph($r('sys.symbol.checkmark'))
+          .fontSize(16)
+          .fontColor([Color.White])
+          .padding({ left: AppSpacing.xs, right: AppSpacing.xs })
+          .backgroundColor(AppColor.accent)
+          .borderRadius(AppRadius.button)
+          .margin(6)
+      }
     }
     .width('100%')
     .aspectRatio(1)
     .padding(2)
-    .justifyContent(FlexAlign.Center)
     .border({
       width: isCustomStyleTransferUri(this.styleImageUri) ? 2 : 1,
       color: isCustomStyleTransferUri(this.styleImageUri) ? AppColor.accent : AppColor.divider,
@@ -2233,6 +2561,8 @@ struct FeatureRuntimePage {
     .backgroundColor('#F7F8FA')
     .clip(true)
     .enabled(!this.workflowRunning)
+    .accessibilityText(appString('feature_runtime_style_custom') as Resource)
+    .accessibilityRole(AccessibilityRoleType.BUTTON)
     .onClick(() => this.prepareInput('styleImage'))
   }
 
@@ -2388,9 +2718,6 @@ struct FeatureRuntimePage {
         }
       })
       .onDestroy(() => this.stopLiveCameraPreview())
-    if (this.sceneOverlayRows.length > 0 && this.shouldShowLiveSceneOverlay()) {
-      this.liveSceneOverlay()
-    }
     if (this.segmentationForegroundPixelMap !== undefined &&
       shouldShowLiveSegmentationCameraOverlay(workflowForRoute(this.routeName)) &&
       !usesAndroidPortraitSegmentationLayout(workflowForRoute(this.routeName))) {
@@ -2408,6 +2735,16 @@ struct FeatureRuntimePage {
         `${detection.imageId}-${detection.labelId}-${detection.score}-${detection.left}-${detection.top}` +
           `-${detection.right}-${detection.bottom}`)
     }
+    if (shouldShowLivePoseTemplateOverlay(workflowForRoute(this.routeName))) {
+      Column() {
+        this.livePoseTemplateOverlay()
+      }
+      .width('100%')
+      .height('100%')
+      .padding(AppSpacing.md)
+      .justifyContent(FlexAlign.Start)
+      .alignItems(HorizontalAlign.Start)
+    }
     if (this.posePoints.length > 0 && shouldShowLivePoseCameraOverlay(workflowForRoute(this.routeName))) {
       ForEach(this.poseLines(), (line: PoseLine) => {
         this.poseLine(line)
@@ -2419,18 +2756,9 @@ struct FeatureRuntimePage {
     if (this.visibleGestureDetections().length > 0 &&
       shouldShowLiveGestureCameraOverlay(workflowForRoute(this.routeName))) {
       ForEach(this.visibleGestureDetections(), (gesture: GestureDetection) => {
-        this.gestureBox(gesture)
+        this.liveGestureBox(gesture)
       }, (gesture: GestureDetection) =>
         `${gesture.category}-${gesture.score}-${gesture.rect?.left}-${gesture.rect?.top}`)
-    }
-    if (shouldShowLivePoseTemplateOverlay(workflowForRoute(this.routeName))) {
-      Column() {
-        this.livePoseTemplateOverlay()
-      }
-      .width('100%')
-      .height('100%')
-      .justifyContent(FlexAlign.End)
-      .alignItems(HorizontalAlign.End)
     }
     if (shouldShowLiveClassificationCameraOverlay(workflowForRoute(this.routeName)) &&
       specializedAndroidLiveLayoutForWorkflow(workflowForRoute(this.routeName)) !== 'imageClassification') {
@@ -2469,26 +2797,35 @@ struct FeatureRuntimePage {
 
   @Builder
   liveSceneOverlay() {
-    Column() {
-      ForEach(this.sceneOverlayRows, (row: SceneDetectionOverlayRow) => {
-        Row() {
-          Text(appString(row.labelKey))
-            .fontSize(13)
-            .fontColor('#FCA5A5')
-            .fontWeight(FontWeight.Medium)
-          Text(`: ${row.value}`)
-            .fontSize(13)
-            .fontColor('#FFFFFF')
-            .fontWeight(FontWeight.Medium)
-        }
-        .width('100%')
-      }, (row: SceneDetectionOverlayRow) => row.id)
+    Scroll() {
+      Column({ space: AppSpacing.xs }) {
+        ForEach(this.sceneOverlayRows, (row: SceneDetectionOverlayRow) => {
+          Row({ space: AppSpacing.xs }) {
+            Text(appString(row.labelKey))
+              .fontSize(12)
+              .fontColor('#FCA5A5')
+              .fontWeight(FontWeight.Medium)
+              .maxLines(3)
+              .maxFontScale(3.2)
+              .width(96)
+            Text(row.value)
+              .fontSize(13)
+              .fontColor(Color.White)
+              .fontWeight(FontWeight.Medium)
+              .maxFontScale(3.2)
+              .layoutWeight(1)
+          }
+          .width('100%')
+        }, (row: SceneDetectionOverlayRow) => row.id)
+      }
+      .width('100%')
     }
-    .padding({ left: 10, right: 10, top: 8, bottom: 8 })
-    .backgroundColor('#66000000')
-    .border({ radius: 6 })
-    .margin({ left: 10, top: 10 })
-    .width(190)
+    .layoutWeight(1)
+    .constraintSize({ maxWidth: 360, maxHeight: 176 })
+    .padding({ left: AppSpacing.sm, right: AppSpacing.sm, top: AppSpacing.xs, bottom: AppSpacing.xs })
+    .backgroundColor('#B31F2937')
+    .borderRadius(AppRadius.card)
+    .margin({ top: AppSpacing.sm })
   }
 
   @Builder
@@ -2519,10 +2856,11 @@ struct FeatureRuntimePage {
   @Builder
   livePoseTemplateOverlay() {
     Column() {
-      Text(`similarity:${this.livePoseSimilarityPercent()}`)
+      Text(`Similarity:${this.livePoseSimilarityPercent()}`)
         .fontSize(13)
         .fontColor(Color.White)
-        .height(18)
+        .width(196)
+        .maxLines(2)
       Image($r('app.media.skeleton_template'))
         .width(135)
         .height(169)
@@ -2564,6 +2902,18 @@ struct FeatureRuntimePage {
     return this.poseImageWidth / this.poseImageHeight;
   }
 
+  private poseNetStillPreviewWidthPercent(): number {
+    const sourceAspect = this.poseAspectRatio();
+    const cardAspect = 4 / 3;
+    return sourceAspect >= cardAspect ? 100 : sourceAspect / cardAspect * 100;
+  }
+
+  private poseNetStillPreviewHeightPercent(): number {
+    const sourceAspect = this.poseAspectRatio();
+    const cardAspect = 4 / 3;
+    return sourceAspect >= cardAspect ? cardAspect / sourceAspect * 100 : 100;
+  }
+
   private objectDetectionAspectRatio(): number {
     if (this.objectDetectionImageWidth <= 0 || this.objectDetectionImageHeight <= 0) {
       return 1;
@@ -2571,11 +2921,129 @@ struct FeatureRuntimePage {
     return this.objectDetectionImageWidth / this.objectDetectionImageHeight;
   }
 
+  private objectPhotoPreviewWidthPercent(): number {
+    const sourceAspect = this.objectDetectionAspectRatio();
+    const cardAspect = 4 / 3;
+    return sourceAspect >= cardAspect ? 100 : sourceAspect / cardAspect * 100;
+  }
+
+  private objectPhotoPreviewHeightPercent(): number {
+    const sourceAspect = this.objectDetectionAspectRatio();
+    const cardAspect = 4 / 3;
+    return sourceAspect >= cardAspect ? cardAspect / sourceAspect * 100 : 100;
+  }
+
   private gestureAspectRatio(): number {
     if (this.gestureImageWidth <= 0 || this.gestureImageHeight <= 0) {
       return 1;
     }
     return this.gestureImageWidth / this.gestureImageHeight;
+  }
+
+  private gestureStillPreviewWidthPercent(): number {
+    const sourceAspect = this.gestureAspectRatio();
+    const cardAspect = 4 / 3;
+    return sourceAspect >= cardAspect ? 100 : sourceAspect / cardAspect * 100;
+  }
+
+  private gestureStillPreviewHeightPercent(): number {
+    const sourceAspect = this.gestureAspectRatio();
+    const cardAspect = 4 / 3;
+    return sourceAspect >= cardAspect ? cardAspect / sourceAspect * 100 : 100;
+  }
+
+  private objectPhotoLabelPosition(detection: ObjectDetection): ObjectPhotoLabelPosition {
+    const box = this.objectDetectionBoxStyle(detection);
+    const overlayWidth = this.objectPhotoOverlayWidthVp;
+    const overlayHeight = this.objectPhotoOverlayHeightVp;
+    if (overlayWidth <= 0 || overlayHeight <= 0) {
+      return {
+        left: Math.max(0, box.left),
+        top: Math.max(0, box.top)
+      };
+    }
+    const labelWidth = 112;
+    const labelHeight = 24;
+    const gap = 4;
+    const boxLeft = box.left * overlayWidth / 100;
+    const boxTop = box.top * overlayHeight / 100;
+    const boxWidth = box.width * overlayWidth / 100;
+    const boxHeight = box.height * overlayHeight / 100;
+    const boxRight = boxLeft + boxWidth;
+    const boxBottom = boxTop + boxHeight;
+    let labelLeft = boxLeft;
+    let labelTop = boxTop;
+    const canPlaceRight = boxRight + gap + labelWidth <= overlayWidth;
+    const canPlaceBelow = boxBottom + gap + labelHeight <= overlayHeight;
+    if (canPlaceRight) {
+      labelLeft = boxRight + gap;
+      labelTop = boxTop + (boxHeight - labelHeight) / 2;
+    } else if (canPlaceBelow) {
+      labelLeft = boxLeft + (boxWidth - labelWidth) / 2;
+      labelTop = boxBottom + gap;
+    } else if (boxLeft >= labelWidth + gap) {
+      labelLeft = boxLeft - labelWidth - gap;
+      labelTop = boxTop + (boxHeight - labelHeight) / 2;
+    } else if (boxTop >= labelHeight + gap) {
+      labelLeft = boxLeft + (boxWidth - labelWidth) / 2;
+      labelTop = boxTop - labelHeight - gap;
+    } else {
+      labelLeft = boxLeft + (boxWidth - labelWidth) / 2;
+      labelTop = boxBottom + gap;
+    }
+    labelLeft = Math.min(Math.max(labelLeft, 0), Math.max(0, overlayWidth - labelWidth));
+    labelTop = Math.min(Math.max(labelTop, 0), Math.max(0, overlayHeight - labelHeight));
+    return {
+      left: labelLeft * 100 / overlayWidth,
+      top: labelTop * 100 / overlayHeight
+    };
+  }
+
+  private gestureStillLabelPosition(gesture: GestureDetection): GestureStillLabelPosition {
+    const box = this.gestureBoxStyle(gesture);
+    const overlayWidth = this.gestureStillOverlayWidthVp;
+    const overlayHeight = this.gestureStillOverlayHeightVp;
+    if (overlayWidth <= 0 || overlayHeight <= 0) {
+      return {
+        left: Math.max(0, box.left),
+        top: Math.max(0, box.top)
+      };
+    }
+    const labelWidth = 88;
+    const labelHeight = 24;
+    const gap = 4;
+    const boxLeft = box.left * overlayWidth / 100;
+    const boxTop = box.top * overlayHeight / 100;
+    const boxWidth = box.width * overlayWidth / 100;
+    const boxHeight = box.height * overlayHeight / 100;
+    const boxRight = boxLeft + boxWidth;
+    const boxBottom = boxTop + boxHeight;
+    let labelLeft = boxLeft;
+    let labelTop = boxTop;
+    const canPlaceRight = boxRight + gap + labelWidth <= overlayWidth;
+    const canPlaceBelow = boxBottom + gap + labelHeight <= overlayHeight;
+    if (canPlaceRight) {
+      labelLeft = boxRight + gap;
+      labelTop = boxTop + (boxHeight - labelHeight) / 2;
+    } else if (canPlaceBelow) {
+      labelLeft = boxLeft + (boxWidth - labelWidth) / 2;
+      labelTop = boxBottom + gap;
+    } else if (boxLeft >= labelWidth + gap) {
+      labelLeft = boxLeft - labelWidth - gap;
+      labelTop = boxTop + (boxHeight - labelHeight) / 2;
+    } else if (boxTop >= labelHeight + gap) {
+      labelLeft = boxLeft + (boxWidth - labelWidth) / 2;
+      labelTop = boxTop - labelHeight - gap;
+    } else {
+      labelLeft = boxLeft + (boxWidth - labelWidth) / 2;
+      labelTop = boxBottom + gap;
+    }
+    labelLeft = Math.min(Math.max(labelLeft, 0), Math.max(0, overlayWidth - labelWidth));
+    labelTop = Math.min(Math.max(labelTop, 0), Math.max(0, overlayHeight - labelHeight));
+    return {
+      left: labelLeft * 100 / overlayWidth,
+      top: labelTop * 100 / overlayHeight
+    };
   }
 
   private objectDetectionLabel(detection: ObjectDetection, index: number): string {
@@ -2627,16 +3095,6 @@ struct FeatureRuntimePage {
     );
   }
 
-  private liveObjectDetectionLabelOffset(detection: ObjectDetection): ObjectDetectionLiveLabelOffset {
-    const style = this.liveObjectDetectionBoxStyle(detection);
-    const topPercent = this.liveObjectDetectionOverlayHeightVp > 0 ?
-      style.top * 100 / this.liveObjectDetectionOverlayHeightVp : 0;
-    return objectDetectionLiveLabelOffset(
-      topPercent,
-      this.liveObjectDetectionOverlayHeightVp
-    );
-  }
-
   private liveObjectDetectionBoxStyle(detection: ObjectDetection): ObjectDetectionLiveOverlayBox {
     return objectDetectionLiveOverlayBox(
       detection,
@@ -2645,6 +3103,18 @@ struct FeatureRuntimePage {
       this.liveObjectDetectionOverlayWidthVp,
       this.liveObjectDetectionOverlayHeightVp,
       this.liveCameraPreviewRotationDegrees
+    );
+  }
+
+  private liveObjectDetectionLabelPlacement(
+    detection: ObjectDetection,
+    index: number
+  ): ObjectDetectionLiveLabelPlacement {
+    return objectDetectionLiveLabelPlacement(
+      this.liveObjectDetectionBoxStyle(detection),
+      this.liveObjectDetectionOverlayWidthVp,
+      this.liveObjectDetectionOverlayHeightVp,
+      this.objectDetectionLabel(detection, index).length
     );
   }
 
@@ -2665,16 +3135,36 @@ struct FeatureRuntimePage {
     );
   }
 
+  private liveGestureLabelLeft(gesture: GestureDetection): string {
+    if (shouldMirrorLiveGestureCameraOverlay(workflowForRoute(this.routeName), this.liveCameraPosition)) {
+      return 'calc(100% - 176vp)';
+    }
+    const canvasWidth = this.liveGestureOverlayWidthVp;
+    if (canvasWidth <= 176) {
+      return '0vp';
+    }
+    const labelLeft = this.gestureBoxStyle(gesture).left * canvasWidth / 100;
+    const clampedLabelLeft = Math.min(Math.max(labelLeft, 0), canvasWidth - 176);
+    return `${clampedLabelLeft}vp`;
+  }
+
   private visibleGestureDetections(): Array<GestureDetection> {
     return this.gestureDetections.filter((gesture: GestureDetection) => gesture.rect !== undefined);
   }
 
   private posePointStyle(point: PosePoint): PosePointPercent {
-    return posePointPercent(
+    const position = posePointPercent(
       point,
       this.poseImageWidth,
       this.poseImageHeight
     );
+    if (shouldMirrorLivePoseCameraOverlay(workflowForRoute(this.routeName), this.liveCameraPosition)) {
+      return {
+        x: 100 - position.x,
+        y: position.y
+      };
+    }
+    return position;
   }
 
   private visiblePosePoints(): Array<PosePoint> {
@@ -2690,11 +3180,22 @@ struct FeatureRuntimePage {
   }
 
   private poseLineStyle(line: PoseLine): PoseLinePercent {
-    return poseLinePercent(
+    const position = poseLinePercent(
       line,
       this.poseImageWidth,
       this.poseImageHeight
     );
+    if (shouldMirrorLivePoseCameraOverlay(workflowForRoute(this.routeName), this.liveCameraPosition)) {
+      return {
+        startX: 100 - position.startX,
+        startY: position.startY,
+        endX: 100 - position.endX,
+        endY: position.endY,
+        length: position.length,
+        angle: 180 - position.angle
+      };
+    }
+    return position;
   }
 
   private segmentationForegroundMirrorScaleX(): number {
@@ -2711,6 +3212,14 @@ struct FeatureRuntimePage {
 
   private percentLength(value: number): string {
     return `${value}%`;
+  }
+
+  private updateTextRecognitionImageOrientation(uri: string): void {
+    this.updateOverlayPreviewImageOrientation(uri, (orientation: ImageRotateOrientation) => {
+      if (this.imageInputUri === uri) {
+        this.textRecognitionImageOrientation = orientation;
+      }
+    });
   }
 
   private updateObjectDetectionImageOrientation(uri: string): void {
@@ -2982,6 +3491,87 @@ struct FeatureRuntimePage {
   }
 
   @Builder
+  gestureStillBox(gesture: GestureDetection) {
+    Stack({ alignContent: Alignment.TopStart }) {
+      Row() {
+      }
+      .width(this.percentLength(this.gestureBoxStyle(gesture).width))
+      .height(this.percentLength(this.gestureBoxStyle(gesture).height))
+      .border({ width: 2, color: AppColor.accent, radius: 2 })
+      .position({
+        x: this.percentLength(this.gestureBoxStyle(gesture).left),
+        y: this.percentLength(this.gestureBoxStyle(gesture).top)
+      })
+
+      Row({ space: 4 }) {
+        Text(this.gestureLabelResource(gesture))
+          .fontSize(10)
+          .fontColor(Color.White)
+          .fontWeight(FontWeight.Medium)
+          .maxFontScale(1.2)
+          .maxLines(1)
+          .layoutWeight(1)
+        Text(this.gestureScoreLabel(gesture))
+          .fontSize(10)
+          .fontColor(Color.White)
+          .maxFontScale(1.2)
+          .maxLines(1)
+      }
+      .width(88)
+      .height(24)
+      .padding({ left: 6, right: 6 })
+      .backgroundColor(AppColor.accent)
+      .position({
+        x: this.percentLength(this.gestureStillLabelPosition(gesture).left),
+        y: this.percentLength(this.gestureStillLabelPosition(gesture).top)
+      })
+    }
+    .width('100%')
+    .height('100%')
+  }
+
+  @Builder
+  liveGestureBox(gesture: GestureDetection) {
+    Stack({ alignContent: Alignment.TopStart }) {
+      Column() {
+      }
+      .width(this.percentLength(this.gestureBoxStyle(gesture).width))
+      .height(this.percentLength(this.gestureBoxStyle(gesture).height))
+      .border({ width: 2, color: AppColor.accent, radius: 2 })
+      .position({
+        x: this.percentLength(this.gestureBoxStyle(gesture).left),
+        y: this.percentLength(this.gestureBoxStyle(gesture).top)
+      })
+      Column({ space: 2 }) {
+        Text(this.gestureLabelResource(gesture))
+          .fontSize(12)
+          .fontColor(Color.White)
+          .fontWeight(FontWeight.Medium)
+          .maxFontScale(3.2)
+          .maxLines(2)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+          .width('100%')
+        Text(this.gestureScoreLabel(gesture))
+          .fontSize(11)
+          .fontColor('#E5E7EB')
+          .maxFontScale(3.2)
+          .maxLines(1)
+      }
+      .constraintSize({ maxWidth: 176 })
+      .width(176)
+      .padding({ left: AppSpacing.xs, right: AppSpacing.xs, top: 2, bottom: 2 })
+      .backgroundColor('#B31F2937')
+      .borderRadius(AppRadius.button)
+      .position({
+        x: this.liveGestureLabelLeft(gesture),
+        y: this.percentLength(this.gestureBoxStyle(gesture).top)
+      })
+    }
+    .width('100%')
+    .height('100%')
+  }
+
+  @Builder
   gestureBox(gesture: GestureDetection) {
     Column() {
       Row() {
@@ -3009,6 +3599,38 @@ struct FeatureRuntimePage {
   }
 
   @Builder
+  objectPhotoDetectionBox(detection: ObjectDetection, index: number) {
+    Stack({ alignContent: Alignment.TopStart }) {
+      Column() {
+      }
+      .width(this.percentLength(this.objectDetectionBoxStyle(detection).width))
+      .height(this.percentLength(this.objectDetectionBoxStyle(detection).height))
+      .border({ width: 2, color: objectDetectionOverlayColor(index), radius: 2 })
+      .position({
+        x: this.percentLength(this.objectDetectionBoxStyle(detection).left),
+        y: this.percentLength(this.objectDetectionBoxStyle(detection).top)
+      })
+      Text(this.objectDetectionLabel(detection, index))
+        .fontSize(10)
+        .fontColor(objectDetectionOverlayTextColor(index))
+        .fontWeight(FontWeight.Medium)
+        .maxFontScale(1.2)
+        .maxLines(1)
+        .textOverflow({ overflow: TextOverflow.Ellipsis })
+        .width(112)
+        .height(24)
+        .padding({ left: 6, right: 6 })
+        .backgroundColor(objectDetectionOverlayColor(index))
+        .position({
+          x: this.percentLength(this.objectPhotoLabelPosition(detection).left),
+          y: this.percentLength(this.objectPhotoLabelPosition(detection).top)
+        })
+    }
+    .width('100%')
+    .height('100%')
+  }
+
+  @Builder
   objectDetectionBox(detection: ObjectDetection, index: number) {
     Column() {
       Text(this.objectDetectionLabel(detection, index))
@@ -3032,24 +3654,28 @@ struct FeatureRuntimePage {
     Stack({ alignContent: Alignment.TopStart }) {
       Column() {
       }
-      .width('100%')
-      .height('100%')
+      .width(this.liveObjectDetectionBoxStyle(detection).width)
+      .height(this.liveObjectDetectionBoxStyle(detection).height)
       .border({ width: 2, color: objectDetectionOverlayColor(index), radius: 2 })
+      .position({
+        x: this.liveObjectDetectionBoxStyle(detection).left,
+        y: this.liveObjectDetectionBoxStyle(detection).top
+      })
       Text(this.objectDetectionLabel(detection, index))
-        .fontSize(16)
-        .fontColor(objectDetectionOverlayColor(index))
-        .maxLines(1)
+        .width(this.liveObjectDetectionLabelPlacement(detection, index).maxWidth)
+        .fontSize(13)
+        .fontColor(objectDetectionOverlayTextColor(index))
+        .maxFontScale(1.6)
+        .padding({ left: 6, right: 6, top: 4, bottom: 4 })
+        .backgroundColor(objectDetectionOverlayColor(index))
+        .borderRadius(4)
         .position({
-          x: this.liveObjectDetectionLabelOffset(detection).x,
-          y: this.liveObjectDetectionLabelOffset(detection).y
+          x: this.liveObjectDetectionLabelPlacement(detection, index).left,
+          y: this.liveObjectDetectionLabelPlacement(detection, index).top
         })
     }
-    .width(this.liveObjectDetectionBoxStyle(detection).width)
-    .height(this.liveObjectDetectionBoxStyle(detection).height)
-    .position({
-      x: this.liveObjectDetectionBoxStyle(detection).left,
-      y: this.liveObjectDetectionBoxStyle(detection).top
-    })
+    .width('100%')
+    .height('100%')
   }
 
   @Builder
@@ -3182,17 +3808,20 @@ struct FeatureRuntimePage {
           .height(22)
           .objectFit(ImageFit.Contain)
       }
-        .width(40)
-        .height(40)
+        .width(48)
+        .height(48)
         .justifyContent(FlexAlign.Center)
         .alignItems(VerticalAlign.Center)
+        .accessibilityText($r('app.string.action_back'))
+        .accessibilityRole(AccessibilityRoleType.BACK_BUTTON)
         .onClick(() => router.back())
       Text(appString(this.titleKey))
-        .fontSize(22)
+        .fontSize(20)
         .fontWeight(FontWeight.Bold)
         .fontColor(AppColor.textPrimary)
         .layoutWeight(1)
-        .maxLines(1)
+        .maxFontScale(1.6)
+        .maxLines(2)
       if (showActions && this.helpContentKey !== undefined) {
         Row() {
           Image($r('app.media.icon_help'))
@@ -3200,11 +3829,13 @@ struct FeatureRuntimePage {
             .height(24)
             .objectFit(ImageFit.Contain)
         }
-          .width(40)
-          .height(40)
+          .width(48)
+          .height(48)
           .justifyContent(FlexAlign.Center)
           .alignItems(VerticalAlign.Center)
           .margin({ left: AppSpacing.xs })
+          .accessibilityText(appString('feature_runtime_help') as Resource)
+          .accessibilityRole(AccessibilityRoleType.BUTTON)
           .onClick(() => this.showLocalHelpDialog())
       }
       if (showActions && this.helpUrl.length > 0) {
@@ -3214,45 +3845,95 @@ struct FeatureRuntimePage {
             .height(24)
             .objectFit(ImageFit.Contain)
         }
-          .width(40)
-          .height(40)
+          .width(48)
+          .height(48)
           .justifyContent(FlexAlign.Center)
           .alignItems(VerticalAlign.Center)
           .margin({ left: AppSpacing.xs })
+          .accessibilityText($r('app.string.action_more'))
+          .accessibilityRole(AccessibilityRoleType.BUTTON)
           .onClick(() => this.openHelpPage())
       }
     }
     .width('100%')
-    .height(56)
-    .padding({ left: AppSpacing.page, right: AppSpacing.page })
+    .constraintSize({ minHeight: 56 })
+    .padding({ left: AppSpacing.page, right: AppSpacing.page, top: AppSpacing.xs, bottom: AppSpacing.xs })
     .alignItems(VerticalAlign.Center)
     .backgroundColor(Color.White)
+  }
+
+  @Builder
+  runtimeStatusBar() {
+    Text(appString(this.statusKey))
+      .fontSize(14)
+      .fontColor(Color.White)
+      .textAlign(TextAlign.Center)
+      .maxFontScale(1.6)
+      .padding({ left: AppSpacing.md, right: AppSpacing.md, top: AppSpacing.sm, bottom: AppSpacing.sm })
+      .constraintSize({ minHeight: 44 })
+      .backgroundColor('#B31F2937')
+      .borderRadius(AppRadius.button)
+  }
+
+  @Builder
+  runtimeCameraSwitchAction() {
+    Row() {
+      Image($r('app.media.front_back_switch'))
+        .width(24)
+        .height(24)
+        .objectFit(ImageFit.Contain)
+    }
+    .width(48)
+    .height(48)
+    .justifyContent(FlexAlign.Center)
+    .alignItems(VerticalAlign.Center)
+    .backgroundColor('#B31F2937')
+    .borderRadius(24)
+    .accessibilityText(appString('feature_runtime_switch_camera') as Resource)
+    .accessibilityRole(AccessibilityRoleType.BUTTON)
+    .onClick(() => this.switchLiveCamera())
   }
 
   @Builder
   runtimePermissionRecoveryOverlay() {
     if (this.shouldShowRuntimePermissionRetry()) {
       Stack({ alignContent: Alignment.Center }) {
-        Column() {
-          Text(appString(this.statusKey))
-            .fontSize(14)
-            .fontColor(AppColor.textPrimary)
-            .textAlign(TextAlign.Center)
-          Button(appString('splash_permission_retry'))
-            .height(36)
-            .margin({ top: AppSpacing.sm })
-            .onClick(() => this.retryRuntimePermission())
-          Button(appString('app_permission_by_hand'))
-            .height(36)
-            .margin({ top: AppSpacing.sm })
-            .onClick(() => this.openRuntimePermissionSettings())
+        Scroll() {
+          Column() {
+            Text(appString(this.statusKey))
+              .fontSize(16)
+              .fontColor(AppColor.textPrimary)
+              .textAlign(TextAlign.Center)
+              .maxFontScale(1.6)
+              .width('100%')
+            Button(appString('splash_permission_retry'))
+              .width('100%')
+              .constraintSize({ minHeight: 48 })
+              .maxFontScale(1.6)
+              .margin({ top: AppSpacing.md })
+              .onClick(() => this.retryRuntimePermission())
+            Button(appString('app_permission_by_hand'), { type: ButtonType.Normal })
+              .width('100%')
+              .constraintSize({ minHeight: 48 })
+              .maxFontScale(1.6)
+              .fontColor(AppColor.accent)
+              .backgroundColor(AppColor.cardBackground)
+              .border({ width: 1, color: AppColor.divider, radius: AppRadius.button })
+              .margin({ top: AppSpacing.sm })
+              .onClick(() => this.openRuntimePermissionSettings())
+          }
+          .width('calc(100% - 24vp)')
+          .padding(AppSpacing.md)
         }
-        .padding(AppSpacing.md)
-        .backgroundColor('#E6FFFFFF')
+        .width('calc(100% - 40vp)')
+        .constraintSize({ maxWidth: 520, maxHeight: 520 })
+        .backgroundColor(AppColor.cardBackground)
         .borderRadius(AppRadius.card)
       }
       .width('100%')
       .height('100%')
+      .backgroundColor('#66000000')
+      .hitTestBehavior(HitTestMode.Default)
     }
   }
 
@@ -3265,17 +3946,20 @@ struct FeatureRuntimePage {
           .height(22)
           .objectFit(ImageFit.Contain)
       }
-        .width(40)
-        .height(40)
+        .width(48)
+        .height(48)
         .justifyContent(FlexAlign.Center)
         .alignItems(VerticalAlign.Center)
+        .accessibilityText($r('app.string.action_back'))
+        .accessibilityRole(AccessibilityRoleType.BACK_BUTTON)
         .onClick(() => router.back())
       Text(appString(this.titleKey))
-        .fontSize(22)
+        .fontSize(20)
         .fontWeight(FontWeight.Bold)
         .fontColor(AppColor.textPrimary)
         .layoutWeight(1)
-        .maxLines(1)
+        .maxFontScale(1.6)
+        .maxLines(2)
       if (this.liveCameraSwitchAvailable) {
         Row() {
           Image($r('app.media.icon_camera'))
@@ -3283,31 +3967,34 @@ struct FeatureRuntimePage {
             .height(24)
             .objectFit(ImageFit.Contain)
         }
-          .width(40)
-          .height(40)
+          .width(48)
+          .height(48)
           .justifyContent(FlexAlign.Center)
           .alignItems(VerticalAlign.Center)
+          .accessibilityText(appString('feature_runtime_switch_camera') as Resource)
+          .accessibilityRole(AccessibilityRoleType.BUTTON)
           .onClick(() => this.switchLiveCamera())
       }
       SaveButton({
         icon: SaveIconStyle.FULL_FILLED,
         buttonType: ButtonType.Normal
       })
-        .width(40)
-        .height(40)
+        .width(48)
+        .height(48)
         .enabled(compositeSegmentationSaveReady(this.workflowRunning,
           this.segmentationForegroundPixelMap !== undefined, this.resultImageSaveInFlight))
         .onClick((_event: ClickEvent, result: SaveButtonOnClickResult) => {
-          if (result === SaveButtonOnClickResult.SUCCESS) {
-            this.saveResultComponentImage(segmentationBackgroundReplacementComponentId);
-            return;
-          }
-          this.statusKey = 'feature_runtime_save_image_failed';
+        if (result === SaveButtonOnClickResult.SUCCESS) {
+          this.saveResultComponentImage(segmentationBackgroundReplacementComponentId);
+          return;
+        }
+        this.statusKey = 'feature_runtime_save_image_failed';
+        this.showRuntimeToast(this.statusKey);
         })
     }
     .width('100%')
-    .height(56)
-    .padding({ left: AppSpacing.page, right: AppSpacing.page })
+    .constraintSize({ minHeight: 56 })
+    .padding({ left: AppSpacing.page, right: AppSpacing.page, top: AppSpacing.xs, bottom: AppSpacing.xs })
     .alignItems(VerticalAlign.Center)
     .backgroundColor(Color.White)
   }
@@ -3319,12 +4006,12 @@ struct FeatureRuntimePage {
         .orientation(this.segmentationBackgroundImageOrientation)
         .width('100%')
         .height('100%')
-        .objectFit(ImageFit.Fill)
+        .objectFit(ImageFit.Contain)
       if (this.segmentationForegroundPixelMap !== undefined) {
         Image(this.segmentationForegroundPixelMap)
           .width('100%')
           .height('100%')
-          .objectFit(ImageFit.Fill)
+          .objectFit(ImageFit.Contain)
           .scale({ x: this.segmentationForegroundMirrorScaleX(), y: 1 })
       }
     }
@@ -3334,162 +4021,295 @@ struct FeatureRuntimePage {
   }
 
   @Builder
-  portraitSegmentationBackgroundStrip() {
-    Column() {
-      Divider()
-        .strokeWidth(5)
-        .color(AppColor.divider)
-        .width('100%')
-      List({ space: 0 }) {
-        ForEach(portraitSegmentationBackgroundPresets, (preset: PortraitSegmentationBackgroundPreset) => {
-          ListItem() {
-            Image(portraitSegmentationBackgroundUri(preset))
-              .width(95)
-              .height(120)
-              .objectFit(ImageFit.Fill)
-              .onClick(() => this.selectPortraitBackgroundPreset(preset))
-          }
-        }, (preset: PortraitSegmentationBackgroundPreset) => preset.id)
-        ListItem() {
-          Image($r('app.media.icon_default'))
-            .width(95)
-            .height(120)
-            .objectFit(ImageFit.Fill)
-            .onClick(() => this.prepareInput('backgroundImage'))
+  portraitSegmentationStatus() {
+    Row({ space: AppSpacing.sm }) {
+      Row({ space: AppSpacing.xs }) {
+        if (this.workflowRunning) {
+          LoadingProgress()
+            .width(20)
+            .height(20)
+            .color(AppColor.accent)
         }
+        Text(appString(this.statusKey))
+          .fontSize(13)
+          .fontColor(AppColor.textPrimary)
+          .maxFontScale(3.2)
+          .maxLines(2)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+          .layoutWeight(1)
       }
-      .listDirection(Axis.Horizontal)
-      .scrollBar(BarState.Off)
-      .width('100%')
-      .height(100)
-      .clip(true)
+      .layoutWeight(1)
+      .constraintSize({ minHeight: 48 })
+      .alignItems(VerticalAlign.Center)
+      if (this.liveSegmentationRetryAction() !== 'none') {
+        Button(appString('web_retry'), { type: ButtonType.Normal })
+          .constraintSize({ minWidth: 72, minHeight: 48 })
+          .fontSize(14)
+          .maxFontScale(3.2)
+          .fontColor(AppColor.accent)
+          .backgroundColor(AppColor.cardBackground)
+          .border({ width: 1, color: AppColor.divider, radius: AppRadius.button })
+          .onClick(() => this.retryLiveSegmentation())
+      }
+    }
+    .width('calc(100% - 32vp)')
+    .constraintSize({ maxWidth: 520 })
+    .padding({ left: AppSpacing.md, right: AppSpacing.md, top: AppSpacing.xs, bottom: AppSpacing.xs })
+    .backgroundColor(AppColor.cardBackground)
+    .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
+    .borderRadius(AppRadius.card)
+  }
+
+  @Builder
+  portraitSegmentationBackgroundStrip() {
+    List({ space: AppSpacing.sm }) {
+      ForEach(portraitSegmentationBackgroundPresets, (preset: PortraitSegmentationBackgroundPreset) => {
+        ListItem() {
+          Stack({ alignContent: Alignment.TopEnd }) {
+            Column({ space: AppSpacing.xs }) {
+              Image(portraitSegmentationBackgroundUri(preset))
+                .width(72)
+                .height(72)
+                .objectFit(ImageFit.Cover)
+              Text(appString(preset.titleKey))
+                .fontSize(12)
+                .fontColor(AppColor.textSecondary)
+                .textAlign(TextAlign.Center)
+                .maxFontScale(3.2)
+                .maxLines(2)
+                .width('100%')
+            }
+            .width(88)
+            if (this.selectedPortraitBackgroundPresetId === preset.id) {
+              SymbolGlyph($r('sys.symbol.checkmark'))
+                .fontSize(16)
+                .fontColor([Color.White])
+                .padding({ left: AppSpacing.xs, right: AppSpacing.xs })
+                .backgroundColor(AppColor.accent)
+                .borderRadius(AppRadius.button)
+            }
+          }
+          .width(96)
+          .padding(AppSpacing.xs)
+          .backgroundColor(this.selectedPortraitBackgroundPresetId === preset.id ? '#F0F3FF' : AppColor.cardBackground)
+          .border({
+            width: 1,
+            color: this.selectedPortraitBackgroundPresetId === preset.id ? AppColor.accent : AppColor.divider,
+            radius: AppRadius.card
+          })
+          .onClick(() => this.selectPortraitBackgroundPreset(preset))
+        }
+      }, (preset: PortraitSegmentationBackgroundPreset) => preset.id)
+      ListItem() {
+        Stack({ alignContent: Alignment.TopEnd }) {
+          Column({ space: AppSpacing.xs }) {
+            Image($r('app.media.icon_default'))
+              .width(72)
+              .height(72)
+              .objectFit(ImageFit.Contain)
+            Text(appString('feature_runtime_portrait_background_custom'))
+              .fontSize(12)
+              .fontColor(AppColor.textSecondary)
+              .textAlign(TextAlign.Center)
+              .maxFontScale(3.2)
+              .maxLines(2)
+              .width('100%')
+          }
+          .width(88)
+          if (this.selectedPortraitBackgroundPresetId === portraitSegmentationCustomBackgroundId) {
+            SymbolGlyph($r('sys.symbol.checkmark'))
+              .fontSize(16)
+              .fontColor([Color.White])
+              .padding({ left: AppSpacing.xs, right: AppSpacing.xs })
+              .backgroundColor(AppColor.accent)
+              .borderRadius(AppRadius.button)
+          }
+        }
+        .width(96)
+        .padding(AppSpacing.xs)
+        .backgroundColor(this.selectedPortraitBackgroundPresetId === portraitSegmentationCustomBackgroundId ?
+          '#F0F3FF' : AppColor.cardBackground)
+        .border({
+          width: 1,
+          color: this.selectedPortraitBackgroundPresetId === portraitSegmentationCustomBackgroundId ?
+            AppColor.accent : AppColor.divider,
+          radius: AppRadius.card
+        })
+        .onClick(() => this.prepareInput('backgroundImage'))
+      }
     }
     .width('100%')
-    .height(105)
-    .backgroundColor(AppColor.divider)
+    .height(184)
+    .padding({ left: AppSpacing.page, right: AppSpacing.page })
+    .listDirection(Axis.Horizontal)
+    .scrollBar(BarState.Off)
+  }
+
+  @Builder
+  stillScenePreviewContent() {
+    if (this.liveCameraInputSelected || this.liveCameraActive) {
+      this.liveCameraSurfaceContent()
+    } else if (this.imageInputUri.length > 0) {
+      Image(this.imageInputUri)
+        .width('100%')
+        .height('100%')
+        .objectFit(ImageFit.Contain)
+    } else {
+      Column({ space: AppSpacing.sm }) {
+        Image($r('app.media.icon_style'))
+          .width(56)
+          .height(56)
+          .objectFit(ImageFit.Contain)
+        Text(appString('workflow_summary_scene_still_android_prompt'))
+          .fontSize(16)
+          .fontColor(AppColor.textSecondary)
+          .textAlign(TextAlign.Center)
+          .maxFontScale(1.6)
+          .width('100%')
+      }
+      .width('100%')
+      .padding(AppSpacing.lg)
+      .alignItems(HorizontalAlign.Center)
+    }
   }
 
   @Builder
   stillSceneAndroidLayout() {
-    Stack({ alignContent: Alignment.TopStart }) {
-      Column() {
-        this.runtimeActionToolbar(false)
-        Row() {
-        }
-        .width('100%')
-        .height(1)
-        .backgroundColor('#E4E4E4')
-        Stack({ alignContent: Alignment.Center }) {
-          if (this.imageInputUri.length > 0) {
-            Image(this.imageInputUri)
-              .width(266)
-              .height(356)
-              .objectFit(ImageFit.Fill)
-          } else {
-            Column({ space: 10 }) {
-              Image($r('app.media.icon_style'))
-                .width(69.33)
-                .height(56.33)
-                .objectFit(ImageFit.Contain)
-              Text(appString('workflow_summary_scene_still_android_prompt'))
-                .fontSize(16)
-                .fontColor('#666666')
-                .textAlign(TextAlign.Center)
-            }
-            .alignItems(HorizontalAlign.Center)
-          }
-        }
-        .width('100%')
-        .height(376)
-        .backgroundColor('#E6E6E6')
-        Row() {
-          Button(appString('feature_input_photo_android'), { type: ButtonType.Normal })
-            .layoutWeight(1)
-            .height(37)
-            .margin({ left: 20, right: 5 })
-            .fontSize(14)
-            .fontWeight(FontWeight.Normal)
-            .fontColor('#666666')
-            .backgroundColor('#F4F3F8')
-            .borderRadius(5)
-            .enabled(!this.workflowRunning)
-            .onClick(() => this.prepareInput('photo'))
-          Button(appString('feature_input_camera_android'), { type: ButtonType.Normal })
-            .layoutWeight(1)
-            .height(37)
-            .margin({ left: 5, right: 5 })
-            .fontSize(14)
-            .fontWeight(FontWeight.Normal)
-            .fontColor('#666666')
-            .backgroundColor('#F4F3F8')
-            .borderRadius(5)
-            .enabled(!this.workflowRunning)
-            .onClick(() => this.prepareInput('camera'))
-          Button(appString('feature_runtime_go_live_android_hms'), { type: ButtonType.Normal })
-            .layoutWeight(1)
-            .height(37)
-            .margin({ left: 5, right: 5 })
-            .fontSize(14)
-            .fontWeight(FontWeight.Normal)
-            .fontColor('#666666')
-            .backgroundColor('#F4F3F8')
-            .borderRadius(5)
-            .enabled(!this.workflowRunning)
-            .onClick(() => {
-              this.openStillSceneLiveRoute()
-            })
-        }
-        .width('100%')
-        .margin({ top: 14 })
-        .alignItems(VerticalAlign.Center)
-        Scroll() {
-          Column() {
-            ForEach(this.resultRows, (row: AiRunResultRow) => {
-              Text() {
-                Span(appString(row.labelKey))
-                Span('\uFF1A')
-                Span(this.resultRowValue(row))
-              }
-              .fontSize(14)
-              .fontColor(Color.Black)
-              .width('100%')
-            }, (row: AiRunResultRow, index: number) => `${index}-${row.labelKey}-${row.value}`)
+    Column() {
+      this.runtimeActionToolbar(false)
+      Scroll() {
+        Column({ space: AppSpacing.md }) {
+          Stack({ alignContent: Alignment.Center }) {
+            this.stillScenePreviewContent()
           }
           .width('100%')
-          .alignItems(HorizontalAlign.Start)
+          .aspectRatio(4 / 3)
+          .constraintSize({ minHeight: 220, maxHeight: 420 })
+          .clip(true)
+          .backgroundColor(AppColor.cardBackground)
+          .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
+          Row({ space: AppSpacing.sm }) {
+            if (this.workflowRunning) {
+              LoadingProgress()
+                .width(24)
+                .height(24)
+            }
+            Text(appString(this.statusKey))
+              .fontSize(14)
+              .fontColor(AppColor.textSecondary)
+              .maxFontScale(1.6)
+              .layoutWeight(1)
+          }
+          .width('100%')
+          .constraintSize({ minHeight: 48 })
+          .padding(AppSpacing.md)
+          .alignItems(VerticalAlign.Center)
+          .backgroundColor(AppColor.cardBackground)
+          .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
+          Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.SpaceBetween }) {
+            Button(appString('feature_input_photo_android'), { type: ButtonType.Normal })
+              .width('calc(50% - 4vp)')
+              .constraintSize({ minHeight: 48 })
+              .maxFontScale(1.6)
+              .fontColor(AppColor.accent)
+              .backgroundColor(AppColor.cardBackground)
+              .border({ width: 1, color: AppColor.divider, radius: AppRadius.button })
+              .margin({ bottom: AppSpacing.sm })
+              .enabled(!this.workflowRunning)
+              .onClick(() => this.prepareInput('photo'))
+            Button(appString('feature_input_camera_android'), { type: ButtonType.Normal })
+              .width('calc(50% - 4vp)')
+              .constraintSize({ minHeight: 48 })
+              .maxFontScale(1.6)
+              .fontColor(AppColor.accent)
+              .backgroundColor(AppColor.cardBackground)
+              .border({ width: 1, color: AppColor.divider, radius: AppRadius.button })
+              .margin({ bottom: AppSpacing.sm })
+              .enabled(!this.workflowRunning)
+              .onClick(() => this.prepareInput('camera'))
+            Button(appString('feature_runtime_go_live_android_hms'), { type: ButtonType.Normal })
+              .width('calc(50% - 4vp)')
+              .constraintSize({ minHeight: 48 })
+              .maxFontScale(1.6)
+              .fontColor(AppColor.accent)
+              .backgroundColor(AppColor.cardBackground)
+              .border({ width: 1, color: AppColor.divider, radius: AppRadius.button })
+              .margin({ bottom: AppSpacing.sm })
+              .enabled(!this.workflowRunning)
+              .onClick(() => {
+                this.openStillSceneLiveRoute()
+              })
+            Button(appString(this.statusKey === 'feature_runtime_scene_failed' ||
+              this.statusKey === 'feature_runtime_scene_runner_unavailable' ?
+              'splash_permission_retry' : this.runActionKey))
+              .width('calc(50% - 4vp)')
+              .constraintSize({ minHeight: 48 })
+              .maxFontScale(1.6)
+              .fontColor(Color.White)
+              .backgroundColor(AppColor.accent)
+              .borderRadius(AppRadius.button)
+              .margin({ bottom: AppSpacing.sm })
+              .enabled(this.runActionEnabled())
+              .onClick(() => this.runPrimaryAction())
+          }
+          .width('100%')
+          if (this.resultRows.length > 0) {
+            Column({ space: AppSpacing.sm }) {
+              Text(appString(workflowResultTitleKey(workflowForRoute(this.routeName))))
+                .fontSize(16)
+                .fontWeight(FontWeight.Medium)
+                .fontColor(AppColor.textPrimary)
+                .maxFontScale(1.6)
+                .width('100%')
+              ForEach(this.resultRows, (row: AiRunResultRow) => {
+                Text() {
+                  Span(appString(row.labelKey))
+                  Span(appString('feature_runtime_result_separator'))
+                  Span(this.resultRowValue(row))
+                }
+                .fontSize(14)
+                .fontColor(AppColor.textPrimary)
+                .maxFontScale(1.6)
+                .width('100%')
+              }, (row: AiRunResultRow, index: number) => `${index}-${row.labelKey}-${row.value}`)
+            }
+            .width('100%')
+            .padding(AppSpacing.md)
+            .alignItems(HorizontalAlign.Start)
+            .backgroundColor(AppColor.cardBackground)
+            .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
+          }
         }
         .width('100%')
-        .layoutWeight(1)
-        .margin({ left: 20, right: 20, top: 14 })
+        .padding({ left: AppSpacing.page, right: AppSpacing.page, top: AppSpacing.md, bottom: AppSpacing.xl })
       }
       .width('100%')
-      .height('100%')
-      .backgroundColor(Color.White)
-      this.runtimePermissionRecoveryOverlay()
+      .layoutWeight(1)
+      .scrollBar(BarState.Auto)
     }
-    .width('100%')
-    .height('100%')
-    .backgroundColor(Color.White)
+      .width('100%')
+      .height('100%')
+      .backgroundColor(AppColor.pageBackground)
   }
 
   @Builder
   portraitSegmentationAndroidLayout() {
-    Column() {
+    Column({ space: AppSpacing.sm }) {
       this.portraitSegmentationToolbar()
       Stack({ alignContent: Alignment.TopStart }) {
         this.liveCameraSurfaceContent()
         this.portraitSegmentationComposite()
-        Column() {
-          this.portraitSegmentationBackgroundStrip()
-        }
-        .width('100%')
-        .height('100%')
-        .justifyContent(FlexAlign.End)
-        this.runtimePermissionRecoveryOverlay()
       }
       .width('100%')
       .layoutWeight(1)
       .backgroundColor('#111827')
+      .clip(true)
+      Row() {
+        this.portraitSegmentationStatus()
+      }
+      .width('100%')
+      .justifyContent(FlexAlign.Center)
+      this.portraitSegmentationBackgroundStrip()
     }
     .width('100%')
     .height('100%')
@@ -3502,21 +4322,22 @@ struct FeatureRuntimePage {
       this.runtimeActionToolbar(false)
       Stack({ alignContent: Alignment.TopStart }) {
         this.liveCameraSurfaceContent()
-        if (this.liveCameraSwitchAvailable) {
-          Column() {
-            Image($r('app.media.front_back_switch'))
-              .width(35)
-              .height(35)
-              .objectFit(ImageFit.Contain)
-              .margin({ bottom: 30 })
-              .onClick(() => this.switchLiveCamera())
+        Column() {
+          this.runtimeStatusBar()
+          if (this.liveCameraSwitchAvailable) {
+            this.runtimeCameraSwitchAction()
           }
-          .width('100%')
-          .height('100%')
-          .justifyContent(FlexAlign.End)
-          .alignItems(HorizontalAlign.Center)
         }
-        this.runtimePermissionRecoveryOverlay()
+        .width('100%')
+        .height('100%')
+        .padding({
+          left: AppSpacing.page,
+          right: AppSpacing.page,
+          top: AppSpacing.sm,
+          bottom: AppSpacing.md
+        })
+        .justifyContent(FlexAlign.SpaceBetween)
+        .alignItems(HorizontalAlign.Center)
       }
       .width('100%')
       .layoutWeight(1)
@@ -3525,6 +4346,168 @@ struct FeatureRuntimePage {
     .width('100%')
     .height('100%')
     .backgroundColor(AppColor.pageBackground)
+  }
+
+  @Builder
+  liveClassificationStatusOverlay() {
+    Column({ space: AppSpacing.sm }) {
+      Text(this.liveClassificationOverlayValue())
+        .width('100%')
+        .fontSize(18)
+        .fontWeight(FontWeight.Medium)
+        .fontColor(Color.White)
+        .maxFontScale(1.6)
+      Row({ space: AppSpacing.sm }) {
+        Row({ space: AppSpacing.xs }) {
+          if (this.statusKey === 'feature_runtime_status_preparing') {
+            LoadingProgress()
+              .width(20)
+              .height(20)
+              .color(Color.White)
+          }
+          Text(appString(this.statusKey))
+            .fontSize(13)
+            .fontColor('#E5E7EB')
+            .maxFontScale(1.6)
+            .layoutWeight(1)
+        }
+        .layoutWeight(1)
+        .constraintSize({ minHeight: 48 })
+        .alignItems(VerticalAlign.Center)
+        if (this.liveClassificationRetryAction() !== 'none') {
+          Button(appString('web_retry'), { type: ButtonType.Normal })
+            .constraintSize({ minWidth: 72, minHeight: 48 })
+            .fontSize(14)
+            .fontColor(Color.White)
+            .maxFontScale(1.6)
+            .backgroundColor(Color.Transparent)
+            .border({ width: 1, color: '#99FFFFFF', radius: AppRadius.button })
+            .onClick(() => this.retryLiveClassification())
+        }
+      }
+      .width('100%')
+      .alignItems(VerticalAlign.Center)
+    }
+    .width('calc(100% - 32vp)')
+    .constraintSize({ maxWidth: 520 })
+    .padding({ left: AppSpacing.md, right: AppSpacing.md, top: AppSpacing.sm, bottom: AppSpacing.sm })
+    .backgroundColor('#B31F2937')
+    .borderRadius(AppRadius.card)
+  }
+
+  @Builder
+  liveSegmentationStatusOverlay() {
+    Row({ space: AppSpacing.sm }) {
+      Row({ space: AppSpacing.xs }) {
+        if (this.statusKey === 'feature_runtime_status_preparing') {
+          LoadingProgress()
+            .width(20)
+            .height(20)
+            .color(Color.White)
+        }
+        Text(appString(this.statusKey))
+          .fontSize(13)
+          .fontColor('#F3F4F6')
+          .maxFontScale(1.6)
+          .layoutWeight(1)
+      }
+      .layoutWeight(1)
+      .constraintSize({ minHeight: 48 })
+      .alignItems(VerticalAlign.Center)
+      if (this.liveSegmentationRetryAction() !== 'none') {
+        Button(appString('web_retry'), { type: ButtonType.Normal })
+          .constraintSize({ minWidth: 72, minHeight: 48 })
+          .fontSize(14)
+          .fontColor(Color.White)
+          .maxFontScale(1.6)
+          .backgroundColor(Color.Transparent)
+          .border({ width: 1, color: '#99FFFFFF', radius: AppRadius.button })
+          .onClick(() => this.retryLiveSegmentation())
+      }
+    }
+    .width('calc(100% - 32vp)')
+    .constraintSize({ maxWidth: 520 })
+    .padding({ left: AppSpacing.md, right: AppSpacing.md, top: AppSpacing.xs, bottom: AppSpacing.xs })
+    .backgroundColor('#B31F2937')
+    .borderRadius(AppRadius.card)
+  }
+
+  @Builder
+  liveGestureStatusOverlay() {
+    Row({ space: AppSpacing.sm }) {
+      Row({ space: AppSpacing.xs }) {
+        if (this.statusKey === 'feature_runtime_status_preparing') {
+          LoadingProgress()
+            .width(20)
+            .height(20)
+            .color(Color.White)
+        }
+        Text(appString(this.statusKey))
+          .fontSize(13)
+          .fontColor('#F3F4F6')
+          .maxFontScale(3.2)
+          .maxLines(2)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+          .layoutWeight(1)
+      }
+      .layoutWeight(1)
+      .constraintSize({ minHeight: 48 })
+      .alignItems(VerticalAlign.Center)
+      if (this.liveGestureRetryAction() !== 'none') {
+        Button(appString('web_retry'), { type: ButtonType.Normal })
+          .constraintSize({ minWidth: 72, minHeight: 48 })
+          .fontSize(14)
+          .fontColor(Color.White)
+          .maxFontScale(3.2)
+          .backgroundColor(Color.Transparent)
+          .border({ width: 1, color: '#99FFFFFF', radius: AppRadius.button })
+          .onClick(() => this.retryLiveGesture())
+      }
+    }
+    .width('calc(100% - 32vp)')
+    .constraintSize({ maxWidth: 520 })
+    .padding({ left: AppSpacing.md, right: AppSpacing.md, top: AppSpacing.xs, bottom: AppSpacing.xs })
+    .backgroundColor('#B31F2937')
+    .borderRadius(AppRadius.card)
+  }
+
+  @Builder
+  liveSkeletonStatusOverlay() {
+    Row({ space: AppSpacing.sm }) {
+      Row({ space: AppSpacing.xs }) {
+        if (this.statusKey === 'feature_runtime_status_preparing') {
+          LoadingProgress()
+            .width(20)
+            .height(20)
+            .color(Color.White)
+        }
+        Text(appString(this.statusKey))
+          .fontSize(13)
+          .fontColor('#F3F4F6')
+          .maxFontScale(3.2)
+          .maxLines(2)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+          .layoutWeight(1)
+      }
+      .layoutWeight(1)
+      .constraintSize({ minHeight: 48 })
+      .alignItems(VerticalAlign.Center)
+      if (this.liveSkeletonRetryAction() !== 'none') {
+        Button(appString('web_retry'), { type: ButtonType.Normal })
+          .constraintSize({ minWidth: 72, minHeight: 48 })
+          .fontSize(14)
+          .fontColor(Color.White)
+          .maxFontScale(3.2)
+          .backgroundColor(Color.Transparent)
+          .border({ width: 1, color: '#99FFFFFF', radius: AppRadius.button })
+          .onClick(() => this.retryLiveSkeleton())
+      }
+    }
+    .layoutWeight(1)
+    .constraintSize({ maxWidth: 520 })
+    .padding({ left: AppSpacing.md, right: AppSpacing.md, top: AppSpacing.xs, bottom: AppSpacing.xs })
+    .backgroundColor('#B31F2937')
+    .borderRadius(AppRadius.card)
   }
 
   @Builder
@@ -3534,30 +4517,13 @@ struct FeatureRuntimePage {
       Stack({ alignContent: Alignment.TopStart }) {
         this.liveCameraSurfaceContent()
         Column() {
-          Column() {
-            Text(this.liveClassificationOverlayValue())
-              .fontSize(14)
-              .fontWeight(FontWeight.Bold)
-              .fontColor(AppColor.textPrimary)
-              .maxLines(1)
-              .textOverflow({ overflow: TextOverflow.Ellipsis })
-              .margin({ top: 6 })
-            Divider()
-              .strokeWidth(0.5)
-              .color('#E6E6E6')
-              .width('100%')
-              .margin({ top: 10 })
-          }
-          .width('100%')
-          .height(100)
-          .padding({ left: 15, right: 15 })
-          .alignItems(HorizontalAlign.Start)
-          .backgroundColor(Color.White)
+          this.liveClassificationStatusOverlay()
         }
         .width('100%')
         .height('100%')
+        .padding({ bottom: AppSpacing.md })
         .justifyContent(FlexAlign.End)
-        this.runtimePermissionRecoveryOverlay()
+        .alignItems(HorizontalAlign.Center)
       }
       .width('100%')
       .layoutWeight(1)
@@ -3569,24 +4535,238 @@ struct FeatureRuntimePage {
   }
 
   @Builder
-  objectDetectionAndroidLiveLayout() {
+  segmentationAndroidLiveLayout() {
     Column() {
       this.runtimeActionToolbar(true)
       Stack({ alignContent: Alignment.TopStart }) {
         this.liveCameraSurfaceContent()
-        Column() {
-          Button(appString(workflowInputLabelKey(workflowForRoute(this.routeName), 'modelFile')))
-            .fontSize(16)
-            .fontColor(Color.White)
-            .backgroundColor('#33B5E5')
-            .onClick(() => this.prepareInput('modelFile'))
+        Column({ space: AppSpacing.md }) {
+          Row() {
+            if (this.liveCameraSwitchAvailable) {
+              this.runtimeCameraSwitchAction()
+            }
+          }
+          .width('100%')
+          .padding({ left: AppSpacing.md, right: AppSpacing.md })
+          .justifyContent(FlexAlign.End)
+          Row() {
+            this.liveSegmentationStatusOverlay()
+          }
+          .width('100%')
+          .justifyContent(FlexAlign.Center)
         }
         .width('100%')
         .height('100%')
-        .padding({ right: 16, bottom: 16 })
-        .justifyContent(FlexAlign.End)
-        .alignItems(HorizontalAlign.End)
-        this.runtimePermissionRecoveryOverlay()
+        .padding({ top: AppSpacing.sm, bottom: AppSpacing.md })
+        .justifyContent(FlexAlign.SpaceBetween)
+      }
+      .width('100%')
+      .layoutWeight(1)
+      .backgroundColor('#111827')
+    }
+    .width('100%')
+    .height('100%')
+    .backgroundColor(AppColor.pageBackground)
+  }
+
+  @Builder
+  gestureAndroidLiveLayout() {
+    Column() {
+      this.runtimeActionToolbar(true)
+      Stack({ alignContent: Alignment.TopStart }) {
+        this.liveCameraSurfaceContent()
+        Column({ space: AppSpacing.md }) {
+          Row() {
+            if (this.liveCameraSwitchAvailable) {
+              this.runtimeCameraSwitchAction()
+            }
+          }
+          .width('100%')
+          .padding({ left: AppSpacing.md, right: AppSpacing.md })
+          .justifyContent(FlexAlign.End)
+          Row() {
+            this.liveGestureStatusOverlay()
+          }
+          .width('100%')
+          .justifyContent(FlexAlign.Center)
+        }
+        .width('100%')
+        .height('100%')
+        .padding({ top: AppSpacing.sm, bottom: AppSpacing.md })
+        .justifyContent(FlexAlign.SpaceBetween)
+      }
+      .width('100%')
+      .layoutWeight(1)
+      .backgroundColor('#111827')
+      .onAreaChange((_previousArea: Area, currentArea: Area) => {
+        const width = Number(currentArea.width);
+        this.liveGestureOverlayWidthVp = Number.isFinite(width) && width > 0 ? width : 0;
+      })
+    }
+    .width('100%')
+    .height('100%')
+    .backgroundColor(AppColor.pageBackground)
+  }
+
+  @Builder
+  skeletonAndroidLiveLayout() {
+    Column({ space: AppSpacing.sm }) {
+      this.runtimeActionToolbar(true)
+      Stack({ alignContent: Alignment.TopStart }) {
+        this.liveCameraSurfaceContent()
+      }
+      .width('100%')
+      .layoutWeight(1)
+      .backgroundColor('#111827')
+      Row({ space: AppSpacing.sm }) {
+        this.liveSkeletonStatusOverlay()
+        if (this.liveCameraSwitchAvailable) {
+          this.runtimeCameraSwitchAction()
+        }
+      }
+      .width('100%')
+      .padding({ left: AppSpacing.md, right: AppSpacing.md, bottom: AppSpacing.md })
+      .justifyContent(FlexAlign.Center)
+      .alignItems(VerticalAlign.Center)
+    }
+    .width('100%')
+    .height('100%')
+    .backgroundColor(AppColor.pageBackground)
+  }
+
+  @Builder
+  liveSceneStatusOverlay() {
+    Row({ space: AppSpacing.sm }) {
+      Row({ space: AppSpacing.xs }) {
+        if (this.statusKey === 'feature_runtime_status_preparing') {
+          LoadingProgress()
+            .width(20)
+            .height(20)
+            .color(Color.White)
+        }
+        Text(appString(this.statusKey))
+          .fontSize(13)
+          .fontColor('#F3F4F6')
+          .maxFontScale(3.2)
+          .maxLines(2)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+          .layoutWeight(1)
+      }
+      .layoutWeight(1)
+      .constraintSize({ minHeight: 48 })
+      .alignItems(VerticalAlign.Center)
+      if (this.liveSceneRetryAction() !== 'none') {
+        Button(appString('web_retry'), { type: ButtonType.Normal })
+          .constraintSize({ minWidth: 72, minHeight: 48 })
+          .fontSize(14)
+          .fontColor(Color.White)
+          .maxFontScale(3.2)
+          .backgroundColor(Color.Transparent)
+          .border({ width: 1, color: '#99FFFFFF', radius: AppRadius.button })
+          .onClick(() => this.retryLiveScene())
+      }
+    }
+    .width('calc(100% - 32vp)')
+    .constraintSize({ maxWidth: 520 })
+    .padding({ left: AppSpacing.md, right: AppSpacing.md, top: AppSpacing.xs, bottom: AppSpacing.xs })
+    .backgroundColor('#B31F2937')
+    .borderRadius(AppRadius.card)
+  }
+
+  @Builder
+  sceneLiveOverlayAndCameraActionLane() {
+    Row({ space: AppSpacing.sm }) {
+      if (this.sceneOverlayRows.length > 0 && this.shouldShowLiveSceneOverlay()) {
+        this.liveSceneOverlay()
+      }
+      if (this.liveCameraSwitchAvailable) {
+        this.runtimeCameraSwitchAction()
+      }
+    }
+    .width('100%')
+    .padding({ left: AppSpacing.md, right: AppSpacing.md })
+    .justifyContent(FlexAlign.End)
+    .alignItems(VerticalAlign.Top)
+  }
+
+  @Builder
+  sceneAndroidLiveLayout() {
+    Column() {
+      this.runtimeActionToolbar(true)
+      Stack({ alignContent: Alignment.TopStart }) {
+        this.liveCameraSurfaceContent()
+        Column({ space: AppSpacing.md }) {
+          this.sceneLiveOverlayAndCameraActionLane()
+          Row() {
+            this.liveSceneStatusOverlay()
+          }
+          .width('100%')
+          .justifyContent(FlexAlign.Center)
+        }
+        .width('100%')
+        .height('100%')
+        .padding({ top: AppSpacing.sm, bottom: AppSpacing.md })
+        .justifyContent(FlexAlign.SpaceBetween)
+      }
+      .width('100%')
+      .layoutWeight(1)
+      .backgroundColor('#111827')
+    }
+    .width('100%')
+    .height('100%')
+    .backgroundColor(AppColor.pageBackground)
+  }
+
+  @Builder
+  liveObjectDetectionStatusOverlay() {
+    Row({ space: AppSpacing.sm }) {
+      Row({ space: AppSpacing.xs }) {
+        if (this.statusKey === 'feature_runtime_status_preparing') {
+          LoadingProgress()
+            .width(20)
+            .height(20)
+            .color(Color.White)
+        }
+        Text(appString(this.statusKey))
+          .fontSize(13)
+          .fontColor('#F3F4F6')
+          .maxFontScale(1.6)
+          .layoutWeight(1)
+      }
+      .layoutWeight(1)
+      .constraintSize({ minHeight: 48 })
+      .alignItems(VerticalAlign.Center)
+      if (this.liveObjectDetectionRetryAction() !== 'none') {
+        Button(appString('web_retry'), { type: ButtonType.Normal })
+          .constraintSize({ minWidth: 72, minHeight: 48 })
+          .fontSize(14)
+          .fontColor(Color.White)
+          .maxFontScale(1.6)
+          .backgroundColor(Color.Transparent)
+          .border({ width: 1, color: '#99FFFFFF', radius: AppRadius.button })
+          .onClick(() => this.retryLiveObjectDetection())
+      }
+    }
+    .width('calc(100% - 32vp)')
+    .constraintSize({ maxWidth: 520 })
+    .padding({ left: AppSpacing.md, right: AppSpacing.md, top: AppSpacing.xs, bottom: AppSpacing.xs })
+    .backgroundColor('#B31F2937')
+    .borderRadius(AppRadius.card)
+  }
+
+  @Builder
+  objectDetectionAndroidLiveLayout() {
+    Column() {
+      this.runtimeActionToolbar(true)
+      Row() {
+        this.liveObjectDetectionStatusOverlay()
+      }
+      .width('100%')
+      .padding({ top: AppSpacing.sm, bottom: AppSpacing.sm })
+      .justifyContent(FlexAlign.Center)
+      .backgroundColor('#111827')
+      Stack({ alignContent: Alignment.TopStart }) {
+        this.liveCameraSurfaceContent()
       }
       .width('100%')
       .layoutWeight(1)
@@ -3604,131 +4784,270 @@ struct FeatureRuntimePage {
   }
 
   @Builder
-  objectPhotoAndroidLayout() {
-    Column() {
-      this.runtimeActionToolbar(true)
-      Stack({ alignContent: Alignment.Center }) {
-        if (this.objectDetectionImageUri.length > 0 && this.objectDetections.length > 0) {
-          Stack({ alignContent: Alignment.TopStart }) {
-            Image(this.objectDetectionImageUri)
-              .orientation(this.objectDetectionImageOrientation)
-              .width('100%')
-              .height('100%')
-              .objectFit(ImageFit.Fill)
-            ForEach(this.objectDetections, (detection: ObjectDetection, index: number) => {
-              this.objectDetectionBox(detection, index)
-            }, (detection: ObjectDetection) => `${detection.imageId}-${detection.labelId}-${detection.score}`)
-          }
-          .width('100%')
-          .aspectRatio(this.objectDetectionAspectRatio())
-          .clip(true)
-        } else if (this.imageInputUri.length > 0) {
-          Image(this.imageInputUri)
+  objectPhotoAndroidPreview() {
+    Stack({ alignContent: Alignment.Center }) {
+      if (this.objectDetectionImageUri.length > 0 && this.objectDetections.length > 0) {
+        Stack({ alignContent: Alignment.TopStart }) {
+          Image(this.objectDetectionImageUri)
+            .orientation(this.objectDetectionImageOrientation)
             .width('100%')
             .height('100%')
+            .objectFit(ImageFit.Fill)
+          ForEach(this.objectDetections, (detection: ObjectDetection, index: number) => {
+            this.objectPhotoDetectionBox(detection, index)
+          }, (detection: ObjectDetection) => `${detection.imageId}-${detection.labelId}-${detection.score}`)
+        }
+        .width(this.percentLength(this.objectPhotoPreviewWidthPercent()))
+        .height(this.percentLength(this.objectPhotoPreviewHeightPercent()))
+        .clip(true)
+        .onAreaChange((_previousArea: Area, currentArea: Area) => {
+          const width = Number(currentArea.width);
+          const height = Number(currentArea.height);
+          this.objectPhotoOverlayWidthVp = Number.isFinite(width) && width > 0 ? width : 0;
+          this.objectPhotoOverlayHeightVp = Number.isFinite(height) && height > 0 ? height : 0;
+        })
+      } else if (this.imageInputUri.length > 0) {
+        Image(this.imageInputUri)
+          .width('100%')
+          .height('100%')
+          .objectFit(ImageFit.Contain)
+      } else {
+        Column({ space: AppSpacing.sm }) {
+          Image($r('app.media.icon_style'))
+            .width(56)
+            .height(56)
             .objectFit(ImageFit.Contain)
+          Text(appString('feature_runtime_help_object_photo'))
+            .fontSize(14)
+            .fontColor(AppColor.textSecondary)
+            .maxFontScale(1.6)
+            .textAlign(TextAlign.Center)
+            .width('100%')
         }
-        Column() {
-          Button(appString(workflowInputLabelKey(workflowForRoute(this.routeName), 'modelFile')), { type: ButtonType.Normal })
-            .fontSize(16)
-            .fontColor(Color.White)
-            .backgroundColor('#33B5E5')
-            .enabled(!this.workflowRunning)
-            .onClick(() => this.prepareInput('modelFile'))
-        }
-        .width('100%')
-        .height('100%')
-        .padding({ right: 16, bottom: 16 })
-        .justifyContent(FlexAlign.End)
-        .alignItems(HorizontalAlign.End)
-        this.runtimePermissionRecoveryOverlay()
+        .padding(AppSpacing.md)
+        .alignItems(HorizontalAlign.Center)
       }
-      .width('100%')
-      .layoutWeight(1)
-      .backgroundColor(Color.White)
     }
     .width('100%')
     .height('100%')
-    .backgroundColor(Color.White)
+    .clip(true)
+    .backgroundColor(AppColor.cardBackground)
+  }
+
+  @Builder
+  objectPhotoAndroidLayout() {
+    Column() {
+      this.runtimeActionToolbar(true)
+      Scroll() {
+        Column({ space: AppSpacing.md }) {
+          Stack({ alignContent: Alignment.Center }) {
+            this.objectPhotoAndroidPreview()
+          }
+          .width('100%')
+          .aspectRatio(4 / 3)
+          .constraintSize({ minHeight: 220, maxHeight: 420 })
+          .clip(true)
+          .backgroundColor(AppColor.cardBackground)
+          .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
+          Row({ space: AppSpacing.sm }) {
+            if (this.workflowRunning) {
+              LoadingProgress()
+                .width(24)
+                .height(24)
+            }
+            Text(appString(this.statusKey))
+              .fontSize(14)
+              .fontColor(AppColor.textSecondary)
+              .maxFontScale(1.6)
+              .maxLines(3)
+              .layoutWeight(1)
+          }
+          .width('100%')
+          .constraintSize({ minHeight: 48 })
+          .padding(AppSpacing.md)
+          .alignItems(VerticalAlign.Center)
+          .backgroundColor(AppColor.cardBackground)
+          .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
+          Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.SpaceBetween }) {
+            Button(appString(workflowInputLabelKey(workflowForRoute(this.routeName), 'photo')), { type: ButtonType.Normal })
+              .width('calc(50% - 4vp)')
+              .constraintSize({ minHeight: 48 })
+              .maxFontScale(1.6)
+              .fontColor(AppColor.accent)
+              .backgroundColor(AppColor.cardBackground)
+              .border({ width: 1, color: AppColor.divider, radius: AppRadius.button })
+              .margin({ bottom: AppSpacing.sm })
+              .enabled(!this.workflowRunning)
+              .onClick(() => this.prepareInput('photo'))
+            Button(appString(this.statusKey === 'feature_runtime_object_detection_failed' ||
+              this.statusKey === 'feature_runtime_run_failed' ?
+              'web_retry' : this.runActionKey))
+              .width('calc(50% - 4vp)')
+              .constraintSize({ minHeight: 48 })
+              .maxFontScale(1.6)
+              .fontColor(Color.White)
+              .backgroundColor(AppColor.accent)
+              .borderRadius(AppRadius.button)
+              .margin({ bottom: AppSpacing.sm })
+              .enabled(this.runActionEnabled())
+              .onClick(() => this.runPrimaryAction())
+          }
+          .width('100%')
+          if (this.resultRows.length > 0) {
+            Column({ space: AppSpacing.sm }) {
+              Text(appString(workflowResultTitleKey(workflowForRoute(this.routeName))))
+                .fontSize(16)
+                .fontWeight(FontWeight.Medium)
+                .fontColor(AppColor.textPrimary)
+                .maxFontScale(1.6)
+                .width('100%')
+              ForEach(this.resultRows, (row: AiRunResultRow) => {
+                Text() {
+                  Span(appString(row.labelKey))
+                  Span(appString('feature_runtime_result_separator'))
+                  Span(this.resultRowValue(row))
+                }
+                .fontSize(14)
+                .fontColor(AppColor.textSecondary)
+                .maxFontScale(1.6)
+                .width('100%')
+              }, (row: AiRunResultRow, index: number) => `${index}-${row.labelKey}-${row.value}`)
+            }
+            .width('100%')
+            .padding(AppSpacing.md)
+            .alignItems(HorizontalAlign.Start)
+            .backgroundColor(AppColor.cardBackground)
+            .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
+          }
+        }
+        .width('100%')
+        .padding({ left: AppSpacing.page, right: AppSpacing.page, top: AppSpacing.md, bottom: AppSpacing.xl })
+      }
+      .width('100%')
+      .layoutWeight(1)
+      .align(Alignment.TopStart)
+      .scrollBar(BarState.Auto)
+    }
+    .width('100%')
+    .height('100%')
+    .backgroundColor(AppColor.pageBackground)
   }
 
   @Builder
   styleTransferAndroidLayout() {
-    Stack({ alignContent: Alignment.TopStart }) {
-      Column() {
-        this.runtimeActionToolbar(true)
-        Row() {
-        }
-        .width('100%')
-        .height(1)
-        .backgroundColor('#E4E4E4')
-        Stack({ alignContent: Alignment.Center }) {
-          if (this.styledImagePixelMap !== undefined && !this.styleOriginalPreviewRecovered) {
-            Image(this.styledImagePixelMap)
-              .width(256)
-              .height(256)
-              .objectFit(ImageFit.Contain)
-          } else if (this.styleTransferContentInputReady()) {
-            Image(this.contentImageUri.length > 0 ? this.contentImageUri : this.imageInputUri)
-              .width(256)
-              .height(256)
-              .objectFit(ImageFit.Contain)
-          } else {
-            Column() {
-              Image($r('app.media.icon_style'))
-                .width(64)
-                .height(64)
+    Column() {
+      this.runtimeActionToolbar(true)
+      Scroll() {
+        Column() {
+          Stack({ alignContent: Alignment.Center }) {
+            if (this.styledImagePixelMap !== undefined && !this.styleOriginalPreviewRecovered) {
+              Image(this.styledImagePixelMap)
+                .width('100%')
+                .height('100%')
+                .padding(AppSpacing.md)
                 .objectFit(ImageFit.Contain)
-              Text(appString('feature_runtime_style_choose_image'))
-                .fontSize(16)
-                .fontColor('#666666')
-                .margin({ top: 8 })
+            } else if (this.styleTransferContentInputReady()) {
+              Image(this.contentImageUri.length > 0 ? this.contentImageUri : this.imageInputUri)
+                .width('100%')
+                .height('100%')
+                .padding(AppSpacing.md)
+                .objectFit(ImageFit.Contain)
+            } else {
+              Column() {
+                Image($r('app.media.icon_style'))
+                  .width(64)
+                  .height(64)
+                  .objectFit(ImageFit.Contain)
+                Text(appString('feature_runtime_style_choose_image'))
+                  .fontSize(16)
+                  .fontColor(AppColor.textSecondary)
+                  .maxFontScale(3.2)
+                  .maxLines(2)
+                  .margin({ top: AppSpacing.sm })
+              }
+              .alignItems(HorizontalAlign.Center)
             }
-            .alignItems(HorizontalAlign.Center)
           }
-          if (this.workflowRunning) {
-            LoadingProgress()
-              .width(80)
-              .height(80)
+          .width('100%')
+          .aspectRatio(4 / 3)
+          .constraintSize({ minHeight: 220, maxHeight: 420 })
+          .backgroundColor(AppColor.cardBackground)
+          .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
+          .margin({ top: AppSpacing.md })
+
+          Button(appString(this.statusKey === 'feature_runtime_style_transfer_failed' ||
+            this.statusKey === 'feature_runtime_run_failed' ? 'web_retry' : this.runActionKey))
+            .width('100%')
+            .constraintSize({ minHeight: 48 })
+            .fontSize(16)
+            .maxFontScale(3.2)
+            .fontWeight(FontWeight.Medium)
+            .fontColor(Color.White)
+            .backgroundColor(AppColor.accent)
+            .borderRadius(AppRadius.button)
+            .enabled(this.styleTransferRunEnabled())
+            .onClick(() => this.runWorkflow())
+
+          Row() {
+            if (this.workflowRunning) {
+              LoadingProgress()
+                .width(20)
+                .height(20)
+                .margin({ right: AppSpacing.sm })
+            }
+            Text(appString(this.statusKey))
+              .fontSize(14)
+              .fontColor(AppColor.textSecondary)
+              .maxFontScale(3.2)
+              .maxLines(3)
+              .layoutWeight(1)
           }
-        }
-        .width('100%')
-        .height(265)
-        .backgroundColor('#F4F3F8')
-        Row() {
+          .width('100%')
+          .constraintSize({ minHeight: 56 })
+          .padding({ left: AppSpacing.md, right: AppSpacing.md })
+          .backgroundColor(AppColor.cardBackground)
+          .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
+          .margin({ top: AppSpacing.sm })
+
           Button(appString('feature_runtime_style_album'), { type: ButtonType.Normal })
-            .layoutWeight(1)
-            .height(37)
-            .margin({ left: 20, right: 5 })
-            .fontSize(14)
-            .fontWeight(FontWeight.Normal)
-            .fontColor('#666666')
-            .backgroundColor('#F4F3F8')
-            .borderRadius(5)
+            .width('100%')
+            .constraintSize({ minHeight: 48 })
+            .fontSize(15)
+            .maxFontScale(3.2)
+            .fontColor(AppColor.accent)
+            .backgroundColor(AppColor.cardBackground)
+            .border({ width: 1, color: AppColor.divider })
+            .borderRadius(AppRadius.button)
             .enabled(!this.workflowRunning)
+            .margin({ top: AppSpacing.md })
             .onClick(() => this.prepareInput('contentImage'))
+
           Button(appString(workflowInputLabelKey(workflowForRoute(this.routeName), 'camera')), { type: ButtonType.Normal })
-            .layoutWeight(1)
-            .height(37)
-            .margin({ left: 5, right: 5 })
-            .fontSize(14)
-            .fontWeight(FontWeight.Normal)
-            .fontColor('#666666')
-            .backgroundColor('#F4F3F8')
-            .borderRadius(5)
+            .width('100%')
+            .constraintSize({ minHeight: 48 })
+            .fontSize(15)
+            .maxFontScale(3.2)
+            .fontColor(AppColor.accent)
+            .backgroundColor(AppColor.cardBackground)
+            .border({ width: 1, color: AppColor.divider })
+            .borderRadius(AppRadius.button)
             .enabled(!this.workflowRunning)
+            .margin({ top: AppSpacing.sm })
             .onClick(() => this.prepareInput('camera'))
+
           Button(appString('feature_runtime_style_recovery'), { type: ButtonType.Normal })
-            .layoutWeight(1)
-            .height(37)
-            .margin({ left: 5, right: 5 })
-            .fontSize(14)
-            .fontWeight(FontWeight.Normal)
-            .fontColor('#666666')
-            .backgroundColor('#F4F3F8')
-            .borderRadius(5)
+            .width('100%')
+            .constraintSize({ minHeight: 48 })
+            .fontSize(15)
+            .maxFontScale(3.2)
+            .fontColor(AppColor.accent)
+            .backgroundColor(AppColor.cardBackground)
+            .border({ width: 1, color: AppColor.divider })
+            .borderRadius(AppRadius.button)
             .enabled(!this.workflowRunning)
+            .margin({ top: AppSpacing.sm })
             .onClick(() => this.recoverStyleOriginalPreview())
+
           Column() {
             SaveButton({
               icon: SaveIconStyle.FULL_FILLED,
@@ -3736,10 +5055,12 @@ struct FeatureRuntimePage {
               buttonType: ButtonType.Capsule
             })
               .width('100%')
-              .height(37)
-              .fontSize(14)
-              .fontColor('#666666')
-              .backgroundColor('#F4F3F8')
+              .constraintSize({ minHeight: 48 })
+              .fontSize(15)
+              .maxFontScale(3.2)
+              .fontColor(AppColor.accent)
+              .backgroundColor(AppColor.cardBackground)
+              .borderRadius(AppRadius.button)
               .enabled(styleTransferSaveReady(
                 this.workflowRunning,
                 this.styleTransferResultReady && this.styledImagePixelMap !== undefined,
@@ -3761,127 +5082,139 @@ struct FeatureRuntimePage {
                 this.showRuntimeToast(this.statusKey);
               })
           }
-          .layoutWeight(1)
-          .height(37)
-          .margin({ left: 5, right: 20 })
+          .width('100%')
+          .border({ width: 1, color: AppColor.divider, radius: AppRadius.button })
+          .margin({ top: AppSpacing.sm })
+
+          this.styleTransferStyleGrid()
         }
         .width('100%')
-        .height(37)
-        .margin({ top: 14 })
-        Row() {
-          Button(appString(workflowInputLabelKey(workflowForRoute(this.routeName), 'stylePredictModelFile')), { type: ButtonType.Normal })
-            .layoutWeight(1)
-            .height(37)
-            .margin({ left: 20, right: 5 })
-            .fontSize(14)
-            .fontWeight(FontWeight.Normal)
-            .fontColor('#666666')
-            .backgroundColor('#F4F3F8')
-            .borderRadius(5)
-            .enabled(!this.workflowRunning)
-            .onClick(() => this.prepareInput('stylePredictModelFile'))
-          Button(appString(workflowInputLabelKey(workflowForRoute(this.routeName), 'styleTransferModelFile')), { type: ButtonType.Normal })
-            .layoutWeight(1)
-            .height(37)
-            .margin({ left: 5, right: 20 })
-            .fontSize(14)
-            .fontWeight(FontWeight.Normal)
-            .fontColor('#666666')
-            .backgroundColor('#F4F3F8')
-            .borderRadius(5)
-            .enabled(!this.workflowRunning)
-            .onClick(() => this.prepareInput('styleTransferModelFile'))
-        }
-        .width('100%')
-        .height(37)
-        .margin({ top: 8 })
-        this.styleTransferStyleGrid()
+        .padding({ left: AppSpacing.page, right: AppSpacing.page, bottom: AppSpacing.xl + AppSpacing.page * 2 + AppSpacing.lg })
       }
       .width('100%')
-      .height('100%')
-      .backgroundColor(Color.White)
-      this.runtimePermissionRecoveryOverlay()
+      .layoutWeight(1)
+      .scrollBar(BarState.Auto)
     }
     .width('100%')
     .height('100%')
-    .backgroundColor(Color.White)
+    .backgroundColor(AppColor.pageBackground)
+  }
+
+  @Builder
+  stillSegmentationAndroidPreview() {
+    Stack({ alignContent: Alignment.Center }) {
+      if (this.segmentationForegroundPixelMap !== undefined) {
+        Image(this.segmentationForegroundPixelMap)
+          .width('100%')
+          .height('100%')
+          .objectFit(ImageFit.Contain)
+      } else if (this.imageInputUri.length > 0) {
+        Image(this.imageInputUri)
+          .width('100%')
+          .height('100%')
+          .objectFit(ImageFit.Contain)
+      } else {
+        Column({ space: AppSpacing.sm }) {
+          Image($r('app.media.feature_segmentation'))
+            .width(56)
+            .height(56)
+            .objectFit(ImageFit.Contain)
+          Text(appString('workflow_summary_segmentation'))
+            .fontSize(16)
+            .fontColor(AppColor.textSecondary)
+            .maxFontScale(1.6)
+            .textAlign(TextAlign.Center)
+            .width('100%')
+        }
+        .padding(AppSpacing.lg)
+        .alignItems(HorizontalAlign.Center)
+      }
+    }
+    .width('100%')
+    .height('100%')
+    .clip(true)
+    .backgroundColor(AppColor.cardBackground)
   }
 
   @Builder
   stillSegmentationAndroidLayout() {
-    Stack({ alignContent: Alignment.TopStart }) {
-      Column() {
-        this.runtimeActionToolbar(false)
-        Row() {
-        }
-        .width('100%')
-        .height(1)
-        .backgroundColor('#E4E4E4')
-        Column() {
+    Column() {
+      this.runtimeActionToolbar(false)
+      Scroll() {
+        Column({ space: AppSpacing.md }) {
           Stack({ alignContent: Alignment.Center }) {
-            if (this.imageInputUri.length > 0) {
-              Image(this.imageInputUri)
+            this.stillSegmentationAndroidPreview()
+          }
+          .width('100%')
+          .aspectRatio(4 / 3)
+          .constraintSize({ minHeight: 220, maxHeight: 420 })
+          .clip(true)
+          .backgroundColor(AppColor.cardBackground)
+          .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
+          Column({ space: AppSpacing.sm }) {
+            Row({ space: AppSpacing.sm }) {
+              if (this.workflowRunning || this.resultImageSaveInFlight) {
+                LoadingProgress()
+                  .width(24)
+                  .height(24)
+              }
+              Text(appString(this.resultImageSaveInFlight ? 'feature_runtime_save_image' : this.statusKey))
+                .fontSize(14)
+                .fontColor(AppColor.textSecondary)
+                .maxFontScale(1.6)
+                .maxLines(3)
+                .layoutWeight(1)
+            }
+            .width('100%')
+            .constraintSize({ minHeight: 48 })
+            .alignItems(VerticalAlign.Center)
+            if (!this.workflowRunning && !this.resultImageSaveInFlight &&
+              (this.statusKey === 'feature_runtime_segmentation_failed' ||
+                this.statusKey === 'feature_runtime_run_failed')) {
+              Button(appString('web_retry'), { type: ButtonType.Normal })
                 .width('100%')
-                .height('100%')
-                .objectFit(ImageFit.Contain)
-            } else {
-              Image($r('app.media.icon_default'))
-                .width('100%')
-                .height('100%')
-                .objectFit(ImageFit.Contain)
+                .constraintSize({ minHeight: 48 })
+                .maxFontScale(1.6)
+                .fontColor(Color.White)
+                .backgroundColor(AppColor.accent)
+                .borderRadius(AppRadius.button)
+                .onClick(() => this.runPrimaryAction())
             }
           }
           .width('100%')
-          .layoutWeight(4)
-          Stack({ alignContent: Alignment.Center }) {
-            if (this.segmentationForegroundPixelMap !== undefined) {
-              Image(this.segmentationForegroundPixelMap)
-                .width('100%')
-                .height('100%')
-                .objectFit(ImageFit.Contain)
-            } else {
-              Image($r('app.media.icon_default'))
-                .width('100%')
-                .height('100%')
-                .objectFit(ImageFit.Contain)
-            }
-          }
-          .width('100%')
-          .layoutWeight(4)
-          .margin({ top: 20 })
-          Row() {
+          .padding(AppSpacing.md)
+          .backgroundColor(AppColor.cardBackground)
+          .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
+          Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.SpaceBetween }) {
             Button(appString(workflowInputLabelKey(workflowForRoute(this.routeName), 'photo')), { type: ButtonType.Normal })
-              .layoutWeight(1)
-              .height(37)
-              .margin({ left: 20, right: 5 })
-              .fontSize(14)
-              .fontWeight(FontWeight.Normal)
-              .fontColor('#666666')
-              .backgroundColor('#F4F3F8')
-              .borderRadius(5)
-              .enabled(!this.workflowRunning)
+              .width('calc(50% - 4vp)')
+              .constraintSize({ minHeight: 48 })
+              .maxFontScale(1.6)
+              .fontColor(AppColor.accent)
+              .backgroundColor(AppColor.cardBackground)
+              .border({ width: 1, color: AppColor.divider, radius: AppRadius.button })
+              .margin({ bottom: AppSpacing.sm })
+              .enabled(!this.workflowRunning && !this.resultImageSaveInFlight)
               .onClick(() => this.prepareInput('photo'))
             Button(appString(workflowInputLabelKey(workflowForRoute(this.routeName), 'camera')), { type: ButtonType.Normal })
-              .layoutWeight(1)
-              .height(37)
-              .margin({ left: 5, right: 5 })
-              .fontSize(14)
-              .fontWeight(FontWeight.Normal)
-              .fontColor('#666666')
-              .backgroundColor('#F4F3F8')
-              .borderRadius(5)
-              .enabled(!this.workflowRunning)
+              .width('calc(50% - 4vp)')
+              .constraintSize({ minHeight: 48 })
+              .maxFontScale(1.6)
+              .fontColor(AppColor.accent)
+              .backgroundColor(AppColor.cardBackground)
+              .border({ width: 1, color: AppColor.divider, radius: AppRadius.button })
+              .margin({ bottom: AppSpacing.sm })
+              .enabled(!this.workflowRunning && !this.resultImageSaveInFlight)
               .onClick(() => this.prepareInput('camera'))
             Button(appString(workflowGoLiveLabelKey(workflowForRoute(this.routeName))), { type: ButtonType.Normal })
-              .layoutWeight(1)
-              .height(37)
-              .margin({ left: 5, right: 5 })
-              .fontSize(14)
-              .fontWeight(FontWeight.Normal)
-              .fontColor('#666666')
-              .backgroundColor('#F4F3F8')
-              .borderRadius(5)
-              .enabled(!this.workflowRunning)
+              .width('calc(50% - 4vp)')
+              .constraintSize({ minHeight: 48 })
+              .maxFontScale(1.6)
+              .fontColor(AppColor.accent)
+              .backgroundColor(AppColor.cardBackground)
+              .border({ width: 1, color: AppColor.divider, radius: AppRadius.button })
+              .margin({ bottom: AppSpacing.sm })
+              .enabled(!this.workflowRunning && !this.resultImageSaveInFlight)
               .onClick(() => {
                 this.openStillSegmentationLiveRoute()
               })
@@ -3889,17 +5222,18 @@ struct FeatureRuntimePage {
               SaveButton({
                 icon: SaveIconStyle.FULL_FILLED,
                 text: SaveDescription.SAVE_IMAGE,
-                buttonType: ButtonType.Capsule
+                buttonType: ButtonType.Normal
               })
                 .width('100%')
-                .height(37)
-                .fontSize(14)
-                .fontColor('#666666')
-                .backgroundColor('#F4F3F8')
-                .enabled(!this.workflowRunning && this.segmentationForegroundPixelMap !== undefined &&
-                  !this.resultImageSaveInFlight)
+                .constraintSize({ minHeight: 48 })
+                .maxFontScale(1.6)
+                .fontColor(AppColor.accent)
+                .backgroundColor(AppColor.cardBackground)
+                .enabled(compositeSegmentationSaveReady(this.workflowRunning,
+                  this.segmentationForegroundPixelMap !== undefined, this.resultImageSaveInFlight))
                 .onClick((_event: ClickEvent, result: SaveButtonOnClickResult) => {
-                  if (this.workflowRunning) {
+                  if (!compositeSegmentationSaveReady(this.workflowRunning,
+                    this.segmentationForegroundPixelMap !== undefined, this.resultImageSaveInFlight)) {
                     return;
                   }
                   if (result === SaveButtonOnClickResult.SUCCESS) {
@@ -3910,136 +5244,168 @@ struct FeatureRuntimePage {
                   this.showRuntimeToast(this.statusKey);
                 })
             }
-            .layoutWeight(1)
-            .height(37)
-            .margin({ left: 5, right: 20 })
+            .width('calc(50% - 4vp)')
+            .backgroundColor(AppColor.cardBackground)
+            .border({ width: 1, color: AppColor.divider, radius: AppRadius.button })
+            .margin({ bottom: AppSpacing.sm })
           }
           .width('100%')
-          .layoutWeight(1)
-          .margin({ top: 14 })
-          .alignItems(VerticalAlign.Top)
         }
         .width('100%')
-        .layoutWeight(1)
-        .backgroundColor(Color.Black)
+        .padding({ left: AppSpacing.page, right: AppSpacing.page, top: AppSpacing.md, bottom: AppSpacing.xl })
       }
       .width('100%')
-      .height('100%')
-      .backgroundColor(Color.White)
-      this.runtimePermissionRecoveryOverlay()
+      .layoutWeight(1)
+      .align(Alignment.TopStart)
+      .scrollBar(BarState.Auto)
     }
     .width('100%')
     .height('100%')
-    .backgroundColor(Color.White)
+    .backgroundColor(AppColor.pageBackground)
   }
 
   @Builder
   customModelAndroidLayout() {
-    Stack({ alignContent: Alignment.TopStart }) {
-      Column() {
-        this.runtimeActionToolbar(true)
-        Row() {
-        }
-        .width('100%')
-        .height(1)
-        .backgroundColor('#E4E4E4')
-        Row() {
+    Column() {
+      this.runtimeActionToolbar(true)
+      Scroll() {
+        Column() {
           Button(appString(workflowInputLabelKey(workflowForRoute(this.routeName), 'modelFile')), { type: ButtonType.Normal })
-            .layoutWeight(1)
-            .height(37)
-            .margin({ left: 20, right: 5 })
-            .fontSize(14)
-            .fontWeight(FontWeight.Normal)
-            .fontColor('#666666')
-            .backgroundColor('#F4F3F8')
-            .borderRadius(5)
+            .width('100%')
+            .constraintSize({ minHeight: 48 })
+            .fontSize(16)
+            .maxFontScale(3.2)
+            .fontWeight(FontWeight.Medium)
+            .fontColor(AppColor.accent)
+            .backgroundColor(AppColor.cardBackground)
+            .border({ width: 1, color: AppColor.divider, radius: AppRadius.button })
             .enabled(!this.workflowRunning)
             .onClick(() => this.prepareInput('modelFile'))
+
           Button(appString(workflowInputLabelKey(workflowForRoute(this.routeName), 'photo')), { type: ButtonType.Normal })
-            .layoutWeight(1)
-            .height(37)
-            .margin({ left: 5, right: 5 })
-            .fontSize(14)
-            .fontWeight(FontWeight.Normal)
-            .fontColor('#666666')
-            .backgroundColor('#F4F3F8')
-            .borderRadius(5)
+            .width('100%')
+            .constraintSize({ minHeight: 48 })
+            .fontSize(16)
+            .maxFontScale(3.2)
+            .fontWeight(FontWeight.Medium)
+            .fontColor(AppColor.accent)
+            .backgroundColor(AppColor.cardBackground)
+            .border({ width: 1, color: AppColor.divider, radius: AppRadius.button })
+            .margin({ top: AppSpacing.sm })
             .enabled(!this.workflowRunning)
             .onClick(() => this.prepareInput('photo'))
+
           Button(appString(workflowInputLabelKey(workflowForRoute(this.routeName), 'camera')), { type: ButtonType.Normal })
-            .layoutWeight(1)
-            .height(37)
-            .margin({ left: 5, right: 20 })
-            .fontSize(14)
-            .fontWeight(FontWeight.Normal)
-            .fontColor('#666666')
-            .backgroundColor('#F4F3F8')
-            .borderRadius(5)
+            .width('100%')
+            .constraintSize({ minHeight: 48 })
+            .fontSize(16)
+            .maxFontScale(3.2)
+            .fontWeight(FontWeight.Medium)
+            .fontColor(AppColor.accent)
+            .backgroundColor(AppColor.cardBackground)
+            .border({ width: 1, color: AppColor.divider, radius: AppRadius.button })
+            .margin({ top: AppSpacing.sm })
             .enabled(!this.workflowRunning)
             .onClick(() => this.prepareInput('camera'))
-        }
-        .width('100%')
-        .margin({ top: 14 })
-        .alignItems(VerticalAlign.Center)
-        if (this.imageInputUri.length > 0) {
+
           Stack({ alignContent: Alignment.Center }) {
-            Image(this.imageInputUri)
-              .width(256)
-              .height(256)
-              .objectFit(ImageFit.Fill)
-            if (this.workflowRunning) {
-              LoadingProgress()
-                .width(80)
-                .height(80)
+            if (this.imageInputUri.length > 0) {
+              Image(this.imageInputUri)
+                .width('100%')
+                .height('100%')
+                .padding(AppSpacing.md)
+                .objectFit(ImageFit.Contain)
+            } else {
+              Column() {
+                Image($r('app.media.feature_custom_model'))
+                  .width(64)
+                  .height(64)
+                  .objectFit(ImageFit.Contain)
+                Text(appString('feature_runtime_custom_model_select_photo'))
+                  .fontSize(16)
+                  .fontColor(AppColor.textSecondary)
+                  .maxFontScale(3.2)
+                  .maxLines(2)
+                  .textAlign(TextAlign.Center)
+                  .margin({ top: AppSpacing.sm })
+              }
+              .alignItems(HorizontalAlign.Center)
             }
           }
           .width('100%')
-          .height(265)
-          .margin({ top: 14 })
-          .backgroundColor('#E6E6E6')
-        }
-        Button(appString('feature_runtime_custom_model_execute'), { type: ButtonType.Normal })
-          .width('100%')
-          .height(40)
-          .margin({ left: 20, right: 20, top: 14 })
-          .fontSize(16)
-          .fontWeight(FontWeight.Normal)
-          .fontColor(Color.Black)
-          .backgroundColor(Color.White)
-          .border({ width: 2, color: Color.White, radius: 30 })
-          .onClick(() => this.runCustomModelAndroidAction())
-        Column() {
-          Text(appString('feature_runtime_custom_model_output_title'))
-            .fontSize(16)
-            .fontWeight(FontWeight.Bold)
-            .fontColor(Color.Black)
+          .aspectRatio(4 / 3)
+          .constraintSize({ minHeight: 220, maxHeight: 420 })
+          .backgroundColor(AppColor.cardBackground)
+          .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
+          .margin({ top: AppSpacing.md })
+
+          Button(appString(this.statusKey === 'feature_runtime_custom_model_failed' ||
+            this.statusKey === 'feature_runtime_run_failed' ? 'web_retry' :
+            'feature_runtime_custom_model_execute'), { type: ButtonType.Normal })
             .width('100%')
-          Scroll() {
-            Text(this.customModelOutputText())
-              .width('100%')
-              .padding(12)
+            .constraintSize({ minHeight: 48 })
+            .fontSize(16)
+            .maxFontScale(3.2)
+            .fontWeight(FontWeight.Medium)
+            .fontColor(Color.White)
+            .backgroundColor(AppColor.accent)
+            .borderRadius(AppRadius.button)
+            .margin({ top: AppSpacing.sm })
+            .enabled(!this.workflowRunning)
+            .onClick(() => this.runCustomModelAndroidAction())
+
+          Row() {
+            if (this.workflowRunning) {
+              LoadingProgress()
+                .width(20)
+                .height(20)
+                .margin({ right: AppSpacing.sm })
+            }
+            Text(appString(this.statusKey))
               .fontSize(14)
-              .fontColor('#666666')
-              .backgroundColor('#E6E6E6')
+              .fontColor(AppColor.textSecondary)
+              .maxFontScale(3.2)
+              .maxLines(3)
+              .layoutWeight(1)
           }
           .width('100%')
-          .layoutWeight(1)
-          .margin({ top: 8 })
+          .constraintSize({ minHeight: 48 })
+          .padding(AppSpacing.md)
+          .backgroundColor(AppColor.cardBackground)
+          .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
+          .margin({ top: AppSpacing.sm })
+
+          Column() {
+            Text(appString('feature_runtime_custom_model_output_title'))
+              .fontSize(17)
+              .fontWeight(FontWeight.Medium)
+              .fontColor(AppColor.textPrimary)
+              .maxFontScale(3.2)
+              .width('100%')
+            Text(this.customModelOutputText())
+              .width('100%')
+              .fontSize(14)
+              .fontColor(AppColor.textSecondary)
+              .maxFontScale(3.2)
+              .margin({ top: AppSpacing.sm })
+          }
+          .width('100%')
+          .padding(AppSpacing.md)
+          .backgroundColor(AppColor.cardBackground)
+          .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
+          .margin({ top: AppSpacing.sm })
         }
         .width('100%')
-        .layoutWeight(1)
-        .margin({ left: 20, right: 20, top: 14, bottom: 20 })
-        .padding(16)
-        .backgroundColor(Color.White)
+        .padding({ left: AppSpacing.page, right: AppSpacing.page, top: AppSpacing.md, bottom: AppSpacing.xl })
       }
       .width('100%')
-      .height('100%')
-      .backgroundColor(Color.White)
-      this.runtimePermissionRecoveryOverlay()
+      .layoutWeight(1)
+      .align(Alignment.TopStart)
+      .scrollBar(BarState.Auto)
     }
     .width('100%')
     .height('100%')
-    .backgroundColor(Color.White)
+    .backgroundColor(AppColor.pageBackground)
   }
 
   @Builder
@@ -4090,7 +5456,7 @@ struct FeatureRuntimePage {
 
   @Builder
   poseNetStillAndroidPreview() {
-    Stack({ alignContent: Alignment.TopStart }) {
+    Stack({ alignContent: Alignment.Center }) {
       if (this.poseImageUri.length > 0 && this.posePoints.length > 0) {
         Stack({ alignContent: Alignment.TopStart }) {
           Image(this.poseNetStillImageSource(this.poseImageUri))
@@ -4105,88 +5471,138 @@ struct FeatureRuntimePage {
             this.poseNetStillPosePoint(point)
           }, (point: PosePoint) => `${point.type}-${point.x}-${point.y}-${point.score}`)
         }
-        .width('100%')
-        .aspectRatio(this.poseAspectRatio())
+        .width(this.percentLength(this.poseNetStillPreviewWidthPercent()))
+        .height(this.percentLength(this.poseNetStillPreviewHeightPercent()))
         .clip(true)
       } else if (this.imageInputUri.length > 0) {
         Image(this.poseNetStillImageSource(this.imageInputUri))
           .width('100%')
+          .height('100%')
           .objectFit(ImageFit.Contain)
       }
     }
     .width('100%')
-    .layoutWeight(9)
+    .height('100%')
     .clip(true)
-    .backgroundColor('#E6E6E6')
+    .backgroundColor(AppColor.cardBackground)
   }
 
   @Builder
   poseNetStillAndroidLayout() {
-    Stack({ alignContent: Alignment.TopStart }) {
-      Column() {
-        this.runtimeActionToolbar(false)
-        Row() {
-        }
-        .width('100%')
-        .height(1)
-        .backgroundColor('#E4E4E4')
-        this.poseNetStillAndroidPreview()
-        Row() {
-          Button(appString('feature_input_photo_android'), { type: ButtonType.Normal })
-            .layoutWeight(1)
-            .height(37)
-            .margin({ left: 20, right: 5 })
-            .fontSize(14)
-            .fontWeight(FontWeight.Normal)
-            .fontColor('#666666')
-            .backgroundColor('#F4F3F8')
-            .borderRadius(5)
-            .onClick(() => this.prepareInput('photo'))
-          Button(appString('feature_input_camera_android'), { type: ButtonType.Normal })
-            .layoutWeight(1)
-            .height(37)
-            .margin({ left: 5, right: 5 })
-            .fontSize(14)
-            .fontWeight(FontWeight.Normal)
-            .fontColor('#666666')
-            .backgroundColor('#F4F3F8')
-            .borderRadius(5)
-            .onClick(() => this.prepareInput('camera'))
-          Button(appString('feature_runtime_go_live_android_hms'), { type: ButtonType.Normal })
-            .layoutWeight(1)
-            .height(37)
-            .margin({ left: 5, right: 5 })
-            .fontSize(14)
-            .fontWeight(FontWeight.Normal)
-            .fontColor('#666666')
-            .backgroundColor('#F4F3F8')
-            .borderRadius(5)
+    Column() {
+      this.runtimeActionToolbar(false)
+      Scroll() {
+        Column({ space: AppSpacing.md }) {
+          Stack({ alignContent: Alignment.Center }) {
+            this.poseNetStillAndroidPreview()
+          }
+          .width('100%')
+          .aspectRatio(4 / 3)
+          .constraintSize({ minHeight: 220, maxHeight: 420 })
+          .clip(true)
+          .backgroundColor(AppColor.cardBackground)
+          .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
+          Row({ space: AppSpacing.sm }) {
+            if (this.workflowRunning) {
+              LoadingProgress()
+                .width(24)
+                .height(24)
+            }
+            Text(appString(this.statusKey))
+              .fontSize(14)
+              .fontColor(AppColor.textSecondary)
+              .maxFontScale(1.6)
+              .layoutWeight(1)
+          }
+          .width('100%')
+          .constraintSize({ minHeight: 48 })
+          .padding(AppSpacing.md)
+          .alignItems(VerticalAlign.Center)
+          .backgroundColor(AppColor.cardBackground)
+          .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
+          Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.SpaceBetween }) {
+            Button(appString('feature_input_photo_android'), { type: ButtonType.Normal })
+              .width('calc(50% - 4vp)')
+              .constraintSize({ minHeight: 48 })
+              .maxFontScale(1.6)
+              .fontColor(AppColor.accent)
+              .backgroundColor(AppColor.cardBackground)
+              .border({ width: 1, color: AppColor.divider, radius: AppRadius.button })
+              .margin({ bottom: AppSpacing.sm })
+              .enabled(!this.workflowRunning)
+              .onClick(() => this.prepareInput('photo'))
+            Button(appString('feature_input_camera_android'), { type: ButtonType.Normal })
+              .width('calc(50% - 4vp)')
+              .constraintSize({ minHeight: 48 })
+              .maxFontScale(1.6)
+              .fontColor(AppColor.accent)
+              .backgroundColor(AppColor.cardBackground)
+              .border({ width: 1, color: AppColor.divider, radius: AppRadius.button })
+              .margin({ bottom: AppSpacing.sm })
+              .enabled(!this.workflowRunning)
+              .onClick(() => this.prepareInput('camera'))
+            Button(appString('feature_runtime_go_live_android_hms'), { type: ButtonType.Normal })
+              .width('calc(50% - 4vp)')
+              .constraintSize({ minHeight: 48 })
+              .maxFontScale(1.6)
+              .fontColor(AppColor.accent)
+              .backgroundColor(AppColor.cardBackground)
+              .border({ width: 1, color: AppColor.divider, radius: AppRadius.button })
+              .margin({ bottom: AppSpacing.sm })
+              .enabled(!this.workflowRunning)
             .onClick(() => this.openLinkedLiveRoute())
-          Button(appString('feature_runtime_pose_detect_android'), { type: ButtonType.Normal })
-            .layoutWeight(1)
-            .height(37)
-            .margin({ left: 5, right: 5 })
-            .fontSize(14)
-            .fontWeight(FontWeight.Normal)
-            .fontColor('#666666')
-            .backgroundColor('#F4F3F8')
-            .borderRadius(5)
-            .enabled(this.runActionEnabled())
-            .onClick(() => this.runPoseNetSampleDetection())
+            Button(appString(this.statusKey === 'feature_runtime_pose_failed' ||
+              this.statusKey === 'feature_runtime_run_failed' ?
+              'web_retry' : 'feature_runtime_pose_detect_android'))
+              .width('calc(50% - 4vp)')
+              .constraintSize({ minHeight: 48 })
+              .maxFontScale(1.6)
+              .fontColor(Color.White)
+              .backgroundColor(AppColor.accent)
+              .borderRadius(AppRadius.button)
+              .margin({ bottom: AppSpacing.sm })
+              .enabled(this.runActionEnabled())
+              .onClick(() => this.runPrimaryAction())
+          }
+          .width('100%')
+          if (this.resultRows.length > 0) {
+            Column({ space: AppSpacing.sm }) {
+              Text(appString(workflowResultTitleKey(workflowForRoute(this.routeName))))
+                .fontSize(16)
+                .fontWeight(FontWeight.Medium)
+                .fontColor(AppColor.textPrimary)
+                .maxFontScale(1.6)
+                .width('100%')
+              ForEach(this.resultRows, (row: AiRunResultRow) => {
+                Text() {
+                  Span(appString(row.labelKey))
+                  Span(appString('feature_runtime_result_separator'))
+                  Span(this.resultRowValue(row))
+                }
+                .fontSize(14)
+                .fontColor(AppColor.textSecondary)
+                .maxFontScale(1.6)
+                .width('100%')
+              }, (row: AiRunResultRow, index: number) => `${index}-${row.labelKey}-${row.value}`)
+            }
+            .width('100%')
+            .padding(AppSpacing.md)
+            .alignItems(HorizontalAlign.Start)
+            .backgroundColor(AppColor.cardBackground)
+            .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
+          }
         }
         .width('100%')
-        .layoutWeight(1)
-        .margin({ top: 14 })
-        .alignItems(VerticalAlign.Center)
+        .padding({ left: AppSpacing.page, right: AppSpacing.page, top: AppSpacing.md, bottom: AppSpacing.xl })
       }
       .width('100%')
-      .height('100%')
-      .backgroundColor(Color.White)
-      this.runtimePermissionRecoveryOverlay()
+      .layoutWeight(1)
+      .align(Alignment.TopStart)
+      .scrollBar(BarState.Auto)
     }
     .width('100%')
     .height('100%')
-    .backgroundColor(Color.White)
+    .backgroundColor(AppColor.pageBackground)
   }
 
   @Builder
@@ -4200,13 +5616,19 @@ struct FeatureRuntimePage {
             .height('100%')
             .objectFit(ImageFit.Fill)
           ForEach(this.visibleGestureDetections(), (gesture: GestureDetection) => {
-            this.gestureBox(gesture)
+            this.gestureStillBox(gesture)
           }, (gesture: GestureDetection) =>
             `${gesture.category}-${gesture.score}-${gesture.rect?.left}-${gesture.rect?.top}`)
         }
-        .width('100%')
-        .aspectRatio(this.gestureAspectRatio())
+        .width(this.percentLength(this.gestureStillPreviewWidthPercent()))
+        .height(this.percentLength(this.gestureStillPreviewHeightPercent()))
         .clip(true)
+        .onAreaChange((_previousArea: Area, currentArea: Area) => {
+          const width = Number(currentArea.width);
+          const height = Number(currentArea.height);
+          this.gestureStillOverlayWidthVp = Number.isFinite(width) && width > 0 ? width : 0;
+          this.gestureStillOverlayHeightVp = Number.isFinite(height) && height > 0 ? height : 0;
+        })
       } else if (this.imageInputUri.length > 0) {
         Image(this.imageInputUri)
           .width('100%')
@@ -4215,282 +5637,418 @@ struct FeatureRuntimePage {
       } else {
         Column() {
           Image($r('app.media.icon_style'))
-            .width(69.33)
-            .height(56.33)
+            .width(64)
+            .height(52)
             .objectFit(ImageFit.Contain)
           Text(appString('workflow_summary_gesture_still_android_prompt'))
-            .fontSize(16)
-            .fontColor('#666666')
+            .fontSize(14)
+            .fontColor(AppColor.textSecondary)
+            .maxFontScale(1.6)
             .textAlign(TextAlign.Center)
-            .margin({ top: 10 })
+            .margin({ top: AppSpacing.sm })
         }
+        .padding(AppSpacing.md)
         .alignItems(HorizontalAlign.Center)
       }
     }
     .width('100%')
-    .layoutWeight(9)
-    .padding(50)
+    .height('100%')
     .clip(true)
-    .backgroundColor('#E6E6E6')
+    .backgroundColor(AppColor.cardBackground)
   }
 
   @Builder
   gestureStillAndroidLayout() {
-    Stack({ alignContent: Alignment.TopStart }) {
-      Column() {
-        this.runtimeActionToolbar(false)
-        Row() {
+    Column() {
+      this.runtimeActionToolbar(false)
+      Scroll() {
+        Column({ space: AppSpacing.md }) {
+          Stack({ alignContent: Alignment.Center }) {
+            this.gestureStillAndroidPreview()
+          }
+          .width('100%')
+          .aspectRatio(4 / 3)
+          .constraintSize({ minHeight: 220, maxHeight: 420 })
+          .clip(true)
+          .backgroundColor(AppColor.cardBackground)
+          .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
+          Row({ space: AppSpacing.sm }) {
+            if (this.workflowRunning) {
+              LoadingProgress()
+                .width(24)
+                .height(24)
+            }
+            Text(appString(this.statusKey))
+              .fontSize(14)
+              .fontColor(AppColor.textSecondary)
+              .maxFontScale(1.6)
+              .layoutWeight(1)
+          }
+          .width('100%')
+          .constraintSize({ minHeight: 48 })
+          .padding(AppSpacing.md)
+          .alignItems(VerticalAlign.Center)
+          .backgroundColor(AppColor.cardBackground)
+          .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
+          Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.SpaceBetween }) {
+            Button(appString('feature_input_photo_android'), { type: ButtonType.Normal })
+              .width('calc(50% - 4vp)')
+              .constraintSize({ minHeight: 48 })
+              .maxFontScale(1.6)
+              .fontColor(AppColor.accent)
+              .backgroundColor(AppColor.cardBackground)
+              .border({ width: 1, color: AppColor.divider, radius: AppRadius.button })
+              .margin({ bottom: AppSpacing.sm })
+              .enabled(!this.workflowRunning)
+              .onClick(() => this.prepareInput('photo'))
+            Button(appString('feature_input_camera_android'), { type: ButtonType.Normal })
+              .width('calc(50% - 4vp)')
+              .constraintSize({ minHeight: 48 })
+              .maxFontScale(1.6)
+              .fontColor(AppColor.accent)
+              .backgroundColor(AppColor.cardBackground)
+              .border({ width: 1, color: AppColor.divider, radius: AppRadius.button })
+              .margin({ bottom: AppSpacing.sm })
+              .enabled(!this.workflowRunning)
+              .onClick(() => this.prepareInput('camera'))
+            Button(appString('feature_runtime_go_live_android_hms'), { type: ButtonType.Normal })
+              .width('calc(50% - 4vp)')
+              .constraintSize({ minHeight: 48 })
+              .maxFontScale(1.6)
+              .fontColor(AppColor.accent)
+              .backgroundColor(AppColor.cardBackground)
+              .border({ width: 1, color: AppColor.divider, radius: AppRadius.button })
+              .margin({ bottom: AppSpacing.sm })
+              .enabled(!this.workflowRunning)
+              .onClick(() => this.openLinkedLiveRoute())
+            Button(appString(this.statusKey === 'feature_runtime_gesture_failed' ||
+              this.statusKey === 'feature_runtime_run_failed' ?
+              'web_retry' : 'feature_runtime_gesture_detect_android'))
+              .width('calc(50% - 4vp)')
+              .constraintSize({ minHeight: 48 })
+              .maxFontScale(1.6)
+              .fontColor(Color.White)
+              .backgroundColor(AppColor.accent)
+              .borderRadius(AppRadius.button)
+              .margin({ bottom: AppSpacing.sm })
+              .enabled(this.runActionEnabled())
+              .onClick(() => this.runPrimaryAction())
+          }
+          .width('100%')
+          if (this.resultRows.length > 0) {
+            Column({ space: AppSpacing.sm }) {
+              Text(appString(workflowResultTitleKey(workflowForRoute(this.routeName))))
+                .fontSize(16)
+                .fontWeight(FontWeight.Medium)
+                .fontColor(AppColor.textPrimary)
+                .maxFontScale(1.6)
+                .width('100%')
+              ForEach(this.resultRows, (row: AiRunResultRow) => {
+                Text() {
+                  Span(appString(row.labelKey))
+                  Span(appString('feature_runtime_result_separator'))
+                  Span(this.resultRowValue(row))
+                }
+                .fontSize(14)
+                .fontColor(AppColor.textSecondary)
+                .maxFontScale(1.6)
+                .width('100%')
+              }, (row: AiRunResultRow, index: number) => `${index}-${row.labelKey}-${row.value}`)
+            }
+            .width('100%')
+            .padding(AppSpacing.md)
+            .alignItems(HorizontalAlign.Start)
+            .backgroundColor(AppColor.cardBackground)
+            .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
+          }
         }
         .width('100%')
-        .height(1)
-        .backgroundColor('#E4E4E4')
-        Row() {
-        }
-        .width('100%')
-        .height(1)
-        .backgroundColor('#E4E4E4')
-        this.gestureStillAndroidPreview()
-        Row() {
-          Button(appString('feature_input_photo_android'), { type: ButtonType.Normal })
-            .layoutWeight(1)
-            .height(37)
-            .margin({ left: 20, right: 5 })
-            .fontSize(14)
-            .fontWeight(FontWeight.Normal)
-            .fontColor('#666666')
-            .backgroundColor('#F4F3F8')
-            .borderRadius(5)
-            .onClick(() => this.prepareInput('photo'))
-          Button(appString('feature_input_camera_android'), { type: ButtonType.Normal })
-            .layoutWeight(1)
-            .height(37)
-            .margin({ left: 5, right: 5 })
-            .fontSize(14)
-            .fontWeight(FontWeight.Normal)
-            .fontColor('#666666')
-            .backgroundColor('#F4F3F8')
-            .borderRadius(5)
-            .onClick(() => this.prepareInput('camera'))
-          Button(appString('feature_runtime_go_live_android_hms'), { type: ButtonType.Normal })
-            .layoutWeight(1)
-            .height(37)
-            .margin({ left: 5, right: 5 })
-            .fontSize(14)
-            .fontWeight(FontWeight.Normal)
-            .fontColor('#666666')
-            .backgroundColor('#F4F3F8')
-            .borderRadius(5)
-            .onClick(() => this.openLinkedLiveRoute())
-        }
-        .width('100%')
-        .layoutWeight(1)
-        .margin({ top: 14 })
-        .alignItems(VerticalAlign.Center)
+        .padding({ left: AppSpacing.page, right: AppSpacing.page, top: AppSpacing.md, bottom: AppSpacing.xl })
       }
       .width('100%')
-      .height('100%')
-      .backgroundColor(Color.White)
-      this.runtimePermissionRecoveryOverlay()
+      .layoutWeight(1)
+      .align(Alignment.TopStart)
+      .scrollBar(BarState.Auto)
     }
     .width('100%')
     .height('100%')
-    .backgroundColor(Color.White)
+    .backgroundColor(AppColor.pageBackground)
+  }
+
+  @Builder
+  textRecognitionPreview() {
+    Stack({ alignContent: Alignment.Center }) {
+      if (this.imageInputUri.length > 0) {
+        Image(this.imageInputUri)
+          .width('100%')
+          .height('100%')
+          .objectFit(ImageFit.Contain)
+          .orientation(this.textRecognitionImageOrientation)
+      } else {
+        Column({ space: AppSpacing.sm }) {
+          Row() {
+          }
+          .width(32)
+          .height(3)
+          .backgroundColor(AppColor.accent)
+          .borderRadius(2)
+          Text(appString('workflow_summary_text_recognition_android_prompt'))
+            .fontSize(14)
+            .fontColor(AppColor.textSecondary)
+            .maxFontScale(1.6)
+            .textAlign(TextAlign.Center)
+        }
+        .padding(AppSpacing.md)
+        .alignItems(HorizontalAlign.Center)
+      }
+    }
+    .width('100%')
+    .height('100%')
+    .clip(true)
+    .backgroundColor(AppColor.cardBackground)
   }
 
   @Builder
   textRecognitionAndroidLayout() {
-    Stack({ alignContent: Alignment.TopStart }) {
-      Column() {
-        this.runtimeActionToolbar(false)
-        Row() {
-        }
-        .width('100%')
-        .height(1)
-        .backgroundColor('#DBDBDB')
-        Stack({ alignContent: Alignment.Center }) {
-          if (this.imageInputUri.length > 0) {
-            Image(this.imageInputUri)
-              .width('100%')
-              .height('100%')
-              .padding(10)
-              .objectFit(ImageFit.Contain)
-          } else {
-            Column() {
-              Image($r('app.media.icon_style'))
-                .width(69.33)
-                .height(56.33)
-                .objectFit(ImageFit.Contain)
-              Text(appString('workflow_summary_text_recognition_android_prompt'))
-                .fontSize(16)
-                .fontColor('#666666')
-                .textAlign(TextAlign.Center)
-                .margin({ top: 10 })
-            }
-            .alignItems(HorizontalAlign.Center)
+    Column() {
+      this.runtimeActionToolbar(false)
+      Scroll() {
+        Column({ space: AppSpacing.md }) {
+          Stack({ alignContent: Alignment.Center }) {
+            this.textRecognitionPreview()
           }
-          if (this.workflowRunning) {
-            LoadingProgress()
-              .width(80)
-              .height(80)
-          }
-        }
-        .width('100%')
-        .layoutWeight(5)
-        .backgroundColor('#E6E6E6')
-        Row() {
-          Button(appString('feature_input_photo_android'), { type: ButtonType.Normal })
-            .layoutWeight(1)
-            .height(37)
-            .fontSize(14)
-            .fontWeight(FontWeight.Normal)
-            .fontColor('#666666')
-            .backgroundColor('#F4F3F8')
-            .borderRadius(5)
-            .onClick(() => this.prepareInput('photo'))
-          Button(appString('feature_input_camera_android'), { type: ButtonType.Normal })
-            .layoutWeight(1)
-            .height(37)
-            .fontSize(14)
-            .fontWeight(FontWeight.Normal)
-            .fontColor('#666666')
-            .backgroundColor('#F4F3F8')
-            .borderRadius(5)
-            .margin({ left: 10 })
-            .onClick(() => this.prepareInput('camera'))
-        }
-        .width('100%')
-        .height(50)
-        .margin({ left: 10, right: 10, top: 14, bottom: 10 })
-        .alignItems(VerticalAlign.Center)
-        Scroll() {
-          Text(this.textRecognitionOutputText())
-            .width('100%')
-            .fontSize(14)
-            .fontColor('#000000')
-            .copyOption(CopyOptions.LocalDevice)
-        }
-        .width('100%')
-        .layoutWeight(3)
-        .padding({ left: 24, right: 24 })
-        .scrollBar(BarState.Auto)
-        .backgroundColor('#E6E6E6')
-        Button(appString('feature_runtime_copy_text'), { type: ButtonType.Normal })
           .width('100%')
-          .height(48)
-          .fontSize(14)
-          .fontWeight(FontWeight.Normal)
-          .fontColor('#000000')
-          .backgroundColor(Color.White)
-          .borderRadius(10)
-          .onClick(() => this.copyRecognizedText())
+          .aspectRatio(4 / 3)
+          .constraintSize({ minHeight: 220, maxHeight: 420 })
+          .clip(true)
+          .backgroundColor(AppColor.cardBackground)
+          .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
+          Row({ space: AppSpacing.sm }) {
+            if (this.workflowRunning) {
+              LoadingProgress()
+                .width(24)
+                .height(24)
+            }
+            Text(appString(this.statusKey))
+              .fontSize(14)
+              .fontColor(AppColor.textSecondary)
+              .maxFontScale(1.6)
+              .layoutWeight(1)
+            if (!this.workflowRunning &&
+              (this.statusKey === 'feature_runtime_text_recognition_failed' ||
+                this.statusKey === 'feature_runtime_run_failed')) {
+              Button(appString('web_retry'), { type: ButtonType.Normal })
+                .constraintSize({ minWidth: 72, minHeight: 48 })
+                .maxFontScale(1.6)
+                .fontColor(AppColor.accent)
+                .backgroundColor(Color.Transparent)
+                .onClick(() => this.runPrimaryAction())
+            }
+          }
+          .width('100%')
+          .constraintSize({ minHeight: 48 })
+          .padding({ left: AppSpacing.md, right: AppSpacing.sm, top: AppSpacing.sm, bottom: AppSpacing.sm })
+          .alignItems(VerticalAlign.Center)
+          .backgroundColor(AppColor.cardBackground)
+          .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
+          Column({ space: AppSpacing.sm }) {
+            Text(appString(workflowResultTitleKey(workflowForRoute(this.routeName))))
+              .fontSize(16)
+              .fontWeight(FontWeight.Medium)
+              .fontColor(AppColor.textPrimary)
+              .maxFontScale(1.6)
+              .width('100%')
+            Text(this.textRecognitionOutputText())
+              .width('100%')
+              .fontSize(14)
+              .fontColor(AppColor.textSecondary)
+              .maxFontScale(1.6)
+              .copyOption(CopyOptions.LocalDevice)
+          }
+          .width('100%')
+          .constraintSize({ minHeight: 112 })
+          .padding(AppSpacing.md)
+          .alignItems(HorizontalAlign.Start)
+          .backgroundColor(AppColor.cardBackground)
+          .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
+          Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.SpaceBetween }) {
+            Button(appString(workflowInputLabelKey(workflowForRoute(this.routeName), 'photo')),
+              { type: ButtonType.Normal })
+              .width('calc(50% - 4vp)')
+              .constraintSize({ minHeight: 48 })
+              .maxFontScale(1.6)
+              .fontColor(AppColor.accent)
+              .backgroundColor(AppColor.cardBackground)
+              .border({ width: 1, color: AppColor.divider, radius: AppRadius.button })
+              .margin({ bottom: AppSpacing.sm })
+              .enabled(textRecognitionActionEnabled(this.workflowRunning))
+              .onClick(() => this.prepareInput('photo'))
+            Button(appString(workflowInputLabelKey(workflowForRoute(this.routeName), 'camera')),
+              { type: ButtonType.Normal })
+              .width('calc(50% - 4vp)')
+              .constraintSize({ minHeight: 48 })
+              .maxFontScale(1.6)
+              .fontColor(AppColor.accent)
+              .backgroundColor(AppColor.cardBackground)
+              .border({ width: 1, color: AppColor.divider, radius: AppRadius.button })
+              .margin({ bottom: AppSpacing.sm })
+              .enabled(textRecognitionActionEnabled(this.workflowRunning))
+              .onClick(() => this.prepareInput('camera'))
+            Button(appString(textRecognitionRunActionLabelKey(this.statusKey, this.runActionKey)))
+              .width('calc(50% - 4vp)')
+              .constraintSize({ minHeight: 48 })
+              .maxFontScale(1.6)
+              .fontColor(Color.White)
+              .backgroundColor(AppColor.accent)
+              .borderRadius(AppRadius.button)
+              .margin({ bottom: AppSpacing.sm })
+              .enabled(this.runActionEnabled() && textRecognitionActionEnabled(this.workflowRunning))
+              .onClick(() => this.runPrimaryAction())
+            Button(appString('feature_runtime_copy_text'), { type: ButtonType.Normal })
+              .width('calc(50% - 4vp)')
+              .constraintSize({ minHeight: 48 })
+              .maxFontScale(1.6)
+              .fontColor(AppColor.accent)
+              .backgroundColor(AppColor.cardBackground)
+              .border({ width: 1, color: AppColor.divider, radius: AppRadius.button })
+              .margin({ bottom: AppSpacing.sm })
+              .enabled(textRecognitionActionEnabled(this.workflowRunning))
+              .onClick(() => this.copyRecognizedText())
+          }
+          .width('100%')
+        }
+        .width('100%')
+        .padding({ left: AppSpacing.page, right: AppSpacing.page, top: AppSpacing.md, bottom: AppSpacing.xl })
       }
       .width('100%')
-      .height('100%')
-      .backgroundColor(Color.White)
-      this.runtimePermissionRecoveryOverlay()
+      .layoutWeight(1)
+      .align(Alignment.TopStart)
+      .scrollBar(BarState.Auto)
     }
     .width('100%')
     .height('100%')
-    .backgroundColor(Color.White)
+    .backgroundColor(AppColor.pageBackground)
   }
 
   @Builder
   textTranslationAndroidLayout() {
-    Stack({ alignContent: Alignment.TopStart }) {
-      Column() {
-        this.runtimeActionToolbar(false)
-        Stack({ alignContent: Alignment.Center }) {
+    Column() {
+      this.runtimeActionToolbar(false)
+      Scroll() {
+        Column({ space: AppSpacing.md }) {
+          Column() {
           if (this.textInputVisible) {
             TextArea({
               text: this.userText,
               placeholder: appString('feature_runtime_text_translation_placeholder')
             })
               .width('100%')
-              .height('100%')
-              .margin(5)
-              .fontSize(18)
-              .fontColor('#000000')
-              .placeholderColor('#666666')
+              .constraintSize({ minHeight: 180 })
+              .fontSize(16)
+              .fontColor(AppColor.textPrimary)
+              .placeholderColor(AppColor.textMuted)
               .backgroundColor(Color.Transparent)
-              .border({ width: 0.33, color: '#B6B2B2', radius: 5 })
+              .enabled(shouldAllowRuntimeInputChange(
+                workflowForRoute(this.routeName), 'text', this.workflowRunning))
               .onChange((value: string) => this.updateUserText(value))
           } else {
             Image(this.imageInputUri)
               .width('100%')
-              .height('100%')
-              .margin(10)
+              .aspectRatio(4 / 3)
               .objectFit(ImageFit.Contain)
               .backgroundColor(Color.Transparent)
-              .border({ width: 0.33, color: '#B6B2B2', radius: 5 })
           }
-        }
-        .width('100%')
-        .layoutWeight(5)
-        Button(appString(this.runActionKey), { type: ButtonType.Normal })
+          }
           .width('100%')
-          .height(50)
-          .margin(5)
-          .fontColor(Color.White)
-          .enabled(this.runActionEnabled())
-          .onClick(() => this.runPrimaryAction())
-        Scroll() {
-          Text(translatedTextForAiResult(this.resultRows))
+          .constraintSize({ minHeight: 180 })
+          .padding(AppSpacing.md)
+          .alignItems(HorizontalAlign.Start)
+          .backgroundColor(AppColor.cardBackground)
+          .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
+          Button(appString(textTranslationRunActionLabelKey(this.statusKey, this.runActionKey)))
             .width('100%')
-            .fontSize(18)
-            .fontColor('#000000')
-        }
-        .width('100%')
-        .layoutWeight(4)
-        .margin(5)
-        .scrollBar(BarState.Auto)
-        .border({ width: 0.33, color: '#B6B2B2', radius: 5 })
-        Row() {
+            .constraintSize({ minHeight: 48 })
+            .fontColor(Color.White)
+            .backgroundColor(AppColor.accent)
+            .borderRadius(AppRadius.button)
+            .enabled(this.runActionEnabled() && !this.workflowRunning)
+            .onClick(() => this.runPrimaryAction())
+          Row({ space: AppSpacing.sm }) {
+            if (this.workflowRunning) {
+              LoadingProgress()
+                .width(24)
+                .height(24)
+            }
+            Text(appString(this.statusKey))
+              .fontSize(14)
+              .fontColor(AppColor.textSecondary)
+              .layoutWeight(1)
+          }
+          .width('100%')
+          .constraintSize({ minHeight: 48 })
+          .padding({ left: AppSpacing.md, right: AppSpacing.md, top: AppSpacing.sm, bottom: AppSpacing.sm })
+          .alignItems(VerticalAlign.Center)
+          .backgroundColor(AppColor.cardBackground)
+          .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
+          Column({ space: AppSpacing.sm }) {
+            Text(appString(workflowResultTitleKey(workflowForRoute(this.routeName))))
+              .fontSize(16)
+              .fontWeight(FontWeight.Medium)
+              .fontColor(AppColor.textPrimary)
+              .width('100%')
+            Text(translatedTextForAiResult(this.resultRows))
+              .width('100%')
+              .fontSize(16)
+              .fontColor(AppColor.textSecondary)
+          }
+          .width('100%')
+          .constraintSize({ minHeight: 112 })
+          .padding(AppSpacing.md)
+          .alignItems(HorizontalAlign.Start)
+          .backgroundColor(AppColor.cardBackground)
+          .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
           Button(appString('feature_input_photo_android'), { type: ButtonType.Normal })
-            .layoutWeight(1)
-            .height(37)
-            .margin({ left: 20, right: 5 })
-            .fontSize(14)
-            .fontWeight(FontWeight.Normal)
-            .fontColor('#666666')
-            .backgroundColor('#F4F3F8')
-            .borderRadius(5)
+            .width('100%')
+            .constraintSize({ minHeight: 48 })
+            .fontColor(AppColor.accent)
+            .backgroundColor(AppColor.cardBackground)
+            .border({ width: 1, color: AppColor.divider, radius: AppRadius.button })
+            .enabled(shouldAllowRuntimeInputChange(
+              workflowForRoute(this.routeName), 'photo', this.workflowRunning))
             .onClick(() => this.prepareInput('photo'))
           Button(appString('feature_input_camera_android'), { type: ButtonType.Normal })
-            .layoutWeight(1)
-            .height(37)
-            .margin({ left: 5, right: 5 })
-            .fontSize(14)
-            .fontWeight(FontWeight.Normal)
-            .fontColor('#666666')
-            .backgroundColor('#F4F3F8')
-            .borderRadius(5)
+            .width('100%')
+            .constraintSize({ minHeight: 48 })
+            .fontColor(AppColor.accent)
+            .backgroundColor(AppColor.cardBackground)
+            .border({ width: 1, color: AppColor.divider, radius: AppRadius.button })
+            .enabled(shouldAllowRuntimeInputChange(
+              workflowForRoute(this.routeName), 'camera', this.workflowRunning))
             .onClick(() => this.prepareInput('camera'))
           Button(appString('feature_runtime_copy_text'), { type: ButtonType.Normal })
-            .layoutWeight(1)
-            .height(37)
-            .margin({ left: 5, right: 20 })
-            .fontSize(14)
-            .fontWeight(FontWeight.Normal)
-            .fontColor('#666666')
-            .backgroundColor('#F4F3F8')
-            .borderRadius(5)
+            .width('100%')
+            .constraintSize({ minHeight: 48 })
+            .fontColor(AppColor.accent)
+            .backgroundColor(AppColor.cardBackground)
+            .border({ width: 1, color: AppColor.divider, radius: AppRadius.button })
+            .enabled(this.translationCopyEnabled())
             .onClick(() => this.copyTranslatedText())
         }
         .width('100%')
-        .layoutWeight(1)
-        .alignItems(VerticalAlign.Center)
+        .padding({ left: AppSpacing.page, right: AppSpacing.page, top: AppSpacing.md, bottom: AppSpacing.xl + AppSpacing.page * 2 + AppSpacing.lg })
       }
       .width('100%')
-      .height('100%')
-      .backgroundColor(Color.White)
-      this.runtimePermissionRecoveryOverlay()
+      .layoutWeight(1)
+      .align(Alignment.TopStart)
+      .scrollBar(BarState.Auto)
     }
     .width('100%')
     .height('100%')
-    .backgroundColor(Color.White)
+    .backgroundColor(AppColor.pageBackground)
   }
 
-  build() {
+  @Builder
+  runtimeLayoutContent() {
     if (usesAndroidTextTranslationLayout(workflowForRoute(this.routeName))) {
       this.textTranslationAndroidLayout()
     } else if (usesAndroidTextRecognitionLayout(workflowForRoute(this.routeName))) {
@@ -4511,6 +6069,14 @@ struct FeatureRuntimePage {
       this.stillSceneAndroidLayout()
     } else if (usesAndroidPortraitSegmentationLayout(workflowForRoute(this.routeName))) {
       this.portraitSegmentationAndroidLayout()
+    } else if (specializedAndroidLiveLayoutForWorkflow(workflowForRoute(this.routeName)) === 'segmentation') {
+      this.segmentationAndroidLiveLayout()
+    } else if (specializedAndroidLiveLayoutForWorkflow(workflowForRoute(this.routeName)) === 'gesture') {
+      this.gestureAndroidLiveLayout()
+    } else if (specializedAndroidLiveLayoutForWorkflow(workflowForRoute(this.routeName)) === 'scene') {
+      this.sceneAndroidLiveLayout()
+    } else if (specializedAndroidLiveLayoutForWorkflow(workflowForRoute(this.routeName)) === 'skeleton') {
+      this.skeletonAndroidLiveLayout()
     } else if (specializedAndroidLiveLayoutForWorkflow(workflowForRoute(this.routeName)) === 'imageClassification') {
       this.imageClassificationAndroidLiveLayout()
     } else if (specializedAndroidLiveLayoutForWorkflow(workflowForRoute(this.routeName)) === 'objectDetection') {
@@ -4795,5 +6361,15 @@ struct FeatureRuntimePage {
     .scrollBar(BarState.Off)
       .backgroundColor(AppColor.pageBackground)
     }
+  }
+
+  build() {
+    Stack({ alignContent: Alignment.TopStart }) {
+      this.runtimeLayoutContent()
+      this.runtimePermissionRecoveryOverlay()
+    }
+    .width('100%')
+    .height('100%')
+    .key(this.routeName)
   }
 }

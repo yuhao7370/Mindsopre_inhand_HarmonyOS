@@ -6,6 +6,7 @@ import request from '@ohos.request';
 import { AppRoute, findRouteByName } from '../main/ets/app/AppRoutes';
 import { MainTab, mainTabs } from '../main/ets/app/AppState';
 import { hasAppStringKey } from '../main/ets/common/i18n/AppStrings';
+import { webPageFailedAfterRequest } from '../main/ets/features/web/WebPageLoadState';
 import { iconLabel, iconMediaName } from '../main/ets/common/icons/IconSymbols';
 import {
   AiRunResult,
@@ -307,7 +308,8 @@ import {
   ObjectDetectionService,
   ObjectDetectionInput,
   ObjectDetectionInputPreprocessor,
-  ObjectDetectionLiveLabelOffset,
+  ObjectDetectionLiveOverlayBox,
+  ObjectDetectionLiveLabelPlacement,
   LocalMnnObjectDetectionRunner,
   ObjectDetectionMnnRuntime,
   ObjectDetectionMindSporeRunner,
@@ -315,7 +317,7 @@ import {
   ObjectDetectionTensorRunner,
   objectDetectionBoxPercent,
   objectDetectionLiveOverlayBox,
-  objectDetectionLiveLabelOffset,
+  objectDetectionLiveLabelPlacement,
   decodeNanoDetObjectDetections,
   decodeSsdObjectDetections,
   generateObjectDetectionDefaultBoxes,
@@ -390,6 +392,8 @@ import {
   usesAndroidPoseNetStillLayout,
   usesAndroidTextRecognitionLayout,
   usesAndroidTextTranslationLayout,
+  usesAndroidLiveSceneLayout,
+  usesAndroidLiveSkeletonLayout,
   usesSimpleAndroidLiveLayout,
   shouldShowPrimaryImageInputPreview,
   sampleImageUriForWorkflow,
@@ -419,18 +423,33 @@ import {
   shouldKeepScreenOnForWorkflow,
   shouldMirrorLiveGestureCameraOverlay,
   shouldShowCopyTextAction,
+  textRecognitionActionEnabled,
+  textRecognitionRunActionLabelKey,
+  textTranslationRunActionLabelKey,
   shouldShowCompositeSegmentationSaveAction,
   compositeSegmentationSaveReady,
   shouldShowResultSaveAction,
   shouldShowStandaloneSegmentationForegroundPreview,
   shouldShowStandaloneSegmentationOverlayPreview,
   shouldShowLiveClassificationCameraOverlay,
+  liveClassificationRetryActionForStatus,
+  shouldPublishLiveClassificationPreparingStatus,
+  liveGestureRetryActionForStatus,
+  shouldPublishLiveGesturePreparingStatus,
+  liveSceneRetryActionForStatus,
+  shouldPublishLiveScenePreparingStatus,
+  shouldPreserveLiveCameraInputOnFailure,
+  liveObjectDetectionRetryActionForStatus,
+  shouldPublishLiveObjectDetectionPreparingStatus,
   shouldShowLiveGestureCameraOverlay,
+  usesAndroidLiveGestureLayout,
   shouldShowLiveObjectDetectionCameraOverlay,
   shouldShowLivePoseCameraOverlay,
   shouldShowLivePoseTemplateOverlay,
   shouldShowPrimaryRunAction,
   shouldShowLiveSegmentationCameraOverlay,
+  liveSegmentationRetryActionForStatus,
+  shouldPublishLiveSegmentationPreparingStatus,
   shouldRenderLiveCameraPreview,
   liveClassificationEmptyPromptKey,
   shouldMirrorSegmentationForeground,
@@ -470,53 +489,48 @@ import {
 } from '../main/ets/features/runtime/FeatureRuntimeViewIds';
 import { featureRuntimeOverlayPreviewImageOrientationFromRotationDegrees } from '../main/ets/features/runtime/FeatureRuntimeOverlayPreview';
 import {
-  appDetailsSettingsWantForBundle,
   declaredPermissionNames,
-  PermissionRequestSummary,
-  runtimeOpenAppSettingsAction,
+  harmonySettingsFallbackWant,
+  permissionRequestSummary,
+  runtimeOpenPermissionSettingsAction,
   runtimePermissionRecoveryActionForWorkflow,
   runtimePermissionRunActionForWorkflow,
-  runtimePermissionNamesForWorkflow,
-  startupPermissionNames
+  runtimePermissionNamesForWorkflow
 } from '../main/ets/services/permissions/PermissionService';
 import {
-  canFinishSplashForStartupPermissionState,
-  finishSplashActionForStartupPermissionState,
-  SplashFinishAction,
-  shouldConsumeSplashBackPress,
-  shouldConsumeIndexBackPress,
-  splashOpenAppSettingsAction,
-  SplashOpenAppSettingsAction,
-  splashRetryPermissionAction,
-  SplashRetryPermissionAction,
-  splashStartupTransitionForMissingContext,
-  splashStartupTransitionForRequest,
-  splashStartupTransitionForRequestAfterPrivacyAccept,
-  SplashStartupTransition,
-  splashStartupPermissionStateForMissingContext,
-  splashStartupPermissionStateForRequest
+  shouldConsumeIndexBackPress
 } from '../main/ets/services/splash/SplashStartupService';
 import {
   splashLogoHeightVp,
   splashLogoWidthVp
 } from '../main/ets/common/data/SplashBranding';
 import {
-  experienceHeaderHeightVp
+  experienceHeaderMinHeightVp
 } from '../main/ets/common/data/ExperienceHeaderBranding';
 import {
-  experienceGridCardHeightVp,
+  experienceCardBorderColor,
+  experienceCardBorderWidthVp,
+  experienceCardPressedScale,
+  experienceCardRadiusVp,
+  experienceContentBottomPaddingVp,
+  experienceGridCardMinHeightVp,
   experienceGridColumnCount,
   experienceGridColumnGapVp,
-  experienceGridHeightVp,
+  experienceGridMinHeightVp,
   experienceGridRowGapVp,
-  experienceGridSideInsetVp
+  experienceGridSideInsetVp,
+  experienceStickyTitleMinHeightVp,
+  experienceStickyTitleThresholdVp,
+  experienceStickyTitleVisible
 } from '../main/ets/common/data/ExperienceLayoutSpec';
 import {
+  PickResult,
   inputActionForKind,
   isApi24EmulatorCameraPickerUnsupported,
   modelFileSuffixFilters,
   runtimeInputActionForWorkflowInput,
-  runtimeInputActionsForWorkflow
+  runtimeInputActionsForWorkflow,
+  shouldUseInlineCameraFallback
 } from '../main/ets/services/picker/PickerService';
 import {
   BasicModelFileCompatibilityChecker,
@@ -619,26 +633,35 @@ import {
 import {
   collegeItems,
   collegeAdapterViewTitleKey,
-  collegeQuickActionVisual,
-  collegeTimelineVisualForItem,
-  CollegeQuickActionVisual,
-  CollegeTimelineVisual,
   collegeSummaryDialogTitleKey,
   isCollegeItemUrlNavigable
 } from '../main/ets/common/data/CollegeCatalog';
+import {
+  collegeCardRadiusVp,
+  collegeDialogConfirmMinHeightVp,
+  collegeEntryMinHeightVp,
+  collegeHeaderMinHeightVp,
+  collegePageInsetVp,
+  collegeQuickActionMinHeightVp
+} from '../main/ets/common/data/CollegeLayoutSpec';
 import {
   androidCollegeSummaryDialogSpec,
   CollegeSummaryDialogSpec,
   collegeSummaryDialogLogoMedia
 } from '../main/ets/common/data/CollegeSummaryDialog';
-import { MeItem, isMeItemUrlNavigable, meItems, visibleMeItems } from '../main/ets/common/data/MeCatalog';
 import {
-  meDividerHeightVp,
-  meRowIconGapVp,
-  meRowIconSizeVp,
-  meRowSideInsetVp,
-  meRowVerticalPaddingVp,
-  meTitleHeightVp
+  MeItem,
+  isMeItemPageNavigable,
+  isMeItemUrlNavigable,
+  meItems,
+  visibleMeItems
+} from '../main/ets/common/data/MeCatalog';
+import {
+  meInfoCardMinHeightVp,
+  meInfoCardRadiusVp,
+  meLogoSizeVp,
+  mePageInsetVp,
+  meTitleMinHeightVp
 } from '../main/ets/common/data/MeLayoutSpec';
 import { AppVersionReader, AppVersionService, formattedAppVersionName } from '../main/ets/services/app/AppVersionService';
 import {
@@ -659,6 +682,7 @@ import {
   QrCodeSaveService
 } from '../main/ets/services/media/QrCodeSaveService';
 import {
+  qrCodeSheetActionForNativeDismiss,
   qrCodeSaveSheetVisibleAfterAction,
   shouldStartQrCodeSave
 } from '../main/ets/features/qrcode/QrCodeActionSheetState';
@@ -686,6 +710,7 @@ import {
   poetryPosterPagePath,
   poetryPosterTextFromParam,
   poetryPosterVisualSpec,
+  shouldStartPoetryPosterAction,
   shouldInstallPoetryJavascriptBridge
 } from '../main/ets/services/poetry/PoetryPosterService';
 
@@ -1778,6 +1803,10 @@ type DanceReferenceVideoDownloadListener =
   DanceReferenceVideoProgressListener | DanceReferenceVideoEmptyListener | DanceReferenceVideoFailureListener;
 
 class ManualDanceReferenceVideoDownloadTask implements DanceReferenceVideoDownloadTask {
+  readonly onEvents: Array<DanceReferenceVideoDownloadEvent> = [];
+  readonly onCallbacks: Array<DanceReferenceVideoDownloadListener> = [];
+  readonly offEvents: Array<DanceReferenceVideoDownloadEvent> = [];
+  readonly offCallbacks: Array<DanceReferenceVideoDownloadListener> = [];
   private readonly progressCallbacks: Array<DanceReferenceVideoProgressListener> = [];
   private readonly completeCallbacks: Array<DanceReferenceVideoEmptyListener> = [];
   private readonly pauseCallbacks: Array<DanceReferenceVideoEmptyListener> = [];
@@ -1801,6 +1830,8 @@ class ManualDanceReferenceVideoDownloadTask implements DanceReferenceVideoDownlo
   }
 
   on(event: DanceReferenceVideoDownloadEvent, callback: DanceReferenceVideoDownloadListener): void {
+    this.onEvents.push(event);
+    this.onCallbacks.push(callback);
     if (event === 'progress') {
       this.progressCallbacks.push(callback as DanceReferenceVideoProgressListener);
       return;
@@ -1820,7 +1851,9 @@ class ManualDanceReferenceVideoDownloadTask implements DanceReferenceVideoDownlo
     this.failCallbacks.push(callback as DanceReferenceVideoFailureListener);
   }
 
-  off(_event: DanceReferenceVideoDownloadEvent, _callback?: DanceReferenceVideoDownloadListener): void {
+  off(event: DanceReferenceVideoDownloadEvent, callback: DanceReferenceVideoDownloadListener): void {
+    this.offEvents.push(event);
+    this.offCallbacks.push(callback);
   }
 
   async getTaskInfo(): Promise<request.DownloadInfo> {
@@ -2496,35 +2529,43 @@ export default function localUnitTest() {
         .map((section) => section.items.length)
         .reduce((sum, count) => sum + count, 0);
       const scene = allExperienceFeatures.find((item: FeatureItem) => item.id === 'scene');
+      const custom = allExperienceFeatures.find((item: FeatureItem) => item.id === 'custom');
       const visibleSceneCount = visibleExperienceSections
         .map((section) => section.items.filter((item: FeatureItem) => item.id === 'scene').length)
         .reduce((sum, count) => sum + count, 0);
-      expect(visibleCount).assertEqual(10);
+      expect(visibleCount).assertEqual(9);
       expect(allExperienceFeatures.length).assertEqual(13);
       expect(scene === undefined).assertFalse();
       expect(scene?.visibleByDefault).assertFalse();
+      expect(custom?.visibleByDefault).assertFalse();
       expect(visibleSceneCount).assertEqual(0);
     });
 
-    it('mapsExperienceFeatureIconsToAndroidDrawableMedia', 0, () => {
+    it('mapsExperienceFeaturesToGeneratedMedia', 0, () => {
       const missingIconFeatures = allExperienceFeatures
         .filter((item: FeatureItem) => iconMediaName(item.icon).length === 0)
         .map((item: FeatureItem) => item.id)
         .join(',');
+      const featureIconNames = allExperienceFeatures
+        .map((item: FeatureItem) => iconMediaName(item.icon));
+      const duplicateIconNames = featureIconNames.filter((name: string, index: number) => {
+        return featureIconNames.indexOf(name) !== index;
+      });
       expect(missingIconFeatures).assertEqual('');
-      expect(iconMediaName('people')).assertEqual('btn_posenet');
-      expect(iconMediaName('image')).assertEqual('btn_segment');
-      expect(iconMediaName('grid')).assertEqual('btn_classification');
-      expect(iconMediaName('hand')).assertEqual('btn_gesture_recognition');
-      expect(iconMediaName('dance')).assertEqual('btn_scene');
-      expect(iconMediaName('poetry')).assertEqual('btn_intelligent_poetry');
-      expect(iconMediaName('text')).assertEqual('btn_text_extraction');
-      expect(iconMediaName('translate')).assertEqual('btn_text_translation');
-      expect(iconMediaName('scene')).assertEqual('btn_scene');
-      expect(iconMediaName('photo')).assertEqual('btn_test');
-      expect(iconMediaName('camera')).assertEqual('btn_video');
-      expect(iconMediaName('style')).assertEqual('btn_style');
-      expect(iconMediaName('model')).assertEqual('btn_test');
+      expect(duplicateIconNames.join(',')).assertEqual('');
+      expect(iconMediaName('people')).assertEqual('feature_posenet');
+      expect(iconMediaName('image')).assertEqual('feature_segmentation');
+      expect(iconMediaName('grid')).assertEqual('feature_classification');
+      expect(iconMediaName('hand')).assertEqual('feature_gesture');
+      expect(iconMediaName('dance')).assertEqual('feature_dance');
+      expect(iconMediaName('poetry')).assertEqual('feature_poetry');
+      expect(iconMediaName('text')).assertEqual('feature_text_extraction');
+      expect(iconMediaName('translate')).assertEqual('feature_translation');
+      expect(iconMediaName('scene')).assertEqual('feature_scene');
+      expect(iconMediaName('photo')).assertEqual('feature_object_photo');
+      expect(iconMediaName('camera')).assertEqual('feature_object_camera');
+      expect(iconMediaName('style')).assertEqual('feature_style_transfer');
+      expect(iconMediaName('model')).assertEqual('feature_custom_model');
     });
 
     it('definesCollegeAndMeRows', 0, () => {
@@ -2539,13 +2580,16 @@ export default function localUnitTest() {
       expect(meItems.find((item: MeItem) => item.id === 'feedback')?.title).assertEqual('Feedback');
     });
 
-    it('usesAndroidMePageGeometry', 0, () => {
-      expect(meTitleHeightVp).assertEqual(56);
-      expect(meDividerHeightVp).assertEqual(1);
-      expect(meRowVerticalPaddingVp).assertEqual(29);
-      expect(meRowSideInsetVp).assertEqual(20);
-      expect(meRowIconSizeVp).assertEqual(14);
-      expect(meRowIconGapVp).assertEqual(15);
+    it('definesHarmonyMeLayoutMinimums', 0, () => {
+      expect(mePageInsetVp).assertEqual(16);
+      expect(meTitleMinHeightVp).assertEqual(72);
+      expect(meInfoCardMinHeightVp).assertEqual(88);
+      expect(meInfoCardRadiusVp).assertEqual(16);
+      expect(meLogoSizeVp).assertEqual(56);
+      expect(visibleMeItems.length).assertEqual(1);
+      expect(visibleMeItems[0].id).assertEqual('version');
+      expect(isMeItemUrlNavigable(visibleMeItems[0])).assertFalse();
+      expect(isMeItemPageNavigable(visibleMeItems[0])).assertFalse();
     });
 
     it('usesAndroidCollegeSummaryDialogTitleKey', 0, () => {
@@ -2553,47 +2597,15 @@ export default function localUnitTest() {
       expect(hasAppStringKey(collegeSummaryDialogTitleKey)).assertTrue();
     });
 
-    it('definesAndroidCollegeTimelineVisuals', 0, () => {
-      const summaryUnchecked: CollegeTimelineVisual = collegeTimelineVisualForItem(collegeItems[0], false);
-      const summaryChecked: CollegeTimelineVisual = collegeTimelineVisualForItem(collegeItems[0], true);
-      const quickChecked: CollegeTimelineVisual = collegeTimelineVisualForItem(collegeItems[2], true);
-      const forumChecked: CollegeTimelineVisual = collegeTimelineVisualForItem(collegeItems[4], true);
-
-      expect(summaryUnchecked.iconMediaName).assertEqual('college_summary_uncheck');
-      expect(summaryUnchecked.checkedIconMediaName).assertEqual('college_summary_checked');
-      expect(summaryUnchecked.uncheckedIconMediaName).assertEqual('college_summary_uncheck');
-      expect(summaryUnchecked.iconSizeVp).assertEqual(45);
-      expect(summaryUnchecked.rowHeightVp).assertEqual(100);
-      expect(summaryUnchecked.showsTrailingLine).assertTrue();
-      expect(summaryUnchecked.showsProgressDot).assertFalse();
-      expect(summaryUnchecked.lineColor).assertEqual('#33999999');
-
-      expect(summaryChecked.iconMediaName).assertEqual('college_summary_checked');
-      expect(summaryChecked.showsProgressDot).assertTrue();
-      expect(summaryChecked.lineColor).assertEqual('#6189FF');
-      expect(quickChecked.rowHeightVp).assertEqual(150);
-      expect(forumChecked.showsTrailingLine).assertFalse();
-      expect(forumChecked.showsProgressDot).assertFalse();
+    it('definesHarmonyCollegeLayoutMinimums', 0, () => {
+      expect(collegePageInsetVp).assertEqual(16);
+      expect(collegeHeaderMinHeightVp).assertEqual(112);
+      expect(collegeEntryMinHeightVp).assertEqual(72);
+      expect(collegeQuickActionMinHeightVp).assertEqual(64);
+      expect(collegeCardRadiusVp).assertEqual(16);
+      expect(collegeDialogConfirmMinHeightVp).assertEqual(44);
       expect(collegeAdapterViewTitleKey).assertEqual('college_adapter_view');
       expect(hasAppStringKey(collegeAdapterViewTitleKey)).assertTrue();
-    });
-
-    it('definesAndroidCollegeQuickActionVisuals', 0, () => {
-      const quickActions = collegeItems[2].quickActions ?? [];
-      const trainUnchecked: CollegeQuickActionVisual = collegeQuickActionVisual(quickActions[0], false);
-      const trainChecked: CollegeQuickActionVisual = collegeQuickActionVisual(quickActions[0], true);
-      const executeChecked: CollegeQuickActionVisual = collegeQuickActionVisual(quickActions[1], true);
-
-      expect(quickActions.length).assertEqual(4);
-      expect(trainUnchecked.iconMediaName).assertEqual('college_train_uncheck');
-      expect(trainUnchecked.borderColor).assertEqual('#E6E6E6');
-      expect(trainUnchecked.textColor).assertEqual('#303133');
-      expect(trainUnchecked.widthVp).assertEqual(55);
-      expect(trainUnchecked.heightVp).assertEqual(60);
-      expect(trainChecked.iconMediaName).assertEqual('college_train_checked');
-      expect(trainChecked.borderColor).assertEqual('#6189FF');
-      expect(trainChecked.textColor).assertEqual('#6189FF');
-      expect(executeChecked.iconMediaName).assertEqual('college_execute_checked');
     });
 
     it('usesAndroidPreferenceKeysForCollegeProgress', 0, () => {
@@ -2646,62 +2658,7 @@ export default function localUnitTest() {
       expect(store.values.get('preferences_privacy')).assertFalse();
     });
 
-    it('blocksSplashEntryWhenStartupPermissionsAreDeniedLikeAndroid', 0, () => {
-      const denied: PermissionRequestSummary = {
-        ok: false,
-        requested: ['ohos.permission.CAMERA']
-      };
-      const granted: PermissionRequestSummary = {
-        ok: true,
-        requested: ['ohos.permission.CAMERA', 'ohos.permission.READ_IMAGEVIDEO']
-      };
-
-      expect(splashStartupPermissionStateForRequest(denied)).assertEqual('blocked');
-      expect(splashStartupPermissionStateForMissingContext()).assertEqual('blocked');
-      expect(canFinishSplashForStartupPermissionState('blocked')).assertFalse();
-      expect(splashStartupPermissionStateForRequest(granted)).assertEqual('ready');
-      expect(canFinishSplashForStartupPermissionState('ready')).assertTrue();
-
-      const deniedTransition: SplashStartupTransition = splashStartupTransitionForRequest(denied);
-      expect(deniedTransition.showPermissionDialog).assertTrue();
-      expect(deniedTransition.startCountdown).assertFalse();
-      const missingContextTransition: SplashStartupTransition = splashStartupTransitionForMissingContext();
-      expect(missingContextTransition.showPermissionDialog).assertTrue();
-      expect(missingContextTransition.startCountdown).assertFalse();
-      const grantedTransition: SplashStartupTransition = splashStartupTransitionForRequest(granted);
-      expect(grantedTransition.showPermissionDialog).assertFalse();
-      expect(grantedTransition.startCountdown).assertTrue();
-      expect(grantedTransition.finishImmediately).assertFalse();
-      const firstAcceptGrantedTransition: SplashStartupTransition =
-        splashStartupTransitionForRequestAfterPrivacyAccept(granted);
-      expect(firstAcceptGrantedTransition.showPermissionDialog).assertFalse();
-      expect(firstAcceptGrantedTransition.startCountdown).assertFalse();
-      expect(firstAcceptGrantedTransition.finishImmediately).assertTrue();
-      const firstAcceptDeniedTransition: SplashStartupTransition =
-        splashStartupTransitionForRequestAfterPrivacyAccept(denied);
-      expect(firstAcceptDeniedTransition.showPermissionDialog).assertTrue();
-      expect(firstAcceptDeniedTransition.finishImmediately).assertFalse();
-      const blockedFinish: SplashFinishAction = finishSplashActionForStartupPermissionState('blocked');
-      const readyFinish: SplashFinishAction = finishSplashActionForStartupPermissionState('ready');
-      const retryAction: SplashRetryPermissionAction = splashRetryPermissionAction();
-      const settingsAction: SplashOpenAppSettingsAction = splashOpenAppSettingsAction('com.example.mindspore');
-      const settingsWant = appDetailsSettingsWantForBundle('com.example.mindspore');
-      expect(blockedFinish.finishSplash).assertFalse();
-      expect(readyFinish.finishSplash).assertTrue();
-      expect(retryAction.requestPermissions).assertTrue();
-      expect(retryAction.showPermissionDialog).assertFalse();
-      expect(settingsAction.openSettings).assertTrue();
-      expect(settingsAction.want.action).assertEqual('action.settings.app.info');
-      expect(settingsWant.action).assertEqual('action.settings.app.info');
-      expect(JSON.stringify(settingsWant.parameters)).assertEqual('{"settingsParamBundleName":"com.example.mindspore"}');
-      expect(hasAppStringKey('app_need_permission')).assertTrue();
-      expect(hasAppStringKey('app_permission_by_hand')).assertTrue();
-      expect(hasAppStringKey('splash_permission_retry')).assertTrue();
-      expect(hasAppStringKey('splash_permission_exit')).assertTrue();
-    });
-
     it('consumesSplashBackPressLikeAndroidStartupActivity', 0, () => {
-      expect(shouldConsumeSplashBackPress()).assertTrue();
       expect(shouldConsumeIndexBackPress(false)).assertTrue();
       expect(shouldConsumeIndexBackPress(true)).assertFalse();
     });
@@ -2711,23 +2668,33 @@ export default function localUnitTest() {
       expect(splashLogoHeightVp).assertEqual(90);
     });
 
-    it('usesAndroidExperienceHeaderHeight', 0, () => {
-      expect(experienceHeaderHeightVp).assertEqual(160);
+    it('usesCompactHarmonyExperienceHeaderAndStickyTitle', 0, () => {
+      expect(experienceHeaderMinHeightVp).assertEqual(132);
+      expect(experienceStickyTitleMinHeightVp).assertEqual(56);
+      expect(experienceStickyTitleThresholdVp).assertEqual(76);
+      expect(experienceStickyTitleVisible(75)).assertFalse();
+      expect(experienceStickyTitleVisible(76)).assertTrue();
+      expect(experienceStickyTitleVisible(132)).assertTrue();
     });
 
-    it('usesAndroidExperienceTwoColumnGridGeometry', 0, () => {
+    it('usesHarmonyExperienceCardGeometry', 0, () => {
       expect(experienceGridColumnCount).assertEqual(2);
-      expect(experienceGridCardHeightVp).assertEqual(50);
-      expect(experienceGridRowGapVp).assertEqual(17);
-      expect(experienceGridSideInsetVp).assertEqual(18);
-      expect(experienceGridColumnGapVp).assertEqual(8);
-      expect(experienceGridHeightVp(-1)).assertEqual(0);
-      expect(experienceGridHeightVp(0)).assertEqual(0);
-      expect(experienceGridHeightVp(1)).assertEqual(50);
-      expect(experienceGridHeightVp(2)).assertEqual(50);
-      expect(experienceGridHeightVp(3)).assertEqual(117);
-      expect(experienceGridHeightVp(4)).assertEqual(117);
-      expect(experienceGridHeightVp(5)).assertEqual(184);
+      expect(experienceGridCardMinHeightVp).assertEqual(72);
+      expect(experienceGridRowGapVp).assertEqual(12);
+      expect(experienceGridSideInsetVp).assertEqual(16);
+      expect(experienceGridColumnGapVp).assertEqual(12);
+      expect(experienceCardRadiusVp).assertEqual(16);
+      expect(experienceCardBorderWidthVp).assertEqual(1);
+      expect(experienceCardBorderColor).assertEqual('#E8EDF5');
+      expect(experienceCardPressedScale).assertEqual(0.98);
+      expect(experienceContentBottomPaddingVp).assertEqual(28);
+      expect(experienceGridMinHeightVp(-1)).assertEqual(0);
+      expect(experienceGridMinHeightVp(0)).assertEqual(0);
+      expect(experienceGridMinHeightVp(1)).assertEqual(72);
+      expect(experienceGridMinHeightVp(2)).assertEqual(72);
+      expect(experienceGridMinHeightVp(3)).assertEqual(156);
+      expect(experienceGridMinHeightVp(4)).assertEqual(156);
+      expect(experienceGridMinHeightVp(5)).assertEqual(240);
     });
 
     it('formatsAppVersionNameLikeAndroidPackageInfo', 0, () => {
@@ -2964,6 +2931,11 @@ export default function localUnitTest() {
       expect(qrCodeSaveSheetVisibleAfterAction(true, 'back')).assertFalse();
     });
 
+    it('qrCodeMapsNativeSheetDismissReasonsToExistingReducerActions', 0, () => {
+      expect(qrCodeSheetActionForNativeDismiss(true)).assertEqual('back');
+      expect(qrCodeSheetActionForNativeDismiss(false)).assertEqual('backdrop');
+    });
+
     it('qrCodeSaveStartsOnlyWhenNoSaveIsAlreadyInFlight', 0, () => {
       expect(shouldStartQrCodeSave(false)).assertTrue();
       expect(shouldStartQrCodeSave(true)).assertFalse();
@@ -3126,6 +3098,12 @@ export default function localUnitTest() {
       expect(collegeDestination.url).assertEqual(collegeMainCloudUrl);
     });
 
+    it('webPageOnlyTreatsMainDocumentErrorsAsPageFailure', 0, () => {
+      expect(webPageFailedAfterRequest(false, false)).assertFalse();
+      expect(webPageFailedAfterRequest(false, true)).assertTrue();
+      expect(webPageFailedAfterRequest(true, false)).assertTrue();
+    });
+
     it('mapsAndroidWebViewToolbarTitlesForCollegeAndMeUrls', 0, () => {
       expect(webDestinationForUrl(collegeMainFaqUrl, 'me_official_title').titleKey).assertEqual('title_college_faq');
       expect(webDestinationForUrl(collegeMainAskUrl, 'me_official_title').titleKey).assertEqual('title_college_forum');
@@ -3212,6 +3190,13 @@ export default function localUnitTest() {
       expect(hasAppStringKey('poem_save_failed')).assertTrue();
       expect(hasAppStringKey('poem_share_failed')).assertTrue();
       expect(hasAppStringKey('poem_ai_credit')).assertTrue();
+      expect(hasAppStringKey('poem_save_in_progress')).assertTrue();
+      expect(hasAppStringKey('poem_share_in_progress')).assertTrue();
+    });
+
+    it('poetryPosterStartsOnlyOneSaveOrShareAction', 0, () => {
+      expect(shouldStartPoetryPosterAction(false)).assertTrue();
+      expect(shouldStartPoetryPosterAction(true)).assertFalse();
     });
 
     it('portsAndroidPoetryPosterVisualAssetsAndLayoutSpec', 0, () => {
@@ -3220,8 +3205,12 @@ export default function localUnitTest() {
       expect(poetryPosterVisualSpec.logoMediaName).assertEqual('poem_logo2');
       expect(poetryPosterVisualSpec.outerPaddingVp).assertEqual(20);
       expect(poetryPosterVisualSpec.poemTopMarginVp).assertEqual(20);
-      expect(poetryPosterVisualSpec.poemTextPaddingVp).assertEqual(60);
+      expect(poetryPosterVisualSpec.poemTextPaddingVp).assertEqual(20);
+      expect(poetryPosterVisualSpec.posterMinHeightVp).assertEqual(520);
+      expect(poetryPosterVisualSpec.posterMaxWidthVp).assertEqual(420);
       expect(poetryPosterVisualSpec.poemTextFontSizeFp).assertEqual(15);
+      expect(poetryPosterVisualSpec.poemTextMaxFontScale > 1).assertTrue();
+      expect(poetryPosterVisualSpec.poemTextMaxFontScale <= 2).assertTrue();
       expect(poetryPosterVisualSpec.logoWidthVp).assertEqual(76);
       expect(poetryPosterVisualSpec.logoHeightVp).assertEqual(57);
       expect(poetryPosterVisualSpec.qrCodeSizeVp).assertEqual(80);
@@ -3831,6 +3820,21 @@ export default function localUnitTest() {
       expect(progressEvents[1].totalBytes).assertEqual(200);
     });
 
+    it('removesDanceReferenceVideoDownloadListenersWithTheirRegisteredCallbacks', 0, async () => {
+      const task = new ManualDanceReferenceVideoDownloadTask(danceReferenceVideoDownloadStatusRunning);
+      const promise = waitForDanceReferenceVideoDownload(task);
+
+      task.emitComplete();
+      await promise;
+
+      expect(task.onEvents.join(',')).assertEqual('progress,complete,pause,remove,fail');
+      expect(task.offEvents.join(',')).assertEqual('progress,complete,pause,remove,fail');
+      expect(task.offCallbacks.length).assertEqual(task.onCallbacks.length);
+      for (let index = 0; index < task.onCallbacks.length; index++) {
+        expect(task.offCallbacks[index] === task.onCallbacks[index]).assertTrue();
+      }
+    });
+
     it('settlesDanceReferenceVideoDownloadWhenTaskAlreadyEnded', 0, async () => {
       await waitForDanceReferenceVideoDownload(
         new ManualDanceReferenceVideoDownloadTask(danceReferenceVideoDownloadStatusSuccessful)
@@ -3983,7 +3987,7 @@ export default function localUnitTest() {
       expect(portraitSegmentation.inputKinds.indexOf('photo')).assertEqual(-1);
       expect((portraitSegmentation.optionalInputKinds ?? []).indexOf('backgroundImage') >= 0).assertTrue();
       expect(portraitSegmentation.requiredPermissions.indexOf('camera') >= 0).assertTrue();
-      expect(portraitSegmentation.requiredPermissions.indexOf('media') >= 0).assertTrue();
+      expect(portraitSegmentation.requiredPermissions.indexOf('media')).assertEqual(-1);
       expect(portraitSegmentation.liveMode).assertTrue();
       expect(liveRuntimeModeForWorkflow(portraitSegmentation)).assertTrue();
       expect(shouldRenderLiveCameraPreview(portraitSegmentation, false)).assertTrue();
@@ -4031,6 +4035,39 @@ export default function localUnitTest() {
       expect(workflowRunActionKey(translation)).assertEqual('feature_runtime_run_translation');
       expect(hasAppStringKey(workflowRunActionKey(translation))).assertTrue();
       expect(workflowRunActionKey(styleTransfer)).assertEqual('feature_runtime_run');
+    });
+
+    it('preservesTranslationInputsAndLastValidResultDuringRunAndFailure', 0, () => {
+      const translation: FeatureWorkflow = workflowForRoute(AppRoute.TEXT_TRANSLATION.name)!;
+
+      expect(shouldClearRuntimeResultAtWorkflowStart(translation)).assertFalse();
+      expect(shouldPreserveRuntimeTextResultOnAiResult(translation, false)).assertTrue();
+      expect(shouldPreserveRuntimeTextResultOnAiResult(translation, true)).assertFalse();
+      expect(shouldPreserveRuntimeResultAfterInputReady(translation, 'photo')).assertTrue();
+      expect(shouldPreserveRuntimeResultAfterInputReady(translation, 'camera')).assertTrue();
+      expect(shouldPreserveRuntimeResultAfterInputReady(translation, 'text')).assertFalse();
+      expect(shouldAllowRuntimeInputChange(translation, 'text', true)).assertFalse();
+      expect(shouldAllowRuntimeInputChange(translation, 'photo', true)).assertFalse();
+      expect(shouldAllowRuntimeInputChange(translation, 'camera', true)).assertFalse();
+      expect(shouldAllowRuntimeInputChange(translation, 'text', false)).assertTrue();
+      expect(shouldAllowRuntimeInputChange(translation, 'photo', false)).assertTrue();
+      expect(shouldAllowRuntimeInputChange(translation, 'camera', false)).assertTrue();
+    });
+
+    it('labelsTranslationFailuresAsRetryWithoutChangingStableLabels', 0, () => {
+      const runKey = 'feature_runtime_run_translation';
+      expect(textTranslationRunActionLabelKey(
+        'feature_runtime_text_translation_failed', runKey)).assertEqual('web_retry');
+      expect(textTranslationRunActionLabelKey(
+        'feature_runtime_text_recognition_failed', runKey)).assertEqual('web_retry');
+      expect(textTranslationRunActionLabelKey(
+        'feature_runtime_run_failed', runKey)).assertEqual('web_retry');
+      expect(textTranslationRunActionLabelKey(
+        'feature_runtime_text_translation_offline_unsupported', runKey)).assertEqual('web_retry');
+      expect(textTranslationRunActionLabelKey(
+        'feature_runtime_status_idle', runKey)).assertEqual(runKey);
+      expect(textTranslationRunActionLabelKey(
+        'feature_runtime_copy_done', runKey)).assertEqual(runKey);
     });
 
     it('usesAndroidObjectDetectionActivityTitlesOnRuntimePages', 0, () => {
@@ -4147,14 +4184,15 @@ export default function localUnitTest() {
       expect(shouldShowCompositeSegmentationSaveAction(undefined)).assertFalse();
     });
 
-    it('mirrorsOnlyAndroidPortraitForegroundForFrontCamera', 0, () => {
+    it('mirrorsPortraitAndLiveSegmentationForegroundOnlyForFrontCamera', 0, () => {
       const portraitSegmentation: FeatureWorkflow = workflowForRoute(AppRoute.PORTRAIT_SEGMENTATION.name)!;
       const segmentationLive: FeatureWorkflow = workflowForRoute(AppRoute.SEGMENTATION_LIVE.name)!;
       const segmentationStill: FeatureWorkflow = workflowForRoute(AppRoute.SEGMENTATION_STILL.name)!;
 
       expect(shouldMirrorSegmentationForeground(portraitSegmentation, 'front')).assertTrue();
       expect(shouldMirrorSegmentationForeground(portraitSegmentation, 'back')).assertFalse();
-      expect(shouldMirrorSegmentationForeground(segmentationLive, 'front')).assertFalse();
+      expect(shouldMirrorSegmentationForeground(segmentationLive, 'front')).assertTrue();
+      expect(shouldMirrorSegmentationForeground(segmentationLive, 'back')).assertFalse();
       expect(shouldMirrorSegmentationForeground(segmentationStill, 'front')).assertFalse();
       expect(shouldMirrorSegmentationForeground(undefined, 'front')).assertFalse();
     });
@@ -4177,6 +4215,26 @@ export default function localUnitTest() {
       expect(shouldShowCopyTextAction(textRecognition.aiMethod)).assertTrue();
       expect(shouldShowCopyTextAction(textTranslation.aiMethod)).assertTrue();
       expect(shouldShowCopyTextAction(styleTransfer.aiMethod)).assertFalse();
+    });
+
+    it('disablesEveryTextRecognitionActionWhileInferenceIsRunning', 0, () => {
+      expect(textRecognitionActionEnabled(false)).assertTrue();
+      expect(textRecognitionActionEnabled(true)).assertFalse();
+    });
+
+    it('labelsTextRecognitionFailuresAsRetryWithoutChangingOtherRunLabels', 0, () => {
+      expect(textRecognitionRunActionLabelKey(
+        'feature_runtime_text_recognition_failed',
+        'feature_runtime_run'
+      )).assertEqual('web_retry');
+      expect(textRecognitionRunActionLabelKey(
+        'feature_runtime_run_failed',
+        'feature_runtime_run'
+      )).assertEqual('web_retry');
+      expect(textRecognitionRunActionLabelKey(
+        'feature_runtime_copy_failed',
+        'feature_runtime_run'
+      )).assertEqual('feature_runtime_run');
     });
 
     it('usesAndroidTextTranslationInputHint', 0, () => {
@@ -4271,6 +4329,7 @@ export default function localUnitTest() {
     it('preservesPortraitSegmentationResultsWhenOnlyBackgroundInputChanges', 0, () => {
       const portraitSegmentation: FeatureWorkflow = workflowForRoute(AppRoute.PORTRAIT_SEGMENTATION.name)!;
       const stillSegmentation: FeatureWorkflow = workflowForRoute(AppRoute.SEGMENTATION_STILL.name)!;
+      const liveSegmentation: FeatureWorkflow = workflowForRoute(AppRoute.SEGMENTATION_LIVE.name)!;
       const styleTransfer: FeatureWorkflow = workflowForRoute(AppRoute.STYLE_TRANSFER.name)!;
 
       expect(shouldPreserveRuntimeResultAfterInputReady(portraitSegmentation, 'backgroundImage')).assertTrue();
@@ -4279,9 +4338,21 @@ export default function localUnitTest() {
       expect(shouldPreserveRuntimeResultAfterInputReady(styleTransfer, 'styleImage')).assertTrue();
 
       expect(shouldPreserveRuntimeVisualResultOnAiResult(portraitSegmentation, true, 'segmentation')).assertTrue();
-      expect(shouldPreserveRuntimeVisualResultOnAiResult(portraitSegmentation, false, 'segmentation')).assertFalse();
+      expect(shouldPreserveRuntimeVisualResultOnAiResult(portraitSegmentation, false, 'segmentation')).assertTrue();
       expect(shouldPreserveRuntimeVisualResultOnAiResult(portraitSegmentation, true, '')).assertFalse();
       expect(shouldPreserveRuntimeVisualResultOnAiResult(stillSegmentation, true, 'segmentation')).assertTrue();
+      expect(shouldPreserveRuntimeVisualResultOnAiResult(liveSegmentation, false, '')).assertTrue();
+      expect(shouldPreserveRuntimeVisualResultOnAiResult(liveSegmentation, true, 'segmentation')).assertTrue();
+      expect(shouldPreserveLiveCameraInputOnFailure(portraitSegmentation)).assertTrue();
+      expect(liveSegmentationRetryActionForStatus(
+        portraitSegmentation,
+        'feature_runtime_segmentation_failed'
+      )).assertEqual('restartInference');
+      expect(liveSegmentationRetryActionForStatus(
+        portraitSegmentation,
+        'feature_runtime_segmentation_no_subject'
+      )).assertEqual('restartInference');
+      expect(shouldPublishLiveSegmentationPreparingStatus(portraitSegmentation, true)).assertFalse();
     });
 
     it('usesCurrentPortraitBackgroundWhenApplyingStaleSegmentationResult', 0, () => {
@@ -4334,6 +4405,34 @@ export default function localUnitTest() {
       );
       expect(modelState.modelInputUri).assertEqual('file://model/custom.ms');
       expect(modelState.imageInputUri).assertEqual('file://album/old-image.jpg');
+
+      const objectPhotoState: FeatureRuntimePickedInputState = runtimePickedInputStateAfterCancelledPick(
+        AppRoute.OBJECT_PHOTO.name,
+        'photo',
+        state
+      );
+      expect(objectPhotoState.selectedInputSummary).assertEqual('file://album/old-content.jpg');
+      expect(objectPhotoState.imageInputUri).assertEqual('file://album/old-image.jpg');
+      expect(objectPhotoState.modelInputUri).assertEqual('file://model/custom.ms');
+
+      const stillSegmentationPhotoState: FeatureRuntimePickedInputState =
+        runtimePickedInputStateAfterCancelledPick(
+          AppRoute.SEGMENTATION_STILL.name,
+          'photo',
+          state
+        );
+      expect(stillSegmentationPhotoState).assertEqual(state);
+      expect(stillSegmentationPhotoState.selectedInputSummary).assertEqual('file://album/old-content.jpg');
+      expect(stillSegmentationPhotoState.imageInputUri).assertEqual('file://album/old-image.jpg');
+
+      const stillSegmentationCameraState: FeatureRuntimePickedInputState =
+        runtimePickedInputStateAfterCancelledPick(
+          AppRoute.SEGMENTATION_STILL.name,
+          'camera',
+          state
+        );
+      expect(stillSegmentationCameraState).assertEqual(state);
+      expect(stillSegmentationCameraState.imageInputUri).assertEqual('file://album/old-image.jpg');
     });
 
     it('preservesPreviousModelOverrideWhenPickedModelCacheFails', 0, () => {
@@ -5467,6 +5566,31 @@ export default function localUnitTest() {
       expect(result.detailText.indexOf('[1,2,3,4]') >= 0).assertTrue();
     });
 
+    it('aiServiceMapsNoSubjectSegmentationFailureToLocalizedRetryStatus', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.PORTRAIT_SEGMENTATION.name);
+      expect(workflow !== undefined).assertTrue();
+      const service = new SegmentationService({
+        runner: new FixedSegmentationRunner({
+          ok: false,
+          subjectCount: 0,
+          detailCount: 0,
+          foregroundAvailable: false,
+          rectangles: [],
+          executionMs: 7,
+          failureReason: 'noSubject'
+        })
+      });
+
+      const result = await new DefaultAiService({ segmentationService: service }).run(workflow!, {
+        imageUri: 'file://selected/no-person.jpg'
+      });
+
+      expect(result.ok).assertFalse();
+      expect(result.code).assertEqual('SEGMENTATION_FAILED');
+      expect(result.messageKey).assertEqual('feature_runtime_segmentation_no_subject');
+      expect(result.detailText.indexOf('subjectCount=0') >= 0).assertTrue();
+    });
+
     it('mapsSegmentationRectangleToPercentOverlay', 0, () => {
       const rectangle: SegmentationRectangle = {
         left: 20,
@@ -5497,6 +5621,17 @@ export default function localUnitTest() {
       expect(result.ok).assertFalse();
       expect(result.code).assertEqual('SEGMENTATION_FAILED');
       expect(result.messageKey).assertEqual('feature_runtime_segmentation_failed');
+    });
+
+    it('segmentationServiceMapsRunnerExceptionToGenericFailureReason', 0, async () => {
+      const service = new SegmentationService({
+        runner: new RejectingSegmentationRunner()
+      });
+
+      const result: SegmentationResult = await service.segmentPerson('file://selected/person.jpg');
+
+      expect(result.ok).assertFalse();
+      expect(result.failureReason).assertEqual('runtimeException');
     });
 
     it('poseDetectionRequiresImageInputWhenServiceIsProvided', 0, async () => {
@@ -5629,14 +5764,14 @@ export default function localUnitTest() {
       expect(marker.y.toFixed(1)).assertEqual('87.5');
     });
 
-    it('gatesPortraitCompositeSaveForCurrentReadyIdleResult', 0, () => {
+    it('gatesSegmentationSaveForCurrentReadyIdleResult', 0, () => {
       expect(compositeSegmentationSaveReady(false, true, false)).assertTrue();
       expect(compositeSegmentationSaveReady(true, true, false)).assertFalse();
       expect(compositeSegmentationSaveReady(false, false, false)).assertFalse();
       expect(compositeSegmentationSaveReady(false, true, true)).assertFalse();
     });
 
-    it('rejectsPortraitCompositeDoubleClickAfterFirstSaveOwnsTheGate', 0, () => {
+    it('rejectsSegmentationDoubleClickAfterFirstSaveOwnsTheGate', 0, () => {
       let saveInFlight: boolean = false;
       const firstClickAccepted = compositeSegmentationSaveReady(false, true, saveInFlight);
       if (firstClickAccepted) {
@@ -6380,9 +6515,9 @@ export default function localUnitTest() {
       expect(result.ok).assertTrue();
       expect(result.scenes.length).assertEqual(2);
       expect(result.scenes[0].label).assertEqual('food');
-      expect(result.scenes[0].score).assertEqual(0.91);
+      expect(result.scenes[0].score.toFixed(4)).assertEqual('0.3452');
       expect(result.scenes[1].label).assertEqual('beach');
-      expect(result.scenes[1].score).assertEqual(0.82);
+      expect(result.scenes[1].score.toFixed(4)).assertEqual('0.3155');
     });
 
     it('localSceneDetectionRunnerKeepsCommonPlaces365Aliases', 0, () => {
@@ -6415,6 +6550,36 @@ export default function localUnitTest() {
       expect(result.scenes[4].label).assertEqual('classroom');
     });
 
+    it('localSceneDetectionRunnerAppliesStableSoftmaxBeforeSelectingScenes', 0, async () => {
+      const runner = new ImageClassificationSceneDetectionRunner({
+        labels: ['field', 'sky', 'mountain'],
+        scoreRunner: new FixedScoreRunner([13.8679, 9.8894, 7.5723]),
+        maxScenes: 3
+      });
+
+      const result = await runner.detectScenes('file://selected/landscape.jpg');
+
+      expect(result.ok).assertTrue();
+      expect(result.scenes.length).assertEqual(3);
+      expect(result.scenes[0].score.toFixed(4)).assertEqual('0.9799');
+      expect(result.scenes[1].score.toFixed(4)).assertEqual('0.0183');
+      expect(result.scenes[2].score.toFixed(4)).assertEqual('0.0018');
+      const scoreSum = result.scenes.reduce((sum: number, scene: SceneDetection) => sum + scene.score, 0);
+      expect(scoreSum.toFixed(6)).assertEqual('1.000000');
+    });
+
+    it('localSceneDetectionSoftmaxAcceptsNegativeLogitsWithoutForcingTopOneToHundredPercent', 0, () => {
+      const scenes = topLocalSceneDetections(
+        [-1, -2, -3],
+        ['field', 'sky', 'mountain'],
+        1
+      );
+
+      expect(scenes.length).assertEqual(1);
+      expect(scenes[0].label).assertEqual('greenplant');
+      expect(scenes[0].score.toFixed(4)).assertEqual('0.6652');
+    });
+
     it('parseSceneDetectionLabelsReadsPlaces365List', 0, () => {
       expect(sceneDetectionLabelRawfilePath).assertEqual('labels/places365.txt');
       expect(sceneDetectionModelRawfilePath).assertEqual('model/resnet18-place365.ms');
@@ -6440,7 +6605,7 @@ export default function localUnitTest() {
 
       expect(scenes.length).assertEqual(1);
       expect(scenes[0].label).assertEqual('stage');
-      expect(scenes[0].score.toFixed(2)).assertEqual('0.77');
+      expect(scenes[0].score.toFixed(6)).assertEqual('0.002153');
     });
 
     it('topLocalSceneDetectionsSkipsOtherWhenUsefulSceneExists', 0, () => {
@@ -6452,9 +6617,9 @@ export default function localUnitTest() {
 
       expect(scenes.length).assertEqual(2);
       expect(scenes[0].label).assertEqual('beach');
-      expect(scenes[0].score).assertEqual(0.91);
+      expect(scenes[0].score.toFixed(4)).assertEqual('0.2626');
       expect(scenes[1].label).assertEqual('diningroom');
-      expect(scenes[1].score).assertEqual(0.7);
+      expect(scenes[1].score.toFixed(4)).assertEqual('0.2129');
     });
 
     it('topLocalSceneDetectionsIgnoresNanScores', 0, () => {
@@ -6466,7 +6631,7 @@ export default function localUnitTest() {
 
       expect(scenes.length).assertEqual(1);
       expect(scenes[0].label).assertEqual('beach');
-      expect(scenes[0].score).assertEqual(0.64);
+      expect(scenes[0].score).assertEqual(1);
 
       const onlyNanOtherScenes = topLocalSceneDetections(
         [Number.NaN],
@@ -6480,7 +6645,7 @@ export default function localUnitTest() {
       const scenes = topLocalSceneDetections([0.99, 0.88], ['accordion', 'unknown_scene'], 2);
       expect(scenes.length).assertEqual(1);
       expect(scenes[0].label).assertEqual('other');
-      expect(scenes[0].score).assertEqual(0.99);
+      expect(scenes[0].score.toFixed(4)).assertEqual('0.5275');
 
       const workflow = workflowForRoute(AppRoute.SCENE_STILL.name);
       expect(workflow !== undefined).assertTrue();
@@ -6503,7 +6668,7 @@ export default function localUnitTest() {
       expect(rows[0].labelKey).assertEqual('feature_runtime_result_scene_count');
       expect(rows[0].value).assertEqual('1');
       expect(rows[1].labelKey).assertEqual('feature_runtime_result_scenes');
-      expect(rows[1].value).assertEqual('1. other 99.00%');
+      expect(rows[1].value).assertEqual('1. other 52.75%');
     });
 
     it('mapsAndroidSceneLabelsToChineseDisplayLabelsWithoutChangingUnknownLabels', 0, () => {
@@ -7394,22 +7559,40 @@ export default function localUnitTest() {
       expect(box.height.toFixed(1)).assertEqual('100.0');
     });
 
-    it('positionsLiveObjectDetectionLabelsLikeAndroidUsingMeasuredOverlayHeight', 0, () => {
-      const belowThreshold: ObjectDetectionLiveLabelOffset = objectDetectionLiveLabelOffset(3.9, 500);
-      expect(belowThreshold.x).assertEqual(5);
-      expect(belowThreshold.y).assertEqual(20);
+    it('keepsLiveObjectDetectionLabelsInsideEveryCanvasEdge', 0, () => {
+      const topEdge: ObjectDetectionLiveLabelPlacement = objectDetectionLiveLabelPlacement(
+        { left: 8, top: 2, width: 80, height: 60 },
+        360,
+        640,
+        12
+      );
+      expect(topEdge.left >= 0).assertTrue();
+      expect(topEdge.top >= 0).assertTrue();
+      expect(topEdge.left + topEdge.maxWidth <= 360).assertTrue();
+      expect(topEdge.top + topEdge.estimatedHeight <= 640).assertTrue();
+      expect(topEdge.top >= 66).assertTrue();
 
-      const atThreshold: ObjectDetectionLiveLabelOffset = objectDetectionLiveLabelOffset(4, 500);
-      expect(atThreshold.x).assertEqual(0);
-      expect(atThreshold.y).assertEqual(-10);
+      const bottomRight: ObjectDetectionLiveLabelPlacement = objectDetectionLiveLabelPlacement(
+        { left: 342, top: 612, width: 40, height: 40 },
+        360,
+        640,
+        36
+      );
+      expect(bottomRight.left >= 0).assertTrue();
+      expect(bottomRight.top >= 0).assertTrue();
+      expect(bottomRight.left + bottomRight.maxWidth <= 360).assertTrue();
+      expect(bottomRight.top + bottomRight.estimatedHeight <= 640).assertTrue();
+    });
 
-      const aboveThreshold: ObjectDetectionLiveLabelOffset = objectDetectionLiveLabelOffset(4.1, 500);
-      expect(aboveThreshold.x).assertEqual(0);
-      expect(aboveThreshold.y).assertEqual(-10);
+    it('allocatesNaturalHeightForLongLiveObjectLabels', 0, () => {
+      const box: ObjectDetectionLiveOverlayBox = { left: 100, top: 280, width: 80, height: 120 };
+      const shortLabel = objectDetectionLiveLabelPlacement(box, 360, 640, 8);
+      const longLabel = objectDetectionLiveLabelPlacement(box, 360, 640, 48);
 
-      const unmeasuredOverlay: ObjectDetectionLiveLabelOffset = objectDetectionLiveLabelOffset(80, 0);
-      expect(unmeasuredOverlay.x).assertEqual(5);
-      expect(unmeasuredOverlay.y).assertEqual(20);
+      expect(longLabel.estimatedHeight > shortLabel.estimatedHeight).assertTrue();
+      expect(longLabel.left + longLabel.maxWidth <= 360).assertTrue();
+      expect(longLabel.top + longLabel.estimatedHeight <= 640).assertTrue();
+      expect(objectDetectionLiveLabelPlacement(box, 0, 640, 8).maxWidth).assertEqual(0);
     });
 
     it('usesAndroidObjectDetectionOverlayPaletteByResultOrder', 0, () => {
@@ -8569,7 +8752,7 @@ export default function localUnitTest() {
       expect(resourceManager.seenPaths[0]).assertEqual('labels/places365.txt');
       expect(result.ok).assertTrue();
       expect(result.code).assertEqual('SCENE_DETECTION_DONE');
-      expect(result.detailText.indexOf('aircraft 92.00%') >= 0).assertTrue();
+      expect(result.detailText.indexOf('aircraft 42.80%') >= 0).assertTrue();
     });
 
     it('cachedRuntimeFactoryReusesLocalSceneDetectionServiceForLiveLoops', 0, async () => {
@@ -9300,10 +9483,10 @@ export default function localUnitTest() {
 
       expect(resourceManager.seenPaths[0]).assertEqual('labels/places365.txt');
       expect(result.ok).assertTrue();
-      expect(result.detailText.indexOf('舞台 82.00%') >= 0).assertTrue();
+      expect(result.detailText.indexOf('舞台 67.26%') >= 0).assertTrue();
       const rows = aiRunResultRows(result);
       expect(rows[1].labelKey).assertEqual('feature_runtime_result_scenes');
-      expect(rows[1].value.indexOf('1. 舞台 82.00%') >= 0).assertTrue();
+      expect(rows[1].value.indexOf('1. 舞台 67.26%') >= 0).assertTrue();
     });
 
     it('runtimeFactoryInjectsSegmentationServiceForSegmentationWorkflow', 0, async () => {
@@ -9420,15 +9603,6 @@ export default function localUnitTest() {
       expect(declaredPermissionNames.indexOf('ohos.permission.SHORT_TERM_WRITE_IMAGEVIDEO') >= 0).assertTrue();
     });
 
-    it('requestsAndroidStartupRuntimePermissionsWithoutInternet', 0, () => {
-      const permissionNames = startupPermissionNames();
-      expect(permissionNames.length).assertEqual(2);
-      expect(permissionNames.indexOf('ohos.permission.CAMERA') >= 0).assertTrue();
-      expect(permissionNames.indexOf('ohos.permission.READ_IMAGEVIDEO') >= 0).assertTrue();
-      expect(permissionNames.indexOf('ohos.permission.INTERNET')).assertEqual(-1);
-      expect(permissionNames.indexOf('ohos.permission.SHORT_TERM_WRITE_IMAGEVIDEO')).assertEqual(-1);
-    });
-
     it('recoversRuntimePermissionDenialWithAndroidLikeRetryActions', 0, () => {
       const textTranslation: FeatureWorkflow = workflowForRoute(AppRoute.TEXT_TRANSLATION.name)!;
       const imageCamera: FeatureWorkflow = workflowForRoute(AppRoute.IMAGE_CAMERA.name)!;
@@ -9471,10 +9645,23 @@ export default function localUnitTest() {
         imageCamera,
         'feature_runtime_live_camera_failed'
       )).assertEqual('runWorkflow');
-      const runtimeSettingsAction = runtimeOpenAppSettingsAction('com.example.mindspore');
+      const deniedSummary = permissionRequestSummary(
+        ['ohos.permission.CAMERA', 'ohos.permission.READ_IMAGEVIDEO'],
+        [0, -1]
+      );
+      expect(deniedSummary.ok).assertFalse();
+      expect(JSON.stringify(deniedSummary.denied))
+        .assertEqual('["ohos.permission.READ_IMAGEVIDEO"]');
+      const runtimeSettingsAction = runtimeOpenPermissionSettingsAction(deniedSummary.denied);
       expect(runtimeSettingsAction.openSettings).assertTrue();
-      expect(runtimeSettingsAction.want.action).assertEqual('action.settings.app.info');
-      expect(JSON.stringify(runtimeSettingsAction.want.parameters))
+      expect(JSON.stringify(runtimeSettingsAction.permissions))
+        .assertEqual('["ohos.permission.READ_IMAGEVIDEO"]');
+      expect(runtimeOpenPermissionSettingsAction([]).openSettings).assertFalse();
+      const fallbackWant = harmonySettingsFallbackWant('com.example.mindspore');
+      expect(fallbackWant.bundleName).assertEqual('com.huawei.hmos.settings');
+      expect(fallbackWant.moduleName).assertEqual('phone_settings');
+      expect(fallbackWant.abilityName).assertEqual('com.huawei.hmos.settings.MainAbility');
+      expect(JSON.stringify(fallbackWant.parameters))
         .assertEqual('{"settingsParamBundleName":"com.example.mindspore"}');
       liveCameraRouteNames.forEach((routeName: string) => {
         const workflow: FeatureWorkflow = workflowForRoute(routeName)!;
@@ -9678,6 +9865,19 @@ export default function localUnitTest() {
       expect(isApi24EmulatorCameraPickerUnsupported('emulator')).assertTrue();
       expect(isApi24EmulatorCameraPickerUnsupported('LNA-AL00')).assertFalse();
       expect(isApi24EmulatorCameraPickerUnsupported('')).assertFalse();
+    });
+
+    it('stillSceneUsesInlineCameraWhenNativeCaptureIsUnavailable', 0, () => {
+      const stillScene = workflowForRoute(AppRoute.SCENE_STILL.name);
+      const liveScene = workflowForRoute(AppRoute.SCENE_LIVE.name);
+      const unavailable: PickResult = { ok: false, uri: '', failure: 'cameraUnavailable' };
+      const cancelled: PickResult = { ok: false, uri: '' };
+
+      expect(shouldUseInlineCameraFallback(stillScene, 'camera', unavailable)).assertTrue();
+      expect(shouldUseInlineCameraFallback(stillScene, 'photo', unavailable)).assertFalse();
+      expect(shouldUseInlineCameraFallback(stillScene, 'camera', cancelled)).assertFalse();
+      expect(shouldUseInlineCameraFallback(liveScene, 'camera', unavailable)).assertFalse();
+      expect(shouldUseInlineCameraFallback(undefined, 'camera', unavailable)).assertFalse();
     });
 
     it('autoRunsTextImageInputsAfterAndroidImageInputReadyOnly', 0, () => {
@@ -9894,6 +10094,59 @@ export default function localUnitTest() {
         .assertFalse();
     });
 
+    it('keepsLiveGestureOverlayCameraAndRetryStatePerRoute', 0, () => {
+      const gestureLive: FeatureWorkflow = workflowForRoute(AppRoute.GESTURE_LIVE.name)!;
+      const sceneLive: FeatureWorkflow = workflowForRoute(AppRoute.SCENE_LIVE.name)!;
+
+      expect(usesAndroidLiveGestureLayout(gestureLive)).assertTrue();
+      expect(usesAndroidLiveGestureLayout(sceneLive)).assertFalse();
+      expect(liveGestureRetryActionForStatus(gestureLive, 'feature_runtime_live_camera_failed'))
+        .assertEqual('restartCamera');
+      expect(liveGestureRetryActionForStatus(gestureLive, 'feature_runtime_run_failed'))
+        .assertEqual('restartInference');
+      expect(liveGestureRetryActionForStatus(gestureLive, 'feature_runtime_gesture_failed'))
+        .assertEqual('restartInference');
+      expect(liveGestureRetryActionForStatus(gestureLive, 'feature_runtime_status_idle')).assertEqual('none');
+      expect(liveGestureRetryActionForStatus(sceneLive, 'feature_runtime_run_failed')).assertEqual('none');
+      expect(shouldPublishLiveGesturePreparingStatus(gestureLive, false)).assertTrue();
+      expect(shouldPublishLiveGesturePreparingStatus(gestureLive, true)).assertFalse();
+      expect(shouldPublishLiveGesturePreparingStatus(sceneLive, true)).assertTrue();
+      expect(shouldClearRuntimeResultAtWorkflowStart(gestureLive)).assertFalse();
+      expect(shouldPreserveRuntimeTextResultOnAiResult(gestureLive, false)).assertTrue();
+      expect(shouldPreserveRuntimeVisualResultOnAiResult(gestureLive, false, '')).assertTrue();
+      expect(shouldPreserveRuntimeVisualResultOnAiResult(gestureLive, true, 'gesture')).assertTrue();
+      expect(shouldPreserveRuntimeVisualResultOnAiResult(gestureLive, true, 'classification')).assertFalse();
+      expect(shouldPreserveLiveCameraInputOnFailure(gestureLive)).assertTrue();
+      expect(shouldPreserveLiveCameraInputOnFailure(sceneLive)).assertTrue();
+    });
+
+    it('keepsLiveSceneLabelsCameraAndRetryStatePerRoute', 0, () => {
+      const sceneLive: FeatureWorkflow = workflowForRoute(AppRoute.SCENE_LIVE.name)!;
+      const gestureLive: FeatureWorkflow = workflowForRoute(AppRoute.GESTURE_LIVE.name)!;
+
+      expect(usesAndroidLiveSceneLayout(sceneLive)).assertTrue();
+      expect(usesAndroidLiveSceneLayout(gestureLive)).assertFalse();
+      expect(liveSceneRetryActionForStatus(sceneLive, 'feature_runtime_live_camera_failed'))
+        .assertEqual('restartCamera');
+      expect(liveSceneRetryActionForStatus(sceneLive, 'feature_runtime_run_failed'))
+        .assertEqual('restartInference');
+      expect(liveSceneRetryActionForStatus(sceneLive, 'feature_runtime_scene_runner_unavailable'))
+        .assertEqual('restartInference');
+      expect(liveSceneRetryActionForStatus(sceneLive, 'feature_runtime_scene_failed'))
+        .assertEqual('restartInference');
+      expect(liveSceneRetryActionForStatus(sceneLive, 'feature_runtime_status_idle')).assertEqual('none');
+      expect(liveSceneRetryActionForStatus(gestureLive, 'feature_runtime_run_failed')).assertEqual('none');
+      expect(shouldPublishLiveScenePreparingStatus(sceneLive, false)).assertTrue();
+      expect(shouldPublishLiveScenePreparingStatus(sceneLive, true)).assertFalse();
+      expect(shouldPublishLiveScenePreparingStatus(gestureLive, true)).assertTrue();
+      expect(shouldClearRuntimeResultAtWorkflowStart(sceneLive)).assertFalse();
+      expect(shouldPreserveRuntimeTextResultOnAiResult(sceneLive, false)).assertTrue();
+      expect(shouldPreserveRuntimeVisualResultOnAiResult(sceneLive, false, '')).assertTrue();
+      expect(shouldPreserveRuntimeVisualResultOnAiResult(sceneLive, true, 'scenes')).assertTrue();
+      expect(shouldPreserveRuntimeVisualResultOnAiResult(sceneLive, true, 'gesture')).assertFalse();
+      expect(shouldPreserveLiveCameraInputOnFailure(sceneLive)).assertTrue();
+    });
+
     it('showsObjectBoxesOnOnlyTheAndroidStyleLiveObjectPreview', 0, () => {
       expect(shouldShowLiveObjectDetectionCameraOverlay(workflowForRoute(AppRoute.OBJECT_CAMERA.name)))
         .assertTrue();
@@ -9965,7 +10218,13 @@ export default function localUnitTest() {
     });
 
     it('keepsPreviousLiveClassificationLabelUntilNextResultLikeAndroid', 0, () => {
-      expect(shouldClearRuntimeResultAtWorkflowStart(workflowForRoute(AppRoute.IMAGE_CAMERA.name)))
+      const imageCamera = workflowForRoute(AppRoute.IMAGE_CAMERA.name);
+
+      expect(shouldClearRuntimeResultAtWorkflowStart(imageCamera))
+        .assertFalse();
+      expect(shouldPreserveRuntimeTextResultOnAiResult(imageCamera, false))
+        .assertTrue();
+      expect(shouldPreserveRuntimeTextResultOnAiResult(imageCamera, true))
         .assertFalse();
       expect(shouldClearRuntimeResultAtWorkflowStart(workflowForRoute(AppRoute.PORTRAIT_SEGMENTATION.name)))
         .assertFalse();
@@ -9975,6 +10234,46 @@ export default function localUnitTest() {
         .assertTrue();
       expect(shouldClearRuntimeResultAtWorkflowStart(undefined))
         .assertTrue();
+    });
+
+    it('offersExplicitLiveClassificationRetryOnlyForCameraAndInferenceFailures', 0, () => {
+      const imageCamera = workflowForRoute(AppRoute.IMAGE_CAMERA.name);
+      const objectCamera = workflowForRoute(AppRoute.OBJECT_CAMERA.name);
+
+      expect(liveClassificationRetryActionForStatus(imageCamera, 'feature_runtime_live_camera_failed'))
+        .assertEqual('restartCamera');
+      expect(liveClassificationRetryActionForStatus(imageCamera, 'feature_runtime_live_camera_surface_missing'))
+        .assertEqual('restartCamera');
+      expect(liveClassificationRetryActionForStatus(imageCamera, 'feature_runtime_permission_denied'))
+        .assertEqual('restartCamera');
+      expect(liveClassificationRetryActionForStatus(imageCamera, 'feature_runtime_live_frame_failed'))
+        .assertEqual('restartInference');
+      expect(liveClassificationRetryActionForStatus(imageCamera, 'feature_runtime_run_failed'))
+        .assertEqual('restartInference');
+      expect(liveClassificationRetryActionForStatus(
+        imageCamera,
+        'feature_runtime_classification_runner_unavailable'
+      )).assertEqual('restartInference');
+      expect(liveClassificationRetryActionForStatus(imageCamera, 'feature_runtime_classification_failed'))
+        .assertEqual('restartInference');
+      expect(liveClassificationRetryActionForStatus(imageCamera, 'feature_runtime_status_preparing'))
+        .assertEqual('none');
+      expect(liveClassificationRetryActionForStatus(imageCamera, 'feature_runtime_classification_done'))
+        .assertEqual('none');
+      expect(liveClassificationRetryActionForStatus(objectCamera, 'feature_runtime_run_failed'))
+        .assertEqual('none');
+      expect(liveClassificationRetryActionForStatus(undefined, 'feature_runtime_live_camera_failed'))
+        .assertEqual('none');
+    });
+
+    it('keepsLiveClassificationSuccessVisibleBetweenAutomaticFrames', 0, () => {
+      const imageCamera = workflowForRoute(AppRoute.IMAGE_CAMERA.name);
+      const objectCamera = workflowForRoute(AppRoute.OBJECT_CAMERA.name);
+
+      expect(shouldPublishLiveClassificationPreparingStatus(imageCamera, false)).assertTrue();
+      expect(shouldPublishLiveClassificationPreparingStatus(imageCamera, true)).assertFalse();
+      expect(shouldPublishLiveClassificationPreparingStatus(objectCamera, true)).assertTrue();
+      expect(shouldPublishLiveClassificationPreparingStatus(undefined, true)).assertTrue();
     });
 
     it('keepsLiveObjectOverlayOnFailureAndAtomicallyReplacesItOnCurrentSuccess', 0, () => {
@@ -9990,6 +10289,42 @@ export default function localUnitTest() {
       expect(shouldPreserveRuntimeVisualResultOnLiveFrameFailure(
         workflowForRoute(AppRoute.TEXT_RECOGNITION.name)
       )).assertFalse();
+    });
+
+    it('offersExplicitLiveObjectRetryOnlyForCameraAndInferenceFailures', 0, () => {
+      const objectCamera = workflowForRoute(AppRoute.OBJECT_CAMERA.name);
+      const imageCamera = workflowForRoute(AppRoute.IMAGE_CAMERA.name);
+
+      expect(liveObjectDetectionRetryActionForStatus(objectCamera, 'feature_runtime_live_camera_failed'))
+        .assertEqual('restartCamera');
+      expect(liveObjectDetectionRetryActionForStatus(objectCamera, 'feature_runtime_live_camera_surface_missing'))
+        .assertEqual('restartCamera');
+      expect(liveObjectDetectionRetryActionForStatus(objectCamera, 'feature_runtime_permission_denied'))
+        .assertEqual('restartCamera');
+      expect(liveObjectDetectionRetryActionForStatus(objectCamera, 'feature_runtime_live_frame_failed'))
+        .assertEqual('restartInference');
+      expect(liveObjectDetectionRetryActionForStatus(objectCamera, 'feature_runtime_run_failed'))
+        .assertEqual('restartInference');
+      expect(liveObjectDetectionRetryActionForStatus(objectCamera, 'feature_runtime_pending_adapter'))
+        .assertEqual('restartInference');
+      expect(liveObjectDetectionRetryActionForStatus(objectCamera, 'feature_runtime_object_detection_failed'))
+        .assertEqual('restartInference');
+      expect(liveObjectDetectionRetryActionForStatus(objectCamera, 'feature_runtime_object_detection_done'))
+        .assertEqual('none');
+      expect(liveObjectDetectionRetryActionForStatus(imageCamera, 'feature_runtime_run_failed'))
+        .assertEqual('none');
+      expect(liveObjectDetectionRetryActionForStatus(undefined, 'feature_runtime_live_camera_failed'))
+        .assertEqual('none');
+    });
+
+    it('keepsLiveObjectStatusVisibleBetweenAutomaticFrames', 0, () => {
+      const objectCamera = workflowForRoute(AppRoute.OBJECT_CAMERA.name);
+      const imageCamera = workflowForRoute(AppRoute.IMAGE_CAMERA.name);
+
+      expect(shouldPublishLiveObjectDetectionPreparingStatus(objectCamera, false)).assertTrue();
+      expect(shouldPublishLiveObjectDetectionPreparingStatus(objectCamera, true)).assertFalse();
+      expect(shouldPublishLiveObjectDetectionPreparingStatus(imageCamera, true)).assertTrue();
+      expect(shouldPublishLiveObjectDetectionPreparingStatus(undefined, true)).assertTrue();
     });
 
     it('samplesLiveObjectFrameLogsWithoutGrowingAtFrameRateForever', 0, () => {
@@ -10015,20 +10350,19 @@ export default function localUnitTest() {
 
     });
 
-    it('usesSimpleAndroidLiveLayoutOnlyForMatchingAndroidActivities', 0, () => {
-      const simpleLiveRouteNames: Array<string> = [
-        AppRoute.SEGMENTATION_LIVE.name,
-        AppRoute.GESTURE_LIVE.name,
-        AppRoute.SCENE_LIVE.name,
-        AppRoute.LIVE_SKELETON.name
-      ];
-      expect(new Set<string>(simpleLiveRouteNames).size).assertEqual(4);
-
+    it('keepsGenericLiveLayoutUnusedAfterSkeletonGetsItsOwnRuntime', 0, () => {
       featureWorkflows.forEach((workflow: FeatureWorkflow) => {
-        expect(usesSimpleAndroidLiveLayout(workflow))
-          .assertEqual(simpleLiveRouteNames.indexOf(workflow.routeName) >= 0);
+        expect(usesSimpleAndroidLiveLayout(workflow)).assertFalse();
       });
       expect(usesSimpleAndroidLiveLayout(undefined)).assertFalse();
+    });
+
+    it('usesAndroidLiveSkeletonLayoutOnlyForLiveSkeleton', 0, () => {
+      featureWorkflows.forEach((workflow: FeatureWorkflow) => {
+        expect(usesAndroidLiveSkeletonLayout(workflow))
+          .assertEqual(workflow.routeName === AppRoute.LIVE_SKELETON.name);
+      });
+      expect(usesAndroidLiveSkeletonLayout(undefined)).assertFalse();
     });
 
     it('usesAndroidPortraitSegmentationLayoutOnlyForPortrait', 0, () => {
@@ -10150,7 +10484,7 @@ export default function localUnitTest() {
       expect(stillSceneResultToastKey(undefined, 'SCENE_DETECTION_FAILED')).assertUndefined();
     });
 
-    it('preservesTextOnlyForFailedStillSceneResults', 0, () => {
+    it('preservesRowsForFailedStillSceneAndObjectPhotoResults', 0, () => {
       const stillScene = workflowForRoute(AppRoute.SCENE_STILL.name);
       const liveScene = workflowForRoute(AppRoute.SCENE_LIVE.name);
       const stillSegmentation = workflowForRoute(AppRoute.SEGMENTATION_STILL.name);
@@ -10159,10 +10493,11 @@ export default function localUnitTest() {
 
       expect(shouldPreserveRuntimeTextResultOnAiResult(stillScene, false)).assertTrue();
       expect(shouldPreserveRuntimeTextResultOnAiResult(stillScene, true)).assertFalse();
-      expect(shouldPreserveRuntimeTextResultOnAiResult(liveScene, false)).assertFalse();
+      expect(shouldPreserveRuntimeTextResultOnAiResult(liveScene, false)).assertTrue();
       expect(shouldPreserveRuntimeTextResultOnAiResult(stillSegmentation, false)).assertFalse();
       expect(shouldPreserveRuntimeTextResultOnAiResult(styleTransfer, false)).assertFalse();
-      expect(shouldPreserveRuntimeTextResultOnAiResult(objectPhoto, false)).assertFalse();
+      expect(shouldPreserveRuntimeTextResultOnAiResult(objectPhoto, false)).assertTrue();
+      expect(shouldPreserveRuntimeTextResultOnAiResult(objectPhoto, true)).assertFalse();
       expect(shouldPreserveRuntimeTextResultOnAiResult(undefined, false)).assertFalse();
     });
 
@@ -10171,6 +10506,7 @@ export default function localUnitTest() {
       const liveScene = workflowForRoute(AppRoute.SCENE_LIVE.name);
       const stillSegmentation = workflowForRoute(AppRoute.SEGMENTATION_STILL.name);
       const styleTransfer = workflowForRoute(AppRoute.STYLE_TRANSFER.name);
+      const objectPhoto = workflowForRoute(AppRoute.OBJECT_PHOTO.name);
 
       expect(shouldPreserveRuntimeResultAfterInputReady(stillScene, 'photo')).assertTrue();
       expect(shouldPreserveRuntimeResultAfterInputReady(stillScene, 'camera')).assertTrue();
@@ -10178,8 +10514,12 @@ export default function localUnitTest() {
       expect(shouldPreserveRuntimeResultAfterInputReady(liveScene, 'photo')).assertFalse();
       expect(shouldPreserveRuntimeResultAfterInputReady(stillSegmentation, 'photo')).assertTrue();
       expect(shouldPreserveRuntimeResultAfterInputReady(styleTransfer, 'contentImage')).assertTrue();
+      expect(shouldPreserveRuntimeResultAfterInputReady(objectPhoto, 'photo')).assertTrue();
+      expect(shouldPreserveRuntimeResultAfterInputReady(objectPhoto, 'modelFile')).assertTrue();
+      expect(shouldPreserveRuntimeResultAfterInputReady(objectPhoto, 'camera')).assertFalse();
       expect(shouldClearRuntimeResultAtWorkflowStart(stillScene)).assertFalse();
-      expect(shouldClearRuntimeResultAtWorkflowStart(liveScene)).assertTrue();
+      expect(shouldClearRuntimeResultAtWorkflowStart(objectPhoto)).assertFalse();
+      expect(shouldClearRuntimeResultAtWorkflowStart(liveScene)).assertFalse();
 
       expect(shouldAllowRuntimeInputChange(stillScene, 'photo', true)).assertFalse();
       expect(shouldAllowRuntimeInputChange(stillScene, 'camera', true)).assertFalse();
@@ -10218,7 +10558,7 @@ export default function localUnitTest() {
       expect(stillSegmentationResultToastKey(undefined, false)).assertUndefined();
     });
 
-    it('preservesStillSegmentationForegroundUntilAtomicReplacement', 0, () => {
+    it('preservesStillAndLiveSegmentationForegroundUntilAtomicReplacement', 0, () => {
       const stillSegmentation = workflowForRoute(AppRoute.SEGMENTATION_STILL.name);
       const liveSegmentation = workflowForRoute(AppRoute.SEGMENTATION_LIVE.name);
       const portraitSegmentation = workflowForRoute(AppRoute.PORTRAIT_SEGMENTATION.name);
@@ -10234,10 +10574,12 @@ export default function localUnitTest() {
       expect(shouldPreserveRuntimeResultAfterInputReady(styleTransfer, 'contentImage')).assertTrue();
 
       expect(shouldClearRuntimeResultAtWorkflowStart(stillSegmentation)).assertFalse();
+      expect(shouldClearRuntimeResultAtWorkflowStart(liveSegmentation)).assertFalse();
       expect(shouldPreserveRuntimeVisualResultOnAiResult(stillSegmentation, false, '')).assertTrue();
       expect(shouldPreserveRuntimeVisualResultOnAiResult(stillSegmentation, true, 'segmentation')).assertTrue();
       expect(shouldPreserveRuntimeVisualResultOnAiResult(stillSegmentation, true, 'classification')).assertFalse();
-      expect(shouldPreserveRuntimeVisualResultOnAiResult(liveSegmentation, false, '')).assertFalse();
+      expect(shouldPreserveRuntimeVisualResultOnAiResult(liveSegmentation, false, '')).assertTrue();
+      expect(shouldPreserveRuntimeVisualResultOnAiResult(liveSegmentation, true, 'segmentation')).assertTrue();
       expect(shouldPreserveRuntimeVisualResultOnAiResult(portraitSegmentation, true, 'segmentation')).assertTrue();
       expect(shouldPreserveRuntimeVisualResultOnAiResult(styleTransfer, true, 'styleTransfer')).assertTrue();
     });
@@ -10312,7 +10654,10 @@ export default function localUnitTest() {
       expect(shouldPreserveRuntimeVisualResultOnAiResult(styleTransfer, false, 'styleTransfer')).assertTrue();
       expect(shouldPreserveRuntimeVisualResultOnAiResult(styleTransfer, true, 'styleTransfer')).assertTrue();
       expect(shouldPreserveRuntimeVisualResultOnAiResult(styleTransfer, true, 'classification')).assertFalse();
-      expect(shouldPreserveRuntimeVisualResultOnAiResult(objectPhoto, false, 'styleTransfer')).assertFalse();
+      expect(shouldPreserveRuntimeVisualResultOnAiResult(objectPhoto, false, '')).assertTrue();
+      expect(shouldPreserveRuntimeVisualResultOnAiResult(objectPhoto, false, 'styleTransfer')).assertTrue();
+      expect(shouldPreserveRuntimeVisualResultOnAiResult(objectPhoto, true, 'objectDetections')).assertTrue();
+      expect(shouldPreserveRuntimeVisualResultOnAiResult(objectPhoto, true, 'styleTransfer')).assertFalse();
       expect(shouldPreserveRuntimeVisualResultOnAiResult(undefined, false, '')).assertFalse();
     });
 
@@ -10394,6 +10739,10 @@ export default function localUnitTest() {
       expect(shouldPreserveRuntimeResultAfterInputReady(portraitSegmentation, 'backgroundImage')).assertTrue();
       expect(shouldPreserveRuntimeResultAfterInputReady(portraitSegmentation, 'camera')).assertFalse();
       expect(shouldPreserveRuntimeResultAfterInputReady(styleTransfer, 'styleImage')).assertTrue();
+      expect(shouldPreserveRuntimeTextResultOnAiResult(customModel, false)).assertTrue();
+      expect(shouldPreserveRuntimeTextResultOnAiResult(customModel, false, false)).assertFalse();
+      expect(shouldPreserveRuntimeTextResultOnAiResult(customModel, true)).assertFalse();
+      expect(shouldClearRuntimeResultAtWorkflowStart(customModel)).assertFalse();
     });
 
     it('blocksOnlyRunningCustomModelAndStyleTransferInputChanges', 0, () => {
@@ -10456,13 +10805,21 @@ export default function localUnitTest() {
       expect(shouldShowGestureStillFailureToast(undefined, true)).assertFalse();
     });
 
-    it('selectsSpecializedAndroidLiveLayoutOnlyForImageAndObjectCamera', 0, () => {
+    it('selectsSpecializedAndroidLiveLayoutForEveryRouteSpecificCameraWorkflow', 0, () => {
       featureWorkflows.forEach((workflow: FeatureWorkflow) => {
         let expectedLayout: string | undefined = undefined;
         if (workflow.routeName === AppRoute.IMAGE_CAMERA.name) {
           expectedLayout = 'imageClassification';
         } else if (workflow.routeName === AppRoute.OBJECT_CAMERA.name) {
           expectedLayout = 'objectDetection';
+        } else if (workflow.routeName === AppRoute.SEGMENTATION_LIVE.name) {
+          expectedLayout = 'segmentation';
+        } else if (workflow.routeName === AppRoute.GESTURE_LIVE.name) {
+          expectedLayout = 'gesture';
+        } else if (workflow.routeName === AppRoute.SCENE_LIVE.name) {
+          expectedLayout = 'scene';
+        } else if (workflow.routeName === AppRoute.LIVE_SKELETON.name) {
+          expectedLayout = 'skeleton';
         }
         expect(specializedAndroidLiveLayoutForWorkflow(workflow)).assertEqual(expectedLayout);
       });
@@ -10483,6 +10840,10 @@ export default function localUnitTest() {
         usesAndroidPortraitSegmentationLayout(workflow),
         specializedAndroidLiveLayoutForWorkflow(workflow) === 'imageClassification',
         specializedAndroidLiveLayoutForWorkflow(workflow) === 'objectDetection',
+        specializedAndroidLiveLayoutForWorkflow(workflow) === 'segmentation',
+        specializedAndroidLiveLayoutForWorkflow(workflow) === 'gesture',
+        specializedAndroidLiveLayoutForWorkflow(workflow) === 'scene',
+        specializedAndroidLiveLayoutForWorkflow(workflow) === 'skeleton',
         usesSimpleAndroidLiveLayout(workflow)
       ].filter((matches: boolean) => matches).length;
 
@@ -10614,14 +10975,18 @@ export default function localUnitTest() {
       resetRememberedLiveCameraPositionsForTests();
       const segmentationLive: FeatureWorkflow = workflowForRoute(AppRoute.SEGMENTATION_LIVE.name)!;
       const sceneLive: FeatureWorkflow = workflowForRoute(AppRoute.SCENE_LIVE.name)!;
+      const gestureLive: FeatureWorkflow = workflowForRoute(AppRoute.GESTURE_LIVE.name)!;
 
       expect(rememberedLiveCameraPositionForWorkflow(segmentationLive)).assertEqual('front');
       expect(rememberedLiveCameraPositionForWorkflow(sceneLive)).assertEqual('front');
+      expect(rememberedLiveCameraPositionForWorkflow(gestureLive)).assertEqual('back');
 
       rememberLiveCameraPositionForRoute(segmentationLive.routeName, 'back');
+      rememberLiveCameraPositionForRoute(gestureLive.routeName, 'front');
 
       expect(rememberedLiveCameraPositionForWorkflow(segmentationLive)).assertEqual('back');
       expect(rememberedLiveCameraPositionForWorkflow(sceneLive)).assertEqual('front');
+      expect(rememberedLiveCameraPositionForWorkflow(gestureLive)).assertEqual('front');
       expect(rememberedLiveCameraPositionForWorkflow(undefined)).assertEqual('back');
       resetRememberedLiveCameraPositionsForTests();
     });
@@ -10673,6 +11038,7 @@ export default function localUnitTest() {
       expect(shouldLeaveRuntimeAfterCancelledInitialPick(objectPhoto, 'photo', true)).assertTrue();
       expect(shouldLeaveRuntimeAfterCancelledInitialPick(objectPhoto, 'photo', false)).assertFalse();
       expect(shouldLeaveRuntimeAfterCancelledInitialPick(objectPhoto, 'modelFile', true)).assertFalse();
+      expect(shouldLeaveRuntimeAfterCancelledInitialPick(objectPhoto, 'modelFile', false)).assertFalse();
       expect(cancelledPickStatusKeyForWorkflow(objectPhoto, 'photo', true)).assertEqual('feature_runtime_image_invalid');
       expect(cancelledPickToastStatusKeyForWorkflow(objectPhoto, 'photo', true))
         .assertEqual('feature_runtime_image_invalid');
@@ -10857,11 +11223,11 @@ export default function localUnitTest() {
       expect(rejected.messageKey).assertEqual('feature_runtime_live_frame_failed');
     });
 
-    it('capturesLiveFrameOnlyWhenLiveCameraIsTheActiveImageSource', 0, () => {
+    it('capturesLiveFrameWheneverLiveCameraIsSelectedEvenBeforePreviewActivation', 0, () => {
       expect(shouldCaptureLiveFrameImage(false, '', false)).assertFalse();
       expect(shouldCaptureLiveFrameImage(false, '/cache/selected.jpg', true)).assertFalse();
       expect(shouldCaptureLiveFrameImage(true, '', false)).assertTrue();
-      expect(shouldCaptureLiveFrameImage(true, '/cache/selected.jpg', false)).assertFalse();
+      expect(shouldCaptureLiveFrameImage(true, '/cache/selected.jpg', false)).assertTrue();
       expect(shouldCaptureLiveFrameImage(true, '/cache/previous.jpg', true)).assertTrue();
     });
 

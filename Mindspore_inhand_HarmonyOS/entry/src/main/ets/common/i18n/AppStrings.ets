@@ -27,9 +27,11 @@ export type AppStringKey =
   'mindspore_college_title' |
   'account_title' |
   'action_back' |
+  'action_more' |
   'app_cancel' |
   'image_save_success' |
   'image_save_failed' |
+  'qr_save_in_progress' |
   'confirm' |
   'dialog_btn_confirm' |
   'title_button_text_angle' |
@@ -74,6 +76,8 @@ export type AppStringKey =
   'me_up_title' |
   'me_official_title' |
   'me_official_code_title' |
+  'web_load_failed' |
+  'web_retry' |
   'me_qa_title' |
   'me_agree' |
   'me_disagree_and_exit' |
@@ -89,8 +93,10 @@ export type AppStringKey =
   'poem_share_poster' |
   'poem_save_success' |
   'poem_save_failed' |
+  'poem_save_in_progress' |
   'poem_share_done' |
   'poem_share_failed' |
+  'poem_share_in_progress' |
   'poem_ai_credit' |
   'dance_prepare_summary' |
   'dance_reference_video' |
@@ -134,6 +140,7 @@ export type AppStringKey =
   'feature_runtime_pose_detect_android' |
   'feature_runtime_pose_detect_success_android' |
   'feature_runtime_pose_detect_failed_android' |
+  'feature_runtime_gesture_detect_android' |
   'feature_runtime_gesture_runner_unavailable' |
   'feature_runtime_gesture_done' |
   'feature_runtime_gesture_failed' |
@@ -207,6 +214,7 @@ export type AppStringKey =
   'feature_runtime_text_translation_failed' |
   'feature_runtime_segmentation_done' |
   'feature_runtime_segmentation_failed' |
+  'feature_runtime_segmentation_no_subject' |
   'feature_runtime_pose_done' |
   'feature_runtime_pose_failed' |
   'feature_runtime_permission_denied' |
@@ -264,6 +272,7 @@ export type AppStringKey =
   'feature_runtime_result_points' |
   'feature_runtime_result_similarity' |
   'feature_runtime_result_execution_time' |
+  'feature_runtime_result_separator' |
   'feature_runtime_result_image' |
   'feature_runtime_result_model' |
   'feature_runtime_result_content_image' |
@@ -344,9 +353,11 @@ const APP_STRING_KEYS: AppStringKey[] = [
   'mindspore_college_title',
   'account_title',
   'action_back',
+  'action_more',
   'app_cancel',
   'image_save_success',
   'image_save_failed',
+  'qr_save_in_progress',
   'confirm',
   'dialog_btn_confirm',
   'title_button_text_angle',
@@ -391,6 +402,8 @@ const APP_STRING_KEYS: AppStringKey[] = [
   'me_up_title',
   'me_official_title',
   'me_official_code_title',
+  'web_load_failed',
+  'web_retry',
   'me_qa_title',
   'me_agree',
   'me_disagree_and_exit',
@@ -406,8 +419,10 @@ const APP_STRING_KEYS: AppStringKey[] = [
   'poem_share_poster',
   'poem_save_success',
   'poem_save_failed',
+  'poem_save_in_progress',
   'poem_share_done',
   'poem_share_failed',
+  'poem_share_in_progress',
   'poem_ai_credit',
   'dance_prepare_summary',
   'dance_reference_video',
@@ -451,6 +466,7 @@ const APP_STRING_KEYS: AppStringKey[] = [
   'feature_runtime_pose_detect_android',
   'feature_runtime_pose_detect_success_android',
   'feature_runtime_pose_detect_failed_android',
+  'feature_runtime_gesture_detect_android',
   'feature_runtime_gesture_runner_unavailable',
   'feature_runtime_gesture_done',
   'feature_runtime_gesture_failed',
@@ -524,6 +540,7 @@ const APP_STRING_KEYS: AppStringKey[] = [
   'feature_runtime_text_translation_failed',
   'feature_runtime_segmentation_done',
   'feature_runtime_segmentation_failed',
+  'feature_runtime_segmentation_no_subject',
   'feature_runtime_pose_done',
   'feature_runtime_pose_failed',
   'feature_runtime_permission_denied',
@@ -581,6 +598,7 @@ const APP_STRING_KEYS: AppStringKey[] = [
   'feature_runtime_result_points',
   'feature_runtime_result_similarity',
   'feature_runtime_result_execution_time',
+  'feature_runtime_result_separator',
   'feature_runtime_result_image',
   'feature_runtime_result_model',
   'feature_runtime_result_content_image',
@@ -693,12 +711,16 @@ export function appString(key: AppStringKey): ResourceStr {
       return $r('app.string.account_title');
     case 'action_back':
       return $r('app.string.action_back');
+    case 'action_more':
+      return $r('app.string.action_more');
     case 'app_cancel':
       return $r('app.string.app_cancel');
     case 'image_save_success':
       return $r('app.string.image_save_success');
     case 'image_save_failed':
       return $r('app.string.image_save_failed');
+    case 'qr_save_in_progress':
+      return $r('app.string.qr_save_in_progress');
     case 'confirm':
       return $r('app.string.confirm');
     case 'dialog_btn_confirm':
@@ -787,6 +809,10 @@ export function appString(key: AppStringKey): ResourceStr {
       return $r('app.string.me_official_title');
     case 'me_official_code_title':
       return $r('app.string.me_official_code_title');
+    case 'web_load_failed':
+      return $r('app.string.web_load_failed');
+    case 'web_retry':
+      return $r('app.string.web_retry');
     case 'me_qa_title':
       return $r('app.string.me_qa_title');
     case 'me_agree':
@@ -817,10 +843,14 @@ export function appString(key: AppStringKey): ResourceStr {
       return $r('app.string.poem_save_success');
     case 'poem_save_failed':
       return $r('app.string.poem_save_failed');
+    case 'poem_save_in_progress':
+      return $r('app.string.poem_save_in_progress');
     case 'poem_share_done':
       return $r('app.string.poem_share_done');
     case 'poem_share_failed':
       return $r('app.string.poem_share_failed');
+    case 'poem_share_in_progress':
+      return $r('app.string.poem_share_in_progress');
     case 'poem_ai_credit':
       return $r('app.string.poem_ai_credit');
     case 'dance_prepare_summary':
@@ -907,6 +937,8 @@ export function appString(key: AppStringKey): ResourceStr {
       return $r('app.string.feature_runtime_pose_detect_success_android');
     case 'feature_runtime_pose_detect_failed_android':
       return $r('app.string.feature_runtime_pose_detect_failed_android');
+    case 'feature_runtime_gesture_detect_android':
+      return $r('app.string.feature_runtime_gesture_detect_android');
     case 'feature_runtime_gesture_runner_unavailable':
       return $r('app.string.feature_runtime_gesture_runner_unavailable');
     case 'feature_runtime_gesture_done':
@@ -1053,6 +1085,8 @@ export function appString(key: AppStringKey): ResourceStr {
       return $r('app.string.feature_runtime_segmentation_done');
     case 'feature_runtime_segmentation_failed':
       return $r('app.string.feature_runtime_segmentation_failed');
+    case 'feature_runtime_segmentation_no_subject':
+      return $r('app.string.feature_runtime_segmentation_no_subject');
     case 'feature_runtime_pose_done':
       return $r('app.string.feature_runtime_pose_done');
     case 'feature_runtime_pose_failed':
@@ -1167,6 +1201,8 @@ export function appString(key: AppStringKey): ResourceStr {
       return $r('app.string.feature_runtime_result_similarity');
     case 'feature_runtime_result_execution_time':
       return $r('app.string.feature_runtime_result_execution_time');
+    case 'feature_runtime_result_separator':
+      return $r('app.string.feature_runtime_result_separator');
     case 'feature_runtime_result_image':
       return $r('app.string.feature_runtime_result_image');
     case 'feature_runtime_result_model':

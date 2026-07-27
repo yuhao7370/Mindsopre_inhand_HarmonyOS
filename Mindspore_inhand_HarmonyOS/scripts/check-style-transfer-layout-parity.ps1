@@ -138,17 +138,43 @@ Assert-CodeLine $selector 'return workflow?.routeName === AppRoute.STYLE_TRANSFE
   'selector must target only Style Transfer.'
 Assert-Count $selector 'AppRoute.' 1 'selector must contain exactly one route target.'
 
-$page = Remove-ArkTsCommentsAndTemplateRaw (Get-NormalizedText $pagePath)
+$preserveInput = Get-TextSection $catalog 'export function shouldPreserveRuntimeResultAfterInputReady' `
+  "`n`nexport function shouldPreserveRuntimeTextResultOnAiResult" 'Style Transfer input preservation policy'
+foreach ($line in @(
+  '(usesAndroidStyleTransferLayout(workflow) &&',
+  "(inputKind === 'contentImage' || inputKind === 'camera' || inputKind === 'styleImage' ||",
+  'isStyleTransferModelInput(inputKind))) ||'
+)) { Assert-CodeLine $preserveInput $line "Style Transfer input preservation is missing: $line." }
+
+$visualPolicy = Get-TextSection $catalog 'export function shouldPreserveRuntimeVisualResultOnAiResult' `
+  "`n`nexport function shouldPreserveRuntimeVisualResultOnLiveFrameFailure" 'Style Transfer result preservation policy'
+Assert-CodeLine $visualPolicy 'if (usesAndroidStyleTransferLayout(workflow)) {' `
+  'Style Transfer must own an explicit visual preservation branch.'
+Assert-CodeLine $visualPolicy "return !resultOk || dataKind === 'styleTransfer';" `
+  'failed Style Transfer runs must retain the last valid visual.'
+
+$inputPolicy = Get-TextSection $catalog 'export function shouldAllowRuntimeInputChange' `
+  "`n`nexport function workflowInputReadyAction" 'Style Transfer running-input policy'
+Assert-Count $inputPolicy `
+  "if (workflow?.routeName === AppRoute.STYLE_TRANSFER.name) {`n    return false;`n  }" 1 `
+  'Style Transfer must explicitly reject all input changes while running.'
+
+$rawPage = Get-NormalizedText $pagePath
+$page = Remove-ArkTsCommentsAndTemplateRaw $rawPage
 $builder = Get-TextSection $page '  styleTransferAndroidLayout() {' `
   "`n`n  @Builder`n  stillSegmentationAndroidLayout()" 'dedicated Style Transfer builder'
 $grid = Get-TextSection $page '  styleTransferStyleGrid() {' `
   "`n`n  @Builder`n  styleTransferStyleItem" 'Style Transfer grid'
+$item = Get-TextSection $page '  styleTransferStyleItem(' `
+  "`n`n  @Builder`n  styleTransferCustomStyleItem()" 'built-in Style Transfer item'
+$customItem = Get-TextSection $page '  styleTransferCustomStyleItem() {' `
+  "`n`n  @Builder`n  styleTransferStyleImage(" 'Style Transfer selected badge'
+$accessibilityName = Get-TextSection $rawPage '  private styleTransferStyleAccessibilityText(' `
+  "`n`n  @Builder`n  inputChip(" 'built-in Style Transfer accessibility name'
 
 foreach ($line in @(
-  'Stack({ alignContent: Alignment.TopStart }) {',
   'this.runtimeActionToolbar(true)',
-  '.height(1)',
-  ".backgroundColor('#E4E4E4')",
+  'Scroll() {',
   'Stack({ alignContent: Alignment.Center }) {',
   'if (this.styledImagePixelMap !== undefined && !this.styleOriginalPreviewRecovered) {',
   'Image(this.styledImagePixelMap)',
@@ -156,11 +182,16 @@ foreach ($line in @(
   "Image(this.contentImageUri.length > 0 ? this.contentImageUri : this.imageInputUri)",
   "Image(`$r('app.media.icon_style'))",
   "Text(appString('feature_runtime_style_choose_image'))",
+  '.aspectRatio(4 / 3)',
+  '.constraintSize({ minHeight: 220, maxHeight: 420 })',
+  '.objectFit(ImageFit.Contain)',
+  "Button(appString(this.statusKey === 'feature_runtime_style_transfer_failed' ||",
+  "this.statusKey === 'feature_runtime_run_failed' ? 'web_retry' : this.runActionKey))",
+  '.enabled(this.styleTransferRunEnabled())',
+  '.onClick(() => this.runWorkflow())',
+  'Text(appString(this.statusKey))',
   'if (this.workflowRunning) {',
   'LoadingProgress()',
-  '.width(80)',
-  '.height(80)',
-  '.height(265)',
   "Button(appString('feature_runtime_style_album'), { type: ButtonType.Normal })",
   ".onClick(() => this.prepareInput('contentImage'))",
   "Button(appString(workflowInputLabelKey(workflowForRoute(this.routeName), 'camera')), { type: ButtonType.Normal })",
@@ -172,91 +203,121 @@ foreach ($line in @(
   'this.saveStyleTransferResultImage()',
   "this.statusKey = 'feature_runtime_save_image_failed';",
   'this.showRuntimeToast(this.statusKey);',
-  "Button(appString(workflowInputLabelKey(workflowForRoute(this.routeName), 'stylePredictModelFile')), { type: ButtonType.Normal })",
-  ".onClick(() => this.prepareInput('stylePredictModelFile'))",
-  "Button(appString(workflowInputLabelKey(workflowForRoute(this.routeName), 'styleTransferModelFile')), { type: ButtonType.Normal })",
-  ".onClick(() => this.prepareInput('styleTransferModelFile'))",
   'this.styleTransferStyleGrid()',
-  'this.runtimePermissionRecoveryOverlay()',
   ".width('100%')",
   ".height('100%')",
-  '.backgroundColor(Color.White)'
+  '.backgroundColor(AppColor.pageBackground)'
 )) { Assert-CodeLine $builder $line "dedicated builder is missing executable line: $line." }
-Assert-CodeLineCount $builder '.width(256)' 2 `
-  'styled and original previews must each be exactly 256vp wide.'
-Assert-CodeLineCount $builder '.height(256)' 2 `
-  'styled and original previews must each be exactly 256vp high.'
+
+Assert-CodeLineCount $builder 'Scroll() {' 1 'Style Transfer must use one page-level Scroll.'
+Assert-CodeLineCount $builder '.constraintSize({ minHeight: 48 })' 5 `
+  'run, album, camera, recovery, and Save controls must keep 48vp targets.'
+Assert-CodeLine $builder `
+  '.padding({ left: AppSpacing.page, right: AppSpacing.page, bottom: AppSpacing.xl + AppSpacing.page * 2 + AppSpacing.lg })' `
+  'Style Transfer must leave enough Scroll tail room for every 3.2x style target.'
+Assert-Excludes $builder 'stylePredictModelFile' 'hidden style-predict model controls must stay absent'
+Assert-Excludes $builder 'styleTransferModelFile' 'hidden style-transfer model controls must stay absent'
+Assert-Excludes $builder '.height(37)' 'legacy Android-height controls must stay removed'
+Assert-Excludes $builder '.height(265)' 'legacy fixed preview geometry must stay removed'
+foreach ($legacy in @('#E4E4E4', '#F4F3F8', '#666666')) {
+  Assert-Excludes $builder $legacy "legacy hard-coded Style Transfer color must stay removed: $legacy"
+}
+
 $emptyPreview = Get-TextSection $builder "Image(`$r('app.media.icon_style'))" `
   'if (this.workflowRunning) {' 'empty Style Transfer preview'
 Assert-CodeLine $emptyPreview "Image(`$r('app.media.icon_style'))" `
-  'empty preview must use Android icon_style.'
+  'empty preview must use the feature icon.'
 Assert-CodeLine $emptyPreview "Text(appString('feature_runtime_style_choose_image'))" `
   'empty preview must retain the choose-image prompt.'
-Assert-CodeLineCount $emptyPreview '.fontSize(16)' 1 `
-  'empty preview prompt must use Android 16sp text.'
+Assert-CodeLine $emptyPreview '.fontSize(16)' `
+  'empty preview prompt must remain readable.'
+Assert-CodeLine $emptyPreview '.fontColor(AppColor.textSecondary)' `
+  'empty preview prompt must use the theme.'
 
 foreach ($line in @(
-  ".columnsTemplate('1fr 1fr 1fr 1fr')",
-  '.columnsGap(10)',
-  '.rowsGap(10)',
-  '.layoutWeight(1)',
-  '.scrollBar(BarState.Auto)',
-  '.margin({ top: 20, bottom: 20 })',
-  ".margin({ left: 20, right: 20, top: 30 })"
+  ".columnsTemplate('1fr 1fr 1fr')",
+  ".rowsTemplate('1fr 1fr 1fr 1fr 1fr 1fr 1fr')",
+  '.columnsGap(6)',
+  '.rowsGap(6)',
+  '.aspectRatio(3 / 7)',
+  '.scrollBar(BarState.Off)',
+  '.enableScrollInteraction(false)',
+  '.margin({ top: AppSpacing.md })',
+  '.padding({ bottom: AppSpacing.xl })'
 )) { Assert-CodeLine $grid $line "style grid is missing executable line: $line." }
+Assert-Excludes $grid '.layoutWeight(1)' 'style grid must not create nested scrolling'
+Assert-Excludes $grid '.height(770)' 'style grid must remain responsive'
 $styleTitle = Get-TextSection $grid "Text(appString('feature_runtime_style_presets_title'))" `
   'Grid() {' 'Choose Style title'
 Assert-CodeLineCount $styleTitle '.fontSize(17)' 1 `
-  'Choose Style title must use Android 17sp text.'
+  'Choose Style title must use 17sp text.'
+Assert-CodeLine $styleTitle '.fontColor(AppColor.textPrimary)' `
+  'Choose Style title must use the theme.'
 
-$toolbarIndex = Get-CodeLineIndex $builder 'this.runtimeActionToolbar(true)'
-$previewIndex = Get-CodeLineIndex $builder 'Stack({ alignContent: Alignment.Center }) {' ($toolbarIndex + 1)
-$albumIndex = Get-CodeLineIndex $builder ".onClick(() => this.prepareInput('contentImage'))" ($previewIndex + 1)
-$cameraIndex = Get-CodeLineIndex $builder ".onClick(() => this.prepareInput('camera'))" ($albumIndex + 1)
-$recoveryButtonIndex = Get-CodeLineIndex $builder `
-  "Button(appString('feature_runtime_style_recovery'), { type: ButtonType.Normal })" ($cameraIndex + 1)
-$recoveryIndex = Get-CodeLineIndex $builder '.onClick(() => this.recoverStyleOriginalPreview())' ($recoveryButtonIndex + 1)
-$saveIndex = Get-CodeLineIndex $builder 'SaveButton({' ($recoveryIndex + 1)
-$predictButtonIndex = Get-CodeLineIndex $builder `
-  "Button(appString(workflowInputLabelKey(workflowForRoute(this.routeName), 'stylePredictModelFile')), { type: ButtonType.Normal })" `
-  ($saveIndex + 1)
-$predictIndex = Get-CodeLineIndex $builder ".onClick(() => this.prepareInput('stylePredictModelFile'))" ($predictButtonIndex + 1)
-$transferIndex = Get-CodeLineIndex $builder ".onClick(() => this.prepareInput('styleTransferModelFile'))" ($predictIndex + 1)
-$gridIndex = Get-CodeLineIndex $builder 'this.styleTransferStyleGrid()' ($transferIndex + 1)
-if ($toolbarIndex -lt 0 -or $previewIndex -le $toolbarIndex -or $albumIndex -le $previewIndex -or
-  $cameraIndex -le $albumIndex -or $recoveryButtonIndex -le $cameraIndex -or $recoveryIndex -le $recoveryButtonIndex -or
-  $saveIndex -le $recoveryIndex -or $predictButtonIndex -le $saveIndex -or
-  $predictIndex -le $predictButtonIndex -or $transferIndex -le $predictIndex -or $gridIndex -le $transferIndex) {
-  throw 'Style Transfer parity guard failed: content order must match Android.'
+Assert-CodeLine $item 'if (this.styleImageUri === builtInStyleTransferUri(style)) {' `
+  'built-in selected state must be reactive in the card.'
+Assert-CodeLine $customItem 'if (isCustomStyleTransferUri(this.styleImageUri)) {' `
+  'custom selected state must be reactive in the card.'
+foreach ($section in @($item, $customItem)) {
+  Assert-CodeLine $section "SymbolGlyph(`$r('sys.symbol.checkmark'))" `
+    'every selected style card must expose a native non-color checkmark.'
+  Assert-CodeLine $section '.enabled(!this.workflowRunning)' `
+    'style cards must be disabled while running.'
+  Assert-CodeLine $section '.accessibilityRole(AccessibilityRoleType.BUTTON)' `
+    'style cards must expose button semantics.'
 }
-$recoveryControl = $builder.Substring($recoveryButtonIndex, $saveIndex - $recoveryButtonIndex)
-$saveControl = $builder.Substring($saveIndex, $predictButtonIndex - $saveIndex)
-Assert-CodeLine $recoveryControl '.enabled(!this.workflowRunning)' `
-  'Recovery must render disabled while Style Transfer is running.'
-Assert-CodeLine $saveControl '.enabled(styleTransferSaveReady(' `
-  'secure Save must use the shared readiness policy.'
-Assert-CodeLine $saveControl 'this.workflowRunning,' `
-  'secure Save readiness must reject running inference.'
-Assert-CodeLine $saveControl 'this.styleTransferResultReady && this.styledImagePixelMap !== undefined,' `
-  'secure Save readiness must require a current accepted result.'
-Assert-CodeLine $saveControl 'this.resultImageSaveInFlight' `
-  'secure Save readiness must reject an in-flight save.'
-Assert-CodeLine $saveControl 'this.showRuntimeToast(this.statusKey);' `
-  'denied secure Save must immediately show failure Toast.'
-$saveOnClick = Get-TextSection $saveControl `
-  '.onClick((_event: ClickEvent, result: SaveButtonOnClickResult) => {' `
-  "`n              })" 'secure Save click handler'
-Assert-CodeLineCount $saveOnClick 'if (!styleTransferSaveReady(' 1 `
-  'secure Save click handler must re-check the full readiness policy.'
-$saveRunningIndex = Get-CodeLineIndex $saveOnClick 'if (!styleTransferSaveReady('
-$saveResultIndex = Get-CodeLineIndex $saveOnClick 'if (result === SaveButtonOnClickResult.SUCCESS) {'
-if ($saveRunningIndex -lt 0 -or $saveResultIndex -le $saveRunningIndex) {
-  throw 'Style Transfer parity guard failed: secure Save readiness guard must precede result handling.'
+Assert-CodeLine $item '.aspectRatio(1)' 'built-in style cards must remain square.'
+Assert-CodeLine $customItem '.aspectRatio(1)' 'custom style card must remain square.'
+Assert-CodeLine $item '.accessibilityText(this.styleTransferStyleAccessibilityText(style))' `
+  'built-in style cards must have localized semantic names.'
+Assert-Excludes $item 'style.rawfilePath' 'built-in style cards must not expose internal paths to accessibility'
+Assert-CodeLine $accessibilityName `
+  "const title = context?.resourceManager.getStringSync(`$r('app.string.feature_runtime_style_presets_title').id);" `
+  'built-in style accessibility names must resolve the localized selector title.'
+Assert-Count $accessibilityName 'style.id + 1' 2 `
+  'built-in style accessibility names must use a 1-based number in localized and fallback branches.'
+Assert-Excludes $accessibilityName 'style.rawfilePath' `
+  'built-in style accessibility helper must not expose internal paths'
+Assert-CodeLine $customItem ".accessibilityText(appString('feature_runtime_style_custom') as Resource)" `
+  'custom style card must have a localized name.'
+Assert-CodeLine $customItem '.maxFontScale(1.6)' `
+  'custom style thumbnail label must fit its square card at large system font scales.'
+
+$runControl = Get-TextSection $builder `
+  "Button(appString(this.statusKey === 'feature_runtime_style_transfer_failed' ||" `
+  "`n`n          Row() {" 'Style Transfer run control'
+$albumControl = Get-TextSection $builder `
+  "Button(appString('feature_runtime_style_album'), { type: ButtonType.Normal })" `
+  "`n`n          Button(appString(workflowInputLabelKey(workflowForRoute(this.routeName), 'camera'))" `
+  'Style Transfer album control'
+$cameraControl = Get-TextSection $builder `
+  "Button(appString(workflowInputLabelKey(workflowForRoute(this.routeName), 'camera')), { type: ButtonType.Normal })" `
+  "`n`n          Button(appString('feature_runtime_style_recovery')" 'Style Transfer camera control'
+$recoveryControl = Get-TextSection $builder `
+  "Button(appString('feature_runtime_style_recovery'), { type: ButtonType.Normal })" `
+  "`n`n          Column() {" 'Style Transfer recovery control'
+$saveControl = Get-TextSection $builder 'SaveButton({' `
+  "`n          }`n          .width('100%')" 'Style Transfer Save control'
+foreach ($section in @($runControl, $albumControl, $cameraControl, $recoveryControl, $saveControl)) {
+  Assert-CodeLine $section ".width('100%')" 'each Style Transfer action must be full width.'
+  Assert-CodeLine $section '.constraintSize({ minHeight: 48 })' `
+    'each Style Transfer action must keep a 48vp minimum target.'
 }
+Assert-CodeLine $runControl '.enabled(this.styleTransferRunEnabled())' `
+  'run action must require content, style, and idle state.'
+Assert-CodeLine $runControl '.onClick(() => this.runWorkflow())' 'run action must execute the workflow.'
+Assert-CodeLine $albumControl '.enabled(!this.workflowRunning)' 'album must freeze while running.'
+Assert-CodeLine $albumControl ".onClick(() => this.prepareInput('contentImage'))" 'album must choose content.'
+Assert-CodeLine $cameraControl '.enabled(!this.workflowRunning)' 'camera must freeze while running.'
+Assert-CodeLine $cameraControl ".onClick(() => this.prepareInput('camera'))" 'camera must choose content.'
+Assert-CodeLine $recoveryControl '.enabled(!this.workflowRunning)' 'recovery must freeze while running.'
+Assert-CodeLine $recoveryControl '.onClick(() => this.recoverStyleOriginalPreview())' `
+  'recovery must restore the original preview.'
+Assert-CodeLine $saveControl '.enabled(styleTransferSaveReady(' 'Save must use the readiness policy.'
 
 foreach ($marker in @(
   'this.summaryKey', 'feature_runtime_inputs_title', 'feature_runtime_permissions_title',
-  'workflowResultTitleKey(', 'this.resultRow(', 'Text(appString(this.statusKey))', 'this.resultText',
+  'workflowResultTitleKey(', 'this.resultRow(', 'this.resultText',
   'feature_runtime_debug', 'filePreview(', 'pixelMapPreview(', 'resultImageSaveControl(',
   'shouldShowPrimaryRunAction(', 'this.runPrimaryAction()'
 )) { Assert-Excludes $builder $marker 'dedicated builder contains generic UI' }
@@ -395,7 +456,10 @@ $sharedSave = Get-TextSection $page '  private saveResultPixelMap(' `
   "`n`n  private saveStyleTransferResultImage" 'shared segmentation save path'
 Assert-Excludes $sharedSave 'showRuntimeToast' 'shared segmentation save path must not gain Toast feedback'
 
-$build = $page.Substring($page.IndexOf("`n  build() {", [StringComparison]::Ordinal))
+$build = $page.Substring($page.IndexOf(
+    "`n  @Builder`n  runtimeLayoutContent() {",
+    [StringComparison]::Ordinal
+  ))
 $styleSelector = '} else if (usesAndroidStyleTransferLayout(workflowForRoute(this.routeName))) {'
 $objectIndex = Get-CodeLineIndex $build '} else if (usesAndroidObjectPhotoLayout(workflowForRoute(this.routeName))) {'
 $styleIndex = Get-CodeLineIndex $build $styleSelector ($objectIndex + 1)

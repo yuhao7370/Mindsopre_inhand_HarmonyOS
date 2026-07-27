@@ -4,6 +4,7 @@ import translationModelUnitTest from './TranslationModelUnit.test';
 import translationRuntimeV2UnitTest from './TranslationRuntimeV2Unit.test';
 import translationRuntimeV2SafetyUnitTest from './TranslationRuntimeV2SafetyUnit.test';
 import poseMoveNetUnitTest from './PoseMoveNetUnit.test';
+import experienceFontScaleUnitTest from './ExperienceFontScaleUnit.test';
 
 export default function testsuite() {
   localUnitTest();
@@ -12,4 +13,5 @@ export default function testsuite() {
   translationRuntimeV2UnitTest();
   translationRuntimeV2SafetyUnitTest();
   poseMoveNetUnitTest();
+  experienceFontScaleUnitTest();
 }

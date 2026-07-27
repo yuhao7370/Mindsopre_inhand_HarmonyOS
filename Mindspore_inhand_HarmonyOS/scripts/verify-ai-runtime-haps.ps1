@@ -1,6 +1,7 @@
 param(
   [Parameter(Mandatory = $true)][string]$MainHapPath,
   [string]$OhosTestHapPath = '',
+  [string]$ExpectedAppResourceRoot = '',
   [string]$ExpectedResourceRoot = '',
   [string]$ExpectedOhosTestResourceRoot = '',
   [string]$ExpectedRawfileRoot = '',
@@ -25,6 +26,9 @@ if (-not $targetAbis) {
 
 if (-not $ExpectedResourceRoot) {
   $ExpectedResourceRoot = Join-Path $PSScriptRoot '..\entry\src\main\resources'
+}
+if (-not $ExpectedAppResourceRoot) {
+  $ExpectedAppResourceRoot = Join-Path $PSScriptRoot '..\AppScope\resources'
 }
 if (-not $ExpectedOhosTestResourceRoot) {
   $ExpectedOhosTestResourceRoot = Join-Path $PSScriptRoot '..\entry\src\ohosTest\resources'
@@ -284,16 +288,33 @@ $structuralEntries = @(
   'ets/sourceMaps.map',
   'resources.index'
 )
+$appProfileEntries = @(
+  Get-SourceHapEntries (Join-Path $ExpectedAppResourceRoot 'base\profile') 'resources/base/profile'
+)
 $mainResourceEntries = @(
   Get-SourceHapEntries $ExpectedRawfileRoot 'resources/rawfile'
   Get-SourceHapEntries (Join-Path $ExpectedResourceRoot 'base\media') 'resources/base/media'
   Get-SourceHapEntries (Join-Path $ExpectedResourceRoot 'base\profile') 'resources/base/profile'
+  $appProfileEntries
 )
 $mainEntries = @($structuralEntries + $mainResourceEntries + $nativeEntries)
 $mainHapEntries = @(Get-HapEntries $MainHapPath)
 Assert-ExactEntries $mainHapEntries $mainEntries 'Main HAP'
 $mainModule = Read-HapJson $MainHapPath 'module.json'
 if ($mainModule.module.name -ne 'entry') { throw 'Main HAP module name must be entry' }
+$appConfigurationPath = Join-Path $ExpectedAppResourceRoot 'base\profile\configuration.json'
+if (Test-Path -LiteralPath $appConfigurationPath -PathType Leaf) {
+  $expectedAppConfiguration = Get-Content -LiteralPath $appConfigurationPath -Raw | ConvertFrom-Json
+  $packagedAppConfiguration = Read-HapJson $MainHapPath 'resources/base/profile/configuration.json'
+  Assert-ExactJsonProperties $packagedAppConfiguration @('configuration') 'packaged application configuration'
+  $expectedConfigurationProperties = @($expectedAppConfiguration.configuration.PSObject.Properties.Name)
+  Assert-ExactJsonProperties $packagedAppConfiguration.configuration $expectedConfigurationProperties 'packaged application configuration values'
+  foreach ($property in $expectedConfigurationProperties) {
+    if ($packagedAppConfiguration.configuration.$property -cne $expectedAppConfiguration.configuration.$property) {
+      throw "Packaged application configuration differs for $property"
+    }
+  }
+}
 $payloads = @(
   foreach ($entry in $resourceEntries) {
     [pscustomobject]@{
@@ -344,6 +365,7 @@ if ($OhosTestHapPath) {
     $structuralEntries
     Get-SourceHapEntries (Join-Path $ExpectedResourceRoot 'base\media') 'resources/base/media'
     Get-SourceHapEntries (Join-Path $ExpectedResourceRoot 'base\profile') 'resources/base/profile'
+    $appProfileEntries
     $testRequired
     $testRawfileEntries
   )

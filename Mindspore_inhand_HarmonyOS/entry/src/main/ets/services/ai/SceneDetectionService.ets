@@ -286,8 +286,9 @@ export function topLocalSceneDetections(
   const candidates: Array<SceneDetection> = [];
   const otherCandidates: Array<SceneDetection> = [];
   const scanLimit = Math.min(scores.length, labels.length);
+  const probabilities = stableSoftmax(scores, scanLimit);
   for (let index = 0; index < scanLimit; index++) {
-    const score = scores[index];
+    const score = probabilities[index];
     const label = sceneLabelForImageClassificationLabel(labels[index]);
     if (!(score > 0)) {
       continue;
@@ -320,6 +321,50 @@ export function topLocalSceneDetections(
     scenes.push(otherCandidates[0]);
   }
   return scenes;
+}
+
+function stableSoftmax(scores: Array<number>, scanLimit: number): Array<number> {
+  const probabilities: Array<number> = [];
+  let maximumFiniteScore = -Number.MAX_VALUE;
+  let finiteScoreCount = 0;
+  let positiveInfinityCount = 0;
+  for (let index = 0; index < scanLimit; index++) {
+    probabilities.push(0);
+    const score = scores[index];
+    if (score === Number.POSITIVE_INFINITY) {
+      positiveInfinityCount++;
+    } else if (Number.isFinite(score)) {
+      finiteScoreCount++;
+      maximumFiniteScore = Math.max(maximumFiniteScore, score);
+    }
+  }
+
+  if (positiveInfinityCount > 0) {
+    const infiniteProbability = 1 / positiveInfinityCount;
+    for (let index = 0; index < scanLimit; index++) {
+      if (scores[index] === Number.POSITIVE_INFINITY) {
+        probabilities[index] = infiniteProbability;
+      }
+    }
+    return probabilities;
+  }
+  if (finiteScoreCount === 0) {
+    return probabilities;
+  }
+
+  let exponentialSum = 0;
+  for (let index = 0; index < scanLimit; index++) {
+    const score = scores[index];
+    if (Number.isFinite(score)) {
+      const exponential = Math.exp(score - maximumFiniteScore);
+      probabilities[index] = exponential;
+      exponentialSum += exponential;
+    }
+  }
+  if (!(exponentialSum > 0) || !Number.isFinite(exponentialSum)) {
+    return probabilities.map((_value: number) => 0);
+  }
+  return probabilities.map((value: number) => value / exponentialSum);
 }
 
 function androidSceneModelDetections(

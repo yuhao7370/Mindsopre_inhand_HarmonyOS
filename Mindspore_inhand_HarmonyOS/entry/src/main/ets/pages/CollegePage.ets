@@ -1,69 +1,65 @@
 import { common } from '@kit.AbilityKit';
 import router from '@ohos.router';
-import { GradientTitleBar } from '../common/components/GradientTitleBar';
-import { SectionTitle } from '../common/components/SectionTitle';
 import {
-  collegeItems,
   collegeAdapterViewTitleKey,
-  collegeQuickActionVisual,
-  collegeTimelineVisualForItem,
+  collegeItems,
   CollegeItem,
-  CollegeMediaName,
   CollegeQuickAction,
-  CollegeQuickActionVisual,
-  CollegeTimelineVisual,
   isCollegeItemUrlNavigable
 } from '../common/data/CollegeCatalog';
+import {
+  collegeCardRadiusVp,
+  collegeDialogConfirmMinHeightVp,
+  collegeEntryMinHeightVp,
+  collegeHeaderMinHeightVp,
+  collegePageInsetVp,
+  collegeQuickActionMinHeightVp
+} from '../common/data/CollegeLayoutSpec';
 import {
   androidCollegeSummaryDialogSpec,
   CollegeSummaryDialogSpec
 } from '../common/data/CollegeSummaryDialog';
 import { AppStringKey, appString } from '../common/i18n/AppStrings';
-import { AppColor, AppRadius, AppSpacing } from '../common/theme/AppTheme';
+import { AppColor } from '../common/theme/AppTheme';
 import { webPagePath } from '../common/data/WebDestination';
 import {
   CollegeProgressService,
   HarmonyCollegeProgressStore
 } from '../services/storage/CollegeProgressService';
 
-function collegeMediaResource(mediaName: CollegeMediaName): Resource {
-  switch (mediaName) {
-    case 'college_summary_uncheck':
-      return $r('app.media.college_summary_uncheck');
-    case 'college_summary_checked':
-      return $r('app.media.college_summary_checked');
-    case 'college_cloud_uncheck':
-      return $r('app.media.college_cloud_uncheck');
-    case 'college_cloud_checked':
-      return $r('app.media.college_cloud_checked');
-    case 'college_quick_uncheck':
-      return $r('app.media.college_quick_uncheck');
-    case 'college_quick_checked':
-      return $r('app.media.college_quick_checked');
-    case 'college_faq_uncheck':
-      return $r('app.media.college_faq_uncheck');
-    case 'college_faq_checked':
-      return $r('app.media.college_faq_checked');
-    case 'college_ask_uncheck':
-      return $r('app.media.college_ask_uncheck');
-    case 'college_ask_checked':
-      return $r('app.media.college_ask_checked');
-    case 'college_train_uncheck':
-      return $r('app.media.college_train_uncheck');
-    case 'college_train_checked':
-      return $r('app.media.college_train_checked');
-    case 'college_execute_uncheck':
-      return $r('app.media.college_execute_uncheck');
-    case 'college_execute_checked':
-      return $r('app.media.college_execute_checked');
-    case 'college_app_uncheck':
-      return $r('app.media.college_app_uncheck');
-    case 'college_app_checked':
-      return $r('app.media.college_app_checked');
-    case 'college_video_uncheck':
-      return $r('app.media.college_video_uncheck');
-    case 'college_video_checked':
-      return $r('app.media.college_video_checked');
+const collegeCardBorderColor: string = '#E8EDF5';
+const collegeCompletedBackgroundColor: string = '#F4F7FF';
+const collegeQuickActionBackgroundColor: string = '#F8FAFD';
+
+function collegeItemMediaResource(itemId: string): Resource {
+  switch (itemId) {
+    case 'summary':
+      return $r('app.media.college_summary_v2');
+    case 'cloud':
+      return $r('app.media.college_cloud_v2');
+    case 'quick':
+      return $r('app.media.college_quick_v2');
+    case 'faq':
+      return $r('app.media.college_faq_v2');
+    case 'forum':
+      return $r('app.media.college_forum_v2');
+    default:
+      return $r('app.media.college_summary_v2');
+  }
+}
+
+function collegeQuickActionMediaResource(actionId: string): Resource {
+  switch (actionId) {
+    case 'train':
+      return $r('app.media.college_train_v2');
+    case 'inference':
+      return $r('app.media.college_inference_v2');
+    case 'applications':
+      return $r('app.media.college_applications_v2');
+    case 'video':
+      return $r('app.media.college_video_v2');
+    default:
+      return $r('app.media.college_quick_v2');
   }
 }
 
@@ -80,28 +76,37 @@ struct CollegeSummaryNoticeDialog {
         .fontColor(AppColor.textPrimary)
         .textAlign(TextAlign.Center)
         .width('100%')
-        .margin({ top: 17 })
-      Text(appString(this.spec.contentKey))
-        .fontSize(12)
-        .fontColor(AppColor.textSecondary)
-        .textAlign(TextAlign.Start)
-        .lineHeight(20)
+        .margin({ top: 20 })
+      Scroll() {
+        Column() {
+          Text(appString(this.spec.contentKey))
+            .fontSize(12)
+            .fontColor(AppColor.textSecondary)
+            .textAlign(TextAlign.Start)
+            .lineHeight(20)
+            .width('100%')
+          if (this.spec.showBottomLogo) {
+            Image($r('app.media.logo_with_title'))
+              .width(95)
+              .height(80)
+              .objectFit(ImageFit.Contain)
+              .margin({ top: 18 })
+          }
+        }
         .width('100%')
-        .margin({ top: 22, left: 22, right: 22 })
-      if (this.spec.showBottomLogo) {
-        Image($r('app.media.logo_with_title'))
-          .width(95)
-          .height(80)
-          .objectFit(ImageFit.Contain)
-          .margin({ top: 18 })
       }
+      .width('100%')
+      .constraintSize({ maxHeight: '72%' })
+      .layoutWeight(1)
+      .scrollBar(BarState.Off)
+      .margin({ top: 18 })
       Divider()
         .strokeWidth(1)
         .color(AppColor.divider)
-        .margin({ top: this.spec.showBottomLogo ? 22 : 50, left: 22, right: 22 })
+        .margin({ top: 16 })
       Button(appString(this.spec.confirmKey))
         .width('100%')
-        .height(40)
+        .constraintSize({ minHeight: collegeDialogConfirmMinHeightVp })
         .fontSize(13)
         .fontColor(AppColor.textPrimary)
         .backgroundColor(Color.Transparent)
@@ -110,8 +115,10 @@ struct CollegeSummaryNoticeDialog {
         })
     }
     .width('86%')
+    .constraintSize({ maxHeight: '72%' })
+    .padding({ left: 22, right: 22 })
     .backgroundColor(Color.White)
-    .borderRadius(AppRadius.card)
+    .borderRadius(20)
     .clip(true)
   }
 }
@@ -150,7 +157,7 @@ export struct CollegePage {
       }
       this.progressService = new CollegeProgressService(new HarmonyCollegeProgressStore(context));
       return this.progressService;
-    } catch (error) {
+    } catch (_) {
       return undefined;
     }
   }
@@ -216,70 +223,153 @@ export struct CollegePage {
     this.summaryDialogController.open();
   }
 
-  private timelineVisualForState(item: CollegeItem): CollegeTimelineVisual {
-    return collegeTimelineVisualForItem(item, this.isCollegeItemChecked(item.id));
-  }
-
-  private quickActionVisualForState(action: CollegeQuickAction): CollegeQuickActionVisual {
-    return collegeQuickActionVisual(action, this.isQuickActionChecked(action.id));
-  }
-
-  @Builder
-  collegeTimelineMarker(item: CollegeItem) {
-    Column() {
-      Image(collegeMediaResource(this.timelineVisualForState(item).iconMediaName))
-        .width(this.timelineVisualForState(item).iconSizeVp)
-        .height(this.timelineVisualForState(item).iconSizeVp)
-        .objectFit(ImageFit.Contain)
-      if (this.timelineVisualForState(item).showsTrailingLine) {
-        Stack({ alignContent: Alignment.Bottom }) {
-          Column() {
-          }
-            .width(1)
-            .height(this.timelineVisualForState(item).rowHeightVp - this.timelineVisualForState(item).iconSizeVp)
-            .backgroundColor(this.timelineVisualForState(item).lineColor)
-          if (this.timelineVisualForState(item).showsProgressDot) {
-            Column() {
-            }
-              .width(10)
-              .height(10)
-              .border({ width: 4, color: '#335C99F4', radius: 5 })
-              .backgroundColor('#5C99F4')
-              .borderRadius(5)
-          }
-        }
-        .width(this.timelineVisualForState(item).iconSizeVp)
-        .height(this.timelineVisualForState(item).rowHeightVp - this.timelineVisualForState(item).iconSizeVp)
-      } else {
-        Blank()
-          .width(this.timelineVisualForState(item).iconSizeVp)
-          .height(this.timelineVisualForState(item).rowHeightVp - this.timelineVisualForState(item).iconSizeVp)
-      }
+  private openCollegeItem(item: CollegeItem): void {
+    if (item.type === 'summary') {
+      this.markCollegeItemChecked(item);
+      this.showSummary();
+      return;
     }
-    .width(this.timelineVisualForState(item).iconSizeVp)
-    .height(this.timelineVisualForState(item).rowHeightVp)
+    if (isCollegeItemUrlNavigable(item)) {
+      this.markCollegeItemChecked(item);
+      this.openWeb(item.titleKey, item.url ?? '');
+    }
   }
 
   @Builder
-  quickActionCard(action: CollegeQuickAction) {
+  private collegeItemCompletedStatus(itemId: string) {
+    Row() {
+      Text('✓')
+        .fontSize(13)
+        .fontWeight(FontWeight.Bold)
+        .fontColor(AppColor.accent)
+      Text(appString('college_checked'))
+        .fontSize(12)
+        .fontWeight(FontWeight.Medium)
+        .fontColor(AppColor.accent)
+        .maxLines(2)
+        .margin({ left: 4 })
+    }
+    .alignItems(VerticalAlign.Center)
+    .visibility(this.isCollegeItemChecked(itemId) ? Visibility.Visible : Visibility.None)
+  }
+
+  @Builder
+  private quickActionCompletedStatus(actionId: string) {
+    Row() {
+      Text('✓')
+        .fontSize(13)
+        .fontWeight(FontWeight.Bold)
+        .fontColor(AppColor.accent)
+      Text(appString('college_checked'))
+        .fontSize(12)
+        .fontWeight(FontWeight.Medium)
+        .fontColor(AppColor.accent)
+        .maxLines(2)
+        .margin({ left: 4 })
+    }
+    .alignItems(VerticalAlign.Center)
+    .visibility(this.isQuickActionChecked(actionId) ? Visibility.Visible : Visibility.None)
+  }
+
+  @Builder
+  private collegeHeader() {
     Column() {
-      Image(collegeMediaResource(this.quickActionVisualForState(action).iconMediaName))
-        .width(20)
-        .height(20)
-        .objectFit(ImageFit.Contain)
-        .margin({ top: 13 })
-      Text(appString(action.titleKey))
-        .fontSize(9)
-        .fontColor(this.quickActionVisualForState(action).textColor)
-        .textAlign(TextAlign.Center)
-        .maxLines(1)
+      Text(appString('college_head_title'))
         .width('100%')
-        .margin({ top: 9 })
+        .fontSize(28)
+        .fontWeight(FontWeight.Bold)
+        .fontColor(AppColor.textPrimary)
+      Text(appString('college_head_subtitle'))
+        .width('100%')
+        .fontSize(14)
+        .fontColor(AppColor.textSecondary)
+        .lineHeight(21)
+        .margin({ top: 8 })
     }
-    .width(this.quickActionVisualForState(action).widthVp)
-    .height(this.quickActionVisualForState(action).heightVp)
-    .backgroundColor(Color.White)
-    .border({ width: 1, color: this.quickActionVisualForState(action).borderColor, radius: 10 })
+    .width('100%')
+    .constraintSize({ minHeight: collegeHeaderMinHeightVp })
+    .justifyContent(FlexAlign.Center)
+    .alignItems(HorizontalAlign.Start)
+  }
+
+  @Builder
+  private collegeEntryCard(item: CollegeItem) {
+    Column() {
+      Row() {
+        Image(collegeItemMediaResource(item.id))
+          .width(40)
+          .height(40)
+          .objectFit(ImageFit.Contain)
+        Text(appString(item.titleKey))
+          .fontSize(16)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(AppColor.textPrimary)
+          .maxLines(2)
+          .layoutWeight(1)
+          .margin({ left: 12 })
+      }
+      .width('100%')
+      .alignItems(VerticalAlign.Center)
+      Row() {
+        this.collegeItemCompletedStatus(item.id)
+        Blank()
+        Row() {
+          Text(appString(collegeAdapterViewTitleKey))
+            .fontSize(12)
+            .fontColor(AppColor.accent)
+            .maxLines(2)
+          Image($r('app.media.me_go'))
+            .width(6)
+            .height(12)
+            .objectFit(ImageFit.Contain)
+            .margin({ left: 6 })
+        }
+        .alignItems(VerticalAlign.Center)
+      }
+      .width('100%')
+      .alignItems(VerticalAlign.Center)
+      .margin({ top: 6 })
+    }
+    .width('100%')
+    .constraintSize({ minHeight: collegeEntryMinHeightVp })
+    .padding({ top: 12, bottom: 12, left: 14, right: 14 })
+    .alignItems(HorizontalAlign.Start)
+    .justifyContent(FlexAlign.Center)
+    .backgroundColor(this.isCollegeItemChecked(item.id) ? collegeCompletedBackgroundColor : Color.White)
+    .border({ width: 1, color: collegeCardBorderColor, radius: collegeCardRadiusVp })
+    .margin({ top: 10 })
+    .onClick(() => {
+      this.openCollegeItem(item);
+    })
+  }
+
+  @Builder
+  private quickActionCard(action: CollegeQuickAction) {
+    Column() {
+      Row() {
+        Image(collegeQuickActionMediaResource(action.id))
+          .width(30)
+          .height(30)
+          .objectFit(ImageFit.Contain)
+        Text(appString(action.titleKey))
+          .fontSize(14)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(this.isQuickActionChecked(action.id) ? AppColor.accent : AppColor.textPrimary)
+          .maxLines(2)
+          .layoutWeight(1)
+          .margin({ left: 8 })
+      }
+      .width('100%')
+      .alignItems(VerticalAlign.Center)
+      this.quickActionCompletedStatus(action.id)
+    }
+    .width('100%')
+    .constraintSize({ minHeight: collegeQuickActionMinHeightVp })
+    .padding({ top: 10, bottom: 10, left: 10, right: 10 })
+    .alignItems(HorizontalAlign.Start)
+    .justifyContent(FlexAlign.Center)
+    .backgroundColor(collegeQuickActionBackgroundColor)
+    .border({ width: 1, color: collegeCardBorderColor, radius: 12 })
     .onClick(() => {
       this.markQuickActionChecked(action);
       this.openWeb(action.titleKey, action.url);
@@ -287,95 +377,90 @@ export struct CollegePage {
   }
 
   @Builder
-  collegeRow(item: CollegeItem) {
-    Row() {
-      this.collegeTimelineMarker(item)
-      Column() {
-        Row() {
-          Text(appString(item.titleKey))
-            .fontSize(13)
-            .fontColor(AppColor.textPrimary)
-            .layoutWeight(1)
-            .maxLines(2)
-          if (item.type === 'summary' || isCollegeItemUrlNavigable(item)) {
-            Text(appString(collegeAdapterViewTitleKey))
-              .fontSize(12)
-              .fontColor(AppColor.accent)
-              .maxLines(1)
-              .margin({ right: AppSpacing.sm })
-            Image($r('app.media.me_go'))
-              .width(6)
-              .height(12)
-              .objectFit(ImageFit.Contain)
-          }
-        }
-        .height(this.timelineVisualForState(item).iconSizeVp)
-        .width('100%')
-        .alignItems(VerticalAlign.Center)
-        if (item.quickActions) {
-          Row() {
-            ForEach(item.quickActions, (action: CollegeQuickAction) => {
-              this.quickActionCard(action)
-            }, (action: CollegeQuickAction) => action.id)
-          }
-          .width('100%')
-          .justifyContent(FlexAlign.SpaceBetween)
-          .margin({ top: AppSpacing.md })
-        }
+  private quickStartCard(item: CollegeItem) {
+    Column() {
+      Row() {
+        Image(collegeItemMediaResource(item.id))
+          .width(40)
+          .height(40)
+          .objectFit(ImageFit.Contain)
+        Text(appString(item.titleKey))
+          .fontSize(17)
+          .fontWeight(FontWeight.Bold)
+          .fontColor(AppColor.textPrimary)
+          .maxLines(2)
+          .layoutWeight(1)
+          .margin({ left: 12 })
       }
-      .layoutWeight(1)
-      .height(this.timelineVisualForState(item).rowHeightVp)
-      .margin({ left: 20 })
+      .width('100%')
+      .alignItems(VerticalAlign.Center)
+      this.collegeItemCompletedStatus(item.id)
+      if (item.quickActions !== undefined) {
+        Grid() {
+          ForEach(item.quickActions, (action: CollegeQuickAction) => {
+            GridItem() {
+              this.quickActionCard(action)
+            }
+          }, (action: CollegeQuickAction) => action.id)
+        }
+        .columnsTemplate('1fr 1fr')
+        .columnsGap(8)
+        .rowsGap(8)
+        .constraintSize({ minHeight: collegeQuickActionMinHeightVp * 2 + 8 })
+        .width('100%')
+        .scrollBar(BarState.Off)
+        .enableScrollInteraction(false)
+        .margin({ top: 12 })
+      }
     }
     .width('100%')
-    .height(this.timelineVisualForState(item).rowHeightVp)
-    .alignItems(VerticalAlign.Top)
-    .padding({ left: 0, right: 0 })
-    .onClick(() => {
-      if (item.type === 'summary') {
-        this.markCollegeItemChecked(item);
-        this.showSummary();
-        return;
-      }
-      if (isCollegeItemUrlNavigable(item)) {
-        this.markCollegeItemChecked(item);
-        this.openWeb(item.titleKey, item.url ?? '');
-      }
-    })
+    .padding(12)
+    .backgroundColor(Color.White)
+    .border({ width: 1, color: collegeCardBorderColor, radius: collegeCardRadiusVp })
+    .margin({ top: 10 })
+  }
+
+  @Builder
+  private collegeFooter(item: CollegeItem) {
+    Text(appString(item.titleKey))
+      .width('100%')
+      .fontSize(13)
+      .fontColor(AppColor.textMuted)
+      .textAlign(TextAlign.Center)
+      .margin({ top: 24, bottom: 8 })
   }
 
   build() {
     Scroll() {
       Column() {
-        GradientTitleBar({
-          titleKey: 'college_head_title',
-          subtitleKey: 'college_head_subtitle'
-        })
-        Column() {
-          SectionTitle({ titleKey: 'mindspore_college_title' })
-          Column() {
-            ForEach(collegeItems, (item: CollegeItem) => {
-              if (item.type === 'footer') {
-                Text(appString(item.titleKey))
-                  .width('100%')
-                  .fontSize(13)
-                  .fontColor(AppColor.textMuted)
-                  .textAlign(TextAlign.Center)
-                  .margin({ top: AppSpacing.md })
-              } else {
-                this.collegeRow(item)
-              }
-            }, (item: CollegeItem) => item.id)
-          }
+        this.collegeHeader()
+        Text(appString('mindspore_college_title'))
           .width('100%')
-          .margin({ top: AppSpacing.md })
-        }
-        .width('100%')
-        .padding(AppSpacing.page)
+          .fontSize(17)
+          .fontWeight(FontWeight.Bold)
+          .fontColor(AppColor.textPrimary)
+          .margin({ top: 4, bottom: 2 })
+        ForEach(collegeItems, (item: CollegeItem) => {
+          if (item.type === 'quickStart') {
+            this.quickStartCard(item)
+          } else if (item.type === 'footer') {
+            this.collegeFooter(item)
+          } else {
+            this.collegeEntryCard(item)
+          }
+        }, (item: CollegeItem) => item.id)
       }
       .width('100%')
+      .padding({
+        left: collegePageInsetVp,
+        right: collegePageInsetVp,
+        bottom: 28
+      })
     }
+    .width('100%')
+    .height('100%')
     .scrollBar(BarState.Off)
+    .edgeEffect(EdgeEffect.None)
     .backgroundColor(AppColor.pageBackground)
   }
 }

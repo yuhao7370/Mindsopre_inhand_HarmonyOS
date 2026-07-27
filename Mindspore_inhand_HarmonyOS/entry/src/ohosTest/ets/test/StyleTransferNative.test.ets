@@ -268,9 +268,14 @@ export default function styleTransferNativeTest() {
         predictBytes,
         new Uint8Array([1, 2, 3, 4])
       )).assertFalse();
-      const pairValidationRecovered: StyleTransferNativeOutput = await styleTransferMnn.run(
+      const pairValidationNative = await styleTransferMnn.run(
         new Float32Array(style0Input.styleInputBuffer),
         new Float32Array(style0Input.contentInputBuffer)
+      );
+      const pairValidationRecovered: StyleTransferNativeOutput = new TestStyleTransferNativeOutput(
+        pairValidationNative.output,
+        pairValidationNative.predictMs,
+        pairValidationNative.transferMs
       );
       expect(pairValidationRecovered.output.length).assertEqual(first.output.length);
       expect(outputContractValid(pairValidationRecovered.output)).assertTrue();
@@ -282,7 +287,7 @@ export default function styleTransferNativeTest() {
         rejected = true;
       }
       expect(rejected).assertTrue();
-      const nativeRecovered: StyleTransferNativeOutput = await styleTransferMnn.run(
+      const nativeRecovered = await styleTransferMnn.run(
         new Float32Array(style0Input.styleInputBuffer),
         new Float32Array(style0Input.contentInputBuffer)
       );

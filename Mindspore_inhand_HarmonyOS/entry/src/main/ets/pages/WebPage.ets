@@ -1,8 +1,9 @@
 import router from '@ohos.router';
 import { webview } from '@kit.ArkWeb';
 import { AppRoute } from '../app/AppRoutes';
+import { NativePageTitleBar } from '../common/components/NativePageTitleBar';
 import { AppStringKey, appString } from '../common/i18n/AppStrings';
-import { AppColor, AppSpacing } from '../common/theme/AppTheme';
+import { AppColor } from '../common/theme/AppTheme';
 import {
   mindSporeBaseUrl,
   userPrivacyRulesUrl,
@@ -16,6 +17,7 @@ import {
   poetryPosterTextFromParam,
   shouldInstallPoetryJavascriptBridge
 } from '../services/poetry/PoetryPosterService';
+import { webPageFailedAfterRequest } from '../features/web/WebPageLoadState';
 
 interface WebPageParams {
   titleKey?: AppStringKey;
@@ -40,6 +42,7 @@ class PoetryJavascriptBridge {
 struct WebPage {
   @State titleKey: AppStringKey = 'me_official_title';
   @State progress: number = 0;
+  @State loadFailed: boolean = false;
 
   private readonly webController: webview.WebviewController = new webview.WebviewController();
   private readonly poetryBridge: PoetryJavascriptBridge =
@@ -68,23 +71,14 @@ struct WebPage {
     });
   }
 
-  private shouldUsePoetryBackIcon(): boolean {
-    return shouldInstallPoetryJavascriptBridge(this.routeName, this.webUrl);
+  private handleWebError(event: OnErrorReceiveEvent): void {
+    this.loadFailed = webPageFailedAfterRequest(this.loadFailed, event.request.isMainFrame());
   }
 
-  @Builder
-  private backButton() {
-    if (this.shouldUsePoetryBackIcon()) {
-      Image($r('app.media.back'))
-        .width(11)
-        .height(22)
-        .objectFit(ImageFit.Contain)
-    } else {
-      Image($r('app.media.icon_back'))
-        .width(11)
-        .height(22)
-        .objectFit(ImageFit.Contain)
-    }
+  private retryWebPage(): void {
+    this.loadFailed = false;
+    this.progress = 0;
+    this.webController.refresh();
   }
 
   @Builder
@@ -97,7 +91,13 @@ struct WebPage {
         .onProgressChange((event: OnProgressChangeEvent) => {
           this.progress = event.newProgress;
         })
-        .layoutWeight(1)
+        .onPageBegin(() => {
+          this.loadFailed = false;
+        })
+        .onErrorReceive((event: OnErrorReceiveEvent) => {
+          this.handleWebError(event);
+        })
+        .height('100%')
         .width('100%')
     } else if (shouldInstallPoetryJavascriptBridge(this.routeName, this.webUrl)) {
       Web({ src: this.webUrl, controller: this.webController })
@@ -113,7 +113,13 @@ struct WebPage {
         .onProgressChange((event: OnProgressChangeEvent) => {
           this.progress = event.newProgress;
         })
-        .layoutWeight(1)
+        .onPageBegin(() => {
+          this.loadFailed = false;
+        })
+        .onErrorReceive((event: OnErrorReceiveEvent) => {
+          this.handleWebError(event);
+        })
+        .height('100%')
         .width('100%')
     } else {
       Web({ src: this.webUrl, controller: this.webController })
@@ -123,44 +129,48 @@ struct WebPage {
         .onProgressChange((event: OnProgressChangeEvent) => {
           this.progress = event.newProgress;
         })
-        .layoutWeight(1)
+        .onPageBegin(() => {
+          this.loadFailed = false;
+        })
+        .onErrorReceive((event: OnErrorReceiveEvent) => {
+          this.handleWebError(event);
+        })
+        .height('100%')
         .width('100%')
     }
   }
 
   build() {
     Column() {
-      Row() {
-        Row() {
-          this.backButton()
-        }
-          .justifyContent(FlexAlign.Center)
-          .alignItems(VerticalAlign.Center)
-          .width(40)
-          .height(40)
-          .onClick(() => router.back())
-        Text(appString(this.titleKey))
-          .fontSize(20)
-          .fontWeight(FontWeight.Bold)
-          .fontColor(AppColor.textPrimary)
-          .layoutWeight(1)
-          .maxLines(1)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
-      }
-      .width('100%')
-      .height(56)
-      .padding({ left: AppSpacing.md, right: AppSpacing.md })
-      .backgroundColor(AppColor.cardBackground)
+      NativePageTitleBar({
+        title: appString(this.titleKey),
+        onBack: () => router.back()
+      })
 
-      if (this.progress > 0 && this.progress < 100) {
-        Progress({ value: this.progress, total: 100, type: ProgressType.Linear })
+      Progress({ value: this.progress, total: 100, type: ProgressType.Linear })
+        .width('100%')
+        .height(2)
+        .color(AppColor.accent)
+        .backgroundColor(Color.Transparent)
+        .opacity(this.progress > 0 && this.progress < 100 && !this.loadFailed ? 1 : 0)
+
+      Stack() {
+        this.webContent()
+        if (this.loadFailed) {
+          Column() {
+            Text(appString('web_load_failed'))
+            Button(appString('web_retry'))
+              .height(48)
+              .onClick(() => this.retryWebPage())
+          }
           .width('100%')
-          .height(2)
-          .color(AppColor.accent)
-          .backgroundColor(AppColor.divider)
+          .height('100%')
+          .justifyContent(FlexAlign.Center)
+          .backgroundColor(AppColor.pageBackground)
+        }
       }
-
-      this.webContent()
+      .layoutWeight(1)
+      .width('100%')
     }
     .width('100%')
     .height('100%')

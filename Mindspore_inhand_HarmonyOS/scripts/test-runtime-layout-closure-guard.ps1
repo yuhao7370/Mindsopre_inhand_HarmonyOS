@@ -34,7 +34,8 @@ struct FeatureRuntimePage {
   }`;
 
   // build() { this.textRecognitionAndroidLayout() }
-  build() {
+  @Builder
+  runtimeLayoutContent() {
     if (usesAndroidTextTranslationLayout(workflowForRoute(this.routeName))) {
       this.textTranslationAndroidLayout()
     } else if (usesAndroidTextRecognitionLayout(workflowForRoute(this.routeName))) {
@@ -55,6 +56,14 @@ struct FeatureRuntimePage {
       this.stillSceneAndroidLayout()
     } else if (usesAndroidPortraitSegmentationLayout(workflowForRoute(this.routeName))) {
       this.portraitSegmentationAndroidLayout()
+    } else if (specializedAndroidLiveLayoutForWorkflow(workflowForRoute(this.routeName)) === 'segmentation') {
+      this.segmentationAndroidLiveLayout()
+    } else if (specializedAndroidLiveLayoutForWorkflow(workflowForRoute(this.routeName)) === 'gesture') {
+      this.gestureAndroidLiveLayout()
+    } else if (specializedAndroidLiveLayoutForWorkflow(workflowForRoute(this.routeName)) === 'scene') {
+      this.sceneAndroidLiveLayout()
+    } else if (specializedAndroidLiveLayoutForWorkflow(workflowForRoute(this.routeName)) === 'skeleton') {
+      this.skeletonAndroidLiveLayout()
     } else if (specializedAndroidLiveLayoutForWorkflow(workflowForRoute(this.routeName)) === 'imageClassification') {
       this.imageClassificationAndroidLiveLayout()
     } else if (specializedAndroidLiveLayoutForWorkflow(workflowForRoute(this.routeName)) === 'objectDetection') {
@@ -67,6 +76,16 @@ struct FeatureRuntimePage {
         }
       }
     }
+  }
+
+  build() {
+    Stack({ alignContent: Alignment.TopStart }) {
+      this.runtimeLayoutContent()
+      this.runtimePermissionRecoveryOverlay()
+    }
+    .width('100%')
+    .height('100%')
+    .key(this.routeName)
   }
 }
 '@
@@ -175,6 +194,52 @@ try {
       '    } else {'
   }
 
+  Assert-GuardRejectsMutation $validRoot 'missing-skeleton-branch' {
+    param($root)
+    Replace-Once (Join-Path $root $pagePath) @'
+    } else if (specializedAndroidLiveLayoutForWorkflow(workflowForRoute(this.routeName)) === 'skeleton') {
+      this.skeletonAndroidLiveLayout()
+'@ ''
+  }
+
+  Assert-GuardRejectsMutation $validRoot 'skeleton-branch-comment-decoy' {
+    param($root)
+    Replace-Once (Join-Path $root $pagePath) `
+      "    } else if (specializedAndroidLiveLayoutForWorkflow(workflowForRoute(this.routeName)) === 'skeleton') {" `
+      "    // } else if (specializedAndroidLiveLayoutForWorkflow(workflowForRoute(this.routeName)) === 'skeleton') {"
+  }
+
+  Assert-GuardRejectsMutation $validRoot 'skeleton-builder-string-decoy' {
+    param($root)
+    Replace-Once (Join-Path $root $pagePath) `
+      '      this.skeletonAndroidLiveLayout()' `
+      "      const skeletonBuilderDecoy = 'this.skeletonAndroidLiveLayout()'"
+  }
+
+  Assert-GuardRejectsMutation $validRoot 'skeleton-builder-template-decoy' {
+    param($root)
+    Replace-Once (Join-Path $root $pagePath) `
+      '      this.skeletonAndroidLiveLayout()' `
+      '      const skeletonBuilderDecoy = `this.skeletonAndroidLiveLayout()`'
+  }
+
+  Assert-GuardRejectsMutation $validRoot 'skeleton-unused-sibling-decoy' {
+    param($root)
+    $path = Join-Path $root $pagePath
+    Replace-Once $path '      this.skeletonAndroidLiveLayout()' '      this.sceneAndroidLiveLayout()'
+    Replace-Once $path @'
+  build() {
+    Stack({ alignContent: Alignment.TopStart }) {
+'@ @'
+  private unusedSkeletonLayoutDecoy() {
+    this.skeletonAndroidLiveLayout()
+  }
+
+  build() {
+    Stack({ alignContent: Alignment.TopStart }) {
+'@
+  }
+
   Assert-GuardRejectsMutation $validRoot 'quoted-builder-decoy' {
     param($root)
     Replace-Once (Join-Path $root $pagePath) `
@@ -192,8 +257,8 @@ try {
   Assert-GuardRejectsMutation $validRoot 'fake-build-template-decoy' {
     param($root)
     Replace-Once (Join-Path $root $pagePath) `
-      "  // build() { this.textRecognitionAndroidLayout() }`n  build() {" `
-      "  // build() { this.textRecognitionAndroidLayout() }`n  private buildDecoy2: string = ```n  build() {`n  }```;`n  render() {"
+      "  build() {`n    Stack({ alignContent: Alignment.TopStart }) {" `
+      "  private buildDecoy2: string = ```n  build() {`n  }```;`n  render() {`n    Stack({ alignContent: Alignment.TopStart }) {"
   }
 
   Assert-GuardRejectsMutation $validRoot 'sibling-component-real-build' {

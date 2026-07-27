@@ -75,9 +75,11 @@ export interface ObjectDetectionLiveOverlayBox {
   readonly height: number;
 }
 
-export interface ObjectDetectionLiveLabelOffset {
-  readonly x: number;
-  readonly y: number;
+export interface ObjectDetectionLiveLabelPlacement {
+  readonly left: number;
+  readonly top: number;
+  readonly maxWidth: number;
+  readonly estimatedHeight: number;
 }
 
 export const objectDetectionOverlayPalette: Array<string> = [
@@ -757,14 +759,32 @@ function normalizedObjectDetectionPreviewRotation(rotationDegrees: number): numb
   return 0;
 }
 
-export function objectDetectionLiveLabelOffset(
-  topPercent: number,
-  overlayHeightVp: number
-): ObjectDetectionLiveLabelOffset {
-  if (overlayHeightVp <= 0 || topPercent * overlayHeightVp / 100 < 20) {
-    return { x: 5, y: 20 };
+export function objectDetectionLiveLabelPlacement(
+  box: ObjectDetectionLiveOverlayBox,
+  overlayWidth: number,
+  overlayHeight: number,
+  labelCharacterCount: number
+): ObjectDetectionLiveLabelPlacement {
+  if (overlayWidth <= 0 || overlayHeight <= 0) {
+    return { left: 0, top: 0, maxWidth: 0, estimatedHeight: 0 };
   }
-  return { x: 0, y: -10 };
+  const gap = 4;
+  const maxWidth = Math.min(180, overlayWidth);
+  const lineCount = Math.max(1, Math.ceil(Math.max(1, labelCharacterCount) / 8));
+  const estimatedHeight = Math.min(overlayHeight, lineCount * 26 + 8);
+  const boxBottom = box.top + box.height;
+  let top = box.top;
+  if (box.top >= estimatedHeight + gap) {
+    top = box.top - estimatedHeight - gap;
+  } else if (boxBottom + gap + estimatedHeight <= overlayHeight) {
+    top = boxBottom + gap;
+  }
+  return {
+    left: Math.min(Math.max(box.left, 0), Math.max(0, overlayWidth - maxWidth)),
+    top: Math.min(Math.max(top, 0), Math.max(0, overlayHeight - estimatedHeight)),
+    maxWidth: maxWidth,
+    estimatedHeight: estimatedHeight
+  };
 }
 
 function objectDetectionPercent(value: number, sourceLength: number): number {

@@ -1,19 +1,68 @@
 import router from '@ohos.router';
 import { findRouteByName } from '../app/AppRoutes';
 import { ExperienceHeader } from '../common/components/ExperienceHeader';
+import { experienceHeaderMinHeightVp } from '../common/data/ExperienceHeaderBranding';
 import { FeatureCard } from '../common/components/FeatureCard';
 import { FeatureItem, FeatureSection, visibleExperienceSections } from '../common/data/FeatureCatalog';
 import {
+  experienceContentBottomPaddingVp,
+  experienceGroupTitleMinHeightVp,
   experienceGridColumnGapVp,
-  experienceGridHeightVp,
+  experienceGridMinHeightVp,
   experienceGridRowGapVp,
-  experienceGridSideInsetVp
+  experienceGridSideInsetVp,
+  experienceSectionTitleMinHeightVp,
+  experienceStickyTitleMinHeightVp,
+  experienceStickyTitleThresholdForMeasuredHeightsVp,
+  experienceStickyTitleVisible
 } from '../common/data/ExperienceLayoutSpec';
 import { appString, AppStringKey } from '../common/i18n/AppStrings';
 import { AppColor } from '../common/theme/AppTheme';
 
 @Component
 export struct ExperiencePage {
+  @State stickyTitleVisible: boolean = false;
+  @State headerHeightVp: number = experienceHeaderMinHeightVp;
+  @State stickyTitleHeightVp: number = experienceStickyTitleMinHeightVp;
+  private scrollController: Scroller = new Scroller();
+
+  private stickyTitleThresholdVp(): number {
+    return experienceStickyTitleThresholdForMeasuredHeightsVp(
+      this.headerHeightVp,
+      this.stickyTitleHeightVp
+    );
+  }
+
+  private updateStickyTitleVisibility(): void {
+    const visible = experienceStickyTitleVisible(
+      this.scrollController.currentOffset().yOffset,
+      this.stickyTitleThresholdVp()
+    );
+    if (visible !== this.stickyTitleVisible) {
+      this.stickyTitleVisible = visible;
+    }
+  }
+
+  private updateHeaderHeight(currentArea: Area): void {
+    const measuredHeightVp = Number(currentArea.height);
+    if (!Number.isFinite(measuredHeightVp) || measuredHeightVp <= 0 ||
+      Math.abs(measuredHeightVp - this.headerHeightVp) < 0.01) {
+      return;
+    }
+    this.headerHeightVp = measuredHeightVp;
+    this.updateStickyTitleVisibility();
+  }
+
+  private updateStickyTitleHeight(currentArea: Area): void {
+    const measuredHeightVp = Number(currentArea.height);
+    if (!Number.isFinite(measuredHeightVp) || measuredHeightVp <= 0 ||
+      Math.abs(measuredHeightVp - this.stickyTitleHeightVp) < 0.01) {
+      return;
+    }
+    this.stickyTitleHeightVp = measuredHeightVp;
+    this.updateStickyTitleVisibility();
+  }
+
   private openFeature(item: FeatureItem): void {
     const route = findRouteByName(item.routeName);
     if (!route) {
@@ -30,31 +79,14 @@ export struct ExperiencePage {
   }
 
   @Builder
-  private dashedDivider() {
-    Row() {
-    }
-    .width('100%')
-    .height(2)
-    .border({
-      width: { top: 2 },
-      color: { top: '#66000000' },
-      style: { top: BorderStyle.Dashed }
-    })
-  }
-
-  @Builder
   private groupTitle(titleKey: AppStringKey, topMargin: number) {
-    Column() {
-      this.dashedDivider()
-      Text(appString(titleKey))
-        .fontSize(16)
-        .fontWeight(FontWeight.Bold)
-        .fontColor(AppColor.textPrimary)
-        .margin({ top: 8, bottom: 8 })
-      this.dashedDivider()
-    }
+    Text(appString(titleKey))
     .width('100%')
-    .alignItems(HorizontalAlign.Center)
+    .constraintSize({ minHeight: experienceGroupTitleMinHeightVp })
+    .fontSize(17)
+    .fontWeight(FontWeight.Bold)
+    .fontColor(AppColor.textPrimary)
+    .padding({ left: experienceGridSideInsetVp, right: experienceGridSideInsetVp })
     .margin({ top: topMargin })
   }
 
@@ -63,65 +95,101 @@ export struct ExperiencePage {
     Row() {
       Column() {
       }
-      .width(3)
-      .height(12)
-      .backgroundColor('#6189FF')
-      .margin({ top: 3 })
+      .width(4)
+      .height(16)
+      .backgroundColor(AppColor.accent)
+      .borderRadius(2)
       Text(appString(titleKey))
-        .fontSize(13)
+        .fontSize(14)
         .fontWeight(FontWeight.Bold)
         .fontColor(AppColor.textPrimary)
-        .margin({ left: 7 })
-        .maxLines(1)
+        .margin({ left: 8 })
+        .layoutWeight(1)
     }
     .width('100%')
-    .height(15)
+    .constraintSize({ minHeight: experienceSectionTitleMinHeightVp })
     .padding({ left: experienceGridSideInsetVp })
-    .alignItems(VerticalAlign.Top)
-    .margin({ top: 20 })
+    .alignItems(VerticalAlign.Center)
+    .margin({ top: 16 })
+  }
+
+  @Builder
+  private stickyTitle() {
+    Row() {
+      Text(appString('experience_head_title'))
+        .fontSize(17)
+        .fontWeight(FontWeight.Bold)
+        .fontColor(AppColor.textPrimary)
+    }
+    .width('100%')
+    .constraintSize({ minHeight: experienceStickyTitleMinHeightVp })
+    .padding({ left: experienceGridSideInsetVp, right: experienceGridSideInsetVp })
+    .alignItems(VerticalAlign.Center)
+    .backgroundColor(Color.White)
+    .border({ width: { bottom: 1 }, color: '#EDF0F5' })
+    .onAreaChange((_previousArea: Area, currentArea: Area) => {
+      this.updateStickyTitleHeight(currentArea);
+    })
   }
 
   build() {
-    Column() {
-      ExperienceHeader()
-      Scroll() {
+    Stack({ alignContent: Alignment.Top }) {
+      Scroll(this.scrollController) {
         Column() {
-          ForEach(visibleExperienceSections, (section: FeatureSection, sectionIndex: number) => {
-            Column() {
-              if (section.groupTitleKey !== undefined) {
-                this.groupTitle(section.groupTitleKey, sectionIndex === 0 ? 0 : 24)
+          Column() {
+            ExperienceHeader()
+          }
+          .width('100%')
+          .onAreaChange((_previousArea: Area, currentArea: Area) => {
+            this.updateHeaderHeight(currentArea);
+          })
+          Column() {
+            ForEach(visibleExperienceSections, (section: FeatureSection, sectionIndex: number) => {
+              Column() {
+                if (section.groupTitleKey !== undefined) {
+                  this.groupTitle(section.groupTitleKey, sectionIndex === 0 ? 18 : 22)
+                }
+                this.sectionTitle(section.titleKey)
+                Grid() {
+                  ForEach(section.items, (item: FeatureItem) => {
+                    GridItem() {
+                      FeatureCard({
+                        item: item,
+                        action: (clicked: FeatureItem) => this.openFeature(clicked)
+                      })
+                    }
+                  }, (item: FeatureItem) => item.id)
+                }
+                .columnsTemplate('1fr 1fr')
+                .columnsGap(experienceGridColumnGapVp)
+                .rowsGap(experienceGridRowGapVp)
+                .constraintSize({ minHeight: experienceGridMinHeightVp(section.items.length) })
+                .width('100%')
+                .padding({ left: experienceGridSideInsetVp, right: experienceGridSideInsetVp })
+                .margin({ top: 12 })
+                .scrollBar(BarState.Off)
+                .enableScrollInteraction(false)
               }
-              this.sectionTitle(section.titleKey)
-              Grid() {
-                ForEach(section.items, (item: FeatureItem) => {
-                  GridItem() {
-                    FeatureCard({
-                      item: item,
-                      action: (clicked: FeatureItem) => this.openFeature(clicked)
-                    })
-                  }
-                }, (item: FeatureItem) => item.id)
-              }
-              .columnsTemplate('1fr 1fr')
-              .columnsGap(experienceGridColumnGapVp)
-              .rowsGap(experienceGridRowGapVp)
-              .height(experienceGridHeightVp(section.items.length))
               .width('100%')
-              .padding({ left: experienceGridSideInsetVp, right: experienceGridSideInsetVp })
-              .margin({ top: 15 })
-              .scrollBar(BarState.Off)
-              .enableScrollInteraction(false)
-            }
-            .width('100%')
-          }, (section: FeatureSection) => section.id)
+            }, (section: FeatureSection) => section.id)
+          }
+          .width('100%')
+          .padding({ bottom: experienceContentBottomPaddingVp })
+          .backgroundColor(Color.White)
         }
         .width('100%')
-        .padding({ top: 30, bottom: 30 })
       }
       .width('100%')
-      .layoutWeight(1)
+      .height('100%')
       .scrollBar(BarState.Off)
-      .backgroundColor(Color.White)
+      .edgeEffect(EdgeEffect.None)
+      .onScroll(() => {
+        this.updateStickyTitleVisibility();
+      })
+
+      if (this.stickyTitleVisible) {
+        this.stickyTitle()
+      }
     }
     .width('100%')
     .height('100%')

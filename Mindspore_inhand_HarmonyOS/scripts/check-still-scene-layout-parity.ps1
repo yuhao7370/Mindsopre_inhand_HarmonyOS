@@ -100,11 +100,14 @@ function Get-CodeLineIndex([string]$Text, [string]$Line, [int]$StartAt = 0) {
 if ([string]::IsNullOrWhiteSpace($SourceRoot)) { $SourceRoot = Split-Path -Parent $PSScriptRoot }
 $SourceRoot = [IO.Path]::GetFullPath($SourceRoot)
 $catalog = Remove-ArkTsCommentsAndTemplateRaw (Get-NormalizedText (Join-Path $SourceRoot 'entry\src\main\ets\features\runtime\FeatureWorkflowCatalog.ets'))
+$featureCatalog = Remove-ArkTsCommentsAndTemplateRaw (Get-NormalizedText (Join-Path $SourceRoot 'entry\src\main\ets\common\data\FeatureCatalog.ets'))
 $page = Remove-ArkTsCommentsAndTemplateRaw (Get-NormalizedText (Join-Path $SourceRoot 'entry\src\main\ets\pages\FeatureRuntimePage.ets'))
 $sceneService = Remove-ArkTsCommentsAndTemplateRaw (Get-NormalizedText (Join-Path $SourceRoot 'entry\src\main\ets\services\ai\SceneDetectionService.ets'))
 $aiService = Remove-ArkTsCommentsAndTemplateRaw (Get-NormalizedText (Join-Path $SourceRoot 'entry\src\main\ets\services\ai\AiService.ets'))
 $buildScriptPath = Join-Path $SourceRoot 'scripts\build-hap.ps1'
 $buildScript = Get-NormalizedText $buildScriptPath
+Assert-CodeLine $page '@State liveCameraInputSelected: boolean = false;' `
+  'inline camera selection must be reactive so the XComponent is mounted.'
 
 $selector = Get-TextSection $catalog 'export function usesAndroidStillSceneLayout' `
   'export function stillSceneResultToastKey' 'exact still-scene selector'
@@ -113,6 +116,9 @@ Assert-CodeLine $selector 'return workflow?.routeName === AppRoute.SCENE_STILL.n
 if (([regex]::Matches($selector, 'AppRoute\.')).Count -ne 1) {
   throw 'Still scene parity guard failed: selector must contain exactly one route target.'
 }
+Assert-CodeLine $featureCatalog `
+  "{ id: 'scene', title: 'Scene Detection', titleKey: 'title_scene_detection', icon: 'scene', routeName: AppRoute.SCENE_STILL.name, visibleByDefault: false }," `
+  'production scene catalog entry must remain hidden.'
 
 $toastPolicy = Get-TextSection $catalog 'export function stillSceneResultToastKey' `
   'export function shouldPreserveRuntimeTextResultOnAiResult' 'still-scene Toast policy'
@@ -122,74 +128,99 @@ Assert-CodeLine $toastPolicy "'feature_runtime_scene_failed' : undefined;" `
   'empty results must use the existing failure Toast.'
 Assert-Excludes $toastPolicy "resultCode === 'SCENE_DETECTION_RUNTIME_FAILED'" 'runtime failure must not map to a Toast'
 
+$preview = Get-TextSection $page '  stillScenePreviewContent() {' `
+  "`n`n  @Builder`n  stillSceneAndroidLayout()" 'still-scene preview builder'
+foreach ($line in @(
+  'if (this.liveCameraInputSelected || this.liveCameraActive) {',
+  'this.liveCameraSurfaceContent()',
+  '} else if (this.imageInputUri.length > 0) {',
+  'Image(this.imageInputUri)',
+  '.objectFit(ImageFit.Contain)',
+  "Image(`$r('app.media.icon_style'))",
+  '.width(56)',
+  '.height(56)',
+  "Text(appString('workflow_summary_scene_still_android_prompt'))",
+  '.fontSize(16)',
+  '.maxFontScale(1.6)'
+)) { Assert-CodeLine $preview $line "preview builder is missing executable line: $line." }
+Assert-Excludes $preview '.objectFit(ImageFit.Fill)' 'ordinary scene input must preserve aspect ratio with Contain.'
+
 $builder = Get-TextSection $page '  stillSceneAndroidLayout() {' `
   "`n`n  @Builder`n  portraitSegmentationAndroidLayout()" 'dedicated still-scene builder'
 foreach ($line in @(
-  'Stack({ alignContent: Alignment.TopStart }) {',
   'this.runtimeActionToolbar(false)',
-  '.height(1)',
-  ".backgroundColor('#E4E4E4')",
-  '.height(376)',
-  ".backgroundColor('#E6E6E6')",
-  'if (this.imageInputUri.length > 0) {',
-  'Image(this.imageInputUri)',
-  '.width(266)',
-  '.height(356)',
-  '.objectFit(ImageFit.Fill)',
-  "Image(`$r('app.media.icon_style'))",
-  '.width(69.33)',
-  '.height(56.33)',
-  "Text(appString('workflow_summary_scene_still_android_prompt'))",
-  '.fontSize(16)',
+  'Scroll() {',
+  'Column({ space: AppSpacing.md }) {',
+  'Stack({ alignContent: Alignment.Center }) {',
+  'this.stillScenePreviewContent()',
+  '.aspectRatio(4 / 3)',
+  '.constraintSize({ minHeight: 220, maxHeight: 420 })',
+  '.backgroundColor(AppColor.cardBackground)',
+  '.border({ width: 1, color: AppColor.divider, radius: AppRadius.card })',
+  'Row({ space: AppSpacing.sm }) {',
+  'if (this.workflowRunning) {',
+  'LoadingProgress()',
+  'Text(appString(this.statusKey))',
+  'Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.SpaceBetween }) {',
   "Button(appString('feature_input_photo_android'), { type: ButtonType.Normal })",
   ".onClick(() => this.prepareInput('photo'))",
   "Button(appString('feature_input_camera_android'), { type: ButtonType.Normal })",
   ".onClick(() => this.prepareInput('camera'))",
   "Button(appString('feature_runtime_go_live_android_hms'), { type: ButtonType.Normal })",
   'this.openStillSceneLiveRoute()',
-  '.height(37)',
-  '.margin({ top: 14 })',
-  ".fontColor('#666666')",
-  ".backgroundColor('#F4F3F8')",
-  '.borderRadius(5)',
+  "Button(appString(this.statusKey === 'feature_runtime_scene_failed' ||",
+  "this.statusKey === 'feature_runtime_scene_runner_unavailable' ?",
+  "'splash_permission_retry' : this.runActionKey))",
+  '.constraintSize({ minHeight: 48 })',
+  '.fontColor(AppColor.accent)',
   '.enabled(!this.workflowRunning)',
-  'Scroll() {',
+  '.enabled(this.runActionEnabled())',
+  '.onClick(() => this.runPrimaryAction())',
+  'if (this.resultRows.length > 0) {',
+  'Text(appString(workflowResultTitleKey(workflowForRoute(this.routeName))))',
   'ForEach(this.resultRows, (row: AiRunResultRow) => {',
   'Text() {',
   'Span(appString(row.labelKey))',
-  "Span('\uFF1A')",
+  "Span(appString('feature_runtime_result_separator'))",
   'Span(this.resultRowValue(row))',
-  '.fontSize(14)',
-  '.layoutWeight(1)',
-  '.margin({ left: 20, right: 20, top: 14 })',
-  'this.runtimePermissionRecoveryOverlay()',
-  ".width('100%')",
+  '.padding({ left: AppSpacing.page, right: AppSpacing.page, top: AppSpacing.md, bottom: AppSpacing.xl })',
+  '.scrollBar(BarState.Auto)',
   ".height('100%')",
-  '.backgroundColor(Color.White)'
+  '.backgroundColor(AppColor.pageBackground)'
 )) { Assert-CodeLine $builder $line "dedicated builder is missing executable line: $line." }
-Assert-Excludes $builder '.margin({ left: 4 })' 'result text must not add spacing around the Android full-width colon'
-Assert-Excludes $builder '.margin({ bottom: 8 })' 'result lines must not add spacing absent from Android TextView output'
-Assert-CodeLineCount $builder '.height(37)' 3 'all three actions must be 37vp high.'
-Assert-CodeLineCount $builder '.enabled(!this.workflowRunning)' 3 'all three actions must visibly disable while running.'
-Assert-CodeLineCount $builder ".fontColor('#666666')" 4 'prompt and all actions must use Android neutral foreground.'
-Assert-CodeLineCount $builder ".backgroundColor('#F4F3F8')" 3 'all actions must use Android neutral background.'
-Assert-CodeLineCount $builder '.borderRadius(5)' 3 'all actions must use Android 5vp radius.'
-Assert-CodeLineCount $builder '.margin({ left: 20, right: 5 })' 1 'Photo must use Android 20/5 margins.'
-Assert-CodeLineCount $builder '.margin({ left: 5, right: 5 })' 2 'Camera and Real-time must use Android 5/5 margins.'
+Assert-CodeLineCount $builder 'Scroll() {' 1 'still scene must expose exactly one top-level content scroll.'
+Assert-Excludes $builder '.height(376)' 'preview must not retain the fixed Android height.'
+Assert-Excludes $builder '.height(37)' 'actions must not retain the undersized Android height.'
+Assert-Excludes $builder ".backgroundColor('#E6E6E6')" 'preview must use the shared Harmony theme.'
+Assert-Excludes $builder ".backgroundColor('#F4F3F8')" 'actions must use the shared Harmony theme.'
+Assert-Excludes $builder ".fontColor('#666666')" 'text must use the shared Harmony theme.'
+
+$statusStart = 'Row({ space: AppSpacing.sm }) {'
+$actionsStart = 'Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.SpaceBetween }) {'
+$statusRegion = Get-TextSection $builder $statusStart $actionsStart 'still-scene status region'
+Assert-CodeLine $statusRegion '.constraintSize({ minHeight: 48 })' 'status feedback must remain content-driven and readable.'
+Assert-CodeLine $statusRegion '.maxFontScale(1.6)' 'status feedback must remain bounded at extreme font scale.'
+
+$actions = Get-TextSection $builder $actionsStart 'if (this.resultRows.length > 0) {' 'still-scene action grid'
+Assert-CodeLineCount $actions '.constraintSize({ minHeight: 48 })' 4 'all four actions must expose 48vp minimum height.'
+Assert-CodeLineCount $actions '.maxFontScale(1.6)' 4 'all four action labels must remain bounded at extreme font scale.'
+Assert-CodeLineCount $actions ".width('calc(50% - 4vp)')" 4 'all four actions must use the two-column wrapping grid.'
+Assert-CodeLineCount $actions '.enabled(!this.workflowRunning)' 3 'input/live actions must visibly disable while running.'
 
 $photo = Get-CodeLineIndex $builder ".onClick(() => this.prepareInput('photo'))"
 $camera = Get-CodeLineIndex $builder ".onClick(() => this.prepareInput('camera'))" ($photo + 1)
 $live = Get-CodeLineIndex $builder 'this.openStillSceneLiveRoute()' ($camera + 1)
-if ($photo -lt 0 -or $camera -le $photo -or $live -le $camera) {
-  throw 'Still scene parity guard failed: actions must be Photo, Camera, Real-time.'
+$runAction = Get-CodeLineIndex $builder '.onClick(() => this.runPrimaryAction())' ($live + 1)
+if ($photo -lt 0 -or $camera -le $photo -or $live -le $camera -or $runAction -le $live) {
+  throw 'Still scene parity guard failed: actions must be Photo, Camera, Real-time, Run/Retry.'
 }
 
 foreach ($marker in @(
-  'LoadingProgress', 'this.summaryKey', "'feature_runtime_inputs_title'", "'feature_runtime_permissions_title'",
-  'Text(appString(this.statusKey))', 'this.resultRow(', "'feature_runtime_result_scenes'",
+  'this.summaryKey', "'feature_runtime_inputs_title'", "'feature_runtime_permissions_title'",
+  'this.resultRow(', "'feature_runtime_result_scenes'",
   "'feature_runtime_result_image'", "'feature_runtime_result_execution_time'", 'liveCamera',
   'sceneOverlayRows', 'segmentation', 'styledImage', 'objectDetection', 'runtimeActionToolbar(true)',
-  'this.runPrimaryAction()', 'SaveButton(', 'resultImageSaveControl('
+  'SaveButton(', 'resultImageSaveControl('
 )) { Assert-Excludes $builder $marker 'dedicated builder contains forbidden generic/live/sibling UI' }
 
 $pickWrapper = Get-TextSection $page '  private prepareInput(' "`n`n  private async prepareInputAsync" 'shared input wrapper'
@@ -199,6 +230,12 @@ $pickController = Get-TextSection $page '  private async prepareInputAsync(' `
   "`n`n  private async cacheAndApplyPickedModelFile" 'shared async input controller'
 Assert-CodeLine $pickController 'if (!shouldAllowRuntimeInputChange(workflow, inputKind, this.workflowRunning)) {' `
   'photo/camera input controller must enforce the pure running policy before its first await.'
+Assert-CodeLine $pickController 'if (shouldUseInlineCameraFallback(workflow, inputKind, result)) {' `
+  'unsupported native capture must enter the inline camera fallback.'
+Assert-CodeLine $pickController 'this.liveCameraInputSelected = true;' `
+  'inline camera fallback must select the live surface before rendering it.'
+Assert-CodeLine $pickController 'this.startLiveCameraPreview();' `
+  'an already loaded inline surface must restart without waiting for onLoad.'
 $pickResult = Get-TextSection $page '  private applyPickResult(' "`n`n  private aiRunInputs" 'accepted-input state flow'
 Assert-CodeLine $pickResult 'if (!shouldPreserveRuntimeResultAfterInputReady(workflow, inputKind)) {' `
   'accepted photo/camera input must preserve prior still-scene rows through the pure policy.'
@@ -210,12 +247,12 @@ Assert-CodeLine $liveWrapper 'this.openLinkedLiveRoute();' 'live wrapper must re
 $run = Get-TextSection $page '  private async runWorkflowAsync(' "`n`n  private applyRuntimeFailure" 'run/permission flow'
 Assert-CodeLine $run 'if (shouldClearRuntimeResultAtWorkflowStart(workflow)) {' `
   'run start must honor the still-scene no-clear policy.'
-Assert-CodeLine $run 'if (!shouldPreserveRuntimeTextResultOnAiResult(workflow, false)) {' `
+Assert-CodeLine $run 'if (!shouldPreserveRuntimeTextResultOnAiResult(workflow, false, this.resultText.length > 0)) {' `
   'permission denial must preserve the prior still-scene result.'
 Assert-CodeLine $run 'await this.applyAiResult(result, runtimeRequestId);' 'run lifecycle must await result application.'
 $failure = Get-TextSection $page '  private applyRuntimeFailure(): void {' `
   "`n`n  private async prepareLiveFrameImageInput" 'thrown-runtime failure flow'
-Assert-CodeLine $failure 'if (!shouldPreserveRuntimeTextResultOnAiResult(workflow, false)) {' `
+Assert-CodeLine $failure 'if (!shouldPreserveRuntimeTextResultOnAiResult(workflow, false, this.resultText.length > 0)) {' `
   'thrown runtime failure must preserve the prior still-scene result.'
 Assert-Excludes $failure 'showStillSceneFailureToastIfNeeded' 'thrown runtime failure must remain silent'
 $apply = Get-TextSection $page '  private async applyAiResult(' `
@@ -229,7 +266,7 @@ Assert-CodeLine $stillResult 'this.resultRows = androidStillSceneResultRows(resu
   'successful current still-scene results must replace rows with the Android adapter.'
 Assert-CodeLine $apply 'this.showStillSceneFailureToastIfNeeded(result.code);' `
   'completed AI results must reach the empty-only Toast policy.'
-Assert-CodeLine $apply 'if (!shouldPreserveRuntimeTextResultOnAiResult(workflow, result.ok)) {' `
+Assert-CodeLine $apply 'if (!shouldPreserveRuntimeTextResultOnAiResult(workflow, result.ok, this.resultText.length > 0)) {' `
   'failed results must preserve the prior text rows.'
 
 $toastHelper = Get-TextSection $page '  private showStillSceneFailureToastIfNeeded(' `
@@ -255,13 +292,20 @@ Assert-CodeLine $detectScene "code: result.failureKind === 'runtime' ?" `
   'AiService must branch scene failure code on runtime provenance.'
 Assert-CodeLine $detectScene "'SCENE_DETECTION_RUNTIME_FAILED' : 'SCENE_DETECTION_FAILED'," `
   'AiService must expose distinct runtime and empty result codes.'
+Assert-CodeLine $detectScene "messageKey: 'feature_runtime_scene_failed'," `
+  'scene empty/runtime failures must retain the localized failure state.'
+Assert-CodeLine $detectScene "messageKey: 'feature_runtime_scene_done'," `
+  'scene success must retain the localized completion state.'
 Assert-CodeLine $sceneService "failureKind: scenes.length === 0 ? 'empty' : undefined," `
   'scene service must preserve empty-result provenance.'
 Assert-CodeLine $sceneService "failureKind: 'runtime'," `
   'scene service must preserve runtime-failure provenance.'
 
-$buildStart = $page.IndexOf('  build() {', [StringComparison]::Ordinal)
-if ($buildStart -lt 0) { throw 'Still scene parity guard failed: top-level build was not found.' }
+$buildStart = $page.IndexOf(
+  "  @Builder`n  runtimeLayoutContent() {",
+  [StringComparison]::Ordinal
+)
+if ($buildStart -lt 0) { throw 'Still scene parity guard failed: runtime layout selector was not found.' }
 $buildSelection = $page.Substring($buildStart)
 $stillSelector = '} else if (usesAndroidStillSceneLayout(workflowForRoute(this.routeName))) {'
 $stillIndex = Get-CodeLineIndex $buildSelection $stillSelector

@@ -1,6 +1,9 @@
 import { abilityAccessCtrl, common, PermissionRequestResult, Permissions, Want } from '@kit.AbilityKit';
 import { FeaturePermissionKind, FeatureWorkflow } from '../../features/runtime/FeatureWorkflowCatalog';
 
+export const harmonySettingsBundleName = 'com.huawei.hmos.settings';
+export const harmonySettingsModuleName = 'phone_settings';
+export const harmonySettingsAbilityName = 'com.huawei.hmos.settings.MainAbility';
 export const appDetailsSettingsAction = 'action.settings.app.info';
 export const cameraPermissionName: Permissions = 'ohos.permission.CAMERA';
 export const mediaPermissionName: Permissions = 'ohos.permission.READ_IMAGEVIDEO';
@@ -17,18 +20,19 @@ export const declaredPermissionNames: Array<Permissions> = [
 export interface PermissionRequestSummary {
   readonly ok: boolean;
   readonly requested: Array<Permissions>;
+  readonly denied: Array<Permissions>;
 }
 
-export interface OpenAppSettingsAction {
+export interface OpenPermissionSettingsAction {
   readonly openSettings: boolean;
-  readonly want: Want;
+  readonly permissions: Array<Permissions>;
 }
 
-export type RuntimePermissionRecoveryAction = 'none' | 'retryRun' | 'retryCameraInput';
-export type RuntimePermissionRunAction = 'runWorkflow' | 'retryCameraInput';
-
-export function appDetailsSettingsWantForBundle(bundleName: string): Want {
+export function harmonySettingsFallbackWant(bundleName: string): Want {
   return {
+    bundleName: harmonySettingsBundleName,
+    moduleName: harmonySettingsModuleName,
+    abilityName: harmonySettingsAbilityName,
     action: appDetailsSettingsAction,
     parameters: {
       settingsParamBundleName: bundleName
@@ -36,12 +40,40 @@ export function appDetailsSettingsWantForBundle(bundleName: string): Want {
   };
 }
 
-export function runtimeOpenAppSettingsAction(bundleName: string): OpenAppSettingsAction {
+export function permissionRequestSummary(
+  permissionNames: Array<Permissions>,
+  authResults: Array<number>
+): PermissionRequestSummary {
+  const denied: Array<Permissions> = [];
+  permissionNames.forEach((permissionName: Permissions, index: number) => {
+    if (authResults[index] !== 0) {
+      denied.push(permissionName);
+    }
+  });
   return {
-    openSettings: true,
-    want: appDetailsSettingsWantForBundle(bundleName)
+    ok: denied.length === 0,
+    requested: permissionNames,
+    denied: denied
   };
 }
+
+export function runtimeOpenPermissionSettingsAction(
+  deniedPermissions: Array<Permissions>
+): OpenPermissionSettingsAction {
+  if (deniedPermissions.length === 0) {
+    return {
+      openSettings: false,
+      permissions: []
+    };
+  }
+  return {
+    openSettings: true,
+    permissions: [deniedPermissions[0]]
+  };
+}
+
+export type RuntimePermissionRecoveryAction = 'none' | 'retryRun' | 'retryCameraInput';
+export type RuntimePermissionRunAction = 'runWorkflow' | 'retryCameraInput';
 
 export function permissionNameForKind(kind: FeaturePermissionKind): Permissions {
   switch (kind) {
@@ -68,13 +100,6 @@ export function runtimePermissionNamesForWorkflow(workflow: FeatureWorkflow): Ar
   return names;
 }
 
-export function startupPermissionNames(): Array<Permissions> {
-  return [
-    cameraPermissionName,
-    mediaPermissionName
-  ];
-}
-
 export function runtimePermissionRecoveryActionForWorkflow(
   workflow: FeatureWorkflow | undefined,
   statusKey: string
@@ -98,12 +123,31 @@ export function runtimePermissionRunActionForWorkflow(
 }
 
 export class PermissionService {
-  async requestStartup(context: common.UIAbilityContext): Promise<PermissionRequestSummary> {
-    return this.requestPermissionNames(context, startupPermissionNames());
+  async requestCamera(context: common.UIAbilityContext): Promise<PermissionRequestSummary> {
+    return this.requestPermissionNames(context, [cameraPermissionName]);
   }
 
   async requestForWorkflow(context: common.UIAbilityContext, workflow: FeatureWorkflow): Promise<PermissionRequestSummary> {
     return this.requestPermissionNames(context, runtimePermissionNamesForWorkflow(workflow));
+  }
+
+  async requestOnSetting(
+    context: common.UIAbilityContext,
+    deniedPermissions: Array<Permissions>
+  ): Promise<PermissionRequestSummary> {
+    const action = runtimeOpenPermissionSettingsAction(deniedPermissions);
+    if (!action.openSettings) {
+      return { ok: true, requested: [], denied: [] };
+    }
+    try {
+      await context.startAbility(harmonySettingsFallbackWant(context.applicationInfo.name));
+    } catch (_) {
+    }
+    return {
+      ok: false,
+      requested: action.permissions,
+      denied: action.permissions
+    };
   }
 
   private async requestPermissionNames(
@@ -111,17 +155,18 @@ export class PermissionService {
     permissionNames: Array<Permissions>
   ): Promise<PermissionRequestSummary> {
     if (permissionNames.length === 0) {
-      return { ok: true, requested: [] };
+      return { ok: true, requested: [], denied: [] };
     }
     const manager = abilityAccessCtrl.createAtManager();
     try {
       const result: PermissionRequestResult = await manager.requestPermissionsFromUser(context, permissionNames);
-      return {
-        ok: result.authResults.find((authResult: number) => authResult !== 0) === undefined,
-        requested: permissionNames
-      };
+      return permissionRequestSummary(permissionNames, result.authResults);
     } catch (_) {
-      return { ok: false, requested: permissionNames };
+      return {
+        ok: false,
+        requested: permissionNames,
+        denied: permissionNames
+      };
     }
   }
 }

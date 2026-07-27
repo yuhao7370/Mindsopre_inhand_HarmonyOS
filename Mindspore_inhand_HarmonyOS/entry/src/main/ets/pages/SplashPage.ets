@@ -4,19 +4,6 @@ import { splashLogoHeightVp, splashLogoWidthVp } from '../common/data/SplashBran
 import { userPrivacyRulesUrl, webPagePath } from '../common/data/WebDestination';
 import { appString } from '../common/i18n/AppStrings';
 import { AppColor, AppRadius, AppSpacing } from '../common/theme/AppTheme';
-import { PermissionRequestSummary, PermissionService } from '../services/permissions/PermissionService';
-import {
-  canFinishSplashForStartupPermissionState,
-  finishSplashActionForStartupPermissionState,
-  splashOpenAppSettingsAction,
-  splashRetryPermissionAction,
-  SplashStartupPermissionState,
-  SplashStartupTransition,
-  SplashRetryPermissionAction,
-  splashStartupTransitionForMissingContext,
-  splashStartupTransitionForRequest,
-  splashStartupTransitionForRequestAfterPrivacyAccept
-} from '../services/splash/SplashStartupService';
 import {
   HarmonyPrivacyConsentStore,
   PrivacyConsentService
@@ -26,23 +13,15 @@ import {
 export struct SplashPage {
   onFinished: () => void = () => {};
   private consentService: PrivacyConsentService | undefined = undefined;
-  private countdownTimer: number = -1;
-  @State countdownValue: number = 3;
   @State showPrivacyDialog: boolean = false;
-  @State showPermissionDialog: boolean = false;
-  @State startupPermissionState: SplashStartupPermissionState = 'blocked';
 
   aboutToAppear() {
     const service = this.privacyConsentService();
     if (service !== undefined && service.hasAcceptedPrivacy()) {
-      this.requestStartupPermissionsThenEnter();
+      this.onFinished();
       return;
     }
     this.showPrivacyDialog = true;
-  }
-
-  aboutToDisappear() {
-    this.stopCountdown();
   }
 
   private uiAbilityContext(): common.UIAbilityContext | undefined {
@@ -69,67 +48,7 @@ export struct SplashPage {
     }
   }
 
-  private startCountdown(): void {
-    this.stopCountdown();
-    this.countdownValue = 3;
-    this.countdownTimer = setInterval(() => {
-      if (this.countdownValue <= 1) {
-        this.finishSplash();
-        return;
-      }
-      this.countdownValue -= 1;
-    }, 1000);
-  }
-
-  private stopCountdown(): void {
-    if (this.countdownTimer >= 0) {
-      clearInterval(this.countdownTimer);
-      this.countdownTimer = -1;
-    }
-  }
-
-  private requestStartupPermissionsThenEnter(finishImmediatelyWhenReady: boolean = false): void {
-    const context = this.uiAbilityContext();
-    if (context === undefined) {
-      this.applyStartupTransition(splashStartupTransitionForMissingContext());
-      return;
-    }
-    new PermissionService().requestStartup(context).then((permission: PermissionRequestSummary) => {
-      this.handleStartupPermissionRequest(permission, finishImmediatelyWhenReady);
-    }).catch(() => {
-      this.handleStartupPermissionRequest({ ok: false, requested: [] }, finishImmediatelyWhenReady);
-    });
-  }
-
-  private handleStartupPermissionRequest(
-    permission: PermissionRequestSummary,
-    finishImmediatelyWhenReady: boolean = false
-  ): void {
-    this.applyStartupTransition(finishImmediatelyWhenReady ?
-      splashStartupTransitionForRequestAfterPrivacyAccept(permission) :
-      splashStartupTransitionForRequest(permission));
-  }
-
-  private applyStartupTransition(transition: SplashStartupTransition): void {
-    this.startupPermissionState = transition.permissionState;
-    this.showPermissionDialog = transition.showPermissionDialog;
-    if (transition.finishImmediately) {
-      this.stopCountdown();
-      this.finishSplash();
-      return;
-    }
-    if (transition.startCountdown) {
-      this.startCountdown();
-      return;
-    }
-    this.stopCountdown();
-  }
-
   private finishSplash(): void {
-    if (!finishSplashActionForStartupPermissionState(this.startupPermissionState).finishSplash) {
-      return;
-    }
-    this.stopCountdown();
     this.onFinished();
   }
 
@@ -139,8 +58,7 @@ export struct SplashPage {
       service.acceptPrivacy();
     }
     this.showPrivacyDialog = false;
-    this.showPermissionDialog = false;
-    this.requestStartupPermissionsThenEnter(true);
+    this.finishSplash();
   }
 
   private declinePrivacy(): void {
@@ -148,34 +66,6 @@ export struct SplashPage {
     if (service !== undefined) {
       service.declinePrivacy();
     }
-    const context = this.uiAbilityContext();
-    if (context !== undefined) {
-      context.terminateSelf();
-    }
-  }
-
-  private retryStartupPermissions(): void {
-    const action: SplashRetryPermissionAction = splashRetryPermissionAction();
-    this.showPermissionDialog = action.showPermissionDialog;
-    if (action.requestPermissions) {
-      this.requestStartupPermissionsThenEnter(true);
-    }
-  }
-
-  private openAppPermissionSettings(): void {
-    const context = this.uiAbilityContext();
-    if (context === undefined) {
-      return;
-    }
-    try {
-      const action = splashOpenAppSettingsAction(context.applicationInfo.name);
-      context.startAbility(action.want).catch(() => {
-      });
-    } catch (_) {
-    }
-  }
-
-  private exitAfterPermissionDenied(): void {
     const context = this.uiAbilityContext();
     if (context !== undefined) {
       context.terminateSelf();
@@ -193,113 +83,49 @@ export struct SplashPage {
   }
 
   @Builder
-  countdownButton() {
-    Row() {
-      Text(`${this.countdownValue}`)
-        .fontSize(14)
-        .fontColor(AppColor.accent)
-        .fontWeight(FontWeight.Bold)
-      Text(appString('splash_count_down'))
-        .fontSize(14)
-        .fontColor(AppColor.accent)
-    }
-    .height(34)
-    .padding({ left: AppSpacing.md, right: AppSpacing.md })
-    .border({ width: 1, color: AppColor.accent, radius: 17 })
-    .enabled(canFinishSplashForStartupPermissionState(this.startupPermissionState))
-    .opacity(canFinishSplashForStartupPermissionState(this.startupPermissionState) ? 1 : 0.45)
-    .onClick(() => this.finishSplash())
-  }
-
-  @Builder
   privacyDialog() {
     Column() {
-      Column() {
+      Scroll() {
+        Column() {
         Text(appString('me_user_agreements'))
           .fontSize(18)
           .fontWeight(FontWeight.Bold)
           .fontColor(AppColor.textPrimary)
           .width('100%')
           .textAlign(TextAlign.Center)
-        Scroll() {
-          Text(appString('me_privacy'))
-            .fontSize(13)
-            .fontColor(AppColor.textSecondary)
-            .lineHeight(20)
-            .width('100%')
-        }
-        .height(180)
-        .margin({ top: AppSpacing.md })
-        Text(appString('me_user_agreement'))
-          .fontSize(13)
-          .fontColor(AppColor.accent)
-          .textAlign(TextAlign.Center)
-          .margin({ top: AppSpacing.sm })
-          .onClick(() => this.openPrivacyPolicy())
-        Row() {
-          Button(appString('me_disagree_and_exit'))
-            .height(38)
-            .layoutWeight(1)
-            .margin({ right: AppSpacing.sm })
-            .onClick(() => this.declinePrivacy())
-          Button(appString('me_agree'))
-            .height(38)
-            .layoutWeight(1)
-            .onClick(() => this.acceptPrivacy())
-        }
-        .width('100%')
-        .margin({ top: AppSpacing.lg })
-      }
-      .width('86%')
-      .padding(AppSpacing.lg)
-      .backgroundColor(AppColor.cardBackground)
-      .borderRadius(AppRadius.sheet)
-    }
-    .width('100%')
-    .height('100%')
-    .justifyContent(FlexAlign.Center)
-    .backgroundColor('#66000000')
-  }
-
-  @Builder
-  permissionDialog() {
-    Column() {
-      Column() {
-        Text(appString('feature_runtime_permissions_title'))
-          .fontSize(18)
-          .fontWeight(FontWeight.Bold)
-          .fontColor(AppColor.textPrimary)
-          .width('100%')
-          .textAlign(TextAlign.Center)
-        Text(appString('app_need_permission'))
+        Text(appString('me_privacy'))
           .fontSize(13)
           .fontColor(AppColor.textSecondary)
           .lineHeight(20)
           .width('100%')
           .margin({ top: AppSpacing.md })
-        Button(appString('app_permission_by_hand'))
-          .height(38)
+        Button(appString('me_user_agreement'), { type: ButtonType.Normal })
+          .constraintSize({ minHeight: 48 })
+          .fontSize(13)
+          .fontColor(AppColor.textAccent)
+          .backgroundColor(AppColor.cardBackground)
           .width('100%')
-          .margin({ top: AppSpacing.lg })
-          .onClick(() => this.openAppPermissionSettings())
-        Row() {
-          Button(appString('splash_permission_exit'))
-            .height(38)
-            .layoutWeight(1)
-            .margin({ right: AppSpacing.sm })
-            .onClick(() => this.exitAfterPermissionDenied())
-          Button(appString('splash_permission_retry'))
-            .height(38)
-            .layoutWeight(1)
-            .onClick(() => this.retryStartupPermissions())
+          .accessibilityText(appString('me_user_agreement') as Resource)
+          .onClick(() => this.openPrivacyPolicy())
+        Button(appString('me_disagree_and_exit'), { type: ButtonType.Normal })
+          .constraintSize({ minHeight: 48 })
+          .width('100%')
+          .margin({ top: AppSpacing.md })
+          .onClick(() => this.declinePrivacy())
+        Button(appString('me_agree'))
+          .constraintSize({ minHeight: 48 })
+          .width('100%')
+          .margin({ top: AppSpacing.sm })
+          .onClick(() => this.acceptPrivacy())
         }
         .width('100%')
-        .margin({ top: AppSpacing.md })
+        .padding(AppSpacing.lg)
       }
       .width('86%')
-      .padding(AppSpacing.lg)
+      .height('82%')
       .backgroundColor(AppColor.cardBackground)
       .borderRadius(AppRadius.sheet)
+      .accessibilityGroup(true)
     }
     .width('100%')
     .height('100%')
@@ -310,12 +136,6 @@ export struct SplashPage {
   build() {
     Stack() {
       Column() {
-        Row() {
-          Blank()
-          this.countdownButton()
-        }
-        .width('100%')
-        .padding({ top: AppSpacing.lg, right: AppSpacing.lg })
         Image($r('app.media.logo_splash'))
           .width(splashLogoWidthVp)
           .height(splashLogoHeightVp)
@@ -338,11 +158,9 @@ export struct SplashPage {
       .width('100%')
       .height('100%')
       .backgroundColor(AppColor.pageBackground)
+      .accessibilityLevel(this.showPrivacyDialog ? 'no-hide-descendants' : 'auto')
       if (this.showPrivacyDialog) {
         this.privacyDialog()
-      }
-      if (this.showPermissionDialog) {
-        this.permissionDialog()
       }
     }
     .width('100%')
