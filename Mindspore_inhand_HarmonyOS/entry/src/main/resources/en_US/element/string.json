@@ -250,6 +250,8 @@
     { "name": "feature_runtime_style_custom", "value": "Custom style" },
     { "name": "feature_runtime_portrait_background_presets", "value": "Choose a background" },
     { "name": "feature_runtime_portrait_background_custom", "value": "Custom" },
+    { "name": "feature_runtime_portrait_camera_original", "value": "Camera" },
+    { "name": "feature_runtime_portrait_segmentation_result", "value": "Segmentation result" },
     { "name": "feature_runtime_portrait_background_1", "value": "Background 1" },
     { "name": "feature_runtime_portrait_background_2", "value": "Background 2" },
     { "name": "feature_runtime_portrait_background_3", "value": "Background 3" },

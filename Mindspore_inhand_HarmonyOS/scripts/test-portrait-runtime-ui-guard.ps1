@@ -124,8 +124,8 @@ try {
     '.aspectRatio(4 / 3)' ".height('100%')"
   Invoke-SectionMutation 'distorted-composite-fit' $page `
     '  portraitSegmentationComposite() {' '  portraitSegmentationStatus() {' `
-    "Image(this.portraitCompositeBackgroundUri())`n        .orientation(this.segmentationBackgroundImageOrientation)`n        .width('100%')`n        .height('100%')`n        .objectFit(ImageFit.Cover)" `
-    "Image(this.portraitCompositeBackgroundUri())`n        .orientation(this.segmentationBackgroundImageOrientation)`n        .width('100%')`n        .height('100%')`n        .objectFit(ImageFit.Fill)"
+    "Image(this.portraitCompositeBackgroundUri())`n          .orientation(this.portraitCompositeBackgroundOrientation())`n          .width('100%')`n          .height('100%')`n          .objectFit(ImageFit.Cover)" `
+    "Image(this.portraitCompositeBackgroundUri())`n          .orientation(this.portraitCompositeBackgroundOrientation())`n          .width('100%')`n          .height('100%')`n          .objectFit(ImageFit.Fill)"
   Invoke-SectionMutation 'color-only-preset-selection' $page `
     '  portraitSegmentationBackgroundStrip() {' '      }, (preset: PortraitSegmentationBackgroundPreset) => preset.id)' `
     "SymbolGlyph(`$r('sys.symbol.checkmark'))" "Text('')"
@@ -177,7 +177,7 @@ try {
   Invoke-Mutation 'template-literal-decoy' $page 'portraitSegmentationAndroidLayout() {' "portraitSegmentationAndroidLayout() {`n    const ignored = ``SymbolGlyph(`$r('sys.symbol.checkmark')) this.portraitSegmentationStatus()``;" $false
   Invoke-SectionMutation 'removed-real-layout-only-template-decoy' $page `
     '  portraitSegmentationAndroidLayout() {' '  simpleAndroidLiveLayout() {' `
-    'this.portraitSegmentationComposite()' '`${this.portraitSegmentationComposite()}`'
+    'this.portraitSegmentationResultPreview()' '`${this.portraitSegmentationResultPreview()}`'
   Invoke-Mutation 'unused-sibling-decoy' $page 'portraitSegmentationStatus() {' "unusedPortraitSegmentationStatus() {`n    Text(appString(this.statusKey))`n  }`n`n  portraitSegmentationStatus() {" $false
   Invoke-Mutation 'comment-build-wire' $build "& (Join-Path `$PSScriptRoot 'check-portrait-runtime-ui.ps1')" "# & (Join-Path `$PSScriptRoot 'check-portrait-runtime-ui.ps1')"
 

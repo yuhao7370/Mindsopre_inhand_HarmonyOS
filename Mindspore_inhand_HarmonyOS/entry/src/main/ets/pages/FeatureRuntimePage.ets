@@ -259,7 +259,8 @@ import {
   PortraitSegmentationBackgroundState,
   portraitSegmentationBackgroundPresets,
   portraitSegmentationBackgroundUri,
-  portraitSegmentationCustomBackgroundId
+  portraitSegmentationCustomBackgroundId,
+  portraitSegmentationOriginalBackgroundId
 } from '../features/runtime/PortraitSegmentationBackgroundCatalog';
 import { featureRuntimeOverlayPreviewImageOrientationForUri } from '../features/runtime/FeatureRuntimeOverlayPreview';
 import {
@@ -2250,11 +2251,28 @@ struct FeatureRuntimePage {
     this.backgroundImageUri = uri;
     this.selectedPortraitBackgroundPresetId = presetId;
     this.segmentationBackgroundImageUri = uri;
-    this.updateSegmentationBackgroundImageOrientation(uri);
+    if (uri.length > 0) {
+      this.updateSegmentationBackgroundImageOrientation(uri);
+    }
     const metadata: SegmentationBackgroundMetadata =
       segmentationMetadataWithBackground(this.resultRows, this.resultText, uri);
     this.resultRows = metadata.rows;
     this.resultText = metadata.detailText;
+  }
+
+  private portraitCompositeBackgroundUri(): string {
+    return this.selectedPortraitBackgroundPresetId === portraitSegmentationOriginalBackgroundId ?
+      this.segmentationImageUri : this.backgroundImageUri;
+  }
+
+  private portraitCompositeBackgroundOrientation(): ImageRotateOrientation {
+    return this.selectedPortraitBackgroundPresetId === portraitSegmentationOriginalBackgroundId ?
+      this.segmentationImageOrientation : this.segmentationBackgroundImageOrientation;
+  }
+
+  private portraitCompositeBackgroundMirrorScaleX(): number {
+    return this.selectedPortraitBackgroundPresetId === portraitSegmentationOriginalBackgroundId ?
+      this.segmentationForegroundMirrorScaleX() : 1;
   }
 
   private lastPathSegment(uri: string): string {
@@ -4000,24 +4018,51 @@ struct FeatureRuntimePage {
   }
 
   @Builder
+  portraitSegmentationCameraPreview() {
+    Stack({ alignContent: Alignment.Center }) {
+      this.liveCameraSurfaceContent()
+    }
+    .width('100%')
+    .aspectRatio(4 / 3)
+    .clip(true)
+    .backgroundColor('#111827')
+    .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
+  }
+
+  @Builder
   portraitSegmentationComposite() {
-    Stack({ alignContent: Alignment.TopStart }) {
-      Image(this.backgroundImageUri)
-        .orientation(this.segmentationBackgroundImageOrientation)
-        .width('100%')
-        .height('100%')
-        .objectFit(ImageFit.Contain)
+    Stack({ alignContent: Alignment.Center }) {
+      if (this.portraitCompositeBackgroundUri().length > 0) {
+        Image(this.portraitCompositeBackgroundUri())
+          .orientation(this.portraitCompositeBackgroundOrientation())
+          .width('100%')
+          .height('100%')
+          .objectFit(ImageFit.Cover)
+          .scale({ x: this.portraitCompositeBackgroundMirrorScaleX(), y: 1 })
+      }
       if (this.segmentationForegroundPixelMap !== undefined) {
         Image(this.segmentationForegroundPixelMap)
           .width('100%')
           .height('100%')
-          .objectFit(ImageFit.Contain)
+          .objectFit(ImageFit.Cover)
           .scale({ x: this.segmentationForegroundMirrorScaleX(), y: 1 })
       }
     }
     .width('100%')
     .height('100%')
     .id(segmentationBackgroundReplacementComponentId)
+  }
+
+  @Builder
+  portraitSegmentationResultPreview() {
+    Stack({ alignContent: Alignment.Center }) {
+      this.portraitSegmentationComposite()
+    }
+    .width('100%')
+    .aspectRatio(4 / 3)
+    .clip(true)
+    .backgroundColor('#111827')
+    .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
   }
 
   @Builder
@@ -4067,10 +4112,24 @@ struct FeatureRuntimePage {
         ListItem() {
           Stack({ alignContent: Alignment.TopEnd }) {
             Column({ space: AppSpacing.xs }) {
-              Image(portraitSegmentationBackgroundUri(preset))
-                .width(72)
-                .height(72)
-                .objectFit(ImageFit.Cover)
+              if (preset.id === portraitSegmentationOriginalBackgroundId && this.segmentationImageUri.length > 0) {
+                Image(this.segmentationImageUri)
+                  .orientation(this.segmentationImageOrientation)
+                  .width(72)
+                  .height(72)
+                  .objectFit(ImageFit.Cover)
+                  .scale({ x: this.segmentationForegroundMirrorScaleX(), y: 1 })
+              } else if (preset.id === portraitSegmentationOriginalBackgroundId) {
+                Image($r('app.media.icon_camera'))
+                  .width(72)
+                  .height(72)
+                  .objectFit(ImageFit.Contain)
+              } else {
+                Image(portraitSegmentationBackgroundUri(preset))
+                  .width(72)
+                  .height(72)
+                  .objectFit(ImageFit.Cover)
+              }
               Text(appString(preset.titleKey))
                 .fontSize(12)
                 .fontColor(AppColor.textSecondary)
@@ -4140,7 +4199,6 @@ struct FeatureRuntimePage {
     }
     .width('100%')
     .height(184)
-    .padding({ left: AppSpacing.page, right: AppSpacing.page })
     .listDirection(Axis.Horizontal)
     .scrollBar(BarState.Off)
   }
@@ -4294,22 +4352,43 @@ struct FeatureRuntimePage {
 
   @Builder
   portraitSegmentationAndroidLayout() {
-    Column({ space: AppSpacing.sm }) {
+    Column() {
       this.portraitSegmentationToolbar()
-      Stack({ alignContent: Alignment.TopStart }) {
-        this.liveCameraSurfaceContent()
-        this.portraitSegmentationComposite()
+      Scroll() {
+        Column({ space: AppSpacing.sm }) {
+          Text(appString('feature_runtime_portrait_camera_original'))
+            .width('100%')
+            .fontSize(15)
+            .fontWeight(FontWeight.Medium)
+            .fontColor(AppColor.textPrimary)
+            .maxFontScale(3.2)
+          this.portraitSegmentationCameraPreview()
+          Text(appString('feature_runtime_portrait_segmentation_result'))
+            .width('100%')
+            .fontSize(15)
+            .fontWeight(FontWeight.Medium)
+            .fontColor(AppColor.textPrimary)
+            .maxFontScale(3.2)
+          this.portraitSegmentationResultPreview()
+          Row() {
+            this.portraitSegmentationStatus()
+          }
+          .width('100%')
+          .justifyContent(FlexAlign.Center)
+          Text(appString('feature_runtime_portrait_background_presets'))
+            .width('100%')
+            .fontSize(15)
+            .fontWeight(FontWeight.Medium)
+            .fontColor(AppColor.textPrimary)
+            .maxFontScale(3.2)
+          this.portraitSegmentationBackgroundStrip()
+        }
+        .width('100%')
+        .padding({ left: AppSpacing.page, right: AppSpacing.page, top: AppSpacing.sm, bottom: AppSpacing.lg })
       }
       .width('100%')
       .layoutWeight(1)
-      .backgroundColor('#111827')
-      .clip(true)
-      Row() {
-        this.portraitSegmentationStatus()
-      }
-      .width('100%')
-      .justifyContent(FlexAlign.Center)
-      this.portraitSegmentationBackgroundStrip()
+      .scrollBar(BarState.Auto)
     }
     .width('100%')
     .height('100%')

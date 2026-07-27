@@ -250,6 +250,8 @@
     { "name": "feature_runtime_style_custom", "value": "自定义风格" },
     { "name": "feature_runtime_portrait_background_presets", "value": "选择背景" },
     { "name": "feature_runtime_portrait_background_custom", "value": "自定义" },
+    { "name": "feature_runtime_portrait_camera_original", "value": "相机原画" },
+    { "name": "feature_runtime_portrait_segmentation_result", "value": "分割效果" },
     { "name": "feature_runtime_portrait_background_1", "value": "背景 1" },
     { "name": "feature_runtime_portrait_background_2", "value": "背景 2" },
     { "name": "feature_runtime_portrait_background_3", "value": "背景 3" },

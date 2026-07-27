@@ -3,6 +3,7 @@ import { AppRoute } from '../../app/AppRoutes';
 
 export const portraitSegmentationRawfileUriPrefix: string = 'rawfile://';
 export const portraitSegmentationCustomBackgroundId: string = 'custom';
+export const portraitSegmentationOriginalBackgroundId: string = 'original';
 
 export interface PortraitSegmentationBackgroundPreset {
   readonly id: string;
@@ -18,10 +19,10 @@ export interface PortraitSegmentationBackgroundState {
 
 export const portraitSegmentationBackgroundPresets: Array<PortraitSegmentationBackgroundPreset> = [
   {
-    id: 'portrait1',
+    id: portraitSegmentationOriginalBackgroundId,
     titleKey: 'feature_runtime_portrait_background_1',
-    mediaName: 'portrait1',
-    rawfilePath: 'portrait/portrait1.jpg'
+    mediaName: portraitSegmentationOriginalBackgroundId,
+    rawfilePath: ''
   },
   {
     id: 'portrait2',
@@ -53,6 +54,9 @@ export const defaultPortraitSegmentationBackgroundPreset: PortraitSegmentationBa
   portraitSegmentationBackgroundPresets[0];
 
 export function portraitSegmentationBackgroundUri(preset: PortraitSegmentationBackgroundPreset): string {
+  if (preset.id === portraitSegmentationOriginalBackgroundId) {
+    return '';
+  }
   return `${portraitSegmentationRawfileUriPrefix}${preset.rawfilePath}`;
 }
 
@@ -62,7 +66,8 @@ export function defaultPortraitSegmentationBackgroundUri(): string {
 
 export function initialPortraitSegmentationBackgroundState(routeName: string, backgroundImageUri: string,
   selectedPresetId: string): PortraitSegmentationBackgroundState {
-  if (routeName !== AppRoute.PORTRAIT_SEGMENTATION.name || backgroundImageUri.length > 0) {
+  if (routeName !== AppRoute.PORTRAIT_SEGMENTATION.name || backgroundImageUri.length > 0 ||
+    selectedPresetId.length > 0) {
     return {
       backgroundImageUri: backgroundImageUri,
       selectedPresetId: selectedPresetId

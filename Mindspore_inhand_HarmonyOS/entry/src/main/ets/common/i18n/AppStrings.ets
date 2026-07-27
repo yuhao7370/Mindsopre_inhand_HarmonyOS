@@ -249,6 +249,8 @@ export type AppStringKey =
   'feature_runtime_style_custom' |
   'feature_runtime_portrait_background_presets' |
   'feature_runtime_portrait_background_custom' |
+  'feature_runtime_portrait_camera_original' |
+  'feature_runtime_portrait_segmentation_result' |
   'feature_runtime_portrait_background_1' |
   'feature_runtime_portrait_background_2' |
   'feature_runtime_portrait_background_3' |
@@ -575,6 +577,8 @@ const APP_STRING_KEYS: AppStringKey[] = [
   'feature_runtime_style_custom',
   'feature_runtime_portrait_background_presets',
   'feature_runtime_portrait_background_custom',
+  'feature_runtime_portrait_camera_original',
+  'feature_runtime_portrait_segmentation_result',
   'feature_runtime_portrait_background_1',
   'feature_runtime_portrait_background_2',
   'feature_runtime_portrait_background_3',
@@ -1155,6 +1159,10 @@ export function appString(key: AppStringKey): ResourceStr {
       return $r('app.string.feature_runtime_portrait_background_presets');
     case 'feature_runtime_portrait_background_custom':
       return $r('app.string.feature_runtime_portrait_background_custom');
+    case 'feature_runtime_portrait_camera_original':
+      return $r('app.string.feature_runtime_portrait_camera_original');
+    case 'feature_runtime_portrait_segmentation_result':
+      return $r('app.string.feature_runtime_portrait_segmentation_result');
     case 'feature_runtime_portrait_background_1':
       return $r('app.string.feature_runtime_portrait_background_1');
     case 'feature_runtime_portrait_background_2':
