@@ -81,16 +81,16 @@ try {
     "  styleTransferAndroidLayout() {`n    Column() {`n      this.runtimeActionToolbar(true)`n      Column() {" `
     'page-level Scroll removed'
   Mutate-Page 'legacy-preview-height' `
-    "          .aspectRatio(4 / 3)`n          .constraintSize({ minHeight: 220, maxHeight: 420 })`n          .backgroundColor(AppColor.cardBackground)`n          .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })`n          .margin({ top: AppSpacing.md })" `
-    "          .height(265)`n          .backgroundColor(AppColor.cardBackground)`n          .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })`n          .margin({ top: AppSpacing.md })" `
+    "          .aspectRatio(4 / 3)`n          .constraintSize({ minHeight: 220, maxHeight: 420 })`n          .backgroundColor(AppColor.cardBackground)`n          .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })`n          .margin({ top: AppSpacing.md })`n`n          Button(appString(this.statusKey === 'feature_runtime_style_transfer_failed'" `
+    "          .height(265)`n          .backgroundColor(AppColor.cardBackground)`n          .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })`n          .margin({ top: AppSpacing.md })`n`n          Button(appString(this.statusKey === 'feature_runtime_style_transfer_failed'" `
     'legacy fixed preview restored'
   Mutate-Page 'short-primary-action' `
-    "            .width('100%')`n            .constraintSize({ minHeight: 48 })`n            .fontSize(16)" `
-    "            .width('100%')`n            .constraintSize({ minHeight: 37 })`n            .fontSize(16)" `
+    "          Button(appString(this.statusKey === 'feature_runtime_style_transfer_failed' ||`n            this.statusKey === 'feature_runtime_run_failed' ? 'web_retry' : this.runActionKey))`n            .width('100%')`n            .constraintSize({ minHeight: 48 })`n            .fontSize(16)" `
+    "          Button(appString(this.statusKey === 'feature_runtime_style_transfer_failed' ||`n            this.statusKey === 'feature_runtime_run_failed' ? 'web_retry' : this.runActionKey))`n            .width('100%')`n            .constraintSize({ minHeight: 37 })`n            .fontSize(16)" `
     'one action target falls below 48vp'
   Mutate-Page 'status-removed' `
-    "                .margin({ right: AppSpacing.sm })`n            }`n            Text(appString(this.statusKey))" `
-    "                .margin({ right: AppSpacing.sm })`n            }`n            Text('status')" `
+    "                .margin({ right: AppSpacing.sm })`n            }`n            Text(appString(this.statusKey))`n              .fontSize(14)`n              .fontColor(AppColor.textSecondary)`n              .maxFontScale(3.2)`n              .maxLines(3)`n              .layoutWeight(1)`n          }`n          .width('100%')`n          .constraintSize({ minHeight: 56 })" `
+    "                .margin({ right: AppSpacing.sm })`n            }`n            Text('status')`n              .fontSize(14)`n              .fontColor(AppColor.textSecondary)`n              .maxFontScale(3.2)`n              .maxLines(3)`n              .layoutWeight(1)`n          }`n          .width('100%')`n          .constraintSize({ minHeight: 56 })" `
     'visible status removed'
   Mutate-Page 'hidden-model-restored' `
     "          .width('100%')`n          .border({ width: 1, color: AppColor.divider, radius: AppRadius.button })`n          .margin({ top: AppSpacing.sm })`n`n          this.styleTransferStyleGrid()" `
