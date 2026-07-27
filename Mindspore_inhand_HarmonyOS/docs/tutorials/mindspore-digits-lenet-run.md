@@ -1,19 +1,19 @@
-# MindSpore 手写数字识别：本地复现实验记录
+# 用 MindSpore 识别手写数字：一次本地实测
 
-本教程在 2026-07-28 于 Windows 11 本机完成。目标是用 MindSpore 复现
-PyTorch 经典入门中的“卷积网络识别手写数字”流程，并留下可重新执行的脚本、
-命令、指标和端侧接入边界。
+2026-07-28，我在一台 Windows 11 电脑上把这条链路跑了一遍：准备数据、
+搭网络、训练、评估，最后导出 MindIR。下面保留了可以直接重跑的脚本和命令，
+也会说清楚这个模型离 HarmonyOS 端侧运行还差哪些步骤。
 
-## 真实性说明
+## 先说清楚数据集
 
-本机和仓库内没有真实 MNIST 的 IDX 数据文件。为了让教程完全离线可复现，
-实验使用 `sklearn.datasets.load_digits()` 随 scikit-learn 安装的 1797 张
-8×8 灰度手写数字图片，并将它们双线性放大到 28×28。
+本机和仓库里都没有 MNIST 的 IDX 文件。为了离线也能跑，我用了
+`sklearn.datasets.load_digits()`：scikit-learn 自带的 1797 张 8×8 灰度
+手写数字图。训练前，脚本会把它们双线性放大到 28×28。
 
-因此，本文中的 98.61% 是 **sklearn digits 测试集准确率，不是 MNIST
-测试集准确率**。它复现的是经典入门的任务和网络结构，不冒充标准 MNIST 实验。
+所以，文中的 98.61% 是 **sklearn digits 测试集准确率，不是 MNIST
+测试集准确率**。任务和网络结构很接近经典入门案例，但数据集不是同一个。
 
-## 实测环境
+## 我用的环境
 
 | 项目 | 实测值 |
 | --- | --- |
@@ -26,9 +26,9 @@ PyTorch 经典入门中的“卷积网络识别手写数字”流程，并留下
 | Pillow | 12.1.1 |
 | PyTorch | 2.6.0+cpu |
 
-本机 torchvision 0.22.0 与 torch 2.6.0 不匹配，导入时报
-`operator torchvision::nms does not exist`，所以实验不依赖
-`torchvision.datasets.MNIST`。
+这里还踩了一个环境坑：torch 2.6.0 能正常导入，torchvision 0.22.0 却和它
+对不上，报错是 `operator torchvision::nms does not exist`。这和 MindSpore
+无关。为了不在版本问题上打转，数据直接从 scikit-learn 读取。
 
 ## 复现命令
 
@@ -42,14 +42,14 @@ python docs/tutorials/mindspore-digits-lenet.py `
   --output-dir .tmp-college-tutorial/verified-artifacts
 ```
 
-脚本固定 MindSpore、NumPy 和数据管线随机种子为 42，并使用分层 80/20
-切分。训练集 1437 张，测试集 360 张。
+脚本把 MindSpore、NumPy 和数据管线的随机种子都设为 42，再按标签做
+80/20 分层切分。最后得到 1437 张训练图和 360 张测试图。
 
-## 1. 数据准备
+## 1. 把数据整理好
 
-原始像素范围为 0–16。脚本先映射到 8-bit 灰度，放大到 28×28，再使用
-`(x - 0.5) / 0.5` 归一化到 `[-1, 1]`。最终输入为 float32 NCHW
-`[N, 1, 28, 28]`，标签为 int32。
+原始像素范围是 0–16。脚本先把它映射成 8-bit 灰度，再放大到 28×28，
+最后用 `(x - 0.5) / 0.5` 归一化到 `[-1, 1]`。送进模型的数据是
+float32 NCHW `[N, 1, 28, 28]`，标签是 int32。
 
 ```python
 bundle = load_digits()
@@ -60,11 +60,11 @@ train_x, test_x, train_y, test_y = train_test_split(
 )
 ```
 
-## 2. 构建 LeNet 风格网络
+## 2. 搭一个 LeNet 风格网络
 
-网络由“卷积—ReLU—池化”两组特征提取层和三层全连接分类器组成，共
-44,404 个可训练参数。它是现代 LeNet-5 风格实现，不是 1998 年原论文的
-逐层复制。
+网络不复杂。前面是两组卷积、ReLU 和池化，后面接三层全连接，一共有
+44,404 个可训练参数。这里用了现代项目里更常见的 ReLU 和 MaxPool，
+所以它和 1998 年原版 LeNet-5 不完全一样。
 
 ```python
 self.features = nn.SequentialCell(
@@ -85,7 +85,7 @@ self.classifier = nn.SequentialCell(
 )
 ```
 
-常见概念对应关系：
+如果写过 PyTorch，可以按下面这样对照：
 
 | PyTorch | MindSpore |
 | --- | --- |
@@ -95,10 +95,10 @@ self.classifier = nn.SequentialCell(
 | `CrossEntropyLoss` | `SoftmaxCrossEntropyWithLogits` |
 | `torch.optim.Adam` | `mindspore.nn.Adam` |
 
-## 3. 训练和评估
+## 3. 跑训练，看结果
 
-损失函数为稀疏标签交叉熵，优化器为 Adam，学习率 0.002，批大小 64，
-训练 20 轮。
+损失函数用稀疏标签交叉熵，优化器是 Adam，学习率 0.002，batch size 64，
+一共训练 20 轮。每轮结束后，马上用测试集算一次准确率。
 
 ```python
 loss_fn = nn.SoftmaxCrossEntropyWithLogits(sparse=True, reduction="mean")
@@ -112,7 +112,7 @@ for epoch in range(1, 21):
     metrics = model.eval(test_data, dataset_sink_mode=False)
 ```
 
-部分实测日志：
+第一次运行的几行日志：
 
 ```text
 epoch=01 test_accuracy=0.8028 seconds=0.348
@@ -122,13 +122,14 @@ epoch=14 test_accuracy=0.9833 seconds=0.208
 epoch=20 test_accuracy=0.9861 seconds=0.199
 ```
 
-首次完整运行的最终/最佳测试准确率均为 0.986111，即 360 张测试图片中
-识别正确 355 张；训练耗时 4.344 秒，脚本完整计时 4.731 秒。将脚本移入
-本文档目录后再次执行，最终准确率为 0.969444、最佳准确率为 0.983333，
-训练耗时 4.497 秒。两次都超过 96%，但 CPU 算子仍会带来轻微波动，因此
-教程不把单次最高值当作保证值。
+第一次运行的最终和最好成绩都是 0.986111，也就是 360 张测试图里认对了
+355 张。训练用了 4.344 秒，整段脚本共用 4.731 秒。
 
-## 4. 保存、导出和回载验证
+把脚本移到文档目录后，我又跑了一次。最终准确率是 0.969444，最好成绩
+0.983333，训练用了 4.497 秒。两次都超过 96%，但结果没有一模一样。
+CPU 算子的细微差异会带来这种波动，看整体趋势更合适。
+
+## 4. 导出后再读回来
 
 ```python
 ms.save_checkpoint(network, "lenet_digits.ckpt")
@@ -142,30 +143,31 @@ ms.set_context(mode=ms.GRAPH_MODE)
 graph_network = nn.GraphCell(ms.load("lenet_digits.mindir"))
 ```
 
-实测产物：
+生成的文件：
 
 | 文件 | 大小 |
 | --- | ---: |
 | `lenet_digits.ckpt` | 177,956 B |
 | `lenet_digits.mindir` | 188,389 B |
 
-固定测试样本真实标签为 5；导出前预测为 5，MindIR 回载后预测也为 5，
-两份 logits 最大绝对差为 0.0。
+我固定拿一张标签为 5 的测试图做检查。导出前预测是 5，MindIR 读回来后
+仍然预测 5，两份 logits 的最大绝对差为 0.0。
 
-第一次回载曾在 `PYNATIVE_MODE` 失败，错误明确要求 GraphMode。切换到
-`ms.GRAPH_MODE` 后成功，这个排错步骤已保留在最终脚本中。
+第一次回载没有成功，因为程序还在 `PYNATIVE_MODE`。错误信息直接要求
+GraphMode，切到 `ms.GRAPH_MODE` 后就正常了。最终脚本已经保留了这一步，
+重新运行时不用再处理。
 
-## 5. HarmonyOS 端侧边界
+## 5. 为什么还不能直接放进 HarmonyOS
 
-本次生成的是桌面侧 MindIR，输入 float32 NCHW `[1,1,28,28]`，输出
-float32 `[1,10]`。当前 HarmonyOS 应用通过 MindSpore Lite 加载 `.ms`
-模型；现有自定义模型页固定要求 float32 NHWC `[1,224,224,3]`。
+现在拿到的是桌面 MindIR，输入为 float32 NCHW `[1,1,28,28]`，输出为
+float32 `[1,10]`。HarmonyOS 应用加载的则是 MindSpore Lite `.ms`，
+而且现有自定义模型页固定要求 float32 NHWC `[1,224,224,3]`。
 
-这两者在格式、通道、尺寸、布局和归一化上均不兼容，不能直接导入，也不能
-把 `.mindir` 改名为 `.ms`。当前仓库和 PATH 内没有 `converter_lite`，
-所以本次没有声称完成 Lite 转换或 API 24/arm64 端侧验证。
+两边的格式、通道、尺寸、布局和归一化都对不上，不能直接导入。把
+`.mindir` 改名为 `.ms` 也没用。当前仓库和 PATH 里没有 `converter_lite`，
+所以流程先停在桌面 MindIR；Lite 转换和 API 24/arm64 端侧验证还没做。
 
-后续真正接入至少需要：
+要接进应用，还得把下面几步补上：
 
 1. 使用与运行时匹配的官方 converter_lite 将 MindIR 转为
    `MINDIR_LITE` `.ms`；
