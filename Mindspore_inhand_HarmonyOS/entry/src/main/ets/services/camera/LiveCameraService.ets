@@ -64,63 +64,120 @@ export function livePreviewCardAspectRatio(aspectRatio: number): number {
   return Number.isFinite(aspectRatio) && aspectRatio > 0 && aspectRatio < 1 ? 3 / 4 : 4 / 3;
 }
 
-export function liveFrameContentCropRegion(rgba: Uint8Array, width: number, height: number): image.Region {
+export interface LiveCameraPreconfigSession {
+  canPreconfig(type: camera.PreconfigType, ratio: camera.PreconfigRatio): boolean;
+  preconfig(type: camera.PreconfigType, ratio: camera.PreconfigRatio): void;
+}
+
+class HarmonyLiveCameraPreconfigSession implements LiveCameraPreconfigSession {
+  private readonly session: camera.PhotoSession;
+
+  constructor(session: camera.PhotoSession) {
+    this.session = session;
+  }
+
+  canPreconfig(type: camera.PreconfigType, ratio: camera.PreconfigRatio): boolean {
+    return this.session.canPreconfig(type, ratio);
+  }
+
+  preconfig(type: camera.PreconfigType, ratio: camera.PreconfigRatio): void {
+    this.session.preconfig(type, ratio);
+  }
+}
+
+export function configureLiveCameraFourThreePreconfig(session: LiveCameraPreconfigSession): boolean {
+  try {
+    if (!session.canPreconfig(
+      camera.PreconfigType.PRECONFIG_720P,
+      camera.PreconfigRatio.PRECONFIG_RATIO_4_3
+    )) {
+      return false;
+    }
+    session.preconfig(
+      camera.PreconfigType.PRECONFIG_720P,
+      camera.PreconfigRatio.PRECONFIG_RATIO_4_3
+    );
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+interface LiveFrameMatteEdge {
+  readonly depth: number;
+  readonly red: number;
+  readonly green: number;
+  readonly blue: number;
+}
+
+export function liveFrameUniformMatteCropRegion(rgba: Uint8Array, width: number, height: number): image.Region {
   const full: image.Region = { x: 0, y: 0, size: { width: width, height: height } };
   if (width <= 0 || height <= 0 || rgba.length !== width * height * 4) {
     return full;
   }
-  const top = darkBorderDepth(rgba, width, height, true, false);
-  const bottom = darkBorderDepth(rgba, width, height, true, true);
-  const left = darkBorderDepth(rgba, width, height, false, false);
-  const right = darkBorderDepth(rgba, width, height, false, true);
-  const vertical = pairedLetterboxDepth(top, bottom, height);
-  const horizontal = pairedLetterboxDepth(left, right, width);
+  const top = uniformMatteEdge(rgba, width, height, true, false);
+  const bottom = uniformMatteEdge(rgba, width, height, true, true);
+  const left = uniformMatteEdge(rgba, width, height, false, false);
+  const right = uniformMatteEdge(rgba, width, height, false, true);
+  const vertical = pairedUniformMatteDepth(top, bottom, height);
+  const horizontal = pairedUniformMatteDepth(left, right, width);
   if (vertical > horizontal) {
-    return { x: 0, y: top, size: { width: width, height: height - top - bottom } };
+    return { x: 0, y: top.depth, size: { width: width, height: height - top.depth - bottom.depth } };
   }
   if (horizontal > 0) {
-    return { x: left, y: 0, size: { width: width - left - right, height: height } };
+    return { x: left.depth, y: 0, size: { width: width - left.depth - right.depth, height: height } };
   }
   return full;
 }
 
-function pairedLetterboxDepth(start: number, end: number, length: number): number {
-  const remaining = length - start - end;
-  return start > 0 && end > 0 &&
-    Math.abs(start - end) <= Math.max(2, Math.floor(length * 0.08)) &&
-    remaining >= Math.ceil(length / 4) ? start + end : 0;
+function pairedUniformMatteDepth(start: LiveFrameMatteEdge, end: LiveFrameMatteEdge, length: number): number {
+  const remaining = length - start.depth - end.depth;
+  const colorsMatch = Math.abs(start.red - end.red) <= 6 &&
+    Math.abs(start.green - end.green) <= 6 &&
+    Math.abs(start.blue - end.blue) <= 6;
+  return start.depth > 0 && end.depth > 0 && colorsMatch &&
+    Math.abs(start.depth - end.depth) <= Math.max(2, Math.floor(length * 0.08)) &&
+    remaining >= Math.ceil(length / 4) ? start.depth + end.depth : 0;
 }
 
-function darkBorderDepth(
+function uniformMatteEdge(
   rgba: Uint8Array,
   width: number,
   height: number,
   rows: boolean,
   reverse: boolean
-): number {
+): LiveFrameMatteEdge {
   const lineCount = rows ? height : width;
   const sampleCount = rows ? width : height;
+  const referenceX = rows ? 0 : (reverse ? width - 1 : 0);
+  const referenceY = rows ? (reverse ? height - 1 : 0) : 0;
+  const referenceOffset = (referenceY * width + referenceX) * 4;
+  const red = rgba[referenceOffset];
+  const green = rgba[referenceOffset + 1];
+  const blue = rgba[referenceOffset + 2];
   const step = Math.max(1, Math.floor(sampleCount / 64));
   let depth = 0;
   for (let line = 0; line < lineCount; line++) {
     const coordinate = reverse ? lineCount - line - 1 : line;
-    let dark = 0;
+    let matched = 0;
     let total = 0;
     for (let sample = 0; sample < sampleCount; sample += step) {
       const x = rows ? sample : coordinate;
       const y = rows ? coordinate : sample;
       const offset = (y * width + x) * 4;
       total++;
-      if (rgba[offset] <= 32 && rgba[offset + 1] <= 32 && rgba[offset + 2] <= 32) {
-        dark++;
+      if (Math.abs(rgba[offset] - red) <= 4 &&
+        Math.abs(rgba[offset + 1] - green) <= 4 &&
+        Math.abs(rgba[offset + 2] - blue) <= 4) {
+        matched++;
       }
     }
-    if (dark * 100 < total * 98) {
+    if (matched * 100 < total * 98) {
       break;
     }
     depth++;
   }
-  return depth;
+  return { depth: depth, red: red, green: green, blue: blue };
 }
 
 function normalizedQuarterTurnDegrees(rotationDegrees: number): number {
@@ -531,7 +588,7 @@ export class HarmonyLiveCameraPreviewDriver implements LiveCameraPreviewDriver {
   private readonly context: common.UIAbilityContext;
   private cameraInput: camera.CameraInput | undefined = undefined;
   private previewOutput: camera.PreviewOutput | undefined = undefined;
-  private session: camera.Session | undefined = undefined;
+  private session: camera.PhotoSession | undefined = undefined;
   private previewRotation: number = 0;
   private previewProfileWidth: number = 4;
   private previewProfileHeight: number = 3;
@@ -557,20 +614,25 @@ export class HarmonyLiveCameraPreviewDriver implements LiveCameraPreviewDriver {
         throw new Error('requested live camera is unavailable');
       }
       const outputCapability = manager.getSupportedOutputCapability(device, camera.SceneMode.NORMAL_PHOTO);
-      const previewProfile = outputCapability.previewProfiles[0];
-      if (previewProfile === undefined) {
-        throw new Error('requested live camera has no preview profile');
-      }
-      this.previewProfileWidth = previewProfile.size.width;
-      this.previewProfileHeight = previewProfile.size.height;
+      const fallbackProfile = outputCapability.previewProfiles[0];
       this.cameraInput = manager.createCameraInput(device);
       await this.cameraInput.open();
-      this.previewOutput = manager.createPreviewOutput(previewProfile, surfaceId);
-      this.session = manager.createSession<camera.Session>(camera.SceneMode.NORMAL_PHOTO);
+      this.session = manager.createSession<camera.PhotoSession>(camera.SceneMode.NORMAL_PHOTO);
       this.session.beginConfig();
       this.session.addInput(this.cameraInput);
+      if (configureLiveCameraFourThreePreconfig(new HarmonyLiveCameraPreconfigSession(this.session))) {
+        this.previewOutput = manager.createPreviewOutput(surfaceId);
+      } else {
+        if (fallbackProfile === undefined) {
+          throw new Error('requested live camera has no preview profile');
+        }
+        this.previewOutput = manager.createPreviewOutput(fallbackProfile, surfaceId);
+      }
       this.session.addOutput(this.previewOutput);
       await this.session.commitConfig();
+      const activeProfile = this.previewOutput.getActiveProfile();
+      this.previewProfileWidth = activeProfile.size.width;
+      this.previewProfileHeight = activeProfile.size.height;
       this.rotationTracker = new LivePreviewRotationTracker(
         device.cameraOrientation,
         position,
@@ -641,7 +703,7 @@ export class HarmonyLiveFrameImageEncoder implements LiveFrameImageEncoder {
         const info = await pixelMap.getImageInfo();
         const rgba = new ArrayBuffer(info.size.width * info.size.height * 4);
         await pixelMap.readPixelsToBuffer(rgba);
-        const crop = liveFrameContentCropRegion(new Uint8Array(rgba), info.size.width, info.size.height);
+        const crop = liveFrameUniformMatteCropRegion(new Uint8Array(rgba), info.size.width, info.size.height);
         if (crop.size.width !== info.size.width || crop.size.height !== info.size.height) {
           await pixelMap.crop(crop);
         }

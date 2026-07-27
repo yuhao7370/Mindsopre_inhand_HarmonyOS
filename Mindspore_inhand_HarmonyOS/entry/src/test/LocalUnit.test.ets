@@ -1,5 +1,6 @@
 import { describe, it, expect } from '@ohos/hypium';
 import { common } from '@kit.AbilityKit';
+import { camera } from '@kit.CameraKit';
 import { fileIo } from '@kit.CoreFileKit';
 import { mindSporeLite } from '@kit.MindSporeLiteKit';
 import request from '@ohos.request';
@@ -555,6 +556,7 @@ import {
 } from '../main/ets/services/picker/ModelFileCacheService';
 import {
   LiveCameraPreviewDriver,
+  LiveCameraPreconfigSession,
   LiveCameraDevicePositionProvider,
   LiveCameraPosition,
   LiveCameraPreviewService,
@@ -576,7 +578,8 @@ import {
   liveRuntimeIntervalMs,
   livePreviewAspectRatioForProfile,
   livePreviewCardAspectRatio,
-  liveFrameContentCropRegion,
+  configureLiveCameraFourThreePreconfig,
+  liveFrameUniformMatteCropRegion,
   livePreviewWidthForAspectRatio,
   livePreviewContentRotationDegrees,
   liveCameraXComponentId,
@@ -2265,6 +2268,29 @@ class FixedLiveCameraDevicePositionProvider implements LiveCameraDevicePositionP
 class ThrowingLiveCameraDevicePositionProvider implements LiveCameraDevicePositionProvider {
   supportedCameraPositions(): Array<LiveCameraPosition> {
     throw new Error('camera capability unavailable');
+  }
+}
+
+class RecordingLiveCameraPreconfigSession implements LiveCameraPreconfigSession {
+  readonly supported: boolean;
+  readonly requestedTypes: Array<camera.PreconfigType> = [];
+  readonly requestedRatios: Array<camera.PreconfigRatio> = [];
+  readonly configuredTypes: Array<camera.PreconfigType> = [];
+  readonly configuredRatios: Array<camera.PreconfigRatio> = [];
+
+  constructor(supported: boolean) {
+    this.supported = supported;
+  }
+
+  canPreconfig(type: camera.PreconfigType, ratio: camera.PreconfigRatio): boolean {
+    this.requestedTypes.push(type);
+    this.requestedRatios.push(ratio);
+    return this.supported;
+  }
+
+  preconfig(type: camera.PreconfigType, ratio: camera.PreconfigRatio): void {
+    this.configuredTypes.push(type);
+    this.configuredRatios.push(ratio);
   }
 }
 
@@ -11250,54 +11276,56 @@ export default function localUnitTest() {
       expect(liveFrameImagePackingOption.quality).assertEqual(90);
     });
 
-    it('cropsSymmetricSurfaceLetterboxBarsBeforeLiveInference', 0, () => {
-      const portrait = new Uint8Array(4 * 8 * 4);
-      for (let y = 2; y < 6; y++) {
-        for (let x = 0; x < 4; x++) {
-          const offset = (y * 4 + x) * 4;
-          portrait[offset] = 200;
-          portrait[offset + 1] = 200;
-          portrait[offset + 2] = 200;
-          portrait[offset + 3] = 255;
-        }
-      }
-      const portraitCrop = liveFrameContentCropRegion(portrait, 4, 8);
-      expect(portraitCrop.x).assertEqual(0);
-      expect(portraitCrop.y).assertEqual(2);
-      expect(portraitCrop.size.width).assertEqual(4);
-      expect(portraitCrop.size.height).assertEqual(4);
+    it('preconfiguresLiveCameraToNativeFourThreeGeometryWhenSupported', 0, () => {
+      const session = new RecordingLiveCameraPreconfigSession(true);
 
-      const landscape = new Uint8Array(8 * 4 * 4);
-      for (let y = 0; y < 4; y++) {
-        for (let x = 2; x < 6; x++) {
-          const offset = (y * 8 + x) * 4;
-          landscape[offset] = 200;
-          landscape[offset + 1] = 200;
-          landscape[offset + 2] = 200;
-          landscape[offset + 3] = 255;
-        }
-      }
-      const landscapeCrop = liveFrameContentCropRegion(landscape, 8, 4);
-      expect(landscapeCrop.x).assertEqual(2);
-      expect(landscapeCrop.y).assertEqual(0);
-      expect(landscapeCrop.size.width).assertEqual(4);
-      expect(landscapeCrop.size.height).assertEqual(4);
+      expect(configureLiveCameraFourThreePreconfig(session)).assertTrue();
+      expect(session.requestedTypes[0]).assertEqual(camera.PreconfigType.PRECONFIG_720P);
+      expect(session.requestedRatios[0]).assertEqual(camera.PreconfigRatio.PRECONFIG_RATIO_4_3);
+      expect(session.configuredTypes[0]).assertEqual(camera.PreconfigType.PRECONFIG_720P);
+      expect(session.configuredRatios[0]).assertEqual(camera.PreconfigRatio.PRECONFIG_RATIO_4_3);
     });
 
-    it('keepsFramesWithoutPairedLetterboxBarsUncropped', 0, () => {
-      const darkFrame = new Uint8Array(4 * 8 * 4);
-      const darkCrop = liveFrameContentCropRegion(darkFrame, 4, 8);
-      expect(darkCrop.x).assertEqual(0);
-      expect(darkCrop.y).assertEqual(0);
-      expect(darkCrop.size.width).assertEqual(4);
-      expect(darkCrop.size.height).assertEqual(8);
+    it('fallsBackWhenNativeFourThreeCameraPreconfigIsUnavailable', 0, () => {
+      const session = new RecordingLiveCameraPreconfigSession(false);
 
-      const oneDarkEdge = new Uint8Array(4 * 8 * 4);
-      oneDarkEdge.fill(200);
-      oneDarkEdge.fill(0, 0, 4 * 2 * 4);
-      const oneEdgeCrop = liveFrameContentCropRegion(oneDarkEdge, 4, 8);
-      expect(oneEdgeCrop.y).assertEqual(0);
-      expect(oneEdgeCrop.size.height).assertEqual(8);
+      expect(configureLiveCameraFourThreePreconfig(session)).assertFalse();
+      expect(session.configuredTypes.length).assertEqual(0);
+    });
+
+    it('cropsOnlySymmetricUniformCameraMatte', 0, () => {
+      const frame = new Uint8Array(4 * 8 * 4);
+      frame.fill(24);
+      for (let y = 2; y < 6; y++) {
+        frame.fill(180, y * 4 * 4, (y + 1) * 4 * 4);
+      }
+
+      const crop = liveFrameUniformMatteCropRegion(frame, 4, 8);
+
+      expect(crop.y).assertEqual(2);
+      expect(crop.size.height).assertEqual(4);
+    });
+
+    it('doesNotMistakeBlackClothingForCameraMatte', 0, () => {
+      const frame = new Uint8Array(4 * 8 * 4);
+      frame.fill(180);
+      for (let y = 0; y < 8; y++) {
+        if (y >= 2 && y < 6) {
+          continue;
+        }
+        for (let x = 0; x < 4; x++) {
+          const offset = (y * 4 + x) * 4;
+          const clothingShade = x % 2 === 0 ? 18 : 30;
+          frame[offset] = clothingShade;
+          frame[offset + 1] = clothingShade;
+          frame[offset + 2] = clothingShade;
+        }
+      }
+
+      const crop = liveFrameUniformMatteCropRegion(frame, 4, 8);
+
+      expect(crop.y).assertEqual(0);
+      expect(crop.size.height).assertEqual(8);
     });
 
     it('normalizesLiveFrameCachePathForStableJpegSlot', 0, () => {
