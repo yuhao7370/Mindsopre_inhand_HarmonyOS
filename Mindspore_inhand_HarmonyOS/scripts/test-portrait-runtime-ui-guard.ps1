@@ -121,8 +121,8 @@ try {
     'this.portraitSegmentationResultPreview()' 'this.portraitSegmentationCameraPreview()'
   Invoke-SectionMutation 'scrolling-camera-surface' $page `
     '  portraitSegmentationAndroidLayout() {' '  simpleAndroidLiveLayout() {' `
-    "this.portraitSegmentationCameraPreview()`n      Scroll() {" `
-    "Scroll() {`n        this.portraitSegmentationCameraPreview()"
+    "Column({ space: AppSpacing.sm }) {`n        Text(appString('feature_runtime_portrait_camera_original'))" `
+    "Scroll() {`n        Text(appString('feature_runtime_portrait_camera_original'))"
   Invoke-SectionMutation 'wrong-result-aspect-ratio' $page `
     '  portraitSegmentationResultPreview() {' '  portraitSegmentationStatus() {' `
     '.aspectRatio(4 / 3)' ".height('100%')"

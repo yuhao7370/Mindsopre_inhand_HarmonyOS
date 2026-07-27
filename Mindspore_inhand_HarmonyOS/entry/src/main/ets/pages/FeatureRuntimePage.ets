@@ -4354,15 +4354,19 @@ struct FeatureRuntimePage {
   portraitSegmentationAndroidLayout() {
     Column() {
       this.portraitSegmentationToolbar()
+      Column({ space: AppSpacing.sm }) {
+        Text(appString('feature_runtime_portrait_camera_original'))
+          .width('100%')
+          .fontSize(15)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(AppColor.textPrimary)
+          .maxFontScale(3.2)
+        this.portraitSegmentationCameraPreview()
+      }
+      .width('100%')
+      .padding({ left: AppSpacing.page, right: AppSpacing.page, top: AppSpacing.sm, bottom: AppSpacing.sm })
       Scroll() {
         Column({ space: AppSpacing.sm }) {
-          Text(appString('feature_runtime_portrait_camera_original'))
-            .width('100%')
-            .fontSize(15)
-            .fontWeight(FontWeight.Medium)
-            .fontColor(AppColor.textPrimary)
-            .maxFontScale(3.2)
-          this.portraitSegmentationCameraPreview()
           Text(appString('feature_runtime_portrait_segmentation_result'))
             .width('100%')
             .fontSize(15)
