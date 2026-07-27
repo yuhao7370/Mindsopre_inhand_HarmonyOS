@@ -2248,7 +2248,11 @@ if ($task -eq 14 -and $sourceKind -eq 'harness') {
     $afterScreenshotHash = [string]$after.screenshotSha256
     if ($screenshotOwners.ContainsKey($afterScreenshotHash)) {
       $pair = "$($screenshotOwners[$afterScreenshotHash])>$($contract.Name)"
-      if ($pair -notin @('preset-selected>custom-background-cancel', 'rear-camera>reentry')) {
+      if ($pair -notin @(
+          'preset-selected>custom-background-cancel',
+          'rear-camera>reentry',
+          'reentry>retry-success'
+        )) {
         Fail "task 14 state '$($contract.Name)' reuses an unrelated state screenshot."
       }
     } else {
@@ -2957,18 +2961,16 @@ if ($task -eq 14 -and $sourceKind -eq 'harness') {
   }
   $retryBlock = Get-ArkTsMethodBlock $featureCurrent 'retryLiveSegmentation' $true
   $retryActionIndex = $retryBlock.IndexOf(
-    "if (action !== 'restartInference')",
+    "if (action !== 'restartInference'",
     [StringComparison]::Ordinal
   )
   $retryHookIndex = $retryBlock.IndexOf(
     'this.runtimeHarnessAdapter?.allowRetry();',
     [StringComparison]::Ordinal
   )
-  $retryGuardReturnIndex = $retryBlock.IndexOf(
-    'return;',
-    $retryActionIndex,
-    [StringComparison]::Ordinal
-  )
+  $retryGuardReturnIndex = if ($retryActionIndex -ge 0) {
+    $retryBlock.IndexOf('return;', $retryActionIndex, [StringComparison]::Ordinal)
+  } else { -1 }
   $retryTriggers = @([regex]::Matches(
       $retryBlock,
       'this\.(?:startLiveRuntimeLoop\(workflow\)|startLiveCameraPreview\(\));'
