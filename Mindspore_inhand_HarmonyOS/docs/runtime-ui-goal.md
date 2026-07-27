@@ -12,9 +12,9 @@ workflow separately.
 
 - [x] Tasks 0–13: shared runtime UI and image/camera workflows.
 - [x] Task 14: portrait segmentation (`3c75b78` through `fc7a496`).
-- [ ] Task 15: text translation.
-- [ ] Task 16: style transfer.
-- [ ] Task 17: custom model (implementation retained; entry stays hidden).
+- [x] Task 15: text translation (`83b3425`).
+- [x] Task 16: style transfer (`cff3322`).
+- [x] Task 17: custom model (`0b53955`; implementation retained; entry stays hidden).
 - [ ] Task 18: final cross-workflow verification, production HAP, review,
   branch integration, and push.
 
