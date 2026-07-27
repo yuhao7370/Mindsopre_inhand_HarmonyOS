@@ -20,6 +20,37 @@ if (-not [IO.File]::Exists($reviewerPublicKeyPath)) {
 if (-not [IO.Directory]::Exists($templateRoot)) {
   throw 'Trusted runtime evidence producer templates are missing.'
 }
+$harnessTemplatePath = Join-Path $templateRoot 'RuntimeHarnessPage.ets'
+if (-not [IO.File]::Exists($harnessTemplatePath)) {
+  throw 'Trusted runtime harness page template is missing.'
+}
+$harnessTemplate = [IO.File]::ReadAllText($harnessTemplatePath)
+function Assert-TrustedHarnessRoute(
+  [string]$MethodName,
+  [string]$ButtonText,
+  [string]$RouteConstant,
+  [string]$TitleKey
+) {
+  $methodPattern = '(?s)private\s+' + [regex]::Escape($MethodName) +
+    '\(\):\s*void\s*\{\s*router\.pushUrl\(\{\s*url:\s*AppRoute\.' +
+    [regex]::Escape($RouteConstant) +
+    '\.page,\s*params:\s*\{\s*routeName:\s*AppRoute\.' +
+    [regex]::Escape($RouteConstant) +
+    '\.name,\s*titleKey:\s*''' + [regex]::Escape($TitleKey) +
+    ''',\s*runtimeEvidenceRunId:\s*AppStorage\.get<string>\(''runtimeEvidenceRunId''\)\s*\?\?\s*''' +
+    ''',\s*runtimeEvidenceMode:\s*AppStorage\.get<string>\(''runtimeEvidenceMode''\)\s*\?\?\s*''' +
+    '''\s*\}\s*\}\);\s*\}'
+  $buttonPattern = '(?s)Button\(''' + [regex]::Escape($ButtonText) +
+    '''\).*?\.onClick\(\(\)\s*=>\s*this\.' + [regex]::Escape($MethodName) + '\(\)\)'
+  if ([regex]::Matches($harnessTemplate, $methodPattern).Count -ne 1 -or
+    [regex]::Matches($harnessTemplate, $buttonPattern).Count -ne 1) {
+    throw "Trusted runtime harness route '$ButtonText' is missing or not exact."
+  }
+}
+Assert-TrustedHarnessRoute 'openPortrait' 'Open portrait' 'PORTRAIT_SEGMENTATION' 'title_segmentation'
+Assert-TrustedHarnessRoute 'openTextTranslation' 'Open text translation' 'TEXT_TRANSLATION' 'title_texttranslation'
+Assert-TrustedHarnessRoute 'openStyleTransfer' 'Open style transfer' 'STYLE_TRANSFER' 'title_style_transfer'
+Assert-TrustedHarnessRoute 'openCustomModel' 'Open custom model' 'CUSTOM_MODEL' 'title_custom_model'
 $tempParent = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\', '/')
 $tempRoot = [IO.Path]::GetFullPath((Join-Path $tempParent ("mindspore-runtime-evidence-" + [guid]::NewGuid().ToString('N'))))
 $tempPrefix = $tempParent + [IO.Path]::DirectorySeparatorChar
