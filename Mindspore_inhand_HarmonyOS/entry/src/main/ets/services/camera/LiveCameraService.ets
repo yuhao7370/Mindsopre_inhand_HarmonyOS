@@ -64,6 +64,65 @@ export function livePreviewCardAspectRatio(aspectRatio: number): number {
   return Number.isFinite(aspectRatio) && aspectRatio > 0 && aspectRatio < 1 ? 3 / 4 : 4 / 3;
 }
 
+export function liveFrameContentCropRegion(rgba: Uint8Array, width: number, height: number): image.Region {
+  const full: image.Region = { x: 0, y: 0, size: { width: width, height: height } };
+  if (width <= 0 || height <= 0 || rgba.length !== width * height * 4) {
+    return full;
+  }
+  const top = darkBorderDepth(rgba, width, height, true, false);
+  const bottom = darkBorderDepth(rgba, width, height, true, true);
+  const left = darkBorderDepth(rgba, width, height, false, false);
+  const right = darkBorderDepth(rgba, width, height, false, true);
+  const vertical = pairedLetterboxDepth(top, bottom, height);
+  const horizontal = pairedLetterboxDepth(left, right, width);
+  if (vertical > horizontal) {
+    return { x: 0, y: top, size: { width: width, height: height - top - bottom } };
+  }
+  if (horizontal > 0) {
+    return { x: left, y: 0, size: { width: width - left - right, height: height } };
+  }
+  return full;
+}
+
+function pairedLetterboxDepth(start: number, end: number, length: number): number {
+  const remaining = length - start - end;
+  return start > 0 && end > 0 &&
+    Math.abs(start - end) <= Math.max(2, Math.floor(length * 0.08)) &&
+    remaining >= Math.ceil(length / 4) ? start + end : 0;
+}
+
+function darkBorderDepth(
+  rgba: Uint8Array,
+  width: number,
+  height: number,
+  rows: boolean,
+  reverse: boolean
+): number {
+  const lineCount = rows ? height : width;
+  const sampleCount = rows ? width : height;
+  const step = Math.max(1, Math.floor(sampleCount / 64));
+  let depth = 0;
+  for (let line = 0; line < lineCount; line++) {
+    const coordinate = reverse ? lineCount - line - 1 : line;
+    let dark = 0;
+    let total = 0;
+    for (let sample = 0; sample < sampleCount; sample += step) {
+      const x = rows ? sample : coordinate;
+      const y = rows ? coordinate : sample;
+      const offset = (y * width + x) * 4;
+      total++;
+      if (rgba[offset] <= 32 && rgba[offset + 1] <= 32 && rgba[offset + 2] <= 32) {
+        dark++;
+      }
+    }
+    if (dark * 100 < total * 98) {
+      break;
+    }
+    depth++;
+  }
+  return depth;
+}
+
 function normalizedQuarterTurnDegrees(rotationDegrees: number): number {
   if (!Number.isFinite(rotationDegrees)) {
     return -1;
@@ -578,6 +637,16 @@ export class HarmonyLiveFrameImageEncoder implements LiveFrameImageEncoder {
     let packer: image.ImagePacker | undefined = undefined;
     try {
       pixelMap = await image.createPixelMapFromSurface(surfaceId);
+      try {
+        const info = await pixelMap.getImageInfo();
+        const rgba = new ArrayBuffer(info.size.width * info.size.height * 4);
+        await pixelMap.readPixelsToBuffer(rgba);
+        const crop = liveFrameContentCropRegion(new Uint8Array(rgba), info.size.width, info.size.height);
+        if (crop.size.width !== info.size.width || crop.size.height !== info.size.height) {
+          await pixelMap.crop(crop);
+        }
+      } catch (_) {
+      }
       if (normalizedQuarterTurnDegrees(rotationDegrees) > 0) {
         await pixelMap.rotate(rotationDegrees);
       }

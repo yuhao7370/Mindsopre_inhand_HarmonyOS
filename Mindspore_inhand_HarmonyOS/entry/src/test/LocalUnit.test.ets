@@ -576,6 +576,7 @@ import {
   liveRuntimeIntervalMs,
   livePreviewAspectRatioForProfile,
   livePreviewCardAspectRatio,
+  liveFrameContentCropRegion,
   livePreviewWidthForAspectRatio,
   livePreviewContentRotationDegrees,
   liveCameraXComponentId,
@@ -11247,6 +11248,56 @@ export default function localUnitTest() {
     it('liveFrameImageEncoderUsesAndroidLikeJpegPacking', 0, () => {
       expect(liveFrameImagePackingOption.format).assertEqual('image/jpeg');
       expect(liveFrameImagePackingOption.quality).assertEqual(90);
+    });
+
+    it('cropsSymmetricSurfaceLetterboxBarsBeforeLiveInference', 0, () => {
+      const portrait = new Uint8Array(4 * 8 * 4);
+      for (let y = 2; y < 6; y++) {
+        for (let x = 0; x < 4; x++) {
+          const offset = (y * 4 + x) * 4;
+          portrait[offset] = 200;
+          portrait[offset + 1] = 200;
+          portrait[offset + 2] = 200;
+          portrait[offset + 3] = 255;
+        }
+      }
+      const portraitCrop = liveFrameContentCropRegion(portrait, 4, 8);
+      expect(portraitCrop.x).assertEqual(0);
+      expect(portraitCrop.y).assertEqual(2);
+      expect(portraitCrop.size.width).assertEqual(4);
+      expect(portraitCrop.size.height).assertEqual(4);
+
+      const landscape = new Uint8Array(8 * 4 * 4);
+      for (let y = 0; y < 4; y++) {
+        for (let x = 2; x < 6; x++) {
+          const offset = (y * 8 + x) * 4;
+          landscape[offset] = 200;
+          landscape[offset + 1] = 200;
+          landscape[offset + 2] = 200;
+          landscape[offset + 3] = 255;
+        }
+      }
+      const landscapeCrop = liveFrameContentCropRegion(landscape, 8, 4);
+      expect(landscapeCrop.x).assertEqual(2);
+      expect(landscapeCrop.y).assertEqual(0);
+      expect(landscapeCrop.size.width).assertEqual(4);
+      expect(landscapeCrop.size.height).assertEqual(4);
+    });
+
+    it('keepsFramesWithoutPairedLetterboxBarsUncropped', 0, () => {
+      const darkFrame = new Uint8Array(4 * 8 * 4);
+      const darkCrop = liveFrameContentCropRegion(darkFrame, 4, 8);
+      expect(darkCrop.x).assertEqual(0);
+      expect(darkCrop.y).assertEqual(0);
+      expect(darkCrop.size.width).assertEqual(4);
+      expect(darkCrop.size.height).assertEqual(8);
+
+      const oneDarkEdge = new Uint8Array(4 * 8 * 4);
+      oneDarkEdge.fill(200);
+      oneDarkEdge.fill(0, 0, 4 * 2 * 4);
+      const oneEdgeCrop = liveFrameContentCropRegion(oneDarkEdge, 4, 8);
+      expect(oneEdgeCrop.y).assertEqual(0);
+      expect(oneEdgeCrop.size.height).assertEqual(8);
     });
 
     it('normalizesLiveFrameCachePathForStableJpegSlot', 0, () => {
