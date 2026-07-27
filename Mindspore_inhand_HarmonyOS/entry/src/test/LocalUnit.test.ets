@@ -575,6 +575,7 @@ import {
   liveRuntimeIntervalForAiMethod,
   liveRuntimeIntervalMs,
   livePreviewAspectRatioForRotation,
+  livePreviewWidthForAspectRatio,
   livePreviewContentRotationDegrees,
   liveCameraXComponentId,
   liveFrameImagePackingOption,
@@ -11130,6 +11131,12 @@ export default function localUnitTest() {
       expect(livePreviewAspectRatioForRotation(90)).assertEqual(3 / 4);
       expect(livePreviewAspectRatioForRotation(0)).assertEqual(4 / 3);
       expect(livePreviewAspectRatioForRotation(45)).assertEqual(4 / 3);
+    });
+
+    it('usesCompactWidthOnlyForVerticalCameraPreviews', 0, () => {
+      expect(livePreviewWidthForAspectRatio(3 / 4)).assertEqual('78%');
+      expect(livePreviewWidthForAspectRatio(4 / 3)).assertEqual('100%');
+      expect(livePreviewWidthForAspectRatio(Number.NaN)).assertEqual('100%');
     });
 
     it('refreshesNativeFallbackWhenDisplayRotatesWithInvalidSensorOrientation', 0, () => {

@@ -140,6 +140,15 @@ try {
   Invoke-SectionMutation 'wrong-camera-aspect-ratio' $page `
     '  portraitSegmentationCameraPreview() {' '  portraitSegmentationComposite() {' `
     '.aspectRatio(this.liveCameraPreviewAspectRatio)' '.aspectRatio(4 / 3)'
+  Invoke-SectionMutation 'fixed-full-width-camera-preview' $page `
+    '  portraitSegmentationCameraPreview() {' '  portraitSegmentationComposite() {' `
+    '.width(livePreviewWidthForAspectRatio(this.liveCameraPreviewAspectRatio))' ".width('100%')"
+  Invoke-SectionMutation 'fixed-full-width-result-preview' $page `
+    '  portraitSegmentationResultPreview() {' '  portraitSegmentationStatus() {' `
+    '.width(livePreviewWidthForAspectRatio(this.liveCameraPreviewAspectRatio))' ".width('100%')"
+  Invoke-SectionMutation 'visible-result-scrollbar' $page `
+    '  portraitSegmentationAndroidLayout() {' '  simpleAndroidLiveLayout() {' `
+    '.scrollBar(BarState.Off)' '.scrollBar(BarState.Auto)'
   Invoke-SectionMutation 'capture-ignores-camera-rotation' $page `
     '  private async prepareLiveFrameImageInput(' '  private async applyAiResult(' `
     'captureToCacheImage(surfaceId, context.cacheDir, rotation)' `

@@ -212,6 +212,16 @@ Assert-Contains $portraitCameraPreview '.aspectRatio(this.liveCameraPreviewAspec
   'portrait camera preview must follow the oriented camera aspect ratio.'
 Assert-Contains $portraitResultPreview '.aspectRatio(this.liveCameraPreviewAspectRatio)' `
   'portrait result preview must match the oriented camera aspect ratio.'
+Assert-Contains $portraitCameraPreview `
+  '.width(livePreviewWidthForAspectRatio(this.liveCameraPreviewAspectRatio))' `
+  'portrait camera preview must become compact only for vertical cameras.'
+Assert-Contains $portraitResultPreview `
+  '.width(livePreviewWidthForAspectRatio(this.liveCameraPreviewAspectRatio))' `
+  'portrait result preview must match the adaptive camera width.'
+Assert-Contains $portraitLayout '.scrollBar(BarState.Off)' `
+  'portrait result content must remain scrollable without a visible scrollbar.'
+Assert-Excludes $portraitLayout '.scrollBar(BarState.Auto)' `
+  'portrait result content must not show an automatic scrollbar.'
 Assert-Contains $portraitCameraPreview 'this.liveCameraSurfaceContent()' `
   'portrait camera preview must contain only the live camera.'
 Assert-Contains $portraitResultPreview 'this.portraitSegmentationComposite()' `

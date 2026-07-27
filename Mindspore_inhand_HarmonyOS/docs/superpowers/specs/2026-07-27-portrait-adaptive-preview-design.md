@@ -22,4 +22,4 @@
 
 ## 概念图
 
-![人像分割布局概念](assets/portrait-segmentation-layout-concept.png)
+![人像分割竖向摄像头布局概念](assets/portrait-segmentation-layout-concept-v2.png)

@@ -196,6 +196,7 @@ import {
   isLiveRuntimeGenerationCurrent,
   liveRuntimeIntervalForAiMethod,
   liveCameraXComponentId,
+  livePreviewWidthForAspectRatio,
   shouldRunLiveRuntimeLoop,
   shouldAutoRunLiveRuntimeAfterPreview,
   nextLiveCameraPosition,
@@ -4043,7 +4044,7 @@ struct FeatureRuntimePage {
     Stack({ alignContent: Alignment.Center }) {
       this.liveCameraSurfaceContent()
     }
-    .width('100%')
+    .width(livePreviewWidthForAspectRatio(this.liveCameraPreviewAspectRatio))
     .aspectRatio(this.liveCameraPreviewAspectRatio)
     .clip(true)
     .backgroundColor('#111827')
@@ -4080,7 +4081,7 @@ struct FeatureRuntimePage {
     Stack({ alignContent: Alignment.Center }) {
       this.portraitSegmentationComposite()
     }
-    .width('100%')
+    .width(livePreviewWidthForAspectRatio(this.liveCameraPreviewAspectRatio))
     .aspectRatio(this.liveCameraPreviewAspectRatio)
     .clip(true)
     .backgroundColor('#111827')
@@ -4414,7 +4415,7 @@ struct FeatureRuntimePage {
       }
       .width('100%')
       .layoutWeight(1)
-      .scrollBar(BarState.Auto)
+      .scrollBar(BarState.Off)
     }
     .width('100%')
     .height('100%')

@@ -49,6 +49,10 @@ export function livePreviewAspectRatioForRotation(rotationDegrees: number): numb
   return rotation === 90 || rotation === 270 ? 3 / 4 : 4 / 3;
 }
 
+export function livePreviewWidthForAspectRatio(aspectRatio: number): string {
+  return Number.isFinite(aspectRatio) && aspectRatio > 0 && aspectRatio < 1 ? '78%' : '100%';
+}
+
 function normalizedQuarterTurnDegrees(rotationDegrees: number): number {
   if (!Number.isFinite(rotationDegrees)) {
     return -1;
