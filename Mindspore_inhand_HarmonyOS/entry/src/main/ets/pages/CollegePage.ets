@@ -4,16 +4,21 @@ import {
   collegeAdapterViewTitleKey,
   collegeItems,
   CollegeItem,
-  CollegeQuickAction,
   isCollegeItemUrlNavigable
 } from '../common/data/CollegeCatalog';
+import {
+  CollegeLocalQuickStartSection,
+  CollegeTutorialCodeBlock,
+  collegeLocalQuickStartSections,
+  nextCollegeQuickStartExpandedId,
+  visibleCollegeItems
+} from '../common/data/CollegeLocalQuickStart';
 import {
   collegeCardRadiusVp,
   collegeDialogConfirmMinHeightVp,
   collegeEntryMinHeightVp,
   collegeHeaderMinHeightVp,
-  collegePageInsetVp,
-  collegeQuickActionMinHeightVp
+  collegePageInsetVp
 } from '../common/data/CollegeLayoutSpec';
 import {
   androidCollegeSummaryDialogSpec,
@@ -29,7 +34,8 @@ import {
 
 const collegeCardBorderColor: string = '#E8EDF5';
 const collegeCompletedBackgroundColor: string = '#F4F7FF';
-const collegeQuickActionBackgroundColor: string = '#F8FAFD';
+const collegeTutorialCodeBackgroundColor: string = '#F5F7FA';
+const collegeTutorialResultBackgroundColor: string = '#F4F7FF';
 
 function collegeItemMediaResource(itemId: string): Resource {
   switch (itemId) {
@@ -37,29 +43,10 @@ function collegeItemMediaResource(itemId: string): Resource {
       return $r('app.media.college_summary_v2');
     case 'cloud':
       return $r('app.media.college_cloud_v2');
-    case 'quick':
-      return $r('app.media.college_quick_v2');
-    case 'faq':
-      return $r('app.media.college_faq_v2');
     case 'forum':
       return $r('app.media.college_forum_v2');
     default:
       return $r('app.media.college_summary_v2');
-  }
-}
-
-function collegeQuickActionMediaResource(actionId: string): Resource {
-  switch (actionId) {
-    case 'train':
-      return $r('app.media.college_train_v2');
-    case 'inference':
-      return $r('app.media.college_inference_v2');
-    case 'applications':
-      return $r('app.media.college_applications_v2');
-    case 'video':
-      return $r('app.media.college_video_v2');
-    default:
-      return $r('app.media.college_quick_v2');
   }
 }
 
@@ -132,7 +119,7 @@ export struct CollegePage {
     customStyle: true
   });
   @State checkedCollegeItemIds: Array<string> = [];
-  @State checkedQuickActionIds: Array<string> = [];
+  @State expandedQuickStartSectionId: string = collegeLocalQuickStartSections[0].id;
 
   aboutToAppear() {
     this.refreshCollegeProgress();
@@ -168,27 +155,16 @@ export struct CollegePage {
       return;
     }
     const itemIds: Array<string> = [];
-    const quickActionIds: Array<string> = [];
     collegeItems.forEach((item: CollegeItem) => {
       if (item.type !== 'footer') {
         itemIds.push(item.id);
       }
-      if (item.quickActions !== undefined) {
-        item.quickActions.forEach((action: CollegeQuickAction) => {
-          quickActionIds.push(action.id);
-        });
-      }
     });
     this.checkedCollegeItemIds = service.checkedItemIds(itemIds);
-    this.checkedQuickActionIds = service.checkedQuickActionIds(quickActionIds);
   }
 
   private isCollegeItemChecked(itemId: string): boolean {
     return this.checkedCollegeItemIds.indexOf(itemId) >= 0;
-  }
-
-  private isQuickActionChecked(actionId: string): boolean {
-    return this.checkedQuickActionIds.indexOf(actionId) >= 0;
   }
 
   private markCollegeItemChecked(item: CollegeItem): void {
@@ -197,15 +173,6 @@ export struct CollegePage {
       return;
     }
     service.markItemChecked(item.id);
-    this.refreshCollegeProgress();
-  }
-
-  private markQuickActionChecked(action: CollegeQuickAction): void {
-    const service = this.collegeProgressService();
-    if (service === undefined) {
-      return;
-    }
-    service.markQuickActionChecked(action.id);
     this.refreshCollegeProgress();
   }
 
@@ -251,24 +218,6 @@ export struct CollegePage {
     }
     .alignItems(VerticalAlign.Center)
     .visibility(this.isCollegeItemChecked(itemId) ? Visibility.Visible : Visibility.None)
-  }
-
-  @Builder
-  private quickActionCompletedStatus(actionId: string) {
-    Row() {
-      Text('✓')
-        .fontSize(13)
-        .fontWeight(FontWeight.Bold)
-        .fontColor(AppColor.accent)
-      Text(appString('college_checked'))
-        .fontSize(12)
-        .fontWeight(FontWeight.Medium)
-        .fontColor(AppColor.accent)
-        .maxLines(2)
-        .margin({ left: 4 })
-    }
-    .alignItems(VerticalAlign.Center)
-    .visibility(this.isQuickActionChecked(actionId) ? Visibility.Visible : Visibility.None)
   }
 
   @Builder
@@ -344,80 +293,140 @@ export struct CollegePage {
   }
 
   @Builder
-  private quickActionCard(action: CollegeQuickAction) {
+  private tutorialCodeBlock(block: CollegeTutorialCodeBlock) {
     Column() {
-      Row() {
-        Image(collegeQuickActionMediaResource(action.id))
-          .width(30)
-          .height(30)
-          .objectFit(ImageFit.Contain)
-        Text(appString(action.titleKey))
-          .fontSize(14)
-          .fontWeight(FontWeight.Medium)
-          .fontColor(this.isQuickActionChecked(action.id) ? AppColor.accent : AppColor.textPrimary)
-          .maxLines(2)
-          .layoutWeight(1)
-          .margin({ left: 8 })
-      }
-      .width('100%')
-      .alignItems(VerticalAlign.Center)
-      this.quickActionCompletedStatus(action.id)
+      Text(block.title)
+        .width('100%')
+        .fontSize(12)
+        .fontWeight(FontWeight.Medium)
+        .fontColor(AppColor.textSecondary)
+      Text(block.code)
+        .width('100%')
+        .fontSize(11)
+        .fontColor(AppColor.textPrimary)
+        .fontFamily('monospace')
+        .lineHeight(17)
+        .wordBreak(WordBreak.BREAK_ALL)
+        .margin({ top: 8 })
     }
     .width('100%')
-    .constraintSize({ minHeight: collegeQuickActionMinHeightVp })
-    .padding({ top: 10, bottom: 10, left: 10, right: 10 })
+    .padding(12)
     .alignItems(HorizontalAlign.Start)
-    .justifyContent(FlexAlign.Center)
-    .backgroundColor(collegeQuickActionBackgroundColor)
-    .border({ width: 1, color: collegeCardBorderColor, radius: 12 })
-    .onClick(() => {
-      this.markQuickActionChecked(action);
-      this.openWeb(action.titleKey, action.url);
-    })
+    .backgroundColor(collegeTutorialCodeBackgroundColor)
+    .borderRadius(12)
+    .margin({ top: 10 })
   }
 
   @Builder
-  private quickStartCard(item: CollegeItem) {
+  private localQuickStartSection(section: CollegeLocalQuickStartSection) {
     Column() {
       Row() {
-        Image(collegeItemMediaResource(item.id))
-          .width(40)
-          .height(40)
-          .objectFit(ImageFit.Contain)
-        Text(appString(item.titleKey))
-          .fontSize(17)
+        Row()
+          .width(3)
+          .height(24)
+          .backgroundColor(AppColor.accent)
+          .borderRadius(2)
+        Text(section.step)
+          .fontSize(12)
           .fontWeight(FontWeight.Bold)
+          .fontColor(AppColor.accent)
+          .margin({ left: 10 })
+        Text(section.title)
+          .fontSize(16)
+          .fontWeight(FontWeight.Medium)
           .fontColor(AppColor.textPrimary)
-          .maxLines(2)
           .layoutWeight(1)
-          .margin({ left: 12 })
+          .margin({ left: 8 })
+        Text(this.expandedQuickStartSectionId === section.id ? '收起' : '展开')
+          .fontSize(12)
+          .fontColor(AppColor.accent)
       }
       .width('100%')
+      .constraintSize({ minHeight: 48 })
       .alignItems(VerticalAlign.Center)
-      this.collegeItemCompletedStatus(item.id)
-      if (item.quickActions !== undefined) {
-        Grid() {
-          ForEach(item.quickActions, (action: CollegeQuickAction) => {
-            GridItem() {
-              this.quickActionCard(action)
-            }
-          }, (action: CollegeQuickAction) => action.id)
+      .onClick(() => {
+        this.expandedQuickStartSectionId = nextCollegeQuickStartExpandedId(
+          this.expandedQuickStartSectionId,
+          section.id
+        );
+      })
+      if (this.expandedQuickStartSectionId === section.id) {
+        Divider()
+          .strokeWidth(1)
+          .color(collegeCardBorderColor)
+          .margin({ top: 4, bottom: 14 })
+        Text('学习目标')
+          .width('100%')
+          .fontSize(13)
+          .fontWeight(FontWeight.Bold)
+          .fontColor(AppColor.accent)
+        Text(section.objective)
+          .width('100%')
+          .fontSize(14)
+          .fontColor(AppColor.textPrimary)
+          .lineHeight(22)
+          .margin({ top: 6 })
+        ForEach(section.paragraphs, (paragraph: string, index: number) => {
+          Text(paragraph)
+            .width('100%')
+            .fontSize(14)
+            .fontColor(AppColor.textSecondary)
+            .lineHeight(22)
+            .margin({ top: index === 0 ? 12 : 10 })
+        }, (paragraph: string, index: number): string => `${section.id}-paragraph-${index}`)
+        ForEach(section.codeBlocks, (block: CollegeTutorialCodeBlock, index: number) => {
+          this.tutorialCodeBlock(block)
+        }, (block: CollegeTutorialCodeBlock, index: number): string => `${section.id}-code-${index}`)
+        Column() {
+          Text('本机实测')
+            .width('100%')
+            .fontSize(12)
+            .fontWeight(FontWeight.Bold)
+            .fontColor(AppColor.accent)
+          Text(section.measuredResult)
+            .width('100%')
+            .fontSize(13)
+            .fontColor(AppColor.textPrimary)
+            .lineHeight(21)
+            .margin({ top: 6 })
         }
-        .columnsTemplate('1fr 1fr')
-        .columnsGap(8)
-        .rowsGap(8)
-        .constraintSize({ minHeight: collegeQuickActionMinHeightVp * 2 + 8 })
         .width('100%')
-        .scrollBar(BarState.Off)
-        .enableScrollInteraction(false)
+        .padding(12)
+        .alignItems(HorizontalAlign.Start)
+        .backgroundColor(collegeTutorialResultBackgroundColor)
+        .borderRadius(12)
         .margin({ top: 12 })
       }
     }
     .width('100%')
-    .padding(12)
+    .padding({ top: 8, bottom: 14, left: 14, right: 14 })
+    .alignItems(HorizontalAlign.Start)
     .backgroundColor(Color.White)
     .border({ width: 1, color: collegeCardBorderColor, radius: collegeCardRadiusVp })
     .margin({ top: 10 })
+  }
+
+  @Builder
+  private localQuickStart() {
+    Column() {
+      Text('本地快速入门')
+        .width('100%')
+        .fontSize(19)
+        .fontWeight(FontWeight.Bold)
+        .fontColor(AppColor.textPrimary)
+      Text('用 MindSpore 亲手完成手写数字训练、评估与导出')
+        .width('100%')
+        .fontSize(13)
+        .fontColor(AppColor.textSecondary)
+        .lineHeight(20)
+        .margin({ top: 6 })
+      ForEach(collegeLocalQuickStartSections, (section: CollegeLocalQuickStartSection) => {
+        this.localQuickStartSection(section)
+      }, (section: CollegeLocalQuickStartSection): string => section.id)
+    }
+    .width('100%')
+    .alignItems(HorizontalAlign.Start)
+    .margin({ top: 22 })
   }
 
   @Builder
@@ -440,10 +449,11 @@ export struct CollegePage {
           .fontWeight(FontWeight.Bold)
           .fontColor(AppColor.textPrimary)
           .margin({ top: 4, bottom: 2 })
-        ForEach(collegeItems, (item: CollegeItem) => {
-          if (item.type === 'quickStart') {
-            this.quickStartCard(item)
-          } else if (item.type === 'footer') {
+        ForEach(visibleCollegeItems, (item: CollegeItem) => {
+          if (item.id === 'forum') {
+            this.localQuickStart()
+          }
+          if (item.type === 'footer') {
             this.collegeFooter(item)
           } else {
             this.collegeEntryCard(item)
