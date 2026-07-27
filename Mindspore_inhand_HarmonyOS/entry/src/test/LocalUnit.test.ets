@@ -425,6 +425,7 @@ import {
   shouldShowCopyTextAction,
   textRecognitionActionEnabled,
   textRecognitionRunActionLabelKey,
+  textTranslationRunActionLabelKey,
   shouldShowCompositeSegmentationSaveAction,
   compositeSegmentationSaveReady,
   shouldShowResultSaveAction,
@@ -4034,6 +4035,39 @@ export default function localUnitTest() {
       expect(workflowRunActionKey(translation)).assertEqual('feature_runtime_run_translation');
       expect(hasAppStringKey(workflowRunActionKey(translation))).assertTrue();
       expect(workflowRunActionKey(styleTransfer)).assertEqual('feature_runtime_run');
+    });
+
+    it('preservesTranslationInputsAndLastValidResultDuringRunAndFailure', 0, () => {
+      const translation: FeatureWorkflow = workflowForRoute(AppRoute.TEXT_TRANSLATION.name)!;
+
+      expect(shouldClearRuntimeResultAtWorkflowStart(translation)).assertFalse();
+      expect(shouldPreserveRuntimeTextResultOnAiResult(translation, false)).assertTrue();
+      expect(shouldPreserveRuntimeTextResultOnAiResult(translation, true)).assertFalse();
+      expect(shouldPreserveRuntimeResultAfterInputReady(translation, 'photo')).assertTrue();
+      expect(shouldPreserveRuntimeResultAfterInputReady(translation, 'camera')).assertTrue();
+      expect(shouldPreserveRuntimeResultAfterInputReady(translation, 'text')).assertFalse();
+      expect(shouldAllowRuntimeInputChange(translation, 'text', true)).assertFalse();
+      expect(shouldAllowRuntimeInputChange(translation, 'photo', true)).assertFalse();
+      expect(shouldAllowRuntimeInputChange(translation, 'camera', true)).assertFalse();
+      expect(shouldAllowRuntimeInputChange(translation, 'text', false)).assertTrue();
+      expect(shouldAllowRuntimeInputChange(translation, 'photo', false)).assertTrue();
+      expect(shouldAllowRuntimeInputChange(translation, 'camera', false)).assertTrue();
+    });
+
+    it('labelsTranslationFailuresAsRetryWithoutChangingStableLabels', 0, () => {
+      const runKey = 'feature_runtime_run_translation';
+      expect(textTranslationRunActionLabelKey(
+        'feature_runtime_text_translation_failed', runKey)).assertEqual('web_retry');
+      expect(textTranslationRunActionLabelKey(
+        'feature_runtime_text_recognition_failed', runKey)).assertEqual('web_retry');
+      expect(textTranslationRunActionLabelKey(
+        'feature_runtime_run_failed', runKey)).assertEqual('web_retry');
+      expect(textTranslationRunActionLabelKey(
+        'feature_runtime_text_translation_offline_unsupported', runKey)).assertEqual('web_retry');
+      expect(textTranslationRunActionLabelKey(
+        'feature_runtime_status_idle', runKey)).assertEqual(runKey);
+      expect(textTranslationRunActionLabelKey(
+        'feature_runtime_copy_done', runKey)).assertEqual(runKey);
     });
 
     it('usesAndroidObjectDetectionActivityTitlesOnRuntimePages', 0, () => {

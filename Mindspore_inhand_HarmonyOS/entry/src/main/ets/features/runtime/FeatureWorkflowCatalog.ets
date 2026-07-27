@@ -718,6 +718,16 @@ export function textRecognitionRunActionLabelKey(
     statusKey === 'feature_runtime_run_failed' ? 'web_retry' : runActionKey;
 }
 
+export function textTranslationRunActionLabelKey(
+  statusKey: AppStringKey,
+  runActionKey: AppStringKey
+): AppStringKey {
+  return statusKey === 'feature_runtime_text_translation_failed' ||
+    statusKey === 'feature_runtime_text_recognition_failed' ||
+    statusKey === 'feature_runtime_run_failed' ||
+    statusKey === 'feature_runtime_text_translation_offline_unsupported' ? 'web_retry' : runActionKey;
+}
+
 export function shouldShowResultSaveAction(
   workflow: FeatureWorkflow | undefined,
   resultImageReady: boolean
@@ -989,6 +999,7 @@ export function shouldClearRuntimeResultAtWorkflowStart(workflow: FeatureWorkflo
     !usesAndroidLiveSceneLayout(workflow) &&
     !usesAndroidLiveSkeletonLayout(workflow) &&
     workflow?.routeName !== AppRoute.PORTRAIT_SEGMENTATION.name &&
+    !usesAndroidTextTranslationLayout(workflow) &&
     !usesAndroidObjectPhotoLayout(workflow) &&
     !usesAndroidStyleTransferLayout(workflow) &&
     !usesAndroidStillSegmentationLayout(workflow) &&
@@ -1046,6 +1057,7 @@ export function shouldPreserveRuntimeResultAfterInputReady(
   inputKind: FeatureInputKind
 ): boolean {
   return (workflow?.routeName === AppRoute.PORTRAIT_SEGMENTATION.name && inputKind === 'backgroundImage') ||
+    (usesAndroidTextTranslationLayout(workflow) && (inputKind === 'photo' || inputKind === 'camera')) ||
     (usesAndroidObjectPhotoLayout(workflow) && (inputKind === 'photo' || inputKind === 'modelFile')) ||
     (usesAndroidCustomModelLayout(workflow) &&
       (inputKind === 'modelFile' || inputKind === 'photo' || inputKind === 'camera')) ||
@@ -1061,6 +1073,7 @@ export function shouldPreserveRuntimeTextResultOnAiResult(
   resultOk: boolean
 ): boolean {
   return (usesAndroidStillSceneLayout(workflow) || usesAndroidObjectPhotoLayout(workflow) ||
+    usesAndroidTextTranslationLayout(workflow) ||
     shouldShowLiveClassificationCameraOverlay(workflow) ||
     shouldShowLiveObjectDetectionCameraOverlay(workflow) ||
     usesAndroidLiveSegmentationLayout(workflow) ||
@@ -1259,6 +1272,9 @@ export function shouldAllowRuntimeInputChange(
     return true;
   }
   if (workflow?.routeName === AppRoute.STYLE_TRANSFER.name) {
+    return false;
+  }
+  if (usesAndroidTextTranslationLayout(workflow)) {
     return false;
   }
   if (usesAndroidStillSceneLayout(workflow) && (inputKind === 'photo' || inputKind === 'camera')) {

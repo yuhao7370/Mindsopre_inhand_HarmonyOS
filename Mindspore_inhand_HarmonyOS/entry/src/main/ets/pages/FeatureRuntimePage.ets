@@ -70,6 +70,7 @@ import {
   shouldShowCopyTextAction,
   textRecognitionActionEnabled,
   textRecognitionRunActionLabelKey,
+  textTranslationRunActionLabelKey,
   shouldShowCompositeSegmentationSaveAction,
   compositeSegmentationSaveReady,
   shouldShowLiveClassificationCameraOverlay,
@@ -2287,6 +2288,10 @@ struct FeatureRuntimePage {
       this.statusKey = result.ok ? 'feature_runtime_copy_done' : 'feature_runtime_copy_failed';
       this.showRuntimeToast(this.statusKey);
     });
+  }
+
+  private translationCopyEnabled(): boolean {
+    return !this.workflowRunning && translatedTextForAiResult(this.resultRows).length > 0;
   }
 
   private copyTranslatedText(): void {
@@ -5835,97 +5840,120 @@ struct FeatureRuntimePage {
 
   @Builder
   textTranslationAndroidLayout() {
-    Stack({ alignContent: Alignment.TopStart }) {
-      Column() {
-        this.runtimeActionToolbar(false)
-        Stack({ alignContent: Alignment.Center }) {
+    Column() {
+      this.runtimeActionToolbar(false)
+      Scroll() {
+        Column({ space: AppSpacing.md }) {
+          Column() {
           if (this.textInputVisible) {
             TextArea({
               text: this.userText,
               placeholder: appString('feature_runtime_text_translation_placeholder')
             })
               .width('100%')
-              .height('100%')
-              .margin(5)
-              .fontSize(18)
-              .fontColor('#000000')
-              .placeholderColor('#666666')
+              .constraintSize({ minHeight: 180 })
+              .fontSize(16)
+              .fontColor(AppColor.textPrimary)
+              .placeholderColor(AppColor.textMuted)
               .backgroundColor(Color.Transparent)
-              .border({ width: 0.33, color: '#B6B2B2', radius: 5 })
+              .enabled(shouldAllowRuntimeInputChange(
+                workflowForRoute(this.routeName), 'text', this.workflowRunning))
               .onChange((value: string) => this.updateUserText(value))
           } else {
             Image(this.imageInputUri)
               .width('100%')
-              .height('100%')
-              .margin(10)
+              .aspectRatio(4 / 3)
               .objectFit(ImageFit.Contain)
               .backgroundColor(Color.Transparent)
-              .border({ width: 0.33, color: '#B6B2B2', radius: 5 })
           }
-        }
-        .width('100%')
-        .layoutWeight(5)
-        Button(appString(this.runActionKey), { type: ButtonType.Normal })
+          }
           .width('100%')
-          .height(50)
-          .margin(5)
-          .fontColor(Color.White)
-          .enabled(this.runActionEnabled())
-          .onClick(() => this.runPrimaryAction())
-        Scroll() {
-          Text(translatedTextForAiResult(this.resultRows))
+          .constraintSize({ minHeight: 180 })
+          .padding(AppSpacing.md)
+          .alignItems(HorizontalAlign.Start)
+          .backgroundColor(AppColor.cardBackground)
+          .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
+          Button(appString(textTranslationRunActionLabelKey(this.statusKey, this.runActionKey)))
             .width('100%')
-            .fontSize(18)
-            .fontColor('#000000')
-        }
-        .width('100%')
-        .layoutWeight(4)
-        .margin(5)
-        .scrollBar(BarState.Auto)
-        .border({ width: 0.33, color: '#B6B2B2', radius: 5 })
-        Row() {
+            .constraintSize({ minHeight: 48 })
+            .fontColor(Color.White)
+            .backgroundColor(AppColor.accent)
+            .borderRadius(AppRadius.button)
+            .enabled(this.runActionEnabled() && !this.workflowRunning)
+            .onClick(() => this.runPrimaryAction())
+          Row({ space: AppSpacing.sm }) {
+            if (this.workflowRunning) {
+              LoadingProgress()
+                .width(24)
+                .height(24)
+            }
+            Text(appString(this.statusKey))
+              .fontSize(14)
+              .fontColor(AppColor.textSecondary)
+              .layoutWeight(1)
+          }
+          .width('100%')
+          .constraintSize({ minHeight: 48 })
+          .padding({ left: AppSpacing.md, right: AppSpacing.md, top: AppSpacing.sm, bottom: AppSpacing.sm })
+          .alignItems(VerticalAlign.Center)
+          .backgroundColor(AppColor.cardBackground)
+          .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
+          Column({ space: AppSpacing.sm }) {
+            Text(appString(workflowResultTitleKey(workflowForRoute(this.routeName))))
+              .fontSize(16)
+              .fontWeight(FontWeight.Medium)
+              .fontColor(AppColor.textPrimary)
+              .width('100%')
+            Text(translatedTextForAiResult(this.resultRows))
+              .width('100%')
+              .fontSize(16)
+              .fontColor(AppColor.textSecondary)
+              .copyOption(CopyOptions.LocalDevice)
+          }
+          .width('100%')
+          .constraintSize({ minHeight: 112 })
+          .padding(AppSpacing.md)
+          .alignItems(HorizontalAlign.Start)
+          .backgroundColor(AppColor.cardBackground)
+          .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
           Button(appString('feature_input_photo_android'), { type: ButtonType.Normal })
-            .layoutWeight(1)
-            .height(37)
-            .margin({ left: 20, right: 5 })
-            .fontSize(14)
-            .fontWeight(FontWeight.Normal)
-            .fontColor('#666666')
-            .backgroundColor('#F4F3F8')
-            .borderRadius(5)
+            .width('100%')
+            .constraintSize({ minHeight: 48 })
+            .fontColor(AppColor.accent)
+            .backgroundColor(AppColor.cardBackground)
+            .border({ width: 1, color: AppColor.divider, radius: AppRadius.button })
+            .enabled(shouldAllowRuntimeInputChange(
+              workflowForRoute(this.routeName), 'photo', this.workflowRunning))
             .onClick(() => this.prepareInput('photo'))
           Button(appString('feature_input_camera_android'), { type: ButtonType.Normal })
-            .layoutWeight(1)
-            .height(37)
-            .margin({ left: 5, right: 5 })
-            .fontSize(14)
-            .fontWeight(FontWeight.Normal)
-            .fontColor('#666666')
-            .backgroundColor('#F4F3F8')
-            .borderRadius(5)
+            .width('100%')
+            .constraintSize({ minHeight: 48 })
+            .fontColor(AppColor.accent)
+            .backgroundColor(AppColor.cardBackground)
+            .border({ width: 1, color: AppColor.divider, radius: AppRadius.button })
+            .enabled(shouldAllowRuntimeInputChange(
+              workflowForRoute(this.routeName), 'camera', this.workflowRunning))
             .onClick(() => this.prepareInput('camera'))
           Button(appString('feature_runtime_copy_text'), { type: ButtonType.Normal })
-            .layoutWeight(1)
-            .height(37)
-            .margin({ left: 5, right: 20 })
-            .fontSize(14)
-            .fontWeight(FontWeight.Normal)
-            .fontColor('#666666')
-            .backgroundColor('#F4F3F8')
-            .borderRadius(5)
+            .width('100%')
+            .constraintSize({ minHeight: 48 })
+            .fontColor(AppColor.accent)
+            .backgroundColor(AppColor.cardBackground)
+            .border({ width: 1, color: AppColor.divider, radius: AppRadius.button })
+            .enabled(this.translationCopyEnabled())
             .onClick(() => this.copyTranslatedText())
         }
         .width('100%')
-        .layoutWeight(1)
-        .alignItems(VerticalAlign.Center)
+        .padding({ left: AppSpacing.page, right: AppSpacing.page, top: AppSpacing.md, bottom: AppSpacing.xl })
       }
       .width('100%')
-      .height('100%')
-      .backgroundColor(Color.White)
+      .layoutWeight(1)
+      .align(Alignment.TopStart)
+      .scrollBar(BarState.Auto)
     }
     .width('100%')
     .height('100%')
-    .backgroundColor(Color.White)
+    .backgroundColor(AppColor.pageBackground)
   }
 
   @Builder
