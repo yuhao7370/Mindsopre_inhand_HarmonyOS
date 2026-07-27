@@ -205,16 +205,17 @@ function Write-Jpeg(
             35
           )
         }
-        if ($Variant -ne 'initial') {
-          $variantCode = @($Variant.ToCharArray() | ForEach-Object { [int]$_ } |
-              Measure-Object -Sum).Sum
-          $marker = [Drawing.Color]::FromArgb(
-            255,
-            40 + ($variantCode % 180),
-            40 + (($variantCode * 3) % 180),
-            40 + (($variantCode * 7) % 180)
-          )
-          $graphics.FillRectangle([Drawing.SolidBrush]::new($marker), 70, 1550, 1180, 700)
+        $variantCode = @($Variant.ToCharArray() | ForEach-Object { [int]$_ } |
+            Measure-Object -Sum).Sum
+        $marker = [Drawing.Color]::FromArgb(
+          255,
+          40 + ($variantCode % 180),
+          40 + (($variantCode * 3) % 180),
+          40 + (($variantCode * 7) % 180)
+        )
+        $graphics.FillRectangle([Drawing.SolidBrush]::new($marker), 70, 1350, 1180, 180)
+        for ($offset = 0; $offset -lt 1180; $offset += 60) {
+          $graphics.FillRectangle([Drawing.SolidBrush]::new($secondary), 70 + $offset, 1350, 30, 180)
         }
       }
     } finally {
@@ -844,6 +845,9 @@ function Convert-FixtureToTask14Harness([string]$ManifestPath, [double]$FontScal
         children = @()
       }
     }
+    $customLabel = $stateLayout.children[0].children[0].children[0].children[4].children[1]
+    $customLabel.attributes.bounds = '[900,1350][1260,1530]'
+    $customLabel.attributes.origBounds = '[900,1350][1450,1530]'
     [IO.File]::WriteAllText([string]$state.layout, ($stateLayout | ConvertTo-Json -Depth 20), $utf8)
     if ($name -eq 'custom-background-cancel') {
       Copy-Item -LiteralPath (Join-Path $fixtureRoot 'preset-selected.jpeg') `
@@ -854,6 +858,31 @@ function Convert-FixtureToTask14Harness([string]$ManifestPath, [double]$FontScal
     } elseif ($name -ne 'initial') {
       Write-Jpeg ([string]$state.screenshot) 1320 2856 $name
     }
+    $afterScrollLayoutPath = Join-Path $fixtureRoot "$name-after-scroll.json"
+    $afterScrollScreenshotPath = Join-Path $fixtureRoot "$name-after-scroll.jpeg"
+    $afterScrollLayout = $stateLayout | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+    $afterScrollLabel =
+      $afterScrollLayout.children[0].children[0].children[0].children[4].children[1]
+    $afterScrollLabel.attributes.bounds = '[700,1350][1060,1530]'
+    $afterScrollLabel.attributes.origBounds = '[700,1350][1060,1530]'
+    [IO.File]::WriteAllText(
+      $afterScrollLayoutPath,
+      ($afterScrollLayout | ConvertTo-Json -Depth 20),
+      $utf8
+    )
+    Write-Jpeg $afterScrollScreenshotPath 1320 2856 "$name-after-scroll"
+    Copy-Item -LiteralPath ([string]$state.layout) `
+      -Destination (Join-Path $fixtureRoot "$name-scroll-restored.json")
+    Copy-Item -LiteralPath ([string]$state.screenshot) `
+      -Destination (Join-Path $fixtureRoot "$name-scroll-restored.jpeg")
+    $state | Add-Member -NotePropertyName scrollReachableTexts -NotePropertyValue @(
+      [ordered]@{
+        selector = 'text:Custom background'
+        scrollSelector = 'type:List'
+        afterScrollLayout = $afterScrollLayoutPath
+        afterScrollScreenshot = $afterScrollScreenshotPath
+      }
+    )
     $stateLayouts[$name] = [string]$state.layout
     $state | Add-Member -NotePropertyName hdcActionReceiptPath -NotePropertyValue (
       Join-Path $fixtureRoot "$name-action-receipt.json"
@@ -1070,6 +1099,13 @@ function Convert-FixtureToTask14Harness([string]$ManifestPath, [double]$FontScal
     $state.screenshot = [string]$capture.screenshotPath
     $stateLayouts[[string]$state.name] = [string]$capture.layoutPath
     $stateCaptureEvents[[string]$state.name] = $capture
+    $afterScrollCapture = @($transcriptEvents | Where-Object {
+        $_.type -eq 'capture' -and
+        $_.captureName -eq "$([string]$state.name)-after-scroll"
+      })[0]
+    $state.scrollReachableTexts[0].afterScrollLayout = [string]$afterScrollCapture.layoutPath
+    $state.scrollReachableTexts[0].afterScrollScreenshot =
+      [string]$afterScrollCapture.screenshotPath
   }
   $stateRawLines = @{}
   $stateRangeStarts = @{}
@@ -1273,7 +1309,11 @@ function Convert-FixtureToTask14Harness([string]$ManifestPath, [double]$FontScal
   return $ManifestPath
 }
 
-function Assert-Task14HarnessRejected([string]$Name, [scriptblock]$Mutation) {
+function Assert-Task14HarnessRejected(
+  [string]$Name,
+  [scriptblock]$Mutation,
+  [string]$ExpectedFailure = ''
+) {
   Write-Output "[Task14 mutation] $Name"
   $root = Join-Path $tempRoot $Name
   $manifestPath = Convert-FixtureToTask14Harness (New-Fixture $root) 1.0
@@ -1281,8 +1321,16 @@ function Assert-Task14HarnessRejected([string]$Name, [scriptblock]$Mutation) {
   & $Mutation $manifest $root
   [IO.File]::WriteAllText($manifestPath, ($manifest | ConvertTo-Json -Depth 20), $utf8)
   $rejected = $false
-  try { Invoke-EvidenceGuard $manifestPath | Out-Null } catch { $rejected = $true }
+  $failure = ''
+  try { Invoke-EvidenceGuard $manifestPath | Out-Null } catch {
+    $rejected = $true
+    $failure = $_.Exception.Message
+  }
   if (-not $rejected) { throw "Runtime evidence guard accepted Task 14 harness mutation: $Name" }
+  if (-not [string]::IsNullOrEmpty($ExpectedFailure) -and
+    $failure -notlike "*$ExpectedFailure*") {
+    throw "Task 14 mutation '$Name' failed for the wrong reason: $failure"
+  }
 }
 
 function Sign-Task14RunRoot([object]$Manifest) {
@@ -1350,7 +1398,8 @@ function Sync-Task14RunRoot([object]$Manifest, [bool]$Rechain = $true) {
 function Rewrite-Task14Transcript(
   [object]$Manifest,
   [scriptblock]$Mutation,
-  [bool]$SyncCommands = $false
+  [bool]$SyncCommands = $false,
+  [bool]$SyncNonces = $false
 ) {
   $run = Get-Content -LiteralPath ([string]$Manifest.runReceiptPath) -Raw -Encoding utf8 |
     ConvertFrom-Json
@@ -1368,7 +1417,7 @@ function Rewrite-Task14Transcript(
       })
   }
   $text = ''
-  $previousLineSha256 = ''
+  $previousLineSha256 = ('0' * 64)
   $sequence = 0
   $segments = @{}
   foreach ($group in $orderedGroups) {
@@ -1376,6 +1425,13 @@ function Rewrite-Task14Transcript(
     $segment = ''
     foreach ($event in @($group.Events)) {
       $event.sequence = $sequence
+      if ($SyncNonces) {
+        $nonce = [string]$event.nonce
+        $separator = $nonce.LastIndexOf(':')
+        if ($separator -lt 0) { throw 'Task 14 fixture event nonce is invalid.' }
+        $event.nonce =
+          "$([string]$event.runId):$($sequence.ToString('D6')):$($nonce.Substring($separator + 1))"
+      }
       $event.previousLineSha256 = $previousLineSha256
       $line = ($event | ConvertTo-Json -Compress -Depth 20) + "`n"
       $segment += $line
@@ -1498,8 +1554,8 @@ function Invoke-Task14CoreMutations {
       $temporary = $events[$routeIndex]
       $events[$routeIndex] = $events[$sourceIndex]
       $events[$sourceIndex] = $temporary
-    } $true
-  }
+    } $true $true
+  } 'task 14 camera permission UI grant evidence is missing, reordered, or unbound.'
   Assert-Task14HarnessRejected 'task14-initial-source-before-permission-state' {
     param($manifest, $root)
     Rewrite-Task14Transcript $manifest {
@@ -1517,8 +1573,8 @@ function Invoke-Task14CoreMutations {
       $temporary = $events[$permissionIndex]
       $events[$permissionIndex] = $events[$sourceIndex]
       $events[$sourceIndex] = $temporary
-    } $true
-  }
+    } $true $true
+  } 'task 14 camera permission UI grant evidence is missing, reordered, or unbound.'
   Assert-Task14HarnessRejected 'task14-permission-poll-claimed-ready-too-early' {
     param($manifest, $root)
     Rewrite-Task14Transcript $manifest {
@@ -1709,6 +1765,65 @@ function Invoke-Task14CoreMutations {
       $command.argv[-2] = [string]$command.target.x
     } $true
   }
+  Assert-Task14HarnessRejected 'task14-after-scroll-capture-removed' {
+    param($manifest, $root)
+    Rewrite-Task14Transcript $manifest {
+      param($events)
+      @($events | Where-Object {
+          [string]$_.captureName -eq 'initial-after-scroll' -and
+          [string]$_.type -eq 'capture'
+        })[0].type = 'capture.removed'
+    }
+  }
+  Assert-Task14HarnessRejected 'task14-scroll-restore-wrong-direction' {
+    param($manifest, $root)
+    Rewrite-Task14Transcript $manifest {
+      param($events)
+      $command = @($events | Where-Object {
+          [string]$_.stateName -eq 'initial' -and
+          [string]$_.controlId -eq 'portrait-background-strip-scroll-restore'
+        })[0]
+      $start = [string]$command.target.startX
+      $command.target.startX = [int]$command.target.endX
+      $command.target.endX = [int]$start
+      $command.argv[6] = [string]$command.target.startX
+      $command.argv[8] = [string]$command.target.endX
+    } $true
+  }
+  Assert-Task14HarnessRejected 'task14-scroll-restore-content-not-restored' {
+    param($manifest, $root)
+    $run = Get-Content -LiteralPath ([string]$manifest.runReceiptPath) -Raw | ConvertFrom-Json
+    $events = @([IO.File]::ReadAllLines([string]$run.transcriptPath) |
+        ForEach-Object { $_ | ConvertFrom-Json })
+    $after = @($events | Where-Object {
+        [string]$_.captureName -eq 'initial-after-scroll'
+      })[0]
+    $restored = @($events | Where-Object {
+        [string]$_.captureName -eq 'initial-scroll-restored'
+      })[0]
+    foreach ($field in @('layoutPath', 'rawScreenshotPath', 'screenshotPath')) {
+      Copy-Item -LiteralPath ([string]$after.$field) -Destination ([string]$restored.$field) -Force
+    }
+    $restoredLayoutHash =
+      (Get-FileHash -LiteralPath ([string]$restored.layoutPath) -Algorithm SHA256).Hash.ToLowerInvariant()
+    $restoredEventId = [string]$restored.eventId
+    Rewrite-Task14Transcript $manifest {
+      param($rewritten)
+      $capture = @($rewritten | Where-Object {
+          [string]$_.captureName -eq 'initial-scroll-restored'
+        })[0]
+      $capture.layoutSha256 = $restoredLayoutHash
+      $capture.rawScreenshotSha256 =
+        (Get-FileHash -LiteralPath ([string]$capture.rawScreenshotPath) -Algorithm SHA256).Hash.ToLowerInvariant()
+      $capture.screenshotSha256 =
+        (Get-FileHash -LiteralPath ([string]$capture.screenshotPath) -Algorithm SHA256).Hash.ToLowerInvariant()
+      $nextCommand = @($rewritten | Where-Object {
+          [string]$_.type -eq 'command' -and [string]$_.stateName -eq 'preset-selected' -and
+          [string]$_.target.captureEventId -eq $restoredEventId
+        })[0]
+      $nextCommand.target.layoutSha256 = $restoredLayoutHash
+    } $true
+  } 'restored List differs from its signed base'
   Assert-Task14HarnessRejected 'task14-prewritten-layout-not-from-runner' {
     param($manifest, $root)
     $state = $manifest.states[1]

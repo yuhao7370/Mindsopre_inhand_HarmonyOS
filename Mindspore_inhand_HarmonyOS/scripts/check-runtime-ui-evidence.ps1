@@ -797,6 +797,47 @@ function Node-Label([object]$Node) {
   return ''
 }
 
+function Get-Task14BackgroundListSnapshot(
+  [string]$LayoutPath,
+  [string]$RouteName,
+  [string]$StateName
+) {
+  try { $layout = Get-Content -LiteralPath $LayoutPath -Raw -Encoding utf8 | ConvertFrom-Json }
+  catch { Fail "task 14 state '$StateName' scroll layout is invalid." }
+  $routes = @((Flatten-Nodes $layout) | Where-Object { (Attr $_ 'key') -ceq $RouteName })
+  if ($routes.Count -ne 1) { Fail "task 14 state '$StateName' scroll layout has the wrong route." }
+  $lists = @((Flatten-Nodes $routes[0]) | Where-Object {
+      (Attr $_ 'type') -ceq 'List' -and (Attr $_ 'scrollable') -ceq 'true'
+    })
+  if ($lists.Count -ne 1) { Fail "task 14 state '$StateName' must expose one background List." }
+  $bounds = Parse-Bounds (Attr $lists[0] 'bounds')
+  if ($null -eq $bounds) { Fail "task 14 state '$StateName' background List bounds are invalid." }
+  $items = @()
+  foreach ($item in @($lists[0].children)) {
+    $nodes = @(Flatten-Nodes $item)
+    $labels = @($nodes | Where-Object {
+        (Is-Visible $_) -and -not [string]::IsNullOrWhiteSpace((Node-Label $_))
+      })
+    if ($labels.Count -eq 0) { continue }
+    if ($labels.Count -ne 1) {
+      Fail "task 14 state '$StateName' background item has ambiguous labels."
+    }
+    $original = Parse-Bounds (Attr $labels[0] 'origBounds')
+    if ($null -eq $original) {
+      Fail "task 14 state '$StateName' background label lacks original bounds."
+    }
+    $items += [pscustomobject]@{
+      Label = Node-Label $labels[0]
+      Selected = @($nodes | Where-Object {
+          (Attr $_ 'selected') -ceq 'true' -or (Attr $_ 'checked') -ceq 'true'
+        }).Count -gt 0
+      Original = $original
+    }
+  }
+  if ($items.Count -eq 0) { Fail "task 14 state '$StateName' background List has no visible items." }
+  return [pscustomobject]@{ Bounds = $bounds; Items = $items }
+}
+
 function Get-PreservationNode([object[]]$Nodes, [string]$Selector, [string]$StateName) {
   $separator = $Selector.IndexOf(':', [StringComparison]::Ordinal)
   if ($separator -le 0 -or $separator -eq $Selector.Length - 1) {
@@ -1605,15 +1646,19 @@ if ($task -eq 14 -and $sourceKind -eq 'harness') {
   if ($routeName -cne '/hms/PortraitSegmentationActivity') {
     Fail 'task 14 harness evidence must exercise only the hidden portrait route.'
   }
+  $scrollProofControls = @(
+    'portrait-background-strip-after-scroll',
+    'portrait-background-strip-scroll-restore'
+  )
   $contracts = @(
-    [pscustomobject]@{ Name = 'initial'; Pred = ''; Action = 'open-route'; Controls = @('harness-portrait-route', 'system-camera-permission-allow'); Events = @(); Intermediate = $false },
-    [pscustomobject]@{ Name = 'preset-selected'; Pred = 'initial'; Action = 'select-preset'; Controls = @('portrait-preset-2'); Events = @(); Intermediate = $false },
-    [pscustomobject]@{ Name = 'custom-background-cancel'; Pred = 'preset-selected'; Action = 'cancel-background-picker'; Controls = @('portrait-background-strip-swipe', 'portrait-custom-background', 'key:Back'); Events = @(); Intermediate = $true },
-    [pscustomobject]@{ Name = 'rear-camera'; Pred = 'custom-background-cancel'; Action = 'switch-camera'; Controls = @('portrait-switch-camera'); Events = @('camera.position.observed'); Intermediate = $false },
-    [pscustomobject]@{ Name = 'reentry'; Pred = 'rear-camera'; Action = 'leave-and-reenter'; Controls = @('key:Back', 'harness-portrait-route'); Events = @('camera.restore'); Intermediate = $false },
-    [pscustomobject]@{ Name = 'transient-failure'; Pred = 'reentry'; Action = 'audited-segmentation-failure'; Controls = @(); Events = @('service.failure'); Intermediate = $false },
-    [pscustomobject]@{ Name = 'retry-success'; Pred = 'transient-failure'; Action = 'retry-segmentation'; Controls = @('portrait-retry'); Events = @('service.success'); Intermediate = $false },
-    [pscustomobject]@{ Name = 'save-success'; Pred = 'retry-success'; Action = 'save-success'; Controls = @('portrait-save', 'system-photo-save-allow'); Events = @(); Intermediate = $false }
+    [pscustomobject]@{ Name = 'initial'; Pred = ''; Action = 'open-route'; Controls = @('harness-portrait-route', 'system-camera-permission-allow') + $scrollProofControls; Events = @(); Intermediate = $false },
+    [pscustomobject]@{ Name = 'preset-selected'; Pred = 'initial'; Action = 'select-preset'; Controls = @('portrait-preset-2') + $scrollProofControls; Events = @(); Intermediate = $false },
+    [pscustomobject]@{ Name = 'custom-background-cancel'; Pred = 'preset-selected'; Action = 'cancel-background-picker'; Controls = @('portrait-background-strip-swipe', 'portrait-custom-background', 'key:Back') + $scrollProofControls; Events = @(); Intermediate = $true },
+    [pscustomobject]@{ Name = 'rear-camera'; Pred = 'custom-background-cancel'; Action = 'switch-camera'; Controls = @('portrait-switch-camera') + $scrollProofControls; Events = @('camera.position.observed'); Intermediate = $false },
+    [pscustomobject]@{ Name = 'reentry'; Pred = 'rear-camera'; Action = 'leave-and-reenter'; Controls = @('key:Back', 'harness-portrait-route') + $scrollProofControls; Events = @('camera.restore'); Intermediate = $false },
+    [pscustomobject]@{ Name = 'transient-failure'; Pred = 'reentry'; Action = 'audited-segmentation-failure'; Controls = @() + $scrollProofControls; Events = @('service.failure'); Intermediate = $false },
+    [pscustomobject]@{ Name = 'retry-success'; Pred = 'transient-failure'; Action = 'retry-segmentation'; Controls = @('portrait-retry') + $scrollProofControls; Events = @('service.success'); Intermediate = $false },
+    [pscustomobject]@{ Name = 'save-success'; Pred = 'retry-success'; Action = 'save-success'; Controls = @('portrait-save', 'system-photo-save-allow') + $scrollProofControls; Events = @(); Intermediate = $false }
   )
   $runReceiptPath = [string](Require-Property $manifest 'runReceiptPath')
   Require-AbsoluteFile $runReceiptPath 'task 14 run receipt'
@@ -1862,11 +1907,17 @@ if ($task -eq 14 -and $sourceKind -eq 'harness') {
       [string]$_.type -in @('capture', 'picker.capture')
     })
   $expectedCaptureNames = @(
-    'launcher', 'permission-dialog', 'initial', 'preset-selected',
-    'custom-background-swiped', 'picker-intermediate', 'custom-background-cancel',
-    'rear-camera', 'reentry-launcher', 'reentry', 'transient-failure',
-    'retry-success', 'save-dialog', 'save-success'
+    'launcher', 'permission-dialog',
+    'custom-background-swiped', 'picker-intermediate',
+    'reentry-launcher', 'save-dialog'
   )
+  foreach ($contract in $contracts) {
+    $expectedCaptureNames += @(
+      [string]$contract.Name,
+      "$($contract.Name)-after-scroll",
+      "$($contract.Name)-scroll-restored"
+    )
+  }
   $actualCaptureNames = @($captureEvents | ForEach-Object { [string]$_.captureName })
   $actualCaptureNameSet = (@($actualCaptureNames | Sort-Object) -join "`0")
   $expectedCaptureNameSet = (@($expectedCaptureNames | Sort-Object) -join "`0")
@@ -1937,6 +1988,9 @@ if ($task -eq 14 -and $sourceKind -eq 'harness') {
   $initialCommands = @($transcriptLines | Where-Object {
       [string]$_.type -ceq 'command' -and [string]$_.stateName -ceq 'initial'
     })
+  $permissionGrantCommands = @($initialCommands | Where-Object {
+      [string]$_.controlId -ceq 'system-camera-permission-allow'
+    })
   $permissionFirstSource = if ($permissionDialogCapture.Count -eq 1) {
     $eventsById[[string]@($permissionDialogCapture[0].sourceCommandEventIds)[0]]
   } else { $null }
@@ -1952,20 +2006,20 @@ if ($task -eq 14 -and $sourceKind -eq 'harness') {
     })
   $permissionGrantedPath = Join-Path $manifestDirectory 'permission-granted.json'
   if ($permissionGrantedEvents.Count -ne 1 -or $permissionDialogCapture.Count -ne 1 -or
-    $initialPortraitCapture.Count -ne 1 -or $initialCommands.Count -ne 2 -or
+    $initialPortraitCapture.Count -ne 1 -or $initialCommands.Count -ne 4 -or
+    $permissionGrantCommands.Count -ne 1 -or
     $null -eq $permissionFirstSource -or $null -eq $permissionLastSource -or
     $null -eq $initialFirstSource -or $permissionWaitEvents.Count -lt 1 -or
     $permissionWaitEvents.Count -gt 40 -or
     @($permissionWaitEvents | Where-Object {
         [int]$_.timeoutMilliseconds -lt 1 -or [int]$_.timeoutMilliseconds -gt 10000
       }).Count -gt 0 -or
-    [string]$initialCommands[1].controlId -cne 'system-camera-permission-allow' -or
     [string]$permissionGrantedEvents[0].stateName -cne 'initial' -or
     @($permissionWaitEvents | Where-Object { [string]$_.stateName -cne 'initial' }).Count -gt 0 -or
     [int]$initialCommands[0].sequence -ge [int]$permissionWaitEvents[0].sequence -or
     [int]$permissionWaitEvents[-1].sequence -ge [int]$permissionFirstSource.sequence -or
-    [int]$permissionLastSource.sequence -ge [int]$initialCommands[1].sequence -or
-    [int]$initialCommands[1].sequence -ge [int]$permissionGrantedEvents[0].sequence -or
+    [int]$permissionLastSource.sequence -ge [int]$permissionGrantCommands[0].sequence -or
+    [int]$permissionGrantCommands[0].sequence -ge [int]$permissionGrantedEvents[0].sequence -or
     [int]$permissionGrantedEvents[0].sequence -ge [int]$initialFirstSource.sequence -or
     -not [IO.File]::Exists($permissionGrantedPath) -or
     -not (Test-PathInside $permissionGrantedPath $manifestDirectory) -or
@@ -2014,6 +2068,12 @@ if ($task -eq 14 -and $sourceKind -eq 'harness') {
   $saveCommands = @($transcriptLines | Where-Object {
       [string]$_.type -ceq 'command' -and [string]$_.stateName -ceq 'save-success'
     })
+  $portraitSaveCommands = @($saveCommands | Where-Object {
+      [string]$_.controlId -ceq 'portrait-save'
+    })
+  $photoSaveGrantCommands = @($saveCommands | Where-Object {
+      [string]$_.controlId -ceq 'system-photo-save-allow'
+    })
   $saveWaitEvents = @($transcriptLines | Where-Object {
       [string]$_.type -ceq 'source.save-dialog.wait-aa'
     })
@@ -2028,7 +2088,8 @@ if ($task -eq 14 -and $sourceKind -eq 'harness') {
     $ids = @($saveDialogCapture[0].sourceCommandEventIds)
     $eventsById[[string]$ids[-1]]
   } else { $null }
-  if ($saveDialogCapture.Count -ne 1 -or $saveCommands.Count -ne 2 -or
+  if ($saveDialogCapture.Count -ne 1 -or $saveCommands.Count -ne 4 -or
+    $portraitSaveCommands.Count -ne 1 -or $photoSaveGrantCommands.Count -ne 1 -or
     $saveWaitEvents.Count -lt 1 -or $saveWaitEvents.Count -gt 40 -or
     $firstMediaAfter.Count -ne 1 -or $null -eq $saveFirstSource -or
     $null -eq $saveLastSource -or
@@ -2036,12 +2097,10 @@ if ($task -eq 14 -and $sourceKind -eq 'harness') {
         [string]$_.stateName -cne 'save-success' -or
         [int]$_.timeoutMilliseconds -lt 1 -or [int]$_.timeoutMilliseconds -gt 10000
       }).Count -gt 0 -or
-    [string]$saveCommands[0].controlId -cne 'portrait-save' -or
-    [string]$saveCommands[1].controlId -cne 'system-photo-save-allow' -or
-    [int]$saveCommands[0].sequence -ge [int]$saveWaitEvents[0].sequence -or
+    [int]$portraitSaveCommands[0].sequence -ge [int]$saveWaitEvents[0].sequence -or
     [int]$saveWaitEvents[-1].sequence -ge [int]$saveFirstSource.sequence -or
-    [int]$saveLastSource.sequence -ge [int]$saveCommands[1].sequence -or
-    [int]$saveCommands[1].sequence -ge [int]$firstMediaAfter[0].sequence) {
+    [int]$saveLastSource.sequence -ge [int]$photoSaveGrantCommands[0].sequence -or
+    [int]$photoSaveGrantCommands[0].sequence -ge [int]$firstMediaAfter[0].sequence) {
     Fail 'task 14 photo-save permission evidence is missing, reordered, or unbound.'
   }
   $saveWaitBeforeFinal = if ($saveWaitEvents.Count -gt 1) {
@@ -2386,9 +2445,24 @@ if ($task -eq 14 -and $sourceKind -eq 'harness') {
         Fail "task 14 state '$($contract.Name)' target layout is invalid."
       }
       $selector = [string](Require-Property $target 'selector')
-      if ($expectedControl -eq 'portrait-background-strip-swipe') {
-        if ($selector -cne 'structural:portrait-background-strip/horizontal-swipe') {
-          Fail 'task 14 Custom reveal does not target the reviewed background strip.'
+      if ($expectedControl -in @(
+          'portrait-background-strip-swipe',
+          'portrait-background-strip-after-scroll',
+          'portrait-background-strip-scroll-restore'
+        )) {
+        $expectedSelector = switch ($expectedControl) {
+          'portrait-background-strip-swipe' {
+            'structural:portrait-background-strip/horizontal-swipe'
+          }
+          'portrait-background-strip-after-scroll' {
+            'structural:portrait-background-strip/after-scroll'
+          }
+          default {
+            'structural:portrait-background-strip/scroll-restore'
+          }
+        }
+        if ($selector -cne $expectedSelector) {
+          Fail "task 14 '$expectedControl' does not target the reviewed background strip."
         }
         $bounds = Parse-Bounds ([string](Require-Property $target 'bounds'))
         $startX = [int](Require-Property $target 'startX')
@@ -2396,16 +2470,22 @@ if ($task -eq 14 -and $sourceKind -eq 'harness') {
         $endX = [int](Require-Property $target 'endX')
         $endY = [int](Require-Property $target 'endY')
         $velocity = [int](Require-Property $target 'velocity')
+        $wrongDirection = if ($expectedControl -eq 'portrait-background-strip-scroll-restore') {
+          $startX -ge $endX
+        } else {
+          $startX -le $endX
+        }
         if (($argv -join "`0") -cne (@(
               '-t', $targetId, 'shell', 'uitest', 'uiInput', 'swipe',
               "$startX", "$startY", "$endX", "$endY", "$velocity"
             ) -join "`0") -or
-          $startX -le $endX -or $velocity -ne 500 -or
+          $wrongDirection -or
+          $velocity -ne 500 -or
           $startX -lt $bounds.Left -or $startX -gt $bounds.Right -or
           $endX -lt $bounds.Left -or $endX -gt $bounds.Right -or
           $startY -lt $bounds.Top -or $startY -gt $bounds.Bottom -or
           $endY -lt $bounds.Top -or $endY -gt $bounds.Bottom) {
-          Fail 'task 14 Custom reveal swipe is outside the bound strip or has wrong argv.'
+          Fail "task 14 '$expectedControl' is outside the bound strip or has wrong argv."
         }
         continue
       }
@@ -2470,6 +2550,75 @@ if ($task -eq 14 -and $sourceKind -eq 'harness') {
         $y -ne [int](($bounds.Top + $bounds.Bottom) / 2)) {
         Fail "task 14 state '$($contract.Name)' command misses its production control."
       }
+    }
+    $afterScrollCaptures = @($captureEvents | Where-Object {
+        [string]$_.captureName -ceq "$($contract.Name)-after-scroll" -and
+        [string]$_.stateName -ceq $contract.Name
+      })
+    $restoredCaptures = @($captureEvents | Where-Object {
+        [string]$_.captureName -ceq "$($contract.Name)-scroll-restored" -and
+        [string]$_.stateName -ceq $contract.Name
+      })
+    $scrollEntries = @((Require-Property $state 'scrollReachableTexts'))
+    if ($afterScrollCaptures.Count -ne 1 -or $restoredCaptures.Count -ne 1 -or
+      $scrollEntries.Count -ne 1) {
+      Fail "task 14 state '$($contract.Name)' lacks one signed scroll/recovery proof."
+    }
+    $afterScrollCapture = $afterScrollCaptures[0]
+    $restoredCapture = $restoredCaptures[0]
+    $scrollCommand = $commands[-2]
+    $restoreCommand = $commands[-1]
+    $baseCapture = $eventsById[[string]$after.captureEventId]
+    $afterScrollSourceIds = @($afterScrollCapture.sourceCommandEventIds)
+    $restoredSourceIds = @($restoredCapture.sourceCommandEventIds)
+    $afterScrollFirstSource = $eventsById[[string]$afterScrollSourceIds[0]]
+    $afterScrollLastSource = $eventsById[[string]$afterScrollSourceIds[-1]]
+    $restoredFirstSource = $eventsById[[string]$restoredSourceIds[0]]
+    $restoredLastSource = $eventsById[[string]$restoredSourceIds[-1]]
+    $scrollEntry = $scrollEntries[0]
+    if ([string]$scrollCommand.target.captureEventId -cne [string]$baseCapture.eventId -or
+      [string]$restoreCommand.target.captureEventId -cne [string]$afterScrollCapture.eventId -or
+      [IO.Path]::GetFullPath([string](Require-Property $scrollEntry 'afterScrollLayout')) -ine
+        [IO.Path]::GetFullPath([string]$afterScrollCapture.layoutPath) -or
+      [IO.Path]::GetFullPath([string](Require-Property $scrollEntry 'afterScrollScreenshot')) -ine
+        [IO.Path]::GetFullPath([string]$afterScrollCapture.screenshotPath) -or
+      [int]$baseCapture.sequence -ge [int]$scrollCommand.sequence -or
+      [int]$scrollCommand.sequence -ge [int]$afterScrollFirstSource.sequence -or
+      [int]$afterScrollLastSource.sequence -ge [int]$afterScrollCapture.sequence -or
+      [int]$afterScrollCapture.sequence -ge [int]$restoreCommand.sequence -or
+      [int]$restoreCommand.sequence -ge [int]$restoredFirstSource.sequence -or
+      [int]$restoredLastSource.sequence -ge [int]$restoredCapture.sequence) {
+      Fail "task 14 state '$($contract.Name)' scroll proof is reordered or not capture-bound."
+    }
+    $baseList = Get-Task14BackgroundListSnapshot `
+      ([string]$baseCapture.layoutPath) $routeName $contract.Name
+    $restoredList = Get-Task14BackgroundListSnapshot `
+      ([string]$restoredCapture.layoutPath) $routeName $contract.Name
+    if ($baseList.Bounds.Left -ne $restoredList.Bounds.Left -or
+      $baseList.Bounds.Top -ne $restoredList.Bounds.Top -or
+      $baseList.Bounds.Right -ne $restoredList.Bounds.Right -or
+      $baseList.Bounds.Bottom -ne $restoredList.Bounds.Bottom -or
+      @($baseList.Items).Count -ne @($restoredList.Items).Count) {
+      Fail "task 14 state '$($contract.Name)' did not restore the background List."
+    }
+    for ($itemIndex = 0; $itemIndex -lt @($baseList.Items).Count; $itemIndex++) {
+      $baseItem = @($baseList.Items)[$itemIndex]
+      $restoredItem = @($restoredList.Items)[$itemIndex]
+      if ([string]$baseItem.Label -cne [string]$restoredItem.Label -or
+        [bool]$baseItem.Selected -ne [bool]$restoredItem.Selected -or
+        [Math]::Abs($baseItem.Original.Left - $restoredItem.Original.Left) -gt 4 -or
+        [Math]::Abs($baseItem.Original.Right - $restoredItem.Original.Right) -gt 4 -or
+        [Math]::Abs($baseItem.Original.Top - $restoredItem.Original.Top) -gt 4 -or
+        [Math]::Abs($baseItem.Original.Bottom - $restoredItem.Original.Bottom) -gt 4) {
+        Fail "task 14 state '$($contract.Name)' restored List differs from its signed base."
+      }
+    }
+    $baseListPixels = Get-VisualRegionData `
+      ([string]$baseCapture.screenshotPath) $baseList.Bounds $contract.Name 'type:List'
+    $restoredListPixels = Get-VisualRegionData `
+      ([string]$restoredCapture.screenshotPath) $restoredList.Bounds $contract.Name 'type:List'
+    if ((Get-VisualRegionMeanAbsoluteError $baseListPixels $restoredListPixels) -gt 2.0) {
+      Fail "task 14 state '$($contract.Name)' restored List pixels differ from its signed base."
     }
     $appRuntimeTypes = @(
       'camera.position.observed', 'camera.restore', 'service.failure', 'service.success'

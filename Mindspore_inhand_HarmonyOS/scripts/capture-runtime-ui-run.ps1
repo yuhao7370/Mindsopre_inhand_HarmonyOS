@@ -596,6 +596,35 @@ function Find-ToolbarStructuralTargets([object]$Node, [object[]]$Ancestors = @()
   return $results
 }
 
+function Find-BackgroundLists([object]$Node, [object[]]$Ancestors = @()) {
+  $results = @()
+  if ([string]$Node.attributes.type -ceq 'List' -and
+    [string]$Node.attributes.scrollable -ceq 'true') {
+    $results += [pscustomobject]@{ Node = $Node; Ancestors = $Ancestors }
+  }
+  foreach ($child in @($Node.children)) {
+    $results += @(Find-BackgroundLists $child (@($Ancestors) + @($Node)))
+  }
+  return $results
+}
+
+function Find-RightClippedLabels([object]$Node, [int]$ViewportRight) {
+  $results = @()
+  $label = @([string]$Node.attributes.text, [string]$Node.attributes.originalText) |
+    Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -First 1
+  $original = [string]$Node.attributes.origBounds
+  if (-not [string]::IsNullOrWhiteSpace($label) -and
+    [string]$Node.attributes.visible -cne 'false' -and
+    $original -match '^\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]$' -and
+    [int]$Matches[3] -gt $ViewportRight) {
+    $results += [pscustomobject]@{ Label = $label; Right = [int]$Matches[3] }
+  }
+  foreach ($child in @($Node.children)) {
+    $results += @(Find-RightClippedLabels $child $ViewportRight)
+  }
+  return $results
+}
+
 function Resolve-ToolbarTarget(
   [object]$Capture,
   [string]$LogicalId,
@@ -615,26 +644,32 @@ function Resolve-ToolbarTarget(
     $matches[0].Ancestors $Capture
 }
 
-function Resolve-BackgroundSwipeTarget([object]$Capture) {
+function Resolve-BackgroundSwipeTarget([object]$Capture, [bool]$ClippedOnly = $false) {
   try { $layout = Get-Content -LiteralPath $Capture.layoutPath -Raw -Encoding utf8 | ConvertFrom-Json }
   catch { Fail "runner capture '$($Capture.captureName)' layout is invalid JSON." }
-  $presetMatches = @(Find-ControlNode $layout $controlTexts['portrait-preset-2'])
-  if ($presetMatches.Count -ne 1) { Fail 'portrait background strip must expose one preset 2 control.' }
-  $list = @($presetMatches[0].Ancestors | Where-Object {
-      [string]$_.attributes.type -ceq 'List' -or
-      [string]$_.attributes.scrollable -ceq 'true'
-    } | Select-Object -Last 1)[0]
-  if ($null -eq $list) { Fail 'preset 2 is not inside a scrollable background strip.' }
+  $listMatches = @(Find-BackgroundLists $layout | Where-Object {
+      @($_.Ancestors | Where-Object {
+          [string]$_.attributes.key -ceq '/hms/PortraitSegmentationActivity'
+        }).Count -eq 1
+    })
+  if ($listMatches.Count -ne 1) { Fail 'portrait route must expose one scrollable background strip.' }
+  $list = $listMatches[0].Node
   $target = Get-BoundsTarget $list 'portrait-background-strip-swipe' `
     'structural:portrait-background-strip/horizontal-swipe' `
-    '/hms/PortraitSegmentationActivity' $presetMatches[0].Ancestors $Capture
+    '/hms/PortraitSegmentationActivity' $listMatches[0].Ancestors $Capture
   if ($target.bounds -notmatch '^\[(\d+),(\d+)\]\[(\d+),(\d+)\]$') {
     Fail 'portrait background strip bounds are invalid.'
   }
   $left = [int]$Matches[1]; $top = [int]$Matches[2]
   $right = [int]$Matches[3]; $bottom = [int]$Matches[4]
   $target.startX = [int]($left + (($right - $left) * 0.8))
-  $target.endX = [int]($left + (($right - $left) * 0.2))
+  $target.endX = if ($ClippedOnly) {
+    $clipped = @(Find-RightClippedLabels $list $right)
+    if ($clipped.Count -ne 1) { Fail 'portrait background strip must expose one right-clipped label.' }
+    [Math]::Max($left, $target.startX - ($clipped[0].Right - $right + 4))
+  } else {
+    [int]($left + (($right - $left) * 0.2))
+  }
   $target.startY = [int](($top + $bottom) / 2)
   $target.endY = $target.startY
   $target.velocity = 500
@@ -890,6 +925,12 @@ $controlIds = @{
   'retry-success' = @('portrait-retry')
   'save-success' = @('portrait-save', 'system-photo-save-allow')
 }
+foreach ($stateName in $stateOrder) {
+  $controlIds[$stateName] = @($controlIds[$stateName]) + @(
+    'portrait-background-strip-after-scroll',
+    'portrait-background-strip-scroll-restore'
+  )
+}
 $background2Zh = (-join @(0x80CC, 0x666F | ForEach-Object { [char]$_ })) + ' 2'
 $customZh = -join @(0x81EA, 0x5B9A, 0x4E49 | ForEach-Object { [char]$_ })
 $switchCameraZh = -join @(0x5207, 0x6362, 0x6444, 0x50CF, 0x5934 | ForEach-Object { [char]$_ })
@@ -1056,6 +1097,39 @@ foreach ($stateName in $stateOrder) {
     [void](Receive-MediaAsset $mediaDelta.Added $stateName)
   }
   $currentCapture = Capture-State $stateName $stateName
+  $scrollTarget = Resolve-BackgroundSwipeTarget $currentCapture $true
+  $scrollTarget.controlId = 'portrait-background-strip-after-scroll'
+  $scrollTarget.selector = 'structural:portrait-background-strip/after-scroll'
+  $scrollIndex = @($controlIds[$stateName]).Count - 2
+  [void](Invoke-Hdc 'command' ($targetPrefix + @(
+        'shell', 'uitest', 'uiInput', 'swipe',
+        [string]$scrollTarget.startX, [string]$scrollTarget.startY,
+        [string]$scrollTarget.endX, [string]$scrollTarget.endY,
+        [string]$scrollTarget.velocity
+      )) $stateName ([ordered]@{
+        inputIndex = $scrollIndex
+        controlId = 'portrait-background-strip-after-scroll'
+        target = $scrollTarget
+      }))
+  Start-Sleep -Milliseconds 300
+  $afterScrollCapture = Capture-State "$stateName-after-scroll" $stateName
+  $restoreTarget = Resolve-BackgroundSwipeTarget $afterScrollCapture
+  $restoreTarget.controlId = 'portrait-background-strip-scroll-restore'
+  $restoreTarget.selector = 'structural:portrait-background-strip/scroll-restore'
+  $restoreTarget.startX = $scrollTarget.endX
+  $restoreTarget.endX = $scrollTarget.startX
+  [void](Invoke-Hdc 'command' ($targetPrefix + @(
+        'shell', 'uitest', 'uiInput', 'swipe',
+        [string]$restoreTarget.startX, [string]$restoreTarget.startY,
+        [string]$restoreTarget.endX, [string]$restoreTarget.endY,
+        [string]$restoreTarget.velocity
+      )) $stateName ([ordered]@{
+        inputIndex = $scrollIndex + 1
+        controlId = 'portrait-background-strip-scroll-restore'
+        target = $restoreTarget
+      }))
+  Start-Sleep -Milliseconds 800
+  $currentCapture = Capture-State "$stateName-scroll-restored" $stateName
 }
 
 $permissionAfter = Invoke-Hdc 'run.permission-after' ($targetPrefix + @(
