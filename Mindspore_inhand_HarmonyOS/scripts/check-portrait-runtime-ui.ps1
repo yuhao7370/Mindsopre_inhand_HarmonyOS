@@ -111,6 +111,7 @@ $inputStatePath = Join-Path $root 'entry\src\main\ets\features\runtime\FeatureRu
 $backgroundCatalogPath = Join-Path $root 'entry\src\main\ets\features\runtime\PortraitSegmentationBackgroundCatalog.ets'
 $aiServicePath = Join-Path $root 'entry\src\main\ets\services\ai\AiService.ets'
 $segmentationServicePath = Join-Path $root 'entry\src\main\ets\services\ai\SegmentationService.ets'
+$cameraServicePath = Join-Path $root 'entry\src\main\ets\services\camera\LiveCameraService.ets'
 $buildPath = Join-Path $root 'scripts\build-hap.ps1'
 $page = Convert-ArkTsToGuardCode (Read-Normalized $pagePath)
 $experienceCatalog = Convert-ArkTsToGuardCode (Read-Normalized $experienceCatalogPath)
@@ -119,6 +120,7 @@ $inputState = Convert-ArkTsToGuardCode (Read-Normalized $inputStatePath)
 $backgroundCatalog = Convert-ArkTsToGuardCode (Read-Normalized $backgroundCatalogPath)
 $aiService = Convert-ArkTsToGuardCode (Read-Normalized $aiServicePath)
 $segmentationService = Convert-ArkTsToGuardCode (Read-Normalized $segmentationServicePath)
+$cameraService = Convert-ArkTsToGuardCode (Read-Normalized $cameraServicePath)
 
 $portraitLayout = Balanced-Section $page '  portraitSegmentationAndroidLayout() {' 'portrait layout'
 $portraitToolbar = Balanced-Section $page '  portraitSegmentationToolbar() {' 'portrait toolbar'
@@ -137,6 +139,8 @@ $portraitBackgroundImageSource = Balanced-Section $page `
   '  private portraitBackgroundImageSource(presetId: string, fallbackUri: string): Resource | string {' `
   'portrait background image source'
 $foreground = Balanced-Section $page '  private async updateSegmentationForegroundPreview(' 'segmentation foreground publication'
+$captureFrame = Balanced-Section $page '  private async prepareLiveFrameImageInput(' 'live frame capture'
+$frameEncoder = Balanced-Section $cameraService 'export class HarmonyLiveFrameImageEncoder' 'live frame encoder'
 $retry = Balanced-Section $page '  private retryLiveSegmentation(): void {' 'segmentation retry'
 $layoutRouter = Balanced-Section $page '  runtimeLayoutContent() {' 'runtime layout router'
 $initialCamera = Balanced-Section $catalog 'export function initialLiveCameraPositionForWorkflow(' 'camera policy'
@@ -204,8 +208,10 @@ if ($portraitCameraIndex -ge $portraitScrollIndex) {
 if ($portraitResultIndex -le $portraitScrollIndex) {
   Fail 'portrait result preview must remain inside the reachable scrolling content.'
 }
-Assert-Contains $portraitCameraPreview '.aspectRatio(4 / 3)' 'portrait camera preview must use 4:3.'
-Assert-Contains $portraitResultPreview '.aspectRatio(4 / 3)' 'portrait result preview must use 4:3.'
+Assert-Contains $portraitCameraPreview '.aspectRatio(this.liveCameraPreviewAspectRatio)' `
+  'portrait camera preview must follow the oriented camera aspect ratio.'
+Assert-Contains $portraitResultPreview '.aspectRatio(this.liveCameraPreviewAspectRatio)' `
+  'portrait result preview must match the oriented camera aspect ratio.'
 Assert-Contains $portraitCameraPreview 'this.liveCameraSurfaceContent()' `
   'portrait camera preview must contain only the live camera.'
 Assert-Contains $portraitResultPreview 'this.portraitSegmentationComposite()' `
@@ -220,6 +226,10 @@ Assert-Count $portraitComposite '.objectFit(ImageFit.Cover)' 2 `
   'portrait background and foreground must preserve aspect ratio with matching crops.'
 Assert-Excludes $portraitComposite '.objectFit(ImageFit.Fill)' `
   'portrait composite must not stretch either image layer.'
+Assert-Contains $captureFrame 'captureToCacheImage(surfaceId, context.cacheDir, rotation)' `
+  'portrait inference input must use the current camera rotation.'
+Assert-Contains $frameEncoder 'await pixelMap.rotate(rotationDegrees);' `
+  'captured Surface frames must be rotated into display orientation before inference.'
 Assert-Excludes $selectPortraitBackground 'this.runWorkflow()' `
   'background selection must not rerun segmentation.'
 foreach ($rawfilePath in @(

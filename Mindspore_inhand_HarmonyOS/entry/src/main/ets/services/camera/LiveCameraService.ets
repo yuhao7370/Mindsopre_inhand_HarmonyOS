@@ -20,6 +20,7 @@ export interface LiveCameraPreviewResult {
   readonly surfaceId: string;
   readonly messageKey: AppStringKey;
   readonly previewRotationDegrees?: number;
+  readonly previewAspectRatio?: number;
 }
 
 export type LiveCameraPosition = 'back' | 'front';
@@ -41,6 +42,11 @@ export function livePreviewContentRotationDegrees(
   const contentRotation = position === 'front' ?
     normalizedCamera + displayDegrees : normalizedCamera - displayDegrees;
   return (contentRotation + 360) % 360;
+}
+
+export function livePreviewAspectRatioForRotation(rotationDegrees: number): number {
+  const rotation = normalizedQuarterTurnDegrees(rotationDegrees);
+  return rotation === 90 || rotation === 270 ? 3 / 4 : 4 / 3;
 }
 
 function normalizedQuarterTurnDegrees(rotationDegrees: number): number {
@@ -132,6 +138,7 @@ export interface LiveCameraPreviewDriver {
   start(surfaceId: string, position: LiveCameraPosition): Promise<void>;
   stop(): Promise<void>;
   previewRotationDegrees?(): number;
+  previewAspectRatio?(): number;
 }
 
 export interface LiveCameraDevicePositionProvider {
@@ -150,7 +157,7 @@ export interface LiveFrameImageResult {
 }
 
 export interface LiveFrameImageEncoder {
-  encodeSurfaceFrame(surfaceId: string): Promise<ArrayBuffer>;
+  encodeSurfaceFrame(surfaceId: string, rotationDegrees: number): Promise<ArrayBuffer>;
 }
 
 export interface LiveFrameImageStore {
@@ -381,7 +388,8 @@ export class LiveCameraPreviewService {
         ok: true,
         surfaceId: surfaceId,
         messageKey: 'feature_runtime_live_camera_ready',
-        previewRotationDegrees: this.driver.previewRotationDegrees?.() ?? 0
+        previewRotationDegrees: this.driver.previewRotationDegrees?.() ?? 0,
+        previewAspectRatio: this.driver.previewAspectRatio?.() ?? 4 / 3
       };
     } catch (_) {
       return { ok: false, surfaceId: surfaceId, messageKey: 'feature_runtime_live_camera_failed' };
@@ -398,6 +406,10 @@ export class LiveCameraPreviewService {
   previewRotationDegrees(): number {
     return this.driver.previewRotationDegrees?.() ?? 0;
   }
+
+  previewAspectRatio(): number {
+    return this.driver.previewAspectRatio?.() ?? 4 / 3;
+  }
 }
 
 export class LiveFrameImageService {
@@ -409,13 +421,17 @@ export class LiveFrameImageService {
     this.store = store;
   }
 
-  async captureToCacheImage(surfaceId: string, cacheDir: string): Promise<LiveFrameImageResult> {
+  async captureToCacheImage(
+    surfaceId: string,
+    cacheDir: string,
+    rotationDegrees: number = 0
+  ): Promise<LiveFrameImageResult> {
     if (surfaceId.length === 0) {
       return { ok: false, uri: '', messageKey: 'feature_runtime_live_camera_surface_missing' };
     }
 
     try {
-      const bytes = await this.encoder.encodeSurfaceFrame(surfaceId);
+      const bytes = await this.encoder.encodeSurfaceFrame(surfaceId, rotationDegrees);
       const uri = await this.store.writeJpeg(cacheDir, bytes);
       return { ok: uri.length > 0, uri: uri, messageKey: uri.length > 0 ? 'feature_runtime_image_ready' : 'feature_runtime_live_frame_failed' };
     } catch (_) {
@@ -516,14 +532,21 @@ export class HarmonyLiveCameraPreviewDriver implements LiveCameraPreviewDriver {
     }
     return this.previewRotation;
   }
+
+  previewAspectRatio(): number {
+    return livePreviewAspectRatioForRotation(this.previewRotationDegrees());
+  }
 }
 
 export class HarmonyLiveFrameImageEncoder implements LiveFrameImageEncoder {
-  async encodeSurfaceFrame(surfaceId: string): Promise<ArrayBuffer> {
+  async encodeSurfaceFrame(surfaceId: string, rotationDegrees: number): Promise<ArrayBuffer> {
     let pixelMap: image.PixelMap | undefined = undefined;
     let packer: image.ImagePacker | undefined = undefined;
     try {
       pixelMap = await image.createPixelMapFromSurface(surfaceId);
+      if (normalizedQuarterTurnDegrees(rotationDegrees) > 0) {
+        await pixelMap.rotate(rotationDegrees);
+      }
       packer = image.createImagePacker();
       return await packer.packToData(pixelMap, liveFrameImagePackingOption);
     } finally {

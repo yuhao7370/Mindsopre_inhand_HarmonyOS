@@ -574,6 +574,7 @@ import {
   liveFrameImageCachePath,
   liveRuntimeIntervalForAiMethod,
   liveRuntimeIntervalMs,
+  livePreviewAspectRatioForRotation,
   livePreviewContentRotationDegrees,
   liveCameraXComponentId,
   liveFrameImagePackingOption,
@@ -2139,10 +2140,12 @@ class RecordingLiveCameraPreviewDriver implements LiveCameraPreviewDriver {
   startedPositions: Array<LiveCameraPosition> = [];
   private readonly failStart: boolean;
   private rotationDegrees: number;
+  private readonly aspectRatio: number;
 
-  constructor(failStart: boolean, rotationDegrees: number = 0) {
+  constructor(failStart: boolean, rotationDegrees: number = 0, aspectRatio: number = 4 / 3) {
     this.failStart = failStart;
     this.rotationDegrees = rotationDegrees;
+    this.aspectRatio = aspectRatio;
   }
 
   async start(surfaceId: string, position: LiveCameraPosition): Promise<void> {
@@ -2158,6 +2161,10 @@ class RecordingLiveCameraPreviewDriver implements LiveCameraPreviewDriver {
 
   previewRotationDegrees(): number {
     return this.rotationDegrees;
+  }
+
+  previewAspectRatio(): number {
+    return this.aspectRatio;
   }
 
   setRotationDegrees(rotationDegrees: number): void {
@@ -2255,20 +2262,22 @@ class ThrowingLiveCameraDevicePositionProvider implements LiveCameraDevicePositi
 
 class FixedLiveFrameImageEncoder implements LiveFrameImageEncoder {
   seenSurfaceIds: Array<string> = [];
+  seenRotationDegrees: Array<number> = [];
   private readonly imageBytes: ArrayBuffer;
 
   constructor(imageBytes: ArrayBuffer) {
     this.imageBytes = imageBytes;
   }
 
-  async encodeSurfaceFrame(surfaceId: string): Promise<ArrayBuffer> {
+  async encodeSurfaceFrame(surfaceId: string, rotationDegrees: number): Promise<ArrayBuffer> {
     this.seenSurfaceIds.push(surfaceId);
+    this.seenRotationDegrees.push(rotationDegrees);
     return this.imageBytes;
   }
 }
 
 class RejectingLiveFrameImageEncoder implements LiveFrameImageEncoder {
-  async encodeSurfaceFrame(_surfaceId: string): Promise<ArrayBuffer> {
+  async encodeSurfaceFrame(_surfaceId: string, _rotationDegrees: number): Promise<ArrayBuffer> {
     throw new Error('frame unavailable');
   }
 }
@@ -11081,7 +11090,7 @@ export default function localUnitTest() {
     });
 
     it('liveCameraPreviewServiceReportsReadyAndFailure', 0, async () => {
-      const readyDriver = new RecordingLiveCameraPreviewDriver(false, 90);
+      const readyDriver = new RecordingLiveCameraPreviewDriver(false, 90, 3 / 4);
       const readyResult = await new LiveCameraPreviewService(readyDriver).start('surface-1');
       const failedResult = await new LiveCameraPreviewService(new RecordingLiveCameraPreviewDriver(true)).start('surface-2');
 
@@ -11090,6 +11099,7 @@ export default function localUnitTest() {
       expect(readyResult.surfaceId).assertEqual('surface-1');
       expect(readyResult.messageKey).assertEqual('feature_runtime_live_camera_ready');
       expect(readyResult.previewRotationDegrees).assertEqual(90);
+      expect(readyResult.previewAspectRatio).assertEqual(3 / 4);
       expect(readyDriver.startedSurfaceIds[0]).assertEqual('surface-1');
       expect(readyDriver.startedPositions[0]).assertEqual('back');
       expect(failedResult.ok).assertFalse();
@@ -11113,6 +11123,13 @@ export default function localUnitTest() {
       expect(livePreviewContentRotationDegrees(90, 1, 'front', 0)).assertEqual(180);
       expect(livePreviewContentRotationDegrees(270, 1, 'front', 0)).assertEqual(0);
       expect(livePreviewContentRotationDegrees(-1, 0, 'back', 90)).assertEqual(90);
+    });
+
+    it('swapsTheCameraAspectRatioForQuarterTurnPreviewRotation', 0, () => {
+      expect(livePreviewAspectRatioForRotation(270)).assertEqual(3 / 4);
+      expect(livePreviewAspectRatioForRotation(90)).assertEqual(3 / 4);
+      expect(livePreviewAspectRatioForRotation(0)).assertEqual(4 / 3);
+      expect(livePreviewAspectRatioForRotation(45)).assertEqual(4 / 3);
     });
 
     it('refreshesNativeFallbackWhenDisplayRotatesWithInvalidSensorOrientation', 0, () => {
@@ -11192,12 +11209,14 @@ export default function localUnitTest() {
     it('liveFrameImageServiceCapturesSurfaceToCacheImageUri', 0, async () => {
       const encoder = new FixedLiveFrameImageEncoder(new Uint8Array([1, 2, 3]).buffer as ArrayBuffer);
       const store = new RecordingLiveFrameImageStore('/cache/live-frame.jpg');
-      const result = await new LiveFrameImageService(encoder, store).captureToCacheImage('surface-1', '/cache');
+      const result = await new LiveFrameImageService(encoder, store)
+        .captureToCacheImage('surface-1', '/cache', 270);
 
       expect(result.ok).assertTrue();
       expect(result.uri).assertEqual('/cache/live-frame.jpg');
       expect(result.messageKey).assertEqual('feature_runtime_image_ready');
       expect(encoder.seenSurfaceIds[0]).assertEqual('surface-1');
+      expect(encoder.seenRotationDegrees[0]).assertEqual(270);
       expect(store.seenCacheDirs[0]).assertEqual('/cache');
       expect(store.seenBytes[0][2]).assertEqual(3);
     });

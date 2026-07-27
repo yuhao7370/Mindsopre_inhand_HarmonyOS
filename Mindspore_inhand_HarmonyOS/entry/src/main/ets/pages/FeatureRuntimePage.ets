@@ -378,6 +378,7 @@ struct FeatureRuntimePage {
   @State liveObjectDetectionOverlayWidthVp: number = 0;
   @State liveObjectDetectionOverlayHeightVp: number = 0;
   @State liveCameraPreviewRotationDegrees: number = 0;
+  @State liveCameraPreviewAspectRatio: number = 4 / 3;
   @State segmentationImageUri: string = '';
   @State segmentationImageOrientation: ImageRotateOrientation = ImageRotateOrientation.UP;
   @State segmentationBackgroundImageUri: string = '';
@@ -852,6 +853,7 @@ struct FeatureRuntimePage {
     if (result.ok || !preserveCameraInput) {
       this.liveCameraSurfaceId = result.surfaceId;
       this.liveCameraPreviewRotationDegrees = result.previewRotationDegrees ?? 0;
+      this.liveCameraPreviewAspectRatio = result.previewAspectRatio ?? 4 / 3;
       this.selectedInputSummary = result.surfaceId;
     }
     if (result.ok && shouldShowLiveObjectDetectionCameraOverlay(workflow)) {
@@ -891,6 +893,7 @@ struct FeatureRuntimePage {
     this.liveCameraActive = false;
     this.liveCameraSurfaceId = '';
     this.liveCameraPreviewRotationDegrees = 0;
+    this.liveCameraPreviewAspectRatio = 4 / 3;
     const service = this.liveCameraService;
     this.liveCameraService = undefined;
     if (service !== undefined) {
@@ -1518,10 +1521,15 @@ struct FeatureRuntimePage {
     const surfaceId = this.liveCameraSurfaceId.length > 0 ?
       this.liveCameraSurfaceId :
       this.liveCameraController.getXComponentSurfaceId();
+    const previousRotation = this.liveCameraPreviewRotationDegrees;
+    const rotation = this.liveCameraService?.previewRotationDegrees() ?? previousRotation;
+    this.liveCameraPreviewRotationDegrees = rotation;
+    this.liveCameraPreviewAspectRatio =
+      this.liveCameraService?.previewAspectRatio() ?? this.liveCameraPreviewAspectRatio;
     const result: LiveFrameImageResult = await new LiveFrameImageService(
       new HarmonyLiveFrameImageEncoder(),
       new HarmonyLiveFrameImageStore()
-    ).captureToCacheImage(surfaceId, context.cacheDir);
+    ).captureToCacheImage(surfaceId, context.cacheDir, rotation);
     if (!this.isRuntimeRequestCurrent(runtimeRequestId, liveGeneration)) {
       return false;
     }
@@ -1549,8 +1557,7 @@ struct FeatureRuntimePage {
     this.imageInputUri = result.uri;
     this.selectedInputSummary = result.uri;
     if (shouldShowLiveObjectDetectionCameraOverlay(workflowForRoute(this.routeName))) {
-      const rotation = this.liveCameraService?.previewRotationDegrees() ?? this.liveCameraPreviewRotationDegrees;
-      if (rotation !== this.liveCameraPreviewRotationDegrees) {
+      if (rotation !== previousRotation) {
         hilog.info(
           runtimeLogDomain,
           liveObjectDetectionLogTag,
@@ -1558,7 +1565,6 @@ struct FeatureRuntimePage {
           rotation
         );
       }
-      this.liveCameraPreviewRotationDegrees = rotation;
       this.liveObjectDetectionFrameId += 1;
     }
     return true;
@@ -4038,7 +4044,7 @@ struct FeatureRuntimePage {
       this.liveCameraSurfaceContent()
     }
     .width('100%')
-    .aspectRatio(4 / 3)
+    .aspectRatio(this.liveCameraPreviewAspectRatio)
     .clip(true)
     .backgroundColor('#111827')
     .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
@@ -4075,7 +4081,7 @@ struct FeatureRuntimePage {
       this.portraitSegmentationComposite()
     }
     .width('100%')
-    .aspectRatio(4 / 3)
+    .aspectRatio(this.liveCameraPreviewAspectRatio)
     .clip(true)
     .backgroundColor('#111827')
     .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })

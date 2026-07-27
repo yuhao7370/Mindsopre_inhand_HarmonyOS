@@ -43,6 +43,7 @@ function New-Fixture() {
     'entry\src\main\ets\features\runtime\PortraitSegmentationBackgroundCatalog.ets',
     'entry\src\main\ets\services\ai\AiService.ets',
     'entry\src\main\ets\services\ai\SegmentationService.ets',
+    'entry\src\main\ets\services\camera\LiveCameraService.ets',
     'scripts\build-hap.ps1'
   )) {
     $source = Join-Path $root $relativePath
@@ -116,6 +117,7 @@ try {
   $inputState = 'entry\src\main\ets\features\runtime\FeatureRuntimeInputState.ets'
   $aiService = 'entry\src\main\ets\services\ai\AiService.ets'
   $segmentationService = 'entry\src\main\ets\services\ai\SegmentationService.ets'
+  $cameraService = 'entry\src\main\ets\services\camera\LiveCameraService.ets'
   $build = 'scripts\build-hap.ps1'
 
   Invoke-Mutation 'visible-card-opens-generic-live-segmentation' $experienceCatalog `
@@ -134,7 +136,17 @@ try {
     "Scroll() {`n        Text(appString('feature_runtime_portrait_camera_original'))"
   Invoke-SectionMutation 'wrong-result-aspect-ratio' $page `
     '  portraitSegmentationResultPreview() {' '  portraitSegmentationStatus() {' `
-    '.aspectRatio(4 / 3)' ".height('100%')"
+    '.aspectRatio(this.liveCameraPreviewAspectRatio)' '.aspectRatio(4 / 3)'
+  Invoke-SectionMutation 'wrong-camera-aspect-ratio' $page `
+    '  portraitSegmentationCameraPreview() {' '  portraitSegmentationComposite() {' `
+    '.aspectRatio(this.liveCameraPreviewAspectRatio)' '.aspectRatio(4 / 3)'
+  Invoke-SectionMutation 'capture-ignores-camera-rotation' $page `
+    '  private async prepareLiveFrameImageInput(' '  private async applyAiResult(' `
+    'captureToCacheImage(surfaceId, context.cacheDir, rotation)' `
+    'captureToCacheImage(surfaceId, context.cacheDir, 0)'
+  Invoke-SectionMutation 'encoder-does-not-rotate-surface-frame' $cameraService `
+    'export class HarmonyLiveFrameImageEncoder' 'export class HarmonyLiveFrameImageStore' `
+    'await pixelMap.rotate(rotationDegrees);' 'rotationDegrees = 0;'
   Invoke-SectionMutation 'distorted-composite-fit' $page `
     '  portraitSegmentationComposite() {' '  portraitSegmentationStatus() {' `
     "this.selectedPortraitBackgroundPresetId, this.portraitCompositeBackgroundUri()))`n          .orientation(this.portraitCompositeBackgroundOrientation())`n          .width('100%')`n          .height('100%')`n          .objectFit(ImageFit.Cover)" `
