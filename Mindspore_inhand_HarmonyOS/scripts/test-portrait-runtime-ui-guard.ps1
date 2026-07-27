@@ -160,6 +160,21 @@ try {
     '  portraitSegmentationComposite() {' '  portraitSegmentationStatus() {' `
     "this.selectedPortraitBackgroundPresetId, this.portraitCompositeBackgroundUri()))`n          .orientation(this.portraitCompositeBackgroundOrientation())`n          .width('100%')`n          .height('100%')`n          .objectFit(ImageFit.Cover)" `
     "this.selectedPortraitBackgroundPresetId, this.portraitCompositeBackgroundUri()))`n          .orientation(this.portraitCompositeBackgroundOrientation())`n          .width('100%')`n          .height('100%')`n          .objectFit(ImageFit.Fill)"
+  Invoke-SectionMutation 'cropped-portrait-foreground' $page `
+    '  portraitSegmentationComposite() {' '  portraitSegmentationStatus() {' `
+    "Image(this.segmentationForegroundPixelMap)`n          .width('100%')`n          .height('100%')`n          .objectFit(ImageFit.Contain)" `
+    "Image(this.segmentationForegroundPixelMap)`n          .width('100%')`n          .height('100%')`n          .objectFit(ImageFit.Cover)"
+  Invoke-SectionMutation 'unrotated-preview-ratio' $cameraService `
+    'export class HarmonyLiveCameraPreviewDriver' 'export class HarmonyLiveFrameImageEncoder' `
+    'return livePreviewAspectRatioForProfile(this.previewProfileWidth, this.previewProfileHeight, this.previewRotationDegrees());' `
+    'return livePreviewAspectRatioForProfile(this.previewProfileWidth, this.previewProfileHeight, 0);'
+  Invoke-Mutation 'calculated-preview-rotation-not-applied' $cameraService `
+    'this.previewOutput.setPreviewRotation(previewRotation as camera.ImageRotation);' `
+    'return;'
+  Invoke-SectionMutation 'preview-rotation-applied-after-session-start' $cameraService `
+    'export class HarmonyLiveCameraPreviewDriver' 'export class HarmonyLiveFrameImageEncoder' `
+    "this.previewRotation = this.rotationTracker.currentRotationDegrees();`n      await this.session.start();" `
+    "await this.session.start();`n      this.previewRotation = this.rotationTracker.currentRotationDegrees();"
   Invoke-SectionMutation 'color-only-preset-selection' $page `
     '  portraitSegmentationBackgroundStrip() {' '      }, (preset: PortraitSegmentationBackgroundPreset) => preset.id)' `
     "SymbolGlyph(`$r('sys.symbol.checkmark'))" "Text('')"

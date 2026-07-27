@@ -141,6 +141,7 @@ $portraitBackgroundImageSource = Balanced-Section $page `
 $foreground = Balanced-Section $page '  private async updateSegmentationForegroundPreview(' 'segmentation foreground publication'
 $captureFrame = Balanced-Section $page '  private async prepareLiveFrameImageInput(' 'live frame capture'
 $frameEncoder = Balanced-Section $cameraService 'export class HarmonyLiveFrameImageEncoder' 'live frame encoder'
+$cameraDriver = Balanced-Section $cameraService 'export class HarmonyLiveCameraPreviewDriver' 'live camera preview driver'
 $retry = Balanced-Section $page '  private retryLiveSegmentation(): void {' 'segmentation retry'
 $layoutRouter = Balanced-Section $page '  runtimeLayoutContent() {' 'runtime layout router'
 $initialCamera = Balanced-Section $catalog 'export function initialLiveCameraPositionForWorkflow(' 'camera policy'
@@ -232,10 +233,35 @@ Assert-Excludes $portraitComposite 'this.portraitSegmentationStatus()' `
   'portrait status must stay outside the composite canvas.'
 Assert-Excludes $portraitComposite 'this.portraitSegmentationBackgroundStrip()' `
   'portrait background controls must stay outside the composite canvas.'
-Assert-Count $portraitComposite '.objectFit(ImageFit.Cover)' 2 `
-  'portrait background and foreground must preserve aspect ratio with matching crops.'
+Assert-Count $portraitComposite '.objectFit(ImageFit.Cover)' 1 `
+  'portrait background must fill the result canvas without stretching.'
+Assert-Count $portraitComposite '.objectFit(ImageFit.Contain)' 1 `
+  'portrait foreground must remain fully visible without cropping.'
 Assert-Excludes $portraitComposite '.objectFit(ImageFit.Fill)' `
   'portrait composite must not stretch either image layer.'
+Assert-Contains $cameraDriver `
+  'this.previewProfileWidth = previewProfile.size.width;' `
+  'portrait preview must remember the selected camera profile width.'
+Assert-Contains $cameraDriver `
+  'this.previewProfileHeight = previewProfile.size.height;' `
+  'portrait preview must remember the selected camera profile height.'
+Assert-Contains $cameraDriver `
+  'return livePreviewAspectRatioForProfile(this.previewProfileWidth, this.previewProfileHeight, this.previewRotationDegrees());' `
+  'portrait preview must publish the rotated camera stream ratio.'
+Assert-Contains $cameraService 'this.previewOutput.setPreviewRotation(previewRotation as camera.ImageRotation);' `
+  'camera preview output must apply the calculated display rotation.'
+$previewRotationApplyIndex = $cameraDriver.IndexOf(
+  (Convert-ArkTsToGuardCode 'this.previewRotation = this.rotationTracker.currentRotationDegrees();'),
+  [StringComparison]::Ordinal
+)
+$sessionStartIndex = $cameraDriver.IndexOf(
+  (Convert-ArkTsToGuardCode 'await this.session.start();'),
+  [StringComparison]::Ordinal
+)
+if ($previewRotationApplyIndex -lt 0 -or $sessionStartIndex -lt 0 -or
+    $previewRotationApplyIndex -ge $sessionStartIndex) {
+  Fail 'camera preview rotation must be applied before the session starts.'
+}
 Assert-Contains $captureFrame 'captureToCacheImage(surfaceId, context.cacheDir, rotation)' `
   'portrait inference input must use the current camera rotation.'
 Assert-Contains $frameEncoder 'await pixelMap.rotate(rotationDegrees);' `

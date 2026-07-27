@@ -4067,7 +4067,7 @@ struct FeatureRuntimePage {
         Image(this.segmentationForegroundPixelMap)
           .width('100%')
           .height('100%')
-          .objectFit(ImageFit.Cover)
+          .objectFit(ImageFit.Contain)
           .scale({ x: this.segmentationForegroundMirrorScaleX(), y: 1 })
       }
     }

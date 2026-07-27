@@ -574,7 +574,7 @@ import {
   liveFrameImageCachePath,
   liveRuntimeIntervalForAiMethod,
   liveRuntimeIntervalMs,
-  livePreviewAspectRatioForRotation,
+  livePreviewAspectRatioForProfile,
   livePreviewWidthForAspectRatio,
   livePreviewContentRotationDegrees,
   liveCameraXComponentId,
@@ -2227,6 +2227,7 @@ class MutableLiveDisplayRotationProvider implements LiveDisplayRotationProvider 
 
 class RecordingLivePreviewRotationOutput implements LivePreviewRotationOutput {
   readonly displayRotations: Array<number> = [];
+  readonly appliedRotations: Array<number> = [];
   private readonly rotations: Array<number>;
   fail: boolean = false;
 
@@ -2240,6 +2241,10 @@ class RecordingLivePreviewRotationOutput implements LivePreviewRotationOutput {
       throw new Error('preview rotation unavailable');
     }
     return this.rotations[this.displayRotations.length - 1] ?? 0;
+  }
+
+  setPreviewRotation(rotationDegrees: number): void {
+    this.appliedRotations.push(rotationDegrees);
   }
 }
 
@@ -11126,11 +11131,11 @@ export default function localUnitTest() {
       expect(livePreviewContentRotationDegrees(-1, 0, 'back', 90)).assertEqual(90);
     });
 
-    it('swapsTheCameraAspectRatioForQuarterTurnPreviewRotation', 0, () => {
-      expect(livePreviewAspectRatioForRotation(270)).assertEqual(3 / 4);
-      expect(livePreviewAspectRatioForRotation(90)).assertEqual(3 / 4);
-      expect(livePreviewAspectRatioForRotation(0)).assertEqual(4 / 3);
-      expect(livePreviewAspectRatioForRotation(45)).assertEqual(4 / 3);
+    it('usesTheRotatedCameraStreamAspectRatio', 0, () => {
+      expect(livePreviewAspectRatioForProfile(1920, 1080, 0)).assertEqual(16 / 9);
+      expect(livePreviewAspectRatioForProfile(1920, 1080, 270)).assertEqual(9 / 16);
+      expect(livePreviewAspectRatioForProfile(720, 1280, 0)).assertEqual(9 / 16);
+      expect(livePreviewAspectRatioForProfile(0, 480, 90)).assertEqual(4 / 3);
     });
 
     it('usesCompactWidthOnlyForVerticalCameraPreviews', 0, () => {
@@ -11150,6 +11155,8 @@ export default function localUnitTest() {
       expect(output.displayRotations.length).assertEqual(2);
       expect(output.displayRotations[0]).assertEqual(0);
       expect(output.displayRotations[1]).assertEqual(1);
+      expect(output.appliedRotations[0]).assertEqual(90);
+      expect(output.appliedRotations[1]).assertEqual(0);
 
       displayProvider.rotation = 2;
       expect(tracker.currentRotationDegrees()).assertEqual(0);
@@ -11170,6 +11177,8 @@ export default function localUnitTest() {
       displayProvider.rotation = 1;
       expect(tracker.currentRotationDegrees()).assertEqual(0);
       expect(output.displayRotations.length).assertEqual(0);
+      expect(output.appliedRotations[0]).assertEqual(90);
+      expect(output.appliedRotations[1]).assertEqual(0);
     });
 
     it('liveCameraPreviewServiceUsesRequestedCameraPositionLikeAndroidSwitch', 0, async () => {
