@@ -2221,6 +2221,10 @@ struct FeatureRuntimePage {
     return this.contentImageUri.length > 0 || this.imageInputUri.length > 0;
   }
 
+  private styleTransferRunEnabled(): boolean {
+    return !this.workflowRunning && this.styleTransferContentInputReady() && this.styleImageUri.length > 0;
+  }
+
   private recoverStyleOriginalPreview(): void {
     if (this.workflowRunning) {
       return;
@@ -2415,6 +2419,16 @@ struct FeatureRuntimePage {
     }
   }
 
+  private styleTransferStyleAccessibilityText(style: BuiltInStyleTransferStyle): string {
+    const context = this.uiAbilityContext();
+    try {
+      const title = context?.resourceManager.getStringSync($r('app.string.feature_runtime_style_presets_title').id);
+      return `${title ?? 'Style'} ${style.id + 1}`;
+    } catch (_) {
+      return `Style ${style.id + 1}`;
+    }
+  }
+
   @Builder
   inputChip(inputKind: FeatureInputKind) {
     Text(appString(workflowInputLabelKey(workflowForRoute(this.routeName), inputKind)))
@@ -2456,23 +2470,33 @@ struct FeatureRuntimePage {
           this.styleTransferCustomStyleItem()
         }
       }
-      .columnsTemplate('1fr 1fr 1fr 1fr')
-      .columnsGap(10)
-      .rowsGap(10)
+      .columnsTemplate('1fr 1fr 1fr')
+      .rowsTemplate('1fr 1fr 1fr 1fr 1fr 1fr 1fr')
+      .columnsGap(6)
+      .rowsGap(6)
       .width('100%')
-      .layoutWeight(1)
-      .scrollBar(BarState.Auto)
-      .margin({ top: 20, bottom: 20 })
+      .aspectRatio(3 / 7)
+      .scrollBar(BarState.Off)
+      .enableScrollInteraction(false)
+      .margin({ top: AppSpacing.md })
     }
     .width('100%')
-    .layoutWeight(1)
-    .margin({ left: 20, right: 20, top: 30 })
+    .padding({ bottom: AppSpacing.xl })
   }
 
   @Builder
   styleTransferStyleItem(style: BuiltInStyleTransferStyle) {
-    Column() {
+    Stack({ alignContent: Alignment.TopEnd }) {
       this.styleTransferStyleImage(style)
+      if (this.styleImageUri === builtInStyleTransferUri(style)) {
+        SymbolGlyph($r('sys.symbol.checkmark'))
+          .fontSize(16)
+          .fontColor([Color.White])
+          .padding({ left: AppSpacing.xs, right: AppSpacing.xs })
+          .backgroundColor(AppColor.accent)
+          .borderRadius(AppRadius.button)
+          .margin(6)
+      }
     }
     .width('100%')
     .aspectRatio(1)
@@ -2484,34 +2508,50 @@ struct FeatureRuntimePage {
     })
     .clip(true)
     .enabled(!this.workflowRunning)
+    .accessibilityText(this.styleTransferStyleAccessibilityText(style))
+    .accessibilityRole(AccessibilityRoleType.BUTTON)
     .onClick(() => this.selectBuiltInStyle(style))
   }
 
   @Builder
   styleTransferCustomStyleItem() {
-    Column() {
-      if (isCustomStyleTransferUri(this.styleImageUri)) {
-        Image(this.styleImageUri)
+    Stack({ alignContent: Alignment.TopEnd }) {
+      Column() {
+        if (isCustomStyleTransferUri(this.styleImageUri)) {
+          Image(this.styleImageUri)
+            .width('100%')
+            .height('72%')
+            .objectFit(ImageFit.Cover)
+        } else {
+          Image($r('app.media.icon_default'))
+            .width('100%')
+            .height('72%')
+            .objectFit(ImageFit.Contain)
+        }
+        Text(appString('feature_runtime_style_custom'))
+          .fontSize(11)
+          .fontColor(AppColor.textSecondary)
+          .maxFontScale(1.6)
+          .maxLines(2)
           .width('100%')
-          .height('72%')
-          .objectFit(ImageFit.Cover)
-      } else {
-        Image($r('app.media.icon_default'))
-          .width('100%')
-          .height('72%')
-          .objectFit(ImageFit.Contain)
+          .textAlign(TextAlign.Center)
       }
-      Text(appString('feature_runtime_style_custom'))
-        .fontSize(9)
-        .fontColor(AppColor.textSecondary)
-        .maxLines(1)
-        .width('100%')
-        .textAlign(TextAlign.Center)
+      .width('100%')
+      .height('100%')
+      .justifyContent(FlexAlign.Center)
+      if (isCustomStyleTransferUri(this.styleImageUri)) {
+        SymbolGlyph($r('sys.symbol.checkmark'))
+          .fontSize(16)
+          .fontColor([Color.White])
+          .padding({ left: AppSpacing.xs, right: AppSpacing.xs })
+          .backgroundColor(AppColor.accent)
+          .borderRadius(AppRadius.button)
+          .margin(6)
+      }
     }
     .width('100%')
     .aspectRatio(1)
     .padding(2)
-    .justifyContent(FlexAlign.Center)
     .border({
       width: isCustomStyleTransferUri(this.styleImageUri) ? 2 : 1,
       color: isCustomStyleTransferUri(this.styleImageUri) ? AppColor.accent : AppColor.divider,
@@ -2520,6 +2560,8 @@ struct FeatureRuntimePage {
     .backgroundColor('#F7F8FA')
     .clip(true)
     .enabled(!this.workflowRunning)
+    .accessibilityText(appString('feature_runtime_style_custom') as Resource)
+    .accessibilityRole(AccessibilityRoleType.BUTTON)
     .onClick(() => this.prepareInput('styleImage'))
   }
 
@@ -4892,81 +4934,119 @@ struct FeatureRuntimePage {
 
   @Builder
   styleTransferAndroidLayout() {
-    Stack({ alignContent: Alignment.TopStart }) {
-      Column() {
-        this.runtimeActionToolbar(true)
-        Row() {
-        }
-        .width('100%')
-        .height(1)
-        .backgroundColor('#E4E4E4')
-        Stack({ alignContent: Alignment.Center }) {
-          if (this.styledImagePixelMap !== undefined && !this.styleOriginalPreviewRecovered) {
-            Image(this.styledImagePixelMap)
-              .width(256)
-              .height(256)
-              .objectFit(ImageFit.Contain)
-          } else if (this.styleTransferContentInputReady()) {
-            Image(this.contentImageUri.length > 0 ? this.contentImageUri : this.imageInputUri)
-              .width(256)
-              .height(256)
-              .objectFit(ImageFit.Contain)
-          } else {
-            Column() {
-              Image($r('app.media.icon_style'))
-                .width(64)
-                .height(64)
+    Column() {
+      this.runtimeActionToolbar(true)
+      Scroll() {
+        Column() {
+          Stack({ alignContent: Alignment.Center }) {
+            if (this.styledImagePixelMap !== undefined && !this.styleOriginalPreviewRecovered) {
+              Image(this.styledImagePixelMap)
+                .width('100%')
+                .height('100%')
+                .padding(AppSpacing.md)
                 .objectFit(ImageFit.Contain)
-              Text(appString('feature_runtime_style_choose_image'))
-                .fontSize(16)
-                .fontColor('#666666')
-                .margin({ top: 8 })
+            } else if (this.styleTransferContentInputReady()) {
+              Image(this.contentImageUri.length > 0 ? this.contentImageUri : this.imageInputUri)
+                .width('100%')
+                .height('100%')
+                .padding(AppSpacing.md)
+                .objectFit(ImageFit.Contain)
+            } else {
+              Column() {
+                Image($r('app.media.icon_style'))
+                  .width(64)
+                  .height(64)
+                  .objectFit(ImageFit.Contain)
+                Text(appString('feature_runtime_style_choose_image'))
+                  .fontSize(16)
+                  .fontColor(AppColor.textSecondary)
+                  .maxFontScale(3.2)
+                  .maxLines(2)
+                  .margin({ top: AppSpacing.sm })
+              }
+              .alignItems(HorizontalAlign.Center)
             }
-            .alignItems(HorizontalAlign.Center)
           }
-          if (this.workflowRunning) {
-            LoadingProgress()
-              .width(80)
-              .height(80)
+          .width('100%')
+          .aspectRatio(4 / 3)
+          .constraintSize({ minHeight: 220, maxHeight: 420 })
+          .backgroundColor(AppColor.cardBackground)
+          .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
+          .margin({ top: AppSpacing.md })
+
+          Button(appString(this.statusKey === 'feature_runtime_style_transfer_failed' ||
+            this.statusKey === 'feature_runtime_run_failed' ? 'web_retry' : this.runActionKey))
+            .width('100%')
+            .constraintSize({ minHeight: 48 })
+            .fontSize(16)
+            .maxFontScale(3.2)
+            .fontWeight(FontWeight.Medium)
+            .fontColor(Color.White)
+            .backgroundColor(AppColor.accent)
+            .borderRadius(AppRadius.button)
+            .enabled(this.styleTransferRunEnabled())
+            .onClick(() => this.runWorkflow())
+
+          Row() {
+            if (this.workflowRunning) {
+              LoadingProgress()
+                .width(20)
+                .height(20)
+                .margin({ right: AppSpacing.sm })
+            }
+            Text(appString(this.statusKey))
+              .fontSize(14)
+              .fontColor(AppColor.textSecondary)
+              .maxFontScale(3.2)
+              .maxLines(3)
+              .layoutWeight(1)
           }
-        }
-        .width('100%')
-        .height(265)
-        .backgroundColor('#F4F3F8')
-        Row() {
+          .width('100%')
+          .constraintSize({ minHeight: 56 })
+          .padding({ left: AppSpacing.md, right: AppSpacing.md })
+          .backgroundColor(AppColor.cardBackground)
+          .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
+          .margin({ top: AppSpacing.sm })
+
           Button(appString('feature_runtime_style_album'), { type: ButtonType.Normal })
-            .layoutWeight(1)
-            .height(37)
-            .margin({ left: 20, right: 5 })
-            .fontSize(14)
-            .fontWeight(FontWeight.Normal)
-            .fontColor('#666666')
-            .backgroundColor('#F4F3F8')
-            .borderRadius(5)
+            .width('100%')
+            .constraintSize({ minHeight: 48 })
+            .fontSize(15)
+            .maxFontScale(3.2)
+            .fontColor(AppColor.accent)
+            .backgroundColor(AppColor.cardBackground)
+            .border({ width: 1, color: AppColor.divider })
+            .borderRadius(AppRadius.button)
             .enabled(!this.workflowRunning)
+            .margin({ top: AppSpacing.md })
             .onClick(() => this.prepareInput('contentImage'))
+
           Button(appString(workflowInputLabelKey(workflowForRoute(this.routeName), 'camera')), { type: ButtonType.Normal })
-            .layoutWeight(1)
-            .height(37)
-            .margin({ left: 5, right: 5 })
-            .fontSize(14)
-            .fontWeight(FontWeight.Normal)
-            .fontColor('#666666')
-            .backgroundColor('#F4F3F8')
-            .borderRadius(5)
+            .width('100%')
+            .constraintSize({ minHeight: 48 })
+            .fontSize(15)
+            .maxFontScale(3.2)
+            .fontColor(AppColor.accent)
+            .backgroundColor(AppColor.cardBackground)
+            .border({ width: 1, color: AppColor.divider })
+            .borderRadius(AppRadius.button)
             .enabled(!this.workflowRunning)
+            .margin({ top: AppSpacing.sm })
             .onClick(() => this.prepareInput('camera'))
+
           Button(appString('feature_runtime_style_recovery'), { type: ButtonType.Normal })
-            .layoutWeight(1)
-            .height(37)
-            .margin({ left: 5, right: 5 })
-            .fontSize(14)
-            .fontWeight(FontWeight.Normal)
-            .fontColor('#666666')
-            .backgroundColor('#F4F3F8')
-            .borderRadius(5)
+            .width('100%')
+            .constraintSize({ minHeight: 48 })
+            .fontSize(15)
+            .maxFontScale(3.2)
+            .fontColor(AppColor.accent)
+            .backgroundColor(AppColor.cardBackground)
+            .border({ width: 1, color: AppColor.divider })
+            .borderRadius(AppRadius.button)
             .enabled(!this.workflowRunning)
+            .margin({ top: AppSpacing.sm })
             .onClick(() => this.recoverStyleOriginalPreview())
+
           Column() {
             SaveButton({
               icon: SaveIconStyle.FULL_FILLED,
@@ -4974,10 +5054,12 @@ struct FeatureRuntimePage {
               buttonType: ButtonType.Capsule
             })
               .width('100%')
-              .height(37)
-              .fontSize(14)
-              .fontColor('#666666')
-              .backgroundColor('#F4F3F8')
+              .constraintSize({ minHeight: 48 })
+              .fontSize(15)
+              .maxFontScale(3.2)
+              .fontColor(AppColor.accent)
+              .backgroundColor(AppColor.cardBackground)
+              .borderRadius(AppRadius.button)
               .enabled(styleTransferSaveReady(
                 this.workflowRunning,
                 this.styleTransferResultReady && this.styledImagePixelMap !== undefined,
@@ -4999,49 +5081,22 @@ struct FeatureRuntimePage {
                 this.showRuntimeToast(this.statusKey);
               })
           }
-          .layoutWeight(1)
-          .height(37)
-          .margin({ left: 5, right: 20 })
+          .width('100%')
+          .border({ width: 1, color: AppColor.divider, radius: AppRadius.button })
+          .margin({ top: AppSpacing.sm })
+
+          this.styleTransferStyleGrid()
         }
         .width('100%')
-        .height(37)
-        .margin({ top: 14 })
-        Row() {
-          Button(appString(workflowInputLabelKey(workflowForRoute(this.routeName), 'stylePredictModelFile')), { type: ButtonType.Normal })
-            .layoutWeight(1)
-            .height(37)
-            .margin({ left: 20, right: 5 })
-            .fontSize(14)
-            .fontWeight(FontWeight.Normal)
-            .fontColor('#666666')
-            .backgroundColor('#F4F3F8')
-            .borderRadius(5)
-            .enabled(!this.workflowRunning)
-            .onClick(() => this.prepareInput('stylePredictModelFile'))
-          Button(appString(workflowInputLabelKey(workflowForRoute(this.routeName), 'styleTransferModelFile')), { type: ButtonType.Normal })
-            .layoutWeight(1)
-            .height(37)
-            .margin({ left: 5, right: 20 })
-            .fontSize(14)
-            .fontWeight(FontWeight.Normal)
-            .fontColor('#666666')
-            .backgroundColor('#F4F3F8')
-            .borderRadius(5)
-            .enabled(!this.workflowRunning)
-            .onClick(() => this.prepareInput('styleTransferModelFile'))
-        }
-        .width('100%')
-        .height(37)
-        .margin({ top: 8 })
-        this.styleTransferStyleGrid()
+        .padding({ left: AppSpacing.page, right: AppSpacing.page, bottom: AppSpacing.xl })
       }
       .width('100%')
-      .height('100%')
-      .backgroundColor(Color.White)
+      .layoutWeight(1)
+      .scrollBar(BarState.Auto)
     }
     .width('100%')
     .height('100%')
-    .backgroundColor(Color.White)
+    .backgroundColor(AppColor.pageBackground)
   }
 
   @Builder
