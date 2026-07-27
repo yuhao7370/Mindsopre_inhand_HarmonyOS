@@ -30,7 +30,7 @@ export const experienceSections: FeatureSection[] = [
     groupTitleKey: 'experience_group_experience',
     items: [
       { id: 'posenet', title: 'PoseNet', titleKey: 'title_pose_net', icon: 'people', routeName: AppRoute.POSENET.name, visibleByDefault: true },
-      { id: 'segmentation', title: 'Portrait Segmentation', titleKey: 'title_segmentation', icon: 'image', routeName: AppRoute.SEGMENTATION_LIVE.name, visibleByDefault: true },
+      { id: 'segmentation', title: 'Portrait Segmentation', titleKey: 'title_segmentation', icon: 'image', routeName: AppRoute.PORTRAIT_SEGMENTATION.name, visibleByDefault: true },
       { id: 'image', title: 'Image Classification', titleKey: 'title_image', icon: 'grid', routeName: AppRoute.IMAGE_CAMERA.name, visibleByDefault: true },
       { id: 'gesture', title: 'Gesture Recognition', titleKey: 'title_gesture_recognition', icon: 'hand', routeName: AppRoute.GESTURE_STILL.name, visibleByDefault: true },
       { id: 'dance', title: 'Dance Factory', titleKey: 'title_dance', badge: 'HOT', badgeKey: 'title_button_text_angle', icon: 'dance', routeName: AppRoute.DANCE.name, visibleByDefault: false }
