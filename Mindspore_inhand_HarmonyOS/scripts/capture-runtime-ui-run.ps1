@@ -663,10 +663,12 @@ function Resolve-BackgroundSwipeTarget([object]$Capture, [bool]$ClippedOnly = $f
   $left = [int]$Matches[1]; $top = [int]$Matches[2]
   $right = [int]$Matches[3]; $bottom = [int]$Matches[4]
   $target.startX = [int]($left + (($right - $left) * 0.8))
+  # ponytail: HDC drags undershoot; keep this calibration margin until uiInput is exact.
+  $dragSlackPx = 48
   $target.endX = if ($ClippedOnly) {
     $clipped = @(Find-RightClippedLabels $list $right)
     if ($clipped.Count -ne 1) { Fail 'portrait background strip must expose one right-clipped label.' }
-    [Math]::Max($left, $target.startX - ($clipped[0].Right - $right + 4))
+    [Math]::Max($left, $target.startX - ($clipped[0].Right - $right + $dragSlackPx))
   } else {
     [int]($left + (($right - $left) * 0.2))
   }
