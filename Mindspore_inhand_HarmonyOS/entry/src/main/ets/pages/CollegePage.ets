@@ -326,6 +326,7 @@ export struct CollegePage {
           .height(24)
           .backgroundColor(AppColor.accent)
           .borderRadius(2)
+          .accessibilityLevel('no')
         Text(section.step)
           .fontSize(12)
           .fontWeight(FontWeight.Bold)
@@ -344,6 +345,11 @@ export struct CollegePage {
       .width('100%')
       .constraintSize({ minHeight: 48 })
       .alignItems(VerticalAlign.Center)
+      .accessibilityGroup(true)
+      .accessibilityText(
+        `${section.step} ${section.title}，${this.expandedQuickStartSectionId === section.id ? '已展开' : '已收起'}`
+      )
+      .accessibilityRole(AccessibilityRoleType.BUTTON)
       .onClick(() => {
         this.expandedQuickStartSectionId = nextCollegeQuickStartExpandedId(
           this.expandedQuickStartSectionId,
