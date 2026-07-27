@@ -213,7 +213,7 @@ Assert-CodeLineCount $builder 'Scroll() {' 1 'Style Transfer must use one page-l
 Assert-CodeLineCount $builder '.constraintSize({ minHeight: 48 })' 5 `
   'run, album, camera, recovery, and Save controls must keep 48vp targets.'
 Assert-CodeLine $builder `
-  '.padding({ left: AppSpacing.page, right: AppSpacing.page, bottom: AppSpacing.xl + AppSpacing.page * 2 })' `
+  '.padding({ left: AppSpacing.page, right: AppSpacing.page, bottom: AppSpacing.xl + AppSpacing.page * 2 + AppSpacing.lg })' `
   'Style Transfer must leave enough Scroll tail room for every 3.2x style target.'
 Assert-Excludes $builder 'stylePredictModelFile' 'hidden style-predict model controls must stay absent'
 Assert-Excludes $builder 'styleTransferModelFile' 'hidden style-transfer model controls must stay absent'
