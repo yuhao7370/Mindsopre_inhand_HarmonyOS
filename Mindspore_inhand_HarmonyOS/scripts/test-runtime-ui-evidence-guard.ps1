@@ -39,7 +39,7 @@ function Assert-TrustedHarnessRoute(
   }
   $normalized = $Source.Replace("`r`n", "`n").Replace("`r", "`n")
   $structMarker = "@Entry`n@Component`nstruct RuntimeHarnessPage {"
-  $buildBlock = @"
+$buildBlock = @"
   build() {
     Column() {
       Button('Open portrait')
@@ -64,6 +64,7 @@ function Assert-TrustedHarnessRoute(
     .justifyContent(FlexAlign.Center)
   }
 "@
+  $buildBlock = $buildBlock.Replace("`r`n", "`n").Replace("`r", "`n")
   $structIndex = $normalized.IndexOf($structMarker, [StringComparison]::Ordinal)
   $buildIndex = $normalized.IndexOf($buildBlock, [StringComparison]::Ordinal)
   if ($structIndex -lt 0 -or $buildIndex -le $structIndex -or
@@ -73,7 +74,7 @@ function Assert-TrustedHarnessRoute(
     [regex]::Matches($normalized, '(?m)^\s*struct\s+\w+').Count -ne 1) {
     throw 'Trusted runtime harness must contain one exact RuntimeHarnessPage build.'
   }
-  $methodBlock = @"
+$methodBlock = @"
   private ${MethodName}(): void {
     router.pushUrl({
       url: AppRoute.${RouteConstant}.page,
@@ -86,6 +87,7 @@ function Assert-TrustedHarnessRoute(
     });
   }
 "@
+  $methodBlock = $methodBlock.Replace("`r`n", "`n").Replace("`r", "`n")
   $methodIndex = $normalized.IndexOf($methodBlock, [StringComparison]::Ordinal)
   if ($methodIndex -le $structIndex -or $methodIndex -ge $buildIndex -or
     $normalized.IndexOf($methodBlock, $methodIndex + 1, [StringComparison]::Ordinal) -ge 0) {
@@ -152,7 +154,15 @@ $translationButton = @"
         .constraintSize({ minHeight: 48 })
         .onClick(() => this.openTextTranslation())
 "@
-$unusedComponentDecoy = $harnessTemplate.Replace($translationMethod, '').Replace($translationButton, '') + @'
+$normalizedHarnessTemplate = $harnessTemplate.Replace("`r`n", "`n").Replace("`r", "`n")
+$translationMethod = $translationMethod.Replace("`r`n", "`n").Replace("`r", "`n")
+$translationButton = $translationButton.Replace("`r`n", "`n").Replace("`r", "`n")
+if (($normalizedHarnessTemplate.Split(@($translationMethod), [StringSplitOptions]::None).Count - 1) -ne 1 -or
+  ($normalizedHarnessTemplate.Split(@($translationButton), [StringSplitOptions]::None).Count - 1) -ne 1) {
+  throw 'Trusted runtime harness unused-component fixture must replace one real route.'
+}
+$unusedComponentDecoy =
+  $normalizedHarnessTemplate.Replace($translationMethod, '').Replace($translationButton, '') + @'
 
 @Component
 struct UnusedRouteDecoy {
