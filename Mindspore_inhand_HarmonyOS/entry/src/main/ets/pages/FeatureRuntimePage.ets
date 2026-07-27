@@ -1350,7 +1350,8 @@ struct FeatureRuntimePage {
     const context = this.uiAbilityContext();
     if (!context) {
       this.statusKey = 'feature_runtime_permission_denied';
-      if (!shouldPreserveRuntimeTextResultOnAiResult(workflow, false) && usesAndroidCustomModelLayout(workflow)) {
+      if (!shouldPreserveRuntimeTextResultOnAiResult(
+        workflow, false, this.resultText.length > 0) && usesAndroidCustomModelLayout(workflow)) {
         this.resultText = '';
       }
       return;
@@ -1397,7 +1398,7 @@ struct FeatureRuntimePage {
       if (!permission.ok) {
         this.runtimeDeniedPermissionNames = permission.denied;
         this.statusKey = 'feature_runtime_permission_denied';
-        if (!shouldPreserveRuntimeTextResultOnAiResult(workflow, false)) {
+        if (!shouldPreserveRuntimeTextResultOnAiResult(workflow, false, this.resultText.length > 0)) {
           this.resultText = usesAndroidCustomModelLayout(workflow) ?
             '' : permission.requested.join(', ');
           this.resultRows = [];
@@ -1481,7 +1482,7 @@ struct FeatureRuntimePage {
       this.styleTransferResultReady = false;
     }
     this.statusKey = 'feature_runtime_run_failed';
-    if (!shouldPreserveRuntimeTextResultOnAiResult(workflow, false)) {
+    if (!shouldPreserveRuntimeTextResultOnAiResult(workflow, false, this.resultText.length > 0)) {
       this.resultText = usesAndroidCustomModelLayout(workflow) ? this.customModelTerminalFailureText() : '';
       this.resultRows = [];
     }
@@ -1526,7 +1527,7 @@ struct FeatureRuntimePage {
     if (!result.ok) {
       this.statusKey = result.messageKey;
       const workflow = workflowForRoute(this.routeName);
-      if (!shouldPreserveRuntimeTextResultOnAiResult(workflow, false)) {
+      if (!shouldPreserveRuntimeTextResultOnAiResult(workflow, false, this.resultText.length > 0)) {
         this.resultText = '';
         this.resultRows = [];
       }
@@ -1565,7 +1566,7 @@ struct FeatureRuntimePage {
   private async applyAiResult(result: AiRunResult, runtimeRequestId: number): Promise<void> {
     const workflow = workflowForRoute(this.routeName);
     this.statusKey = result.messageKey;
-    if (!shouldPreserveRuntimeTextResultOnAiResult(workflow, result.ok)) {
+    if (!shouldPreserveRuntimeTextResultOnAiResult(workflow, result.ok, this.resultText.length > 0)) {
       this.resultText = usesAndroidCustomModelLayout(workflow) ?
         (result.ok ? result.detailText : this.customModelTerminalFailureText()) :
         result.detailText;
@@ -5265,110 +5266,146 @@ struct FeatureRuntimePage {
 
   @Builder
   customModelAndroidLayout() {
-    Stack({ alignContent: Alignment.TopStart }) {
-      Column() {
-        this.runtimeActionToolbar(true)
-        Row() {
-        }
-        .width('100%')
-        .height(1)
-        .backgroundColor('#E4E4E4')
-        Row() {
+    Column() {
+      this.runtimeActionToolbar(true)
+      Scroll() {
+        Column() {
           Button(appString(workflowInputLabelKey(workflowForRoute(this.routeName), 'modelFile')), { type: ButtonType.Normal })
-            .layoutWeight(1)
-            .height(37)
-            .margin({ left: 20, right: 5 })
-            .fontSize(14)
-            .fontWeight(FontWeight.Normal)
-            .fontColor('#666666')
-            .backgroundColor('#F4F3F8')
-            .borderRadius(5)
+            .width('100%')
+            .constraintSize({ minHeight: 48 })
+            .fontSize(16)
+            .maxFontScale(3.2)
+            .fontWeight(FontWeight.Medium)
+            .fontColor(AppColor.accent)
+            .backgroundColor(AppColor.cardBackground)
+            .border({ width: 1, color: AppColor.divider, radius: AppRadius.button })
             .enabled(!this.workflowRunning)
             .onClick(() => this.prepareInput('modelFile'))
+
           Button(appString(workflowInputLabelKey(workflowForRoute(this.routeName), 'photo')), { type: ButtonType.Normal })
-            .layoutWeight(1)
-            .height(37)
-            .margin({ left: 5, right: 5 })
-            .fontSize(14)
-            .fontWeight(FontWeight.Normal)
-            .fontColor('#666666')
-            .backgroundColor('#F4F3F8')
-            .borderRadius(5)
+            .width('100%')
+            .constraintSize({ minHeight: 48 })
+            .fontSize(16)
+            .maxFontScale(3.2)
+            .fontWeight(FontWeight.Medium)
+            .fontColor(AppColor.accent)
+            .backgroundColor(AppColor.cardBackground)
+            .border({ width: 1, color: AppColor.divider, radius: AppRadius.button })
+            .margin({ top: AppSpacing.sm })
             .enabled(!this.workflowRunning)
             .onClick(() => this.prepareInput('photo'))
+
           Button(appString(workflowInputLabelKey(workflowForRoute(this.routeName), 'camera')), { type: ButtonType.Normal })
-            .layoutWeight(1)
-            .height(37)
-            .margin({ left: 5, right: 20 })
-            .fontSize(14)
-            .fontWeight(FontWeight.Normal)
-            .fontColor('#666666')
-            .backgroundColor('#F4F3F8')
-            .borderRadius(5)
+            .width('100%')
+            .constraintSize({ minHeight: 48 })
+            .fontSize(16)
+            .maxFontScale(3.2)
+            .fontWeight(FontWeight.Medium)
+            .fontColor(AppColor.accent)
+            .backgroundColor(AppColor.cardBackground)
+            .border({ width: 1, color: AppColor.divider, radius: AppRadius.button })
+            .margin({ top: AppSpacing.sm })
             .enabled(!this.workflowRunning)
             .onClick(() => this.prepareInput('camera'))
-        }
-        .width('100%')
-        .margin({ top: 14 })
-        .alignItems(VerticalAlign.Center)
-        if (this.imageInputUri.length > 0) {
+
           Stack({ alignContent: Alignment.Center }) {
-            Image(this.imageInputUri)
-              .width(256)
-              .height(256)
-              .objectFit(ImageFit.Fill)
-            if (this.workflowRunning) {
-              LoadingProgress()
-                .width(80)
-                .height(80)
+            if (this.imageInputUri.length > 0) {
+              Image(this.imageInputUri)
+                .width('100%')
+                .height('100%')
+                .padding(AppSpacing.md)
+                .objectFit(ImageFit.Contain)
+            } else {
+              Column() {
+                Image($r('app.media.feature_custom_model'))
+                  .width(64)
+                  .height(64)
+                  .objectFit(ImageFit.Contain)
+                Text(appString('feature_runtime_custom_model_select_photo'))
+                  .fontSize(16)
+                  .fontColor(AppColor.textSecondary)
+                  .maxFontScale(3.2)
+                  .maxLines(2)
+                  .textAlign(TextAlign.Center)
+                  .margin({ top: AppSpacing.sm })
+              }
+              .alignItems(HorizontalAlign.Center)
             }
           }
           .width('100%')
-          .height(265)
-          .margin({ top: 14 })
-          .backgroundColor('#E6E6E6')
-        }
-        Button(appString('feature_runtime_custom_model_execute'), { type: ButtonType.Normal })
-          .width('100%')
-          .height(40)
-          .margin({ left: 20, right: 20, top: 14 })
-          .fontSize(16)
-          .fontWeight(FontWeight.Normal)
-          .fontColor(Color.Black)
-          .backgroundColor(Color.White)
-          .border({ width: 2, color: Color.White, radius: 30 })
-          .onClick(() => this.runCustomModelAndroidAction())
-        Column() {
-          Text(appString('feature_runtime_custom_model_output_title'))
-            .fontSize(16)
-            .fontWeight(FontWeight.Bold)
-            .fontColor(Color.Black)
+          .aspectRatio(4 / 3)
+          .constraintSize({ minHeight: 220, maxHeight: 420 })
+          .backgroundColor(AppColor.cardBackground)
+          .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
+          .margin({ top: AppSpacing.md })
+
+          Button(appString(this.statusKey === 'feature_runtime_custom_model_failed' ||
+            this.statusKey === 'feature_runtime_run_failed' ? 'web_retry' :
+            'feature_runtime_custom_model_execute'), { type: ButtonType.Normal })
             .width('100%')
-          Scroll() {
-            Text(this.customModelOutputText())
-              .width('100%')
-              .padding(12)
+            .constraintSize({ minHeight: 48 })
+            .fontSize(16)
+            .maxFontScale(3.2)
+            .fontWeight(FontWeight.Medium)
+            .fontColor(Color.White)
+            .backgroundColor(AppColor.accent)
+            .borderRadius(AppRadius.button)
+            .margin({ top: AppSpacing.sm })
+            .enabled(!this.workflowRunning)
+            .onClick(() => this.runCustomModelAndroidAction())
+
+          Row() {
+            if (this.workflowRunning) {
+              LoadingProgress()
+                .width(20)
+                .height(20)
+                .margin({ right: AppSpacing.sm })
+            }
+            Text(appString(this.statusKey))
               .fontSize(14)
-              .fontColor('#666666')
-              .backgroundColor('#E6E6E6')
+              .fontColor(AppColor.textSecondary)
+              .maxFontScale(3.2)
+              .maxLines(3)
+              .layoutWeight(1)
           }
           .width('100%')
-          .layoutWeight(1)
-          .margin({ top: 8 })
+          .constraintSize({ minHeight: 48 })
+          .padding(AppSpacing.md)
+          .backgroundColor(AppColor.cardBackground)
+          .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
+          .margin({ top: AppSpacing.sm })
+
+          Column() {
+            Text(appString('feature_runtime_custom_model_output_title'))
+              .fontSize(17)
+              .fontWeight(FontWeight.Medium)
+              .fontColor(AppColor.textPrimary)
+              .maxFontScale(3.2)
+              .width('100%')
+            Text(this.customModelOutputText())
+              .width('100%')
+              .fontSize(14)
+              .fontColor(AppColor.textSecondary)
+              .maxFontScale(3.2)
+              .margin({ top: AppSpacing.sm })
+          }
+          .width('100%')
+          .padding(AppSpacing.md)
+          .backgroundColor(AppColor.cardBackground)
+          .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
+          .margin({ top: AppSpacing.sm })
         }
         .width('100%')
-        .layoutWeight(1)
-        .margin({ left: 20, right: 20, top: 14, bottom: 20 })
-        .padding(16)
-        .backgroundColor(Color.White)
+        .padding({ left: AppSpacing.page, right: AppSpacing.page, top: AppSpacing.md, bottom: AppSpacing.xl })
       }
       .width('100%')
-      .height('100%')
-      .backgroundColor(Color.White)
+      .layoutWeight(1)
+      .align(Alignment.TopStart)
+      .scrollBar(BarState.Auto)
     }
     .width('100%')
     .height('100%')
-    .backgroundColor(Color.White)
+    .backgroundColor(AppColor.pageBackground)
   }
 
   @Builder

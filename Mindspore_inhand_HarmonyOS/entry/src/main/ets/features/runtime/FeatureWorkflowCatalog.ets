@@ -1001,6 +1001,7 @@ export function shouldClearRuntimeResultAtWorkflowStart(workflow: FeatureWorkflo
     workflow?.routeName !== AppRoute.PORTRAIT_SEGMENTATION.name &&
     !usesAndroidTextTranslationLayout(workflow) &&
     !usesAndroidObjectPhotoLayout(workflow) &&
+    !usesAndroidCustomModelLayout(workflow) &&
     !usesAndroidStyleTransferLayout(workflow) &&
     !usesAndroidStillSegmentationLayout(workflow) &&
     !usesAndroidStillSceneLayout(workflow);
@@ -1070,10 +1071,12 @@ export function shouldPreserveRuntimeResultAfterInputReady(
 
 export function shouldPreserveRuntimeTextResultOnAiResult(
   workflow: FeatureWorkflow | undefined,
-  resultOk: boolean
+  resultOk: boolean,
+  hasTextResult: boolean = true
 ): boolean {
   return (usesAndroidStillSceneLayout(workflow) || usesAndroidObjectPhotoLayout(workflow) ||
     usesAndroidTextTranslationLayout(workflow) ||
+    (usesAndroidCustomModelLayout(workflow) && hasTextResult) ||
     shouldShowLiveClassificationCameraOverlay(workflow) ||
     shouldShowLiveObjectDetectionCameraOverlay(workflow) ||
     usesAndroidLiveSegmentationLayout(workflow) ||

@@ -174,6 +174,7 @@ if ([string]::IsNullOrWhiteSpace($SourceRoot)) {
 }
 $SourceRoot = [IO.Path]::GetFullPath($SourceRoot)
 $catalogPath = Join-Path $SourceRoot 'entry\src\main\ets\features\runtime\FeatureWorkflowCatalog.ets'
+$featureCatalogPath = Join-Path $SourceRoot 'entry\src\main\ets\common\data\FeatureCatalog.ets'
 $pagePath = Join-Path $SourceRoot 'entry\src\main\ets\pages\FeatureRuntimePage.ets'
 $cacheServicePath = Join-Path $SourceRoot 'entry\src\main\ets\services\picker\ModelFileCacheService.ets'
 $buildScriptPath = Join-Path $SourceRoot 'scripts\build-hap.ps1'
@@ -187,6 +188,16 @@ $selector = Get-TextSection `
 Assert-Contains $selector 'return workflow?.routeName === AppRoute.CUSTOM_MODEL.name;' 'selector must target only Custom Model.'
 Assert-Count $selector 'AppRoute.' 1 'selector must contain exactly one route target.'
 
+$featureCatalog = Remove-ArkTsComments (Get-NormalizedText $featureCatalogPath)
+Assert-Contains $featureCatalog `
+  "{ id: 'custom', title: 'Custom Model', titleKey: 'title_custom_model', icon: 'model', routeName: AppRoute.CUSTOM_MODEL.name, visibleByDefault: false }" `
+  'Custom Model must remain hidden from the public catalog.'
+Assert-Excludes $featureCatalog `
+  "routeName: AppRoute.CUSTOM_MODEL.name, visibleByDefault: true" `
+  'Custom Model must not be re-exposed by default'
+Assert-Count $featureCatalog 'AppRoute.CUSTOM_MODEL.name' 1 `
+  'Custom Model must have exactly one hidden catalog declaration.'
+
 $page = Remove-ArkTsComments (Get-NormalizedText $pagePath)
 $builder = Get-TextSection `
   $page `
@@ -196,133 +207,134 @@ $builder = Get-TextSection `
 
 foreach ($marker in @(
   'this.runtimeActionToolbar(true)',
+  'Scroll() {',
   "Button(appString(workflowInputLabelKey(workflowForRoute(this.routeName), 'modelFile')), { type: ButtonType.Normal })",
+  ".onClick(() => this.prepareInput('modelFile'))",
   "Button(appString(workflowInputLabelKey(workflowForRoute(this.routeName), 'photo')), { type: ButtonType.Normal })",
+  ".onClick(() => this.prepareInput('photo'))",
   "Button(appString(workflowInputLabelKey(workflowForRoute(this.routeName), 'camera')), { type: ButtonType.Normal })",
+  ".onClick(() => this.prepareInput('camera'))",
   '.enabled(!this.workflowRunning)',
-  'if (this.imageInputUri.length > 0) {',
+  "if (this.imageInputUri.length > 0) {",
   'Image(this.imageInputUri)',
-  '.objectFit(ImageFit.Fill)',
+  "Image(`$r('app.media.feature_custom_model'))",
+  '.aspectRatio(4 / 3)',
+  '.constraintSize({ minHeight: 220, maxHeight: 420 })',
+  '.objectFit(ImageFit.Contain)',
+  "Button(appString(this.statusKey === 'feature_runtime_custom_model_failed' ||",
+  "this.statusKey === 'feature_runtime_run_failed' ? 'web_retry' :",
+  "'feature_runtime_custom_model_execute'), { type: ButtonType.Normal })",
+  '.onClick(() => this.runCustomModelAndroidAction())',
+  'Text(appString(this.statusKey))',
   'if (this.workflowRunning) {',
   'LoadingProgress()',
-  "Button(appString('feature_runtime_custom_model_execute'), { type: ButtonType.Normal })",
-  '.onClick(() => this.runCustomModelAndroidAction())',
   "Text(appString('feature_runtime_custom_model_output_title'))",
-  'Scroll() {',
   'Text(this.customModelOutputText())'
 )) {
   Assert-Contains $builder $marker "dedicated builder is missing $marker."
 }
 
-Assert-Count $builder '.height(1)' 1 'dedicated builder must keep exactly one divider.'
-Assert-Count $builder ".backgroundColor('#E4E4E4')" 1 'dedicated builder must keep the Android divider color exactly once.'
-Assert-Count $builder '.enabled(!this.workflowRunning)' 3 'only the three input buttons must be disabled while running.'
-Assert-Count $builder '.layoutWeight(1)' 5 'three equal input buttons plus the output panel and its Scroll must use weight 1.'
-Assert-Count $builder '.height(37)' 3 'all three input buttons must be 37vp.'
+Assert-Count $builder 'Scroll() {' 1 'dedicated builder must use one page-level Scroll.'
+Assert-Count $builder '.constraintSize({ minHeight: 48 })' 5 `
+  'model, photo, camera, run, and status controls must keep 48vp targets.'
+Assert-Count $builder '.enabled(!this.workflowRunning)' 4 `
+  'all four actions must be disabled while running.'
+Assert-Count $builder 'LoadingProgress()' 1 'running state must use one compact status spinner.'
+Assert-Count $builder '.width(20)' 1 'running status spinner must remain compact.'
+Assert-Count $builder '.height(20)' 1 'running status spinner must remain compact.'
+Assert-Count $builder '.layoutWeight(1)' 2 `
+  'only the status text and page-level Scroll may consume remaining space.'
 
 $modelIndex = $builder.IndexOf("this.prepareInput('modelFile')", [StringComparison]::Ordinal)
 $photoIndex = $builder.IndexOf("this.prepareInput('photo')", [StringComparison]::Ordinal)
 $cameraIndex = $builder.IndexOf("this.prepareInput('camera')", [StringComparison]::Ordinal)
 $previewIndex = $builder.IndexOf('if (this.imageInputUri.length > 0) {', [StringComparison]::Ordinal)
-$executeIndex = $builder.IndexOf("Button(appString('feature_runtime_custom_model_execute')", [StringComparison]::Ordinal)
+$executeIndex = $builder.IndexOf(
+  "Button(appString(this.statusKey === 'feature_runtime_custom_model_failed' ||",
+  [StringComparison]::Ordinal
+)
 $outputIndex = $builder.IndexOf("Text(appString('feature_runtime_custom_model_output_title'))", [StringComparison]::Ordinal)
 if ($modelIndex -lt 0 -or $photoIndex -le $modelIndex -or $cameraIndex -le $photoIndex -or
   $previewIndex -le $cameraIndex -or $executeIndex -le $previewIndex -or $outputIndex -le $executeIndex) {
   throw 'Custom Model parity guard failed: content order must be Model, Photo, Camera, conditional preview, Execute, output.'
 }
 
-$inputRow = Get-TextSection `
-  $builder `
-  "        Row() {`n          Button(appString(workflowInputLabelKey(workflowForRoute(this.routeName), 'modelFile'))" `
-  "        if (this.imageInputUri.length > 0) {" `
-  'Custom Model input row'
-foreach ($marker in @(
-  '.margin({ left: 20, right: 5 })',
-  '.margin({ left: 5, right: 5 })',
-  '.margin({ left: 5, right: 20 })',
-  '.fontSize(14)',
-  ".fontColor('#666666')",
-  ".backgroundColor('#F4F3F8')",
-  '.borderRadius(5)',
-  ".margin({ top: 14 })"
-)) {
-  Assert-Contains $inputRow $marker "input row is missing $marker."
-}
-
 $preview = Get-TextSection `
   $builder `
-  '        if (this.imageInputUri.length > 0) {' `
-  "        Button(appString('feature_runtime_custom_model_execute')" `
-  'conditional image preview'
+  '          Stack({ alignContent: Alignment.Center }) {' `
+  "          Button(appString(this.statusKey === 'feature_runtime_custom_model_failed' ||" `
+  'responsive image preview'
 foreach ($marker in @(
-  "Stack({ alignContent: Alignment.Center })",
-  '.width(256)',
-  '.height(256)',
-  '.width(80)',
-  '.height(80)',
-  '.height(265)',
-  ".backgroundColor('#E6E6E6')",
-  '.margin({ top: 14 })'
+  "if (this.imageInputUri.length > 0) {",
+  'Image(this.imageInputUri)',
+  '.objectFit(ImageFit.Contain)',
+  "Image(`$r('app.media.feature_custom_model'))",
+  '.aspectRatio(4 / 3)',
+  '.constraintSize({ minHeight: 220, maxHeight: 420 })',
+  '.backgroundColor(AppColor.cardBackground)',
+  '.border({ width: 1, color: AppColor.divider, radius: AppRadius.card })'
 )) {
-  Assert-Contains $preview $marker "conditional preview is missing $marker."
+  Assert-Contains $preview $marker "responsive preview is missing $marker."
 }
 
 $execute = Get-TextSection `
   $builder `
-  "        Button(appString('feature_runtime_custom_model_execute')" `
-  "        Column() {`n          Text(appString('feature_runtime_custom_model_output_title'))" `
+  "          Button(appString(this.statusKey === 'feature_runtime_custom_model_failed' ||" `
+  "          Row() {`n            if (this.workflowRunning) {" `
   'Execute button'
 foreach ($marker in @(
   '.width(''100%'')',
-  '.height(40)',
-  '.margin({ left: 20, right: 20, top: 14 })',
+  '.constraintSize({ minHeight: 48 })',
   '.fontSize(16)',
-  '.fontColor(Color.Black)',
-  '.backgroundColor(Color.White)',
-  '.border({ width: 2, color: Color.White, radius: 30 })',
+  '.maxFontScale(3.2)',
+  '.fontColor(Color.White)',
+  '.backgroundColor(AppColor.accent)',
+  '.enabled(!this.workflowRunning)',
   '.onClick(() => this.runCustomModelAndroidAction())'
 )) {
   Assert-Contains $execute $marker "Execute button is missing $marker."
 }
-Assert-Excludes $execute '.enabled(' 'Execute must remain clickable while a run is active'
 
 $output = Get-TextSection `
   $builder `
-  "        Column() {`n          Text(appString('feature_runtime_custom_model_output_title'))" `
-  "      }`n      .width('100%')`n      .height('100%')" `
+  "          Column() {`n            Text(appString('feature_runtime_custom_model_output_title'))" `
+  "        }`n        .width('100%')" `
   'Custom Model output panel'
 foreach ($marker in @(
-  '.layoutWeight(1)',
-  '.margin({ left: 20, right: 20, top: 14, bottom: 20 })',
-  '.padding(16)',
-  '.fontSize(16)',
-  '.fontWeight(FontWeight.Bold)',
-  '.fontColor(Color.Black)',
-  '.margin({ top: 8 })',
-  ".backgroundColor('#E6E6E6')",
-  '.padding(12)',
-  '.fontSize(14)',
-  ".fontColor('#666666')"
+  "Text(appString('feature_runtime_custom_model_output_title'))",
+  'Text(this.customModelOutputText())',
+  '.fontWeight(FontWeight.Medium)',
+  '.fontColor(AppColor.textPrimary)',
+  '.fontColor(AppColor.textSecondary)',
+  '.maxFontScale(3.2)',
+  '.backgroundColor(AppColor.cardBackground)',
+  '.border({ width: 1, color: AppColor.divider, radius: AppRadius.card })'
 )) {
   Assert-Contains $output $marker "output panel is missing $marker."
 }
 
 foreach ($marker in @(
-  'this.summaryKey',
-  'feature_runtime_inputs_title',
-  'feature_runtime_permissions_title',
-  'this.selectedInputSummary',
-  'this.statusKey',
-  'this.resultRows',
-  'this.resultRow(',
-  'this.modelInputUri',
-  'this.modelFilePreview(',
-  'resultImageSaveControl(',
-  'resultComponentImageSaveControl(',
-  'feature_runtime_debug'
+  '.height(37)',
+  '.height(40)',
+  '.height(265)',
+  '.objectFit(ImageFit.Fill)',
+  "backgroundColor('#E4E4E4')",
+  "backgroundColor('#F4F3F8')",
+  "fontColor('#666666')"
 )) {
-  Assert-Excludes $builder $marker 'dedicated builder contains generic status/input/model/result/debug/save UI'
+  Assert-Excludes $builder $marker 'dedicated builder contains legacy fixed or nested layout'
 }
+
+$preserveText = Get-TextSection $catalog 'export function shouldPreserveRuntimeTextResultOnAiResult' `
+  'export function shouldPreserveRuntimeVisualResultOnAiResult' 'Custom Model failure result preservation'
+Assert-Contains $preserveText 'hasTextResult: boolean = true' `
+  'Custom Model failure preservation must distinguish first failure from an existing output.'
+Assert-Contains $preserveText '(usesAndroidCustomModelLayout(workflow) && hasTextResult) ||' `
+  'failed Custom Model runs must preserve only an existing valid output.'
+$startClear = Get-TextSection $catalog 'export function shouldClearRuntimeResultAtWorkflowStart' `
+  'export function shouldKeepScreenOnForWorkflow' 'Custom Model run-start preservation'
+Assert-Contains $startClear '!usesAndroidCustomModelLayout(workflow) &&' `
+  'Custom Model must retain its last output while a retry starts.'
 
 $restore = Get-TextSection $page '  private restoreCachedModelFileInputsIfNeeded(): void {' "`n`n  private applyCachedModelFileInputState" 'cache restore gate'
 Assert-Contains $restore 'shouldRestoreCachedModelFileInputs(workflowForRoute(this.routeName))' 'cache restore must use the Task 1 route policy.'

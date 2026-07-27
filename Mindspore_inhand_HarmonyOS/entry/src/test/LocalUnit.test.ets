@@ -10739,6 +10739,10 @@ export default function localUnitTest() {
       expect(shouldPreserveRuntimeResultAfterInputReady(portraitSegmentation, 'backgroundImage')).assertTrue();
       expect(shouldPreserveRuntimeResultAfterInputReady(portraitSegmentation, 'camera')).assertFalse();
       expect(shouldPreserveRuntimeResultAfterInputReady(styleTransfer, 'styleImage')).assertTrue();
+      expect(shouldPreserveRuntimeTextResultOnAiResult(customModel, false)).assertTrue();
+      expect(shouldPreserveRuntimeTextResultOnAiResult(customModel, false, false)).assertFalse();
+      expect(shouldPreserveRuntimeTextResultOnAiResult(customModel, true)).assertFalse();
+      expect(shouldClearRuntimeResultAtWorkflowStart(customModel)).assertFalse();
     });
 
     it('blocksOnlyRunningCustomModelAndStyleTransferInputChanges', 0, () => {
