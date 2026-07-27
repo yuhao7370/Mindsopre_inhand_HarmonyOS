@@ -54,6 +54,10 @@ function New-FileMap([string[]]$Entries) {
       if ($files.ContainsKey($entry)) { $files[$entry] = $script:canonicalTranslationFiles[$entry] }
     }
   }
+  if ($null -ne $script:canonicalAppConfiguration -and
+    $files.ContainsKey('resources/base/profile/configuration.json')) {
+    $files['resources/base/profile/configuration.json'] = $script:canonicalAppConfiguration
+  }
   $files['module.json'] = '{}'
   return $files
 }
@@ -77,6 +81,7 @@ function Assert-GuardRejects(
   $message = ''
   try {
     & $guard -MainHapPath $MainHapPath -OhosTestHapPath $OhosTestHapPath `
+      -ExpectedAppResourceRoot $expectedAppResourceRoot `
       -ExpectedResourceRoot $expectedResourceRoot `
       -ExpectedOhosTestResourceRoot $expectedOhosTestResourceRoot `
       -ExpectedRawfileRoot $expectedRawfileRoot -ExpectedNativeLibRoot $expectedNativeRoot `
@@ -100,6 +105,7 @@ $mainEntries = @(
   'ets/sourceMaps.map',
   'resources.index',
   'resources/base/media/icon.png',
+  'resources/base/profile/configuration.json',
   'resources/base/profile/main_pages.json',
   'resources/rawfile/model/mobilenetv2.ms',
   'resources/rawfile/model/movenet_singlepose_lightning_float16_v4.ms',
@@ -168,6 +174,7 @@ $testEntries = @(
   'ets/sourceMaps.map',
   'resources.index',
   'resources/base/media/icon.png',
+  'resources/base/profile/configuration.json',
   'resources/base/profile/main_pages.json',
   'resources/base/profile/test_pages.json',
   'resources/rawfile/mock/mock-config.json',
@@ -181,17 +188,36 @@ New-Item -ItemType Directory -Path $tempRoot | Out-Null
 try {
   $mainHap = Join-Path $tempRoot 'main.hap'
   $testHap = Join-Path $tempRoot 'test.hap'
+  $script:canonicalAppConfiguration = Get-Content -LiteralPath `
+    (Join-Path $PSScriptRoot '..\AppScope\resources\base\profile\configuration.json') -Raw
   $mainFiles = New-FileMap $mainEntries
   $mainFiles['module.json'] = $mainModule
   $testFiles = New-FileMap $testEntries
   $testFiles['module.json'] = $testModule
   $testFiles['pack.info'] = $testPack
+  $expectedAppResourceRoot = Join-Path $tempRoot 'expected-app-resources'
   $expectedResourceRoot = Join-Path $tempRoot 'expected-resources'
   $expectedOhosTestResourceRoot = Join-Path $tempRoot 'expected-test-resources'
   $expectedRawfileRoot = Join-Path $expectedResourceRoot 'rawfile'
   $expectedNativeRoot = Join-Path $tempRoot 'expected-native'
-  Write-ExpectedFiles $expectedResourceRoot $mainFiles 'resources/'
-  Write-ExpectedFiles $expectedOhosTestResourceRoot $testFiles 'resources/'
+  $appResourceFiles = @{
+    'resources/base/profile/configuration.json' = $script:canonicalAppConfiguration
+  }
+  $entryResourceFiles = @{}
+  foreach ($entry in $mainFiles.Keys) {
+    if ($entry -ne 'resources/base/profile/configuration.json') {
+      $entryResourceFiles[$entry] = $mainFiles[$entry]
+    }
+  }
+  $testResourceFiles = @{}
+  foreach ($entry in $testFiles.Keys) {
+    if ($entry -ne 'resources/base/profile/configuration.json') {
+      $testResourceFiles[$entry] = $testFiles[$entry]
+    }
+  }
+  Write-ExpectedFiles $expectedAppResourceRoot $appResourceFiles 'resources/'
+  Write-ExpectedFiles $expectedResourceRoot $entryResourceFiles 'resources/'
+  Write-ExpectedFiles $expectedOhosTestResourceRoot $testResourceFiles 'resources/'
   Write-ExpectedFiles $expectedNativeRoot $mainFiles 'libs/arm64-v8a/'
   $translationEntry = 'resources/rawfile/models/translation/translation-models.tar.xz'
   $translationManifestEntry = 'resources/rawfile/models/translation/manifest.json'
@@ -279,6 +305,7 @@ try {
   New-HapFixture $mainHap $mainFiles
   New-HapFixture $testHap $testFiles
   $verifiedOutput = & $guard -MainHapPath $mainHap -OhosTestHapPath $testHap `
+    -ExpectedAppResourceRoot $expectedAppResourceRoot `
     -ExpectedResourceRoot $expectedResourceRoot `
     -ExpectedOhosTestResourceRoot $expectedOhosTestResourceRoot `
     -ExpectedRawfileRoot $expectedRawfileRoot -ExpectedNativeLibRoot $expectedNativeRoot `
