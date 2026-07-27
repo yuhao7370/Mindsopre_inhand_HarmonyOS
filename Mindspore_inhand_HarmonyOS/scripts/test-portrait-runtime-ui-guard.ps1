@@ -137,8 +137,8 @@ try {
     '.aspectRatio(4 / 3)' ".height('100%')"
   Invoke-SectionMutation 'distorted-composite-fit' $page `
     '  portraitSegmentationComposite() {' '  portraitSegmentationStatus() {' `
-    "Image(this.portraitCompositeBackgroundUri())`n          .orientation(this.portraitCompositeBackgroundOrientation())`n          .width('100%')`n          .height('100%')`n          .objectFit(ImageFit.Cover)" `
-    "Image(this.portraitCompositeBackgroundUri())`n          .orientation(this.portraitCompositeBackgroundOrientation())`n          .width('100%')`n          .height('100%')`n          .objectFit(ImageFit.Fill)"
+    "this.selectedPortraitBackgroundPresetId, this.portraitCompositeBackgroundUri()))`n          .orientation(this.portraitCompositeBackgroundOrientation())`n          .width('100%')`n          .height('100%')`n          .objectFit(ImageFit.Cover)" `
+    "this.selectedPortraitBackgroundPresetId, this.portraitCompositeBackgroundUri()))`n          .orientation(this.portraitCompositeBackgroundOrientation())`n          .width('100%')`n          .height('100%')`n          .objectFit(ImageFit.Fill)"
   Invoke-SectionMutation 'color-only-preset-selection' $page `
     '  portraitSegmentationBackgroundStrip() {' '      }, (preset: PortraitSegmentationBackgroundPreset) => preset.id)' `
     "SymbolGlyph(`$r('sys.symbol.checkmark'))" "Text('')"

@@ -2275,6 +2275,21 @@ struct FeatureRuntimePage {
       this.segmentationForegroundMirrorScaleX() : 1;
   }
 
+  private portraitBackgroundImageSource(presetId: string, fallbackUri: string): Resource | string {
+    switch (presetId) {
+      case 'portrait2':
+        return $rawfile('portrait/portrait2.jpg');
+      case 'portrait3':
+        return $rawfile('portrait/portrait3.jpg');
+      case 'portrait4':
+        return $rawfile('portrait/portrait4.jpg');
+      case 'portrait5':
+        return $rawfile('portrait/portrait5.jpg');
+      default:
+        return fallbackUri;
+    }
+  }
+
   private lastPathSegment(uri: string): string {
     const normalized = uri.split('\\').join('/');
     const parts = normalized.split('/');
@@ -4033,7 +4048,8 @@ struct FeatureRuntimePage {
   portraitSegmentationComposite() {
     Stack({ alignContent: Alignment.Center }) {
       if (this.portraitCompositeBackgroundUri().length > 0) {
-        Image(this.portraitCompositeBackgroundUri())
+        Image(this.portraitBackgroundImageSource(
+          this.selectedPortraitBackgroundPresetId, this.portraitCompositeBackgroundUri()))
           .orientation(this.portraitCompositeBackgroundOrientation())
           .width('100%')
           .height('100%')
@@ -4125,7 +4141,7 @@ struct FeatureRuntimePage {
                   .height(72)
                   .objectFit(ImageFit.Contain)
               } else {
-                Image(portraitSegmentationBackgroundUri(preset))
+                Image(this.portraitBackgroundImageSource(preset.id, portraitSegmentationBackgroundUri(preset)))
                   .width(72)
                   .height(72)
                   .objectFit(ImageFit.Cover)
