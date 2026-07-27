@@ -26,31 +26,144 @@ if (-not [IO.File]::Exists($harnessTemplatePath)) {
 }
 $harnessTemplate = [IO.File]::ReadAllText($harnessTemplatePath)
 function Assert-TrustedHarnessRoute(
+  [string]$Source,
   [string]$MethodName,
   [string]$ButtonText,
   [string]$RouteConstant,
   [string]$TitleKey
 ) {
-  $methodPattern = '(?s)private\s+' + [regex]::Escape($MethodName) +
-    '\(\):\s*void\s*\{\s*router\.pushUrl\(\{\s*url:\s*AppRoute\.' +
-    [regex]::Escape($RouteConstant) +
-    '\.page,\s*params:\s*\{\s*routeName:\s*AppRoute\.' +
-    [regex]::Escape($RouteConstant) +
-    '\.name,\s*titleKey:\s*''' + [regex]::Escape($TitleKey) +
-    ''',\s*runtimeEvidenceRunId:\s*AppStorage\.get<string>\(''runtimeEvidenceRunId''\)\s*\?\?\s*''' +
-    ''',\s*runtimeEvidenceMode:\s*AppStorage\.get<string>\(''runtimeEvidenceMode''\)\s*\?\?\s*''' +
-    '''\s*\}\s*\}\);\s*\}'
-  $buttonPattern = '(?s)Button\(''' + [regex]::Escape($ButtonText) +
-    '''\).*?\.onClick\(\(\)\s*=>\s*this\.' + [regex]::Escape($MethodName) + '\(\)\)'
-  if ([regex]::Matches($harnessTemplate, $methodPattern).Count -ne 1 -or
-    [regex]::Matches($harnessTemplate, $buttonPattern).Count -ne 1) {
+  foreach ($forbidden in @('/*', '//', [string][char]0x60)) {
+    if ($Source.Contains($forbidden)) {
+      throw "Trusted runtime harness route '$ButtonText' contains unsupported comment/template syntax."
+    }
+  }
+  $normalized = $Source.Replace("`r`n", "`n").Replace("`r", "`n")
+  $structMarker = "@Entry`n@Component`nstruct RuntimeHarnessPage {"
+  $buildBlock = @"
+  build() {
+    Column() {
+      Button('Open portrait')
+        .width('80%')
+        .constraintSize({ minHeight: 48 })
+        .onClick(() => this.openPortrait())
+      Button('Open text translation')
+        .width('80%')
+        .constraintSize({ minHeight: 48 })
+        .onClick(() => this.openTextTranslation())
+      Button('Open style transfer')
+        .width('80%')
+        .constraintSize({ minHeight: 48 })
+        .onClick(() => this.openStyleTransfer())
+      Button('Open custom model')
+        .width('80%')
+        .constraintSize({ minHeight: 48 })
+        .onClick(() => this.openCustomModel())
+    }
+    .width('100%')
+    .height('100%')
+    .justifyContent(FlexAlign.Center)
+  }
+"@
+  $structIndex = $normalized.IndexOf($structMarker, [StringComparison]::Ordinal)
+  $buildIndex = $normalized.IndexOf($buildBlock, [StringComparison]::Ordinal)
+  if ($structIndex -lt 0 -or $buildIndex -le $structIndex -or
+    $normalized.IndexOf($structMarker, $structIndex + 1, [StringComparison]::Ordinal) -ge 0 -or
+    $normalized.IndexOf($buildBlock, $buildIndex + 1, [StringComparison]::Ordinal) -ge 0 -or
+    [regex]::Matches($normalized, '(?m)^\s*@Component\s*$').Count -ne 1 -or
+    [regex]::Matches($normalized, '(?m)^\s*struct\s+\w+').Count -ne 1) {
+    throw 'Trusted runtime harness must contain one exact RuntimeHarnessPage build.'
+  }
+  $methodBlock = @"
+  private ${MethodName}(): void {
+    router.pushUrl({
+      url: AppRoute.${RouteConstant}.page,
+      params: {
+        routeName: AppRoute.${RouteConstant}.name,
+        titleKey: '${TitleKey}',
+        runtimeEvidenceRunId: AppStorage.get<string>('runtimeEvidenceRunId') ?? '',
+        runtimeEvidenceMode: AppStorage.get<string>('runtimeEvidenceMode') ?? ''
+      }
+    });
+  }
+"@
+  $methodIndex = $normalized.IndexOf($methodBlock, [StringComparison]::Ordinal)
+  if ($methodIndex -le $structIndex -or $methodIndex -ge $buildIndex -or
+    $normalized.IndexOf($methodBlock, $methodIndex + 1, [StringComparison]::Ordinal) -ge 0) {
     throw "Trusted runtime harness route '$ButtonText' is missing or not exact."
   }
 }
-Assert-TrustedHarnessRoute 'openPortrait' 'Open portrait' 'PORTRAIT_SEGMENTATION' 'title_segmentation'
-Assert-TrustedHarnessRoute 'openTextTranslation' 'Open text translation' 'TEXT_TRANSLATION' 'title_texttranslation'
-Assert-TrustedHarnessRoute 'openStyleTransfer' 'Open style transfer' 'STYLE_TRANSFER' 'title_style_transfer'
-Assert-TrustedHarnessRoute 'openCustomModel' 'Open custom model' 'CUSTOM_MODEL' 'title_custom_model'
+Assert-TrustedHarnessRoute $harnessTemplate 'openPortrait' 'Open portrait' `
+  'PORTRAIT_SEGMENTATION' 'title_segmentation'
+Assert-TrustedHarnessRoute $harnessTemplate 'openTextTranslation' 'Open text translation' `
+  'TEXT_TRANSLATION' 'title_texttranslation'
+Assert-TrustedHarnessRoute $harnessTemplate 'openStyleTransfer' 'Open style transfer' `
+  'STYLE_TRANSFER' 'title_style_transfer'
+Assert-TrustedHarnessRoute $harnessTemplate 'openCustomModel' 'Open custom model' `
+  'CUSTOM_MODEL' 'title_custom_model'
+
+function Assert-TrustedHarnessDecoyRejected([string]$Name, [string]$Source) {
+  try {
+    Assert-TrustedHarnessRoute $Source 'openTextTranslation' 'Open text translation' `
+      'TEXT_TRANSLATION' 'title_texttranslation'
+  } catch {
+    return
+  }
+  throw "Trusted runtime harness route assertion accepted $Name decoy."
+}
+
+Assert-TrustedHarnessDecoyRejected 'block-comment' @'
+/*
+  private openTextTranslation(): void {
+    router.pushUrl({
+      url: AppRoute.TEXT_TRANSLATION.page,
+      params: {
+        routeName: AppRoute.TEXT_TRANSLATION.name,
+        titleKey: 'title_texttranslation',
+        runtimeEvidenceRunId: AppStorage.get<string>('runtimeEvidenceRunId') ?? '',
+        runtimeEvidenceMode: AppStorage.get<string>('runtimeEvidenceMode') ?? ''
+      }
+    });
+  }
+      Button('Open text translation')
+        .width('80%')
+        .constraintSize({ minHeight: 48 })
+        .onClick(() => this.openTextTranslation())
+*/
+'@
+Assert-TrustedHarnessDecoyRejected 'string-literal' @'
+Text("private openTextTranslation(): void { router.pushUrl({ url: AppRoute.TEXT_TRANSLATION.page, params: { routeName: AppRoute.TEXT_TRANSLATION.name, titleKey: 'title_texttranslation', runtimeEvidenceRunId: AppStorage.get<string>('runtimeEvidenceRunId') ?? '', runtimeEvidenceMode: AppStorage.get<string>('runtimeEvidenceMode') ?? '' } }); } Button('Open text translation').width('80%').constraintSize({ minHeight: 48 }).onClick(() => this.openTextTranslation())")
+'@
+$translationMethod = @"
+  private openTextTranslation(): void {
+    router.pushUrl({
+      url: AppRoute.TEXT_TRANSLATION.page,
+      params: {
+        routeName: AppRoute.TEXT_TRANSLATION.name,
+        titleKey: 'title_texttranslation',
+        runtimeEvidenceRunId: AppStorage.get<string>('runtimeEvidenceRunId') ?? '',
+        runtimeEvidenceMode: AppStorage.get<string>('runtimeEvidenceMode') ?? ''
+      }
+    });
+  }
+"@
+$translationButton = @"
+      Button('Open text translation')
+        .width('80%')
+        .constraintSize({ minHeight: 48 })
+        .onClick(() => this.openTextTranslation())
+"@
+$unusedComponentDecoy = $harnessTemplate.Replace($translationMethod, '').Replace($translationButton, '') + @'
+
+@Component
+struct UnusedRouteDecoy {
+  private openTextTranslation(): void {}
+  build() {
+    Button('Open text translation')
+      .onClick(() => this.openTextTranslation())
+  }
+}
+'@
+Assert-TrustedHarnessDecoyRejected 'unused-component' $unusedComponentDecoy
 $tempParent = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\', '/')
 $tempRoot = [IO.Path]::GetFullPath((Join-Path $tempParent ("mindspore-runtime-evidence-" + [guid]::NewGuid().ToString('N'))))
 $tempPrefix = $tempParent + [IO.Path]::DirectorySeparatorChar
