@@ -47,6 +47,7 @@ import {
   shouldShowPrimaryImageInputPreview,
   sampleImageUriForWorkflow,
   shouldAutoRunStyleTransferAfterStyleReady,
+  shouldDeferLiveCameraStopUntilPhotoPick,
   shouldDeferRuntimeResultClearUntilPickResult,
   shouldLeaveRuntimeAfterCancelledInitialPick,
   cancelledPickStatusKeyForWorkflow,
@@ -504,14 +505,21 @@ struct FeatureRuntimePage {
       this.clearRuntimeResultState();
     }
     const liveCameraInput = this.isLiveCameraInput(inputKind);
+    const deferLiveCameraStop = shouldDeferLiveCameraStopUntilPhotoPick(
+      workflow,
+      inputKind,
+      this.liveCameraInputSelected
+    );
     if (liveCameraInput) {
       this.liveCameraInputSelected = true;
     } else if (inputKindReplacesPrimaryInput(inputKind)) {
       if (this.liveCameraInputSelected || this.liveCameraActive || this.liveCameraService !== undefined ||
         this.liveCameraStopTask !== undefined) {
-        await this.stopLiveCameraPreviewAsync();
-        if (!isInputPreparationRequestCurrent(requestId, this.inputPreparationRequestId)) {
-          return;
+        if (!deferLiveCameraStop) {
+          await this.stopLiveCameraPreviewAsync();
+          if (!isInputPreparationRequestCurrent(requestId, this.inputPreparationRequestId)) {
+            return;
+          }
         }
       } else {
         this.stopLiveRuntimeLoop();
@@ -593,6 +601,12 @@ struct FeatureRuntimePage {
     const result = await pickerService.pickImage();
     if (!isInputPreparationRequestCurrent(requestId, this.inputPreparationRequestId)) {
       return;
+    }
+    if (result.ok && deferLiveCameraStop) {
+      await this.stopLiveCameraPreviewAsync();
+      if (!isInputPreparationRequestCurrent(requestId, this.inputPreparationRequestId)) {
+        return;
+      }
     }
     this.applyPickResult(result, 'feature_runtime_image_ready', inputKind, true, initialPick);
   }
@@ -1182,6 +1196,10 @@ struct FeatureRuntimePage {
     if (action !== 'restartInference' || workflow === undefined) {
       return;
     }
+    if (!this.liveCameraInputSelected && this.imageInputUri.length > 0) {
+      this.runWorkflow();
+      return;
+    }
     this.statusKey = 'feature_runtime_status_preparing';
     this.stopLiveRuntimeLoop();
     if (this.liveCameraInputSelected && this.liveCameraActive) {
@@ -1264,6 +1282,10 @@ struct FeatureRuntimePage {
       return;
     }
     if (action !== 'restartInference' || workflow === undefined) {
+      return;
+    }
+    if (!this.liveCameraInputSelected && this.imageInputUri.length > 0) {
+      this.runWorkflow();
       return;
     }
     this.statusKey = 'feature_runtime_status_preparing';
@@ -3240,7 +3262,11 @@ struct FeatureRuntimePage {
   }
 
   private segmentationForegroundMirrorScaleX(): number {
-    return shouldMirrorSegmentationForeground(workflowForRoute(this.routeName), this.liveCameraPosition) ? -1 : 1;
+    return shouldMirrorSegmentationForeground(
+      workflowForRoute(this.routeName),
+      this.liveCameraPosition,
+      this.liveCameraInputSelected
+    ) ? -1 : 1;
   }
 
   private segmentationBoxStyle(rectangle: SegmentationRectangle): SegmentationRectanglePercent {
@@ -3863,6 +3889,9 @@ struct FeatureRuntimePage {
         .layoutWeight(1)
         .maxFontScale(1.6)
         .maxLines(2)
+      if (showActions && this.routeName === AppRoute.IMAGE_CAMERA.name) {
+        this.runtimeGalleryModeAction()
+      }
       if (showActions && this.helpContentKey !== undefined) {
         Row() {
           Image($r('app.media.icon_help'))
@@ -3901,6 +3930,18 @@ struct FeatureRuntimePage {
     .padding({ left: AppSpacing.page, right: AppSpacing.page, top: AppSpacing.xs, bottom: AppSpacing.xs })
     .alignItems(VerticalAlign.Center)
     .backgroundColor(Color.White)
+  }
+
+  @Builder
+  runtimeGalleryModeAction() {
+    Button(appString(this.liveCameraInputSelected ?
+      'feature_input_photo_android' : 'feature_input_camera_android'), { type: ButtonType.Normal })
+      .constraintSize({ minWidth: 56, minHeight: 48 })
+      .fontSize(14)
+      .fontColor(AppColor.accent)
+      .maxFontScale(1.6)
+      .backgroundColor(Color.Transparent)
+      .onClick(() => this.prepareInput(this.liveCameraInputSelected ? 'photo' : 'camera'))
   }
 
   @Builder
@@ -4001,7 +4042,7 @@ struct FeatureRuntimePage {
         .layoutWeight(1)
         .maxFontScale(1.6)
         .maxLines(2)
-      if (this.liveCameraSwitchAvailable) {
+      if (this.liveCameraInputSelected && this.liveCameraSwitchAvailable) {
         Row() {
           Image($r('app.media.icon_camera'))
             .width(24)
@@ -4016,6 +4057,7 @@ struct FeatureRuntimePage {
           .accessibilityRole(AccessibilityRoleType.BUTTON)
           .onClick(() => this.switchLiveCamera())
       }
+      this.runtimeGalleryModeAction()
       SaveButton({
         icon: SaveIconStyle.FULL_FILLED,
         buttonType: ButtonType.Normal
@@ -4043,7 +4085,14 @@ struct FeatureRuntimePage {
   @Builder
   portraitSegmentationCameraPreview() {
     Stack({ alignContent: Alignment.Center }) {
-      this.liveCameraSurfaceContent()
+      if (!this.liveCameraInputSelected && this.imageInputUri.length > 0) {
+        Image(this.imageInputUri)
+          .width('100%')
+          .height('100%')
+          .objectFit(ImageFit.Contain)
+      } else {
+        this.liveCameraSurfaceContent()
+      }
     }
     .width(livePreviewWidthForAspectRatio(this.liveCameraPreviewAspectRatio))
     .aspectRatio(livePreviewCardAspectRatio(this.liveCameraPreviewAspectRatio))
@@ -4618,7 +4667,14 @@ struct FeatureRuntimePage {
     Column() {
       this.runtimeActionToolbar(true)
       Stack({ alignContent: Alignment.TopStart }) {
-        this.liveCameraSurfaceContent()
+        if (!this.liveCameraInputSelected && this.imageInputUri.length > 0) {
+          Image(this.imageInputUri)
+            .width('100%')
+            .height('100%')
+            .objectFit(ImageFit.Contain)
+        } else {
+          this.liveCameraSurfaceContent()
+        }
         Column() {
           this.liveClassificationStatusOverlay()
         }

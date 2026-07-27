@@ -144,9 +144,9 @@ export const featureWorkflows: Array<FeatureWorkflow> = [
     titleKey: 'title_segmentation',
     summaryKey: 'workflow_summary_segmentation',
     aiMethod: 'segmentPerson',
-    inputKinds: ['camera'],
+    inputKinds: ['camera', 'photo'],
     optionalInputKinds: ['backgroundImage'],
-    requiredPermissions: ['camera'],
+    requiredPermissions: ['camera', 'media'],
     resultKind: 'segmentationMask',
     liveMode: true,
     helpUrl: helpImageSegmentationUrl,
@@ -157,8 +157,8 @@ export const featureWorkflows: Array<FeatureWorkflow> = [
     titleKey: 'title_image',
     summaryKey: 'workflow_summary_classification',
     aiMethod: 'classifyImage',
-    inputKinds: ['camera'],
-    requiredPermissions: ['camera'],
+    inputKinds: ['camera', 'photo'],
+    requiredPermissions: ['camera', 'media'],
     resultKind: 'classification',
     liveMode: true,
     helpUrl: helpImageClassificationUrl,
@@ -512,7 +512,7 @@ export function runtimeInputKindsForWorkflow(workflow: FeatureWorkflow): Array<F
 }
 
 export function autoStartInputKindForWorkflow(workflow: FeatureWorkflow): FeatureInputKind | undefined {
-  if (!workflow.liveMode || workflow.inputKinds.length !== 1 || workflow.inputKinds[0] !== 'camera') {
+  if (!workflow.liveMode || workflow.inputKinds[0] !== 'camera') {
     return undefined;
   }
   return 'camera';
@@ -1013,9 +1013,10 @@ export function shouldKeepScreenOnForWorkflow(workflow: FeatureWorkflow | undefi
 
 export function shouldMirrorSegmentationForeground(
   workflow: FeatureWorkflow | undefined,
-  liveCameraPosition: LiveCameraPosition
+  liveCameraPosition: LiveCameraPosition,
+  liveCameraInputSelected: boolean = true
 ): boolean {
-  return (workflow?.routeName === AppRoute.PORTRAIT_SEGMENTATION.name ||
+  return liveCameraInputSelected && (workflow?.routeName === AppRoute.PORTRAIT_SEGMENTATION.name ||
     usesAndroidLiveSegmentationLayout(workflow)) && liveCameraPosition === 'front';
 }
 
@@ -1051,6 +1052,16 @@ export function shouldDeferRuntimeResultClearUntilPickResult(
     return false;
   }
   return inputKind !== 'camera' || !workflow.liveMode;
+}
+
+export function shouldDeferLiveCameraStopUntilPhotoPick(
+  workflow: FeatureWorkflow | undefined,
+  inputKind: FeatureInputKind,
+  liveCameraInputSelected: boolean
+): boolean {
+  return liveCameraInputSelected && inputKind === 'photo' &&
+    (workflow?.routeName === AppRoute.PORTRAIT_SEGMENTATION.name ||
+      workflow?.routeName === AppRoute.IMAGE_CAMERA.name);
 }
 
 export function shouldPreserveRuntimeResultAfterInputReady(
@@ -1180,6 +1191,10 @@ export function cancelledPickToastStatusKeyForWorkflow(
 }
 
 export function shouldAutoRunWorkflowAfterInputReady(workflow: FeatureWorkflow, inputKind: FeatureInputKind): boolean {
+  if ((workflow.routeName === AppRoute.PORTRAIT_SEGMENTATION.name ||
+    workflow.routeName === AppRoute.IMAGE_CAMERA.name) && inputKind === 'photo') {
+    return true;
+  }
   if (workflow.routeName === AppRoute.OBJECT_PHOTO.name && inputKind === 'photo') {
     return true;
   }

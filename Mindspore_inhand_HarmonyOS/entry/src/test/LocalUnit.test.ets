@@ -358,6 +358,7 @@ import {
   FeatureWorkflow,
   featureWorkflows,
   fixedLiveCameraPositionForWorkflow,
+  shouldDeferLiveCameraStopUntilPhotoPick,
   shouldDeferRuntimeResultClearUntilPickResult,
   WorkflowInputReadyAction,
   autoStartInputKindForWorkflow,
@@ -4006,6 +4007,7 @@ export default function localUnitTest() {
       const classification: FeatureWorkflow = workflowForRoute(AppRoute.IMAGE_CAMERA.name)!;
       expect(classification.aiMethod).assertEqual('classifyImage');
       expect(classification.inputKinds.indexOf('camera') >= 0).assertTrue();
+      expect(classification.inputKinds.indexOf('photo') >= 0).assertTrue();
 
       const styleTransfer: FeatureWorkflow = workflowForRoute(AppRoute.STYLE_TRANSFER.name)!;
       expect(styleTransfer.aiMethod).assertEqual('runStyleTransfer');
@@ -4037,10 +4039,10 @@ export default function localUnitTest() {
       const portraitSegmentation: FeatureWorkflow = workflowForRoute(AppRoute.PORTRAIT_SEGMENTATION.name)!;
       expect(portraitSegmentation.aiMethod).assertEqual('segmentPerson');
       expect(portraitSegmentation.inputKinds.indexOf('camera') >= 0).assertTrue();
-      expect(portraitSegmentation.inputKinds.indexOf('photo')).assertEqual(-1);
+      expect(portraitSegmentation.inputKinds.indexOf('photo') >= 0).assertTrue();
       expect((portraitSegmentation.optionalInputKinds ?? []).indexOf('backgroundImage') >= 0).assertTrue();
       expect(portraitSegmentation.requiredPermissions.indexOf('camera') >= 0).assertTrue();
-      expect(portraitSegmentation.requiredPermissions.indexOf('media')).assertEqual(-1);
+      expect(portraitSegmentation.requiredPermissions.indexOf('media') >= 0).assertTrue();
       expect(portraitSegmentation.liveMode).assertTrue();
       expect(liveRuntimeModeForWorkflow(portraitSegmentation)).assertTrue();
       expect(shouldRenderLiveCameraPreview(portraitSegmentation, false)).assertTrue();
@@ -4244,6 +4246,7 @@ export default function localUnitTest() {
 
       expect(shouldMirrorSegmentationForeground(portraitSegmentation, 'front')).assertTrue();
       expect(shouldMirrorSegmentationForeground(portraitSegmentation, 'back')).assertFalse();
+      expect(shouldMirrorSegmentationForeground(portraitSegmentation, 'front', false)).assertFalse();
       expect(shouldMirrorSegmentationForeground(segmentationLive, 'front')).assertTrue();
       expect(shouldMirrorSegmentationForeground(segmentationLive, 'back')).assertFalse();
       expect(shouldMirrorSegmentationForeground(segmentationStill, 'front')).assertFalse();
@@ -4377,6 +4380,14 @@ export default function localUnitTest() {
 
       const textTranslation: FeatureWorkflow = workflowForRoute(AppRoute.TEXT_TRANSLATION.name)!;
       expect(shouldDeferRuntimeResultClearUntilPickResult(textTranslation, 'text')).assertFalse();
+
+      expect(shouldDeferLiveCameraStopUntilPhotoPick(
+        workflowForRoute(AppRoute.PORTRAIT_SEGMENTATION.name), 'photo', true)).assertTrue();
+      expect(shouldDeferLiveCameraStopUntilPhotoPick(
+        workflowForRoute(AppRoute.IMAGE_CAMERA.name), 'photo', true)).assertTrue();
+      expect(shouldDeferLiveCameraStopUntilPhotoPick(liveObject, 'photo', true)).assertFalse();
+      expect(shouldDeferLiveCameraStopUntilPhotoPick(
+        workflowForRoute(AppRoute.PORTRAIT_SEGMENTATION.name), 'photo', false)).assertFalse();
     });
 
     it('preservesPortraitSegmentationResultsWhenOnlyBackgroundInputChanges', 0, () => {
@@ -9741,9 +9752,13 @@ export default function localUnitTest() {
       expect(runtimeInputActionsForWorkflow(objectPhoto).indexOf('pickModelFile')).assertEqual(-1);
       expect(runtimeInputKindsForWorkflow(objectPhoto).indexOf('modelFile') >= 0).assertTrue();
       const portraitSegmentation: FeatureWorkflow = workflowForRoute(AppRoute.PORTRAIT_SEGMENTATION.name)!;
-      expect(runtimeInputActionsForWorkflow(portraitSegmentation).indexOf('startLiveCamera') >= 0).assertTrue();
+      expect(runtimeInputActionsForWorkflow(portraitSegmentation).join(','))
+        .assertEqual('startLiveCamera,pickImage');
       expect(runtimeInputActionsForWorkflow(portraitSegmentation).indexOf('captureImage')).assertEqual(-1);
       expect(runtimeInputKindsForWorkflow(portraitSegmentation).indexOf('backgroundImage') >= 0).assertTrue();
+      const imageClassification: FeatureWorkflow = workflowForRoute(AppRoute.IMAGE_CAMERA.name)!;
+      expect(runtimeInputActionsForWorkflow(imageClassification).join(','))
+        .assertEqual('startLiveCamera,pickImage');
       expect(inputActionForKind('camera')).assertEqual('captureImage');
       expect(inputActionForKind('photo')).assertEqual('pickImage');
       expect(inputActionForKind('backgroundImage')).assertEqual('pickImage');
@@ -9956,6 +9971,10 @@ export default function localUnitTest() {
 
       expect(shouldAutoRunWorkflowAfterInputReady(segmentationStill, 'photo')).assertTrue();
       expect(shouldAutoRunWorkflowAfterInputReady(segmentationStill, 'camera')).assertTrue();
+      expect(shouldAutoRunWorkflowAfterInputReady(
+        workflowForRoute(AppRoute.PORTRAIT_SEGMENTATION.name)!, 'photo')).assertTrue();
+      expect(shouldAutoRunWorkflowAfterInputReady(
+        workflowForRoute(AppRoute.IMAGE_CAMERA.name)!, 'photo')).assertTrue();
       expect(shouldAutoRunWorkflowAfterInputReady(gestureStill, 'photo')).assertTrue();
       expect(shouldAutoRunWorkflowAfterInputReady(gestureStill, 'camera')).assertTrue();
       expect(shouldAutoRunWorkflowAfterInputReady(sceneStill, 'photo')).assertTrue();
@@ -10907,7 +10926,7 @@ export default function localUnitTest() {
       expect(layoutMatchCount(undefined)).assertEqual(0);
     });
 
-    it('hidesAutoStartCameraFromLiveInputChipsLikeAndroidLiveActivities', 0, () => {
+    it('hidesAutoStartCameraWhileKeepingSecondaryLiveInputsVisible', 0, () => {
       const liveRouteNames: Array<string> = [
         AppRoute.LIVE_SKELETON.name,
         AppRoute.SEGMENTATION_LIVE.name,
@@ -10928,12 +10947,15 @@ export default function localUnitTest() {
         const visibleInputs: Array<FeatureInputKind> = visibleInputKindsForWorkflow(workflow);
         if (routeName === AppRoute.OBJECT_CAMERA.name) {
           expect(JSON.stringify(visibleInputs)).assertEqual(JSON.stringify(['modelFile']));
+        } else if (routeName === AppRoute.PORTRAIT_SEGMENTATION.name ||
+          routeName === AppRoute.IMAGE_CAMERA.name) {
+          expect(JSON.stringify(visibleInputs)).assertEqual(JSON.stringify(['photo']));
         } else {
           expect(visibleInputs.length).assertEqual(0);
           emptyVisibleInputCount += 1;
         }
       });
-      expect(emptyVisibleInputCount).assertEqual(6);
+      expect(emptyVisibleInputCount).assertEqual(4);
 
       const stillRouteNames: Array<string> = [
         AppRoute.POSENET.name,

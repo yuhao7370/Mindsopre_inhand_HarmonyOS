@@ -47,7 +47,8 @@ expect(shouldMirrorSegmentationForeground(portrait, 'front', false)).assertFalse
 Run:
 
 ```powershell
-node .\hvigorw.js test --mode module -p module=entry@default -p product=default
+$env:DEVECO_SDK_HOME = 'F:\Program Files\Huawei\DevEco Studio\sdk'
+& cmd.exe /d /c '"F:\Program Files\Huawei\DevEco Studio\tools\hvigor\bin\hvigorw.bat" test --mode module -p product=default -p module=entry@default --no-daemon'
 ```
 
 Expected: assertions fail because the live workflows expose only camera input and do not auto-run selected photos.
@@ -117,8 +118,9 @@ shouldMirrorSegmentationForeground(
 - [ ] **Step 4: Run unit tests and build the HAP**
 
 ```powershell
-node .\hvigorw.js test --mode module -p module=entry@default -p product=default
-node .\hvigorw.js assembleHap --mode module -p module=entry@default -p product=default
+$env:DEVECO_SDK_HOME = 'F:\Program Files\Huawei\DevEco Studio\sdk'
+& cmd.exe /d /c '"F:\Program Files\Huawei\DevEco Studio\tools\hvigor\bin\hvigorw.bat" test --mode module -p product=default -p module=entry@default --no-daemon'
+& cmd.exe /d /c '"F:\Program Files\Huawei\DevEco Studio\tools\hvigor\bin\hvigorw.bat" assembleHap --mode module -p product=default -p module=entry@default --no-daemon'
 ```
 
 Expected: both commands report `BUILD SUCCESSFUL`.
