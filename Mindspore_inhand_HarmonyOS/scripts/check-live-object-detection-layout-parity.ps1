@@ -21,20 +21,21 @@ function Remove-ArkTsCommentsAndLiteralText([string]$Text) {
   $quote = [char]0
   $escaped = $false
   $templateExpressionDepth = 0
+  $returnState = 'code'
   for ($index = 0; $index -lt $Text.Length; $index++) {
     $current = $Text[$index]
     $next = if ($index + 1 -lt $Text.Length) { $Text[$index + 1] } else { [char]0 }
 
     if ($state -eq 'line') {
       [void]$result.Append($(if ($current -eq [char]0x0A) { "`n" } else { ' ' }))
-      if ($current -eq [char]0x0A) { $state = 'code' }
+      if ($current -eq [char]0x0A) { $state = $returnState }
       continue
     }
     if ($state -eq 'block') {
       if ($current -eq [char]0x2A -and $next -eq [char]0x2F) {
         [void]$result.Append('  ')
         $index++
-        $state = 'code'
+        $state = $returnState
       } else {
         [void]$result.Append($(if ($current -eq [char]0x0A) { "`n" } else { ' ' }))
       }
@@ -47,7 +48,7 @@ function Remove-ArkTsCommentsAndLiteralText([string]$Text) {
       } elseif ($current -eq [char]0x5C) {
         $escaped = $true
       } elseif ($current -eq $quote) {
-        $state = 'code'
+        $state = $returnState
       }
       continue
     }
@@ -82,15 +83,18 @@ function Remove-ArkTsCommentsAndLiteralText([string]$Text) {
       } elseif ($current -eq [char]0x2F -and $next -eq [char]0x2F) {
         [void]$result.Append('  ')
         $index++
+        $returnState = 'templateExpression'
         $state = 'line'
       } elseif ($current -eq [char]0x2F -and $next -eq [char]0x2A) {
         [void]$result.Append('  ')
         $index++
+        $returnState = 'templateExpression'
         $state = 'block'
       } elseif ($current -eq [char]0x22 -or $current -eq [char]0x27) {
         [void]$result.Append(' ')
         $quote = $current
         $escaped = $false
+        $returnState = 'templateExpression'
         $state = 'string'
       } elseif ($current -eq [char]0x60) {
         [void]$result.Append(' ')
@@ -105,15 +109,18 @@ function Remove-ArkTsCommentsAndLiteralText([string]$Text) {
     if ($current -eq [char]0x2F -and $next -eq [char]0x2F) {
       [void]$result.Append('  ')
       $index++
+      $returnState = 'code'
       $state = 'line'
     } elseif ($current -eq [char]0x2F -and $next -eq [char]0x2A) {
       [void]$result.Append('  ')
       $index++
+      $returnState = 'code'
       $state = 'block'
     } elseif ($current -eq [char]0x22 -or $current -eq [char]0x27) {
       [void]$result.Append(' ')
       $quote = $current
       $escaped = $false
+      $returnState = 'code'
       $state = 'string'
     } elseif ($current -eq [char]0x60) {
       [void]$result.Append(' ')
@@ -327,9 +334,9 @@ Assert-Contains $permissionAction 'this.retryRuntimeCameraInput();' `
 
 Assert-Contains $runAsync 'shouldPublishLiveObjectDetectionPreparingStatus(' `
   'automatic frames must preserve durable object detection status.'
-Assert-Contains $frameCapture 'shouldPreserveRuntimeTextResultOnAiResult(workflow, false)' `
+Assert-Contains $frameCapture 'shouldPreserveRuntimeTextResultOnAiResult(workflow, false, this.resultText.length > 0)' `
   'frame failures must preserve the last detection summary.'
-Assert-Contains $applyResult 'shouldPreserveRuntimeTextResultOnAiResult(workflow, result.ok)' `
+Assert-Contains $applyResult 'shouldPreserveRuntimeTextResultOnAiResult(workflow, result.ok, this.resultText.length > 0)' `
   'AI failures must preserve the last detection summary.'
 Assert-Contains $preserveText 'shouldShowLiveObjectDetectionCameraOverlay(workflow)' `
   'transient failures must preserve object detection text.'

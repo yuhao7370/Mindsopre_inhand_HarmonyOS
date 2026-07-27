@@ -287,13 +287,13 @@ $frameFailure = Section-UsingLiteralBounds $frameCapture $frameCaptureWithLitera
   '    if (!result.ok) {' `
   '      if (shouldShowLiveObjectDetectionCameraOverlay(workflow)) {' 'frame failure branch'
 $frameClearBlock = Section $frameFailure `
-  '      if (!shouldPreserveRuntimeTextResultOnAiResult(workflow, false)) {' `
+  '      if (!shouldPreserveRuntimeTextResultOnAiResult(workflow, false, this.resultText.length > 0)) {' `
   "`n      }" 'frame-failure clear gate'
 $frameFailureWithLiterals = Section $frameCaptureWithLiterals `
   '    if (!result.ok) {' `
   '      if (shouldShowLiveObjectDetectionCameraOverlay(workflow)) {' 'frame failure branch literals'
 $frameClearBlockWithLiterals = Section $frameFailureWithLiterals `
-  '      if (!shouldPreserveRuntimeTextResultOnAiResult(workflow, false)) {' `
+  '      if (!shouldPreserveRuntimeTextResultOnAiResult(workflow, false, this.resultText.length > 0)) {' `
   "`n      }" 'frame-failure clear gate literals'
 foreach ($marker in @('this.resultRows = [];')) {
   Assert-Contains $frameClearBlock $marker "frame-failure clear gate is missing: $marker"
@@ -309,11 +309,11 @@ Assert-Contains $runAsync `
   'automatic live frames must not erase a durable classification success/failure status.'
 Assert-Contains $runAsync 'if (shouldClearRuntimeResultAtWorkflowStart(workflow)) {' `
   'workflow start must retain route-specific result preservation.'
-Assert-Contains $runAsync 'if (!shouldPreserveRuntimeTextResultOnAiResult(workflow, false)) {' `
+Assert-Contains $runAsync 'if (!shouldPreserveRuntimeTextResultOnAiResult(workflow, false, this.resultText.length > 0)) {' `
   'permission failure must retain eligible classification results.'
-Assert-Contains $runtimeFailure 'if (!shouldPreserveRuntimeTextResultOnAiResult(workflow, false)) {' `
+Assert-Contains $runtimeFailure 'if (!shouldPreserveRuntimeTextResultOnAiResult(workflow, false, this.resultText.length > 0)) {' `
   'runtime exceptions must retain eligible classification results.'
-Assert-Contains $applyResult 'if (!shouldPreserveRuntimeTextResultOnAiResult(workflow, result.ok)) {' `
+Assert-Contains $applyResult 'if (!shouldPreserveRuntimeTextResultOnAiResult(workflow, result.ok, this.resultText.length > 0)) {' `
   'AI publication must atomically replace only accepted classification results.'
 Assert-Contains $preserve 'shouldShowLiveClassificationCameraOverlay(workflow)' `
   'transient live-classification inference failures must preserve the last label.'

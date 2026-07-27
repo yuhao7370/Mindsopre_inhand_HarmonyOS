@@ -247,12 +247,12 @@ Assert-CodeLine $liveWrapper 'this.openLinkedLiveRoute();' 'live wrapper must re
 $run = Get-TextSection $page '  private async runWorkflowAsync(' "`n`n  private applyRuntimeFailure" 'run/permission flow'
 Assert-CodeLine $run 'if (shouldClearRuntimeResultAtWorkflowStart(workflow)) {' `
   'run start must honor the still-scene no-clear policy.'
-Assert-CodeLine $run 'if (!shouldPreserveRuntimeTextResultOnAiResult(workflow, false)) {' `
+Assert-CodeLine $run 'if (!shouldPreserveRuntimeTextResultOnAiResult(workflow, false, this.resultText.length > 0)) {' `
   'permission denial must preserve the prior still-scene result.'
 Assert-CodeLine $run 'await this.applyAiResult(result, runtimeRequestId);' 'run lifecycle must await result application.'
 $failure = Get-TextSection $page '  private applyRuntimeFailure(): void {' `
   "`n`n  private async prepareLiveFrameImageInput" 'thrown-runtime failure flow'
-Assert-CodeLine $failure 'if (!shouldPreserveRuntimeTextResultOnAiResult(workflow, false)) {' `
+Assert-CodeLine $failure 'if (!shouldPreserveRuntimeTextResultOnAiResult(workflow, false, this.resultText.length > 0)) {' `
   'thrown runtime failure must preserve the prior still-scene result.'
 Assert-Excludes $failure 'showStillSceneFailureToastIfNeeded' 'thrown runtime failure must remain silent'
 $apply = Get-TextSection $page '  private async applyAiResult(' `
@@ -266,7 +266,7 @@ Assert-CodeLine $stillResult 'this.resultRows = androidStillSceneResultRows(resu
   'successful current still-scene results must replace rows with the Android adapter.'
 Assert-CodeLine $apply 'this.showStillSceneFailureToastIfNeeded(result.code);' `
   'completed AI results must reach the empty-only Toast policy.'
-Assert-CodeLine $apply 'if (!shouldPreserveRuntimeTextResultOnAiResult(workflow, result.ok)) {' `
+Assert-CodeLine $apply 'if (!shouldPreserveRuntimeTextResultOnAiResult(workflow, result.ok, this.resultText.length > 0)) {' `
   'failed results must preserve the prior text rows.'
 
 $toastHelper = Get-TextSection $page '  private showStillSceneFailureToastIfNeeded(' `

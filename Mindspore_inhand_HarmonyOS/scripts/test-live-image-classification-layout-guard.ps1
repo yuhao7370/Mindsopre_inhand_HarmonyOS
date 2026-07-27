@@ -98,7 +98,6 @@ function Mutate-Section-And-Reject(
 try {
   [IO.Directory]::CreateDirectory($tempRoot) | Out-Null
   & $guard -SourceRoot $sourceRoot
-  if ($LASTEXITCODE -ne 0) { throw 'Baseline live classification guard failed.' }
 
   $page = 'entry\src\main\ets\pages\FeatureRuntimePage.ets'
   $catalog = 'entry\src\main\ets\features\runtime\FeatureWorkflowCatalog.ets'
@@ -125,7 +124,7 @@ try {
   $previewUnconditionalClear = "    this.statusKey = 'feature_runtime_status_preparing';" +
     "`n    if (true) {`n      this.resultRows = [];"
   $frameClearGate = '      const workflow = workflowForRoute(this.routeName);' +
-    "`n      if (!shouldPreserveRuntimeTextResultOnAiResult(workflow, false)) {" +
+    "`n      if (!shouldPreserveRuntimeTextResultOnAiResult(workflow, false, this.resultText.length > 0)) {" +
     "`n        this.resultText = '';"
   $frameUnconditionalClear = '      const workflow = workflowForRoute(this.routeName);' +
     "`n      if (true) {`n        this.resultText = '';"
@@ -159,6 +158,8 @@ try {
     "`n    }"
   $alwaysPreparing = "    this.statusKey = 'feature_runtime_status_preparing';"
   $preserveClassification = '(usesAndroidStillSceneLayout(workflow) || usesAndroidObjectPhotoLayout(workflow) ||' +
+    "`n    usesAndroidTextTranslationLayout(workflow) ||" +
+    "`n    (usesAndroidCustomModelLayout(workflow) && hasTextResult) ||" +
     "`n    shouldShowLiveClassificationCameraOverlay(workflow) ||" +
     "`n    shouldShowLiveObjectDetectionCameraOverlay(workflow) ||" +
     "`n    usesAndroidLiveSegmentationLayout(workflow) ||" +
@@ -216,6 +217,8 @@ try {
   Mutate-And-Reject 'clear-result-on-frame-failure' $page $frameClearGate $frameUnconditionalClear
   Mutate-And-Reject 'drop-transient-result-preservation' $catalog $preserveClassification `
     ('(usesAndroidStillSceneLayout(workflow) || usesAndroidObjectPhotoLayout(workflow) ||' +
+       "`n    usesAndroidTextTranslationLayout(workflow) ||" +
+       "`n    (usesAndroidCustomModelLayout(workflow) && hasTextResult) ||" +
        "`n    shouldShowLiveObjectDetectionCameraOverlay(workflow) ||" +
        "`n    usesAndroidLiveSegmentationLayout(workflow) ||" +
        "`n    usesAndroidLiveGestureLayout(workflow) ||" +

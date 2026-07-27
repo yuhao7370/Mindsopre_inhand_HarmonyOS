@@ -158,7 +158,7 @@ export function sceneDetectionOverlayRows(result: SceneDetectionResult): Array<S
       this.resultRows = [];
     }
     if (!permission.ok) {
-      if (!shouldPreserveRuntimeTextResultOnAiResult(workflow, false)) {
+      if (!shouldPreserveRuntimeTextResultOnAiResult(workflow, false, this.resultText.length > 0)) {
         this.resultRows = [];
       }
       return;
@@ -168,7 +168,7 @@ export function sceneDetectionOverlayRows(result: SceneDetectionResult): Array<S
 
   private applyRuntimeFailure(): void {
     const workflow = workflowForRoute(this.routeName);
-    if (!shouldPreserveRuntimeTextResultOnAiResult(workflow, false)) {
+    if (!shouldPreserveRuntimeTextResultOnAiResult(workflow, false, this.resultText.length > 0)) {
       this.resultRows = [];
     }
   }
@@ -178,7 +178,7 @@ export function sceneDetectionOverlayRows(result: SceneDetectionResult): Array<S
 
   private async applyAiResult(result: AiRunResult, runtimeRequestId: number): Promise<void> {
     const workflow = workflowForRoute(this.routeName);
-    if (!shouldPreserveRuntimeTextResultOnAiResult(workflow, result.ok)) {
+    if (!shouldPreserveRuntimeTextResultOnAiResult(workflow, result.ok, this.resultText.length > 0)) {
       this.resultRows = [];
     }
     if (usesAndroidStillSceneLayout(workflow) && result.ok && result.data?.kind === 'scenes') {
@@ -473,11 +473,11 @@ try {
     "failureKind: 'runtime',`n    executionMs: 0" `
     "failureKind: 'empty',`n    provenanceDecoy: \"failureKind: 'runtime',\",`n    executionMs: 0"
   Assert-MutationRejected $validRoot 'missing-permission-preservation' $pagePath `
-    "if (!permission.ok) {`n      if (!shouldPreserveRuntimeTextResultOnAiResult(workflow, false)) {" `
+    "if (!permission.ok) {`n      if (!shouldPreserveRuntimeTextResultOnAiResult(workflow, false, this.resultText.length > 0)) {" `
     "if (!permission.ok) {`n      if (true) {"
   Assert-MutationRejected $validRoot 'permission-preservation-string-decoy' $pagePath `
-    "if (!permission.ok) {`n      if (!shouldPreserveRuntimeTextResultOnAiResult(workflow, false)) {" `
-    "if (!permission.ok) {`n      const preservationDecoy = 'if (!shouldPreserveRuntimeTextResultOnAiResult(workflow, false)) {';`n      if (true) {"
+    "if (!permission.ok) {`n      if (!shouldPreserveRuntimeTextResultOnAiResult(workflow, false, this.resultText.length > 0)) {" `
+    "if (!permission.ok) {`n      const preservationDecoy = 'if (!shouldPreserveRuntimeTextResultOnAiResult(workflow, false, this.resultText.length > 0)) {';`n      if (true) {"
   Assert-MutationRejected $validRoot 'runtime-failure-toasts' $catalogPath `
     "resultCode === 'SCENE_DETECTION_FAILED'" `
     "resultCode === 'SCENE_DETECTION_RUNTIME_FAILED'"
@@ -485,8 +485,8 @@ try {
     "messageKey: 'feature_runtime_scene_failed'," `
     "messageKey: 'feature_runtime_scene_done',"
   Assert-MutationRejected $validRoot 'throw-toast-injected' $pagePath `
-    "if (!shouldPreserveRuntimeTextResultOnAiResult(workflow, false)) {`n      this.resultRows = [];`n    }`n  }`n`n  private async prepareLiveFrameImageInput" `
-    "if (!shouldPreserveRuntimeTextResultOnAiResult(workflow, false)) {`n      this.resultRows = [];`n    }`n    this.showStillSceneFailureToastIfNeeded('SCENE_DETECTION_RUNTIME_FAILED');`n  }`n`n  private async prepareLiveFrameImageInput"
+    "if (!shouldPreserveRuntimeTextResultOnAiResult(workflow, false, this.resultText.length > 0)) {`n      this.resultRows = [];`n    }`n  }`n`n  private async prepareLiveFrameImageInput" `
+    "if (!shouldPreserveRuntimeTextResultOnAiResult(workflow, false, this.resultText.length > 0)) {`n      this.resultRows = [];`n    }`n    this.showStillSceneFailureToastIfNeeded('SCENE_DETECTION_RUNTIME_FAILED');`n  }`n`n  private async prepareLiveFrameImageInput"
   Assert-MutationRejected $validRoot 'missing-successful-row-replacement' $pagePath `
     'this.resultRows = androidStillSceneResultRows(result.data.result);' `
     "const rowDecoy = 'this.resultRows = androidStillSceneResultRows(result.data.result);';"
