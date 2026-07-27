@@ -2752,9 +2752,12 @@ export default function localUnitTest() {
     });
 
     it('definesDefaultMainTabsInAndroidOrder', 0, () => {
-      expect(mainTabs.length).assertEqual(2);
+      expect(mainTabs.length).assertEqual(3);
       expect(mainTabs[0].id).assertEqual(MainTab.EXPERIENCE);
-      expect(mainTabs[1].id).assertEqual(MainTab.ME);
+      expect(mainTabs[1].id).assertEqual(MainTab.COLLEGE);
+      expect(mainTabs[2].id).assertEqual(MainTab.ME);
+      expect(mainTabs[1].selectedIconMediaName).assertEqual('college_checked_icon');
+      expect(mainTabs[1].unselectedIconMediaName).assertEqual('college_uncheck');
     });
 
     it('mapsSemanticIconTokensToCompactLabels', 0, () => {

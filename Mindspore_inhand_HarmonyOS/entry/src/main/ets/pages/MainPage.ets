@@ -1,6 +1,7 @@
 import { MainTab, mainTabs } from '../app/AppState';
 import { BottomTabBar } from '../common/components/BottomTabBar';
 import { AppColor } from '../common/theme/AppTheme';
+import { CollegePage } from './CollegePage';
 import { ExperiencePage } from './ExperiencePage';
 import { MePage } from './MePage';
 
@@ -14,6 +15,9 @@ export struct MainPage {
         ExperiencePage()
           .visibility(this.selectedTab === MainTab.EXPERIENCE ? Visibility.Visible : Visibility.Hidden)
           .hitTestBehavior(this.selectedTab === MainTab.EXPERIENCE ? HitTestMode.Default : HitTestMode.None)
+        CollegePage()
+          .visibility(this.selectedTab === MainTab.COLLEGE ? Visibility.Visible : Visibility.Hidden)
+          .hitTestBehavior(this.selectedTab === MainTab.COLLEGE ? HitTestMode.Default : HitTestMode.None)
         MePage()
           .visibility(this.selectedTab === MainTab.ME ? Visibility.Visible : Visibility.Hidden)
           .hitTestBehavior(this.selectedTab === MainTab.ME ? HitTestMode.Default : HitTestMode.None)
