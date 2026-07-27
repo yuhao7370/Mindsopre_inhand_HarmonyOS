@@ -182,11 +182,19 @@ Assert-Contains $portraitLayout 'this.portraitSegmentationResultPreview()' 'port
 Assert-Contains $portraitLayout 'this.portraitSegmentationStatus()' 'portrait layout needs its independent status lane.'
 Assert-Contains $portraitLayout 'this.portraitSegmentationBackgroundStrip()' 'portrait layout needs its background controls.'
 Assert-Contains $portraitLayout 'Scroll() {' 'portrait split previews must remain reachable on compact screens.'
-if ($portraitLayout.IndexOf((Convert-ArkTsToGuardCode 'this.portraitSegmentationCameraPreview()'),
-    [StringComparison]::Ordinal) -ge
-  $portraitLayout.IndexOf((Convert-ArkTsToGuardCode 'this.portraitSegmentationResultPreview()'),
-    [StringComparison]::Ordinal)) {
+$portraitCameraIndex = $portraitLayout.IndexOf(
+  (Convert-ArkTsToGuardCode 'this.portraitSegmentationCameraPreview()'), [StringComparison]::Ordinal)
+$portraitResultIndex = $portraitLayout.IndexOf(
+  (Convert-ArkTsToGuardCode 'this.portraitSegmentationResultPreview()'), [StringComparison]::Ordinal)
+$portraitScrollIndex = $portraitLayout.IndexOf((Convert-ArkTsToGuardCode 'Scroll() {'), [StringComparison]::Ordinal)
+if ($portraitCameraIndex -ge $portraitResultIndex) {
   Fail 'portrait camera preview must appear before the segmentation result.'
+}
+if ($portraitCameraIndex -ge $portraitScrollIndex) {
+  Fail 'portrait camera XComponent must remain outside Scroll to avoid hardware-surface overlay.'
+}
+if ($portraitResultIndex -le $portraitScrollIndex) {
+  Fail 'portrait result preview must remain inside the reachable scrolling content.'
 }
 Assert-Contains $portraitCameraPreview '.aspectRatio(4 / 3)' 'portrait camera preview must use 4:3.'
 Assert-Contains $portraitResultPreview '.aspectRatio(4 / 3)' 'portrait result preview must use 4:3.'

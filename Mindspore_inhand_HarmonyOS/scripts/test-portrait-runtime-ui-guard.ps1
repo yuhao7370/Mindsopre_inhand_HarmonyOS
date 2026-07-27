@@ -119,6 +119,10 @@ try {
   Invoke-SectionMutation 'missing-result-preview' $page `
     '  portraitSegmentationAndroidLayout() {' '  simpleAndroidLiveLayout() {' `
     'this.portraitSegmentationResultPreview()' 'this.portraitSegmentationCameraPreview()'
+  Invoke-SectionMutation 'scrolling-camera-surface' $page `
+    '  portraitSegmentationAndroidLayout() {' '  simpleAndroidLiveLayout() {' `
+    "this.portraitSegmentationCameraPreview()`n      Scroll() {" `
+    "Scroll() {`n        this.portraitSegmentationCameraPreview()"
   Invoke-SectionMutation 'wrong-result-aspect-ratio' $page `
     '  portraitSegmentationResultPreview() {' '  portraitSegmentationStatus() {' `
     '.aspectRatio(4 / 3)' ".height('100%')"
