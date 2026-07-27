@@ -143,6 +143,9 @@ Assert-Count $builder 'Scroll() {' 1 'the page must have one top-level content S
 Assert-Count $builder 'this.resultRows' 1 'the result card must render resultRows exactly once.'
 Assert-Excludes $builder '.copyOption(CopyOptions.LocalDevice)' `
   'translated output must not become a separate undersized clickable target; use the Copy button.'
+Assert-Contains $builder `
+  '.padding({ left: AppSpacing.page, right: AppSpacing.page, top: AppSpacing.md, bottom: AppSpacing.xl + AppSpacing.page * 2 })' `
+  'the translation Scroll must leave enough tail room for 3.2x text without clipping a target.'
 
 foreach ($button in @(
   'Button(appString(textTranslationRunActionLabelKey(this.statusKey, this.runActionKey)))',

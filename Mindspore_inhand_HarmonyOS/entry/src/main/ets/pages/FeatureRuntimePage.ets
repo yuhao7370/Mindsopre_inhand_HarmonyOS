@@ -5089,7 +5089,7 @@ struct FeatureRuntimePage {
           this.styleTransferStyleGrid()
         }
         .width('100%')
-        .padding({ left: AppSpacing.page, right: AppSpacing.page, bottom: AppSpacing.xl })
+        .padding({ left: AppSpacing.page, right: AppSpacing.page, bottom: AppSpacing.xl + AppSpacing.page * 2 })
       }
       .width('100%')
       .layoutWeight(1)
@@ -6035,7 +6035,7 @@ struct FeatureRuntimePage {
             .onClick(() => this.copyTranslatedText())
         }
         .width('100%')
-        .padding({ left: AppSpacing.page, right: AppSpacing.page, top: AppSpacing.md, bottom: AppSpacing.xl })
+        .padding({ left: AppSpacing.page, right: AppSpacing.page, top: AppSpacing.md, bottom: AppSpacing.xl + AppSpacing.page * 2 })
       }
       .width('100%')
       .layoutWeight(1)
