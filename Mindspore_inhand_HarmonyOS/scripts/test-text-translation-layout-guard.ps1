@@ -87,7 +87,10 @@ $fixtures = @(
     New="  if (usesAndroidTextTranslationLayout(workflow)) {`n    return true;`n  }"; Accept=$false },
   @{ Name='source-result-fallback'; Newline="`n"; File='AiService.ets';
     Old="  return resultRowValue(rows, 'feature_runtime_result_translated_text');";
-    New="  return resultRowValue(rows, 'feature_runtime_result_text');"; Accept=$false }
+    New="  return resultRowValue(rows, 'feature_runtime_result_text');"; Accept=$false },
+  @{ Name='translated-result-copy-option'; Newline="`n"; File='FeatureRuntimePage.ets';
+    Old="            Text(translatedTextForAiResult(this.resultRows))`n              .width('100%')";
+    New="            Text(translatedTextForAiResult(this.resultRows))`n              .width('100%')`n              .copyOption(CopyOptions.LocalDevice)"; Accept=$false }
 )
 
 $failures = @()

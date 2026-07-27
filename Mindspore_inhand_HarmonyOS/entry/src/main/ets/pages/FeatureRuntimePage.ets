@@ -6000,7 +6000,6 @@ struct FeatureRuntimePage {
               .width('100%')
               .fontSize(16)
               .fontColor(AppColor.textSecondary)
-              .copyOption(CopyOptions.LocalDevice)
           }
           .width('100%')
           .constraintSize({ minHeight: 112 })

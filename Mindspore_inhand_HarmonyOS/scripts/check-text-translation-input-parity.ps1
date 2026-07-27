@@ -141,6 +141,8 @@ foreach ($marker in @(
 }
 Assert-Count $builder 'Scroll() {' 1 'the page must have one top-level content Scroll.'
 Assert-Count $builder 'this.resultRows' 1 'the result card must render resultRows exactly once.'
+Assert-Excludes $builder '.copyOption(CopyOptions.LocalDevice)' `
+  'translated output must not become a separate undersized clickable target; use the Copy button.'
 
 foreach ($button in @(
   'Button(appString(textTranslationRunActionLabelKey(this.statusKey, this.runActionKey)))',
