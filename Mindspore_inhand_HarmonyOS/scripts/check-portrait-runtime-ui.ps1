@@ -133,6 +133,9 @@ $applyPickResult = Balanced-Section $page '  private applyPickResult(' 'picker a
 $selectPortraitBackground = Balanced-Section $page `
   '  private selectPortraitBackgroundPreset(preset: PortraitSegmentationBackgroundPreset): void {' `
   'portrait preset selection'
+$portraitBackgroundImageSource = Balanced-Section $page `
+  '  private portraitBackgroundImageSource(presetId: string, fallbackUri: string): Resource | string {' `
+  'portrait background image source'
 $foreground = Balanced-Section $page '  private async updateSegmentationForegroundPreview(' 'segmentation foreground publication'
 $retry = Balanced-Section $page '  private retryLiveSegmentation(): void {' 'segmentation retry'
 $layoutRouter = Balanced-Section $page '  runtimeLayoutContent() {' 'runtime layout router'
@@ -219,6 +222,15 @@ Assert-Excludes $portraitComposite '.objectFit(ImageFit.Fill)' `
   'portrait composite must not stretch either image layer.'
 Assert-Excludes $selectPortraitBackground 'this.runWorkflow()' `
   'background selection must not rerun segmentation.'
+foreach ($rawfilePath in @(
+  "portrait/portrait2.jpg",
+  "portrait/portrait3.jpg",
+  "portrait/portrait4.jpg",
+  "portrait/portrait5.jpg"
+)) {
+  Assert-Contains $portraitBackgroundImageSource "`$rawfile('$rawfilePath')" `
+    "portrait built-in background must use an ArkUI rawfile Resource: $rawfilePath"
+}
 Assert-Contains $portraitComposite '.id(segmentationBackgroundReplacementComponentId)' `
   'portrait composite needs the stable save snapshot view id.'
 Assert-Count $page '.id(segmentationBackgroundReplacementComponentId)' 1 `

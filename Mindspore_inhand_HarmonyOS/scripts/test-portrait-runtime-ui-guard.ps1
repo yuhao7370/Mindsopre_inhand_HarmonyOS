@@ -121,6 +121,10 @@ try {
   Invoke-Mutation 'visible-card-opens-generic-live-segmentation' $experienceCatalog `
     'routeName: AppRoute.PORTRAIT_SEGMENTATION.name, visibleByDefault: true' `
     'routeName: AppRoute.SEGMENTATION_LIVE.name, visibleByDefault: true'
+  Invoke-SectionMutation 'rawfile-string-instead-of-resource' $page `
+    '  private portraitBackgroundImageSource(presetId: string, fallbackUri: string): Resource | string {' `
+    '  private lastPathSegment(uri: string): string {' `
+    "`$rawfile('portrait/portrait2.jpg')" "'rawfile://portrait/portrait2.jpg'"
   Invoke-SectionMutation 'missing-result-preview' $page `
     '  portraitSegmentationAndroidLayout() {' '  simpleAndroidLiveLayout() {' `
     'this.portraitSegmentationResultPreview()' 'this.portraitSegmentationCameraPreview()'
