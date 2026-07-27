@@ -15,8 +15,14 @@ workflow separately.
 - [x] Task 15: text translation (`83b3425`).
 - [x] Task 16: style transfer (`cff3322`).
 - [x] Task 17: custom model (`0b53955`; implementation retained; entry stays hidden).
-- [ ] Task 18: final cross-workflow verification, production HAP, review,
-  branch integration, and push.
+- [x] Task 18: final cross-workflow verification, production HAP, review,
+  and branch integration (`00498ca` through `a37851b`).
+
+Task 18 acceptance covers production/default and isolated-harness/3.2x HDC
+evidence for Text Translation, Style Transfer, and Custom Model. All six
+manifests, LocalUnit, focused source/mutation guards, ArkTS compilation, and
+the arm64-v8a/x86_64 HAP payload verifier pass. Custom Model remains hidden
+from the production catalog.
 
 The accepted Task 14 evidence is recorded in `task-14-report.md`. Its two
 harness worktrees must remain dirty because the signed manifests bind their
