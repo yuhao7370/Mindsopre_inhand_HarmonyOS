@@ -22,12 +22,12 @@ export const collegeLocalQuickStartSections: Array<CollegeLocalQuickStartSection
   {
     id: 'environment',
     step: '01',
-    title: '实验目标与环境',
-    objective: '用 MindSpore 在本机完整复现“卷积网络识别手写数字”的经典入门流程。',
+    title: '先看任务和环境',
+    objective: '先确认这台电脑能跑什么，再用 MindSpore 做一遍经典的手写数字识别。',
     paragraphs: [
-      '本教程不是一段概念介绍，而是已经在本机执行过的训练、评估和导出记录。环境为 Windows 11、Python 3.11.7、MindSpore 2.5.0（CPU）、scikit-learn 1.3.2、NumPy 1.26.4 和 Pillow 12.1.1。',
-      '本机没有缓存真实 MNIST 的 IDX 文件。为了保持完全离线，实验改用 scikit-learn 自带的 digits：1797 张 8×8 灰度手写数字图。它复现了 PyTorch 初学教程的任务结构，但后文准确率只代表 digits 测试集，不能写成 MNIST 准确率。',
-      'PyTorch 2.6.0 本体可用，但本机 torchvision 0.22.0 与它不匹配，导入时报告 operator torchvision::nms does not exist。因此数据读取不依赖 torchvision，也不需要联网。'
+      '这套流程已经在本机跑过一遍：训练、评估和导出都留下了实际结果。电脑是 Windows 11，装有 Python 3.11.7、MindSpore 2.5.0（CPU）、scikit-learn 1.3.2、NumPy 1.26.4 和 Pillow 12.1.1。',
+      '本机没有真实 MNIST 的 IDX 文件。为了离线也能跑，我们换成 scikit-learn 自带的 digits：1797 张 8×8 灰度手写数字图。任务还是识别 0 到 9，不过后面看到的准确率只属于 digits，不是 MNIST。',
+      'PyTorch 2.6.0 本身能用，torchvision 0.22.0 却和它对不上，导入时会报 operator torchvision::nms does not exist。问题出在环境版本，不在 MindSpore。这里直接从 scikit-learn 读数据，也省掉了下载。'
     ],
     codeBlocks: [
       {
@@ -35,21 +35,21 @@ export const collegeLocalQuickStartSections: Array<CollegeLocalQuickStartSection
         code: 'python --version\npython -m pip show mindspore torch torchvision scikit-learn numpy pillow\npython -c "import mindspore as ms; print(ms.__version__, ms.get_context(\'device_target\'))"'
       },
       {
-        title: '完整复现命令',
+        title: '从头跑一遍',
         code: 'python docs/tutorials/mindspore-digits-lenet.py --epochs 20 --batch-size 64 --learning-rate 0.002 --output-dir .tmp-college-tutorial/verified-artifacts'
       }
     ],
-    measuredResult: '实测环境识别为 Python 3.11.7、MindSpore 2.5.0、CPU。训练脚本、参数和完整记录已保存在项目 docs/tutorials 目录，可离线重新执行。'
+    measuredResult: '环境是 Python 3.11.7、MindSpore 2.5.0，跑在 CPU 上。脚本和运行记录都放在 docs/tutorials 目录，断网也能重新执行。'
   },
   {
     id: 'data',
     step: '02',
     title: '准备本地数据',
-    objective: '把内置 8×8 手写数字转换为 LeNet 可用的 float32 NCHW 张量，并建立可重复的数据切分。',
+    objective: '先把本地 digits 整理成 LeNet 能吃的格式，再切出固定的训练集和测试集。',
     paragraphs: [
-      'load_digits() 返回 1797 张图片，像素范围是 0–16，标签为 0–9。脚本先映射到 8-bit 灰度，再用 Pillow 双线性插值放大为 28×28，最后用 (x - 0.5) / 0.5 归一化到 [-1, 1]。',
-      '模型输入形状为 [N, 1, 28, 28]，数据类型 float32；标签类型 int32。按标签分层进行 80/20 切分，随机种子固定为 42，得到 1437 张训练图片和 360 张测试图片。',
-      'MindSpore 的 NumpySlicesDataset 接收内存数组，batch(64) 生成批次。训练集开启 shuffle，测试集关闭 shuffle，且两者都保留最后一个不足 64 的批次。'
+      'load_digits() 会给出 1797 张图片，像素范围是 0–16，标签是 0–9。脚本先把像素转成 8-bit 灰度，再用 Pillow 放大到 28×28，最后按 (x - 0.5) / 0.5 归一化到 [-1, 1]。',
+      '送进模型的是 float32 NCHW [N, 1, 28, 28]，标签用 int32。我们固定随机种子 42，再按标签做 80/20 分层切分，最后拿到 1437 张训练图和 360 张测试图。',
+      'NumpySlicesDataset 可以直接接收这些内存数组。训练集会打乱，测试集保持原顺序；batch 大小是 64，最后不满 64 的一批也保留。'
     ],
     codeBlocks: [
       {
@@ -61,17 +61,17 @@ export const collegeLocalQuickStartSections: Array<CollegeLocalQuickStartSection
         code: 'train_x, test_x, train_y, test_y = train_test_split(\n    images, labels, test_size=0.2, random_state=42, stratify=labels\n)\ntrain_data = ds.NumpySlicesDataset(\n    {"image": train_x, "label": train_y.astype(np.int32)}, shuffle=True\n).batch(64, drop_remainder=False)'
       }
     ],
-    measuredResult: '实测原始形状 [1797, 8, 8]，处理后形状 [1797, 1, 28, 28]；训练 1437 张、测试 360 张，数据全程来自本地安装包。'
+    measuredResult: '原图是 [1797, 8, 8]，处理后是 [1797, 1, 28, 28]。其中 1437 张拿来训练，360 张留作测试，整个过程不用下载数据。'
   },
   {
     id: 'network',
     step: '03',
-    title: '构建 LeNet 风格网络',
-    objective: '理解 PyTorch 入门写法与 MindSpore 的一一对应关系，并搭建 10 类分类网络。',
+    title: '搭好 LeNet 网络',
+    objective: '照着熟悉的 PyTorch 思路，在 MindSpore 里搭一个十分类网络。',
     paragraphs: [
-      '网络使用两组“卷积—ReLU—最大池化”提取特征，再通过 120、84 和 10 个神经元的全连接层输出十类 logits，共 44,404 个可训练参数。',
-      'PyTorch 的 nn.Module 对应 MindSpore 的 nn.Cell，forward() 对应 construct()；DataLoader 对应 mindspore.dataset 与 batch()；CrossEntropyLoss 对应 sparse=True 的 SoftmaxCrossEntropyWithLogits；torch.optim.Adam 对应 nn.Adam。',
-      '这是采用 ReLU 与 MaxPool 的现代 LeNet-5 风格实现，用来讲清卷积分类流程，不宣称逐层复刻 1998 年原始网络。'
+      '结构很经典：两组卷积、ReLU 和最大池化负责提取特征，后面接 120、84、10 三层全连接，最后输出十类 logits。整个网络有 44,404 个可训练参数。',
+      '如果写过 PyTorch，这里很好对照：nn.Module 换成 nn.Cell，forward() 换成 construct()；DataLoader 对应 mindspore.dataset 和 batch()；交叉熵与 Adam 也都有直接对应的类。',
+      '这里用的是 ReLU 和 MaxPool，所以更准确地说，它是现代 LeNet-5 风格网络，和 1998 年原版不完全一样。拿它入门卷积分类正合适。'
     ],
     codeBlocks: [
       {
@@ -83,17 +83,17 @@ export const collegeLocalQuickStartSections: Array<CollegeLocalQuickStartSection
         code: 'loss_fn = nn.SoftmaxCrossEntropyWithLogits(sparse=True, reduction="mean")\noptimizer = nn.Adam(network.trainable_params(), learning_rate=0.002)\nmodel = ms.Model(network, loss_fn=loss_fn, optimizer=optimizer,\n                 metrics={"accuracy": nn.Accuracy()})'
       }
     ],
-    measuredResult: '网络在 MindSpore 2.5.0 CPU 下成功完成前向、反向和参数更新；唯一输入为 float32 NCHW [N,1,28,28]，输出为 float32 [N,10]。'
+    measuredResult: '网络已经在 MindSpore 2.5.0 CPU 上完成前向、反向和参数更新。输入是 float32 NCHW [N,1,28,28]，输出是 float32 [N,10]。'
   },
   {
     id: 'training',
     step: '04',
-    title: '训练并读懂结果',
-    objective: '运行 20 轮训练，逐轮在独立测试集评估，并正确理解准确率与波动。',
+    title: '跑训练，看结果',
+    objective: '训练 20 轮，每轮都看一次测试准确率，再比较两次运行为什么会有小幅波动。',
     paragraphs: [
-      '训练参数为 batch size 64、Adam、学习率 0.002、20 epochs，dataset_sink_mode=False。每轮训练结束后立即对 360 张测试图片计算 accuracy。',
-      '首次完整运行从第 1 轮的 80.28% 上升到第 20 轮的 98.61%，最终/最佳均为 98.61%，训练耗时 4.344 秒。脚本移入文档目录后的验证重跑最终 96.94%、最佳 98.33%，训练耗时 4.497 秒。',
-      '两次都超过 96%，但 CPU 算子仍会产生轻微运行差异。教程保留两次真实结果，不把某一次最高准确率当作保证值，也不把 digits 的结果外推到标准 MNIST。'
+      '设置很简单：batch size 64，优化器用 Adam，学习率 0.002，一共训练 20 轮，dataset_sink_mode=False。每轮结束后，马上用 360 张测试图算一次准确率。',
+      '第一次运行从第 1 轮的 80.28% 涨到第 20 轮的 98.61%，最终和最好成绩都是 98.61%，训练用了 4.344 秒。把脚本移到文档目录后又跑了一遍，最终是 96.94%，最好是 98.33%，耗时 4.497 秒。',
+      '两次结果都过了 96%，但并不完全相同。CPU 算子的细微差异会带来这种波动，所以看趋势比盯着某个最高值更有意义。别忘了，这些数字只对应 digits 测试集。'
     ],
     codeBlocks: [
       {
@@ -101,22 +101,22 @@ export const collegeLocalQuickStartSections: Array<CollegeLocalQuickStartSection
         code: 'for epoch in range(1, 21):\n    model.train(1, train_data, dataset_sink_mode=False)\n    metrics = model.eval(test_data, dataset_sink_mode=False)\n    print(epoch, metrics["accuracy"])'
       },
       {
-        title: '首次完整运行日志',
+        title: '第一次运行的日志',
         code: 'epoch=01 test_accuracy=0.8028 seconds=0.348\nepoch=06 test_accuracy=0.9667 seconds=0.212\nepoch=14 test_accuracy=0.9833 seconds=0.208\nepoch=20 test_accuracy=0.9861 seconds=0.199'
       }
     ],
-    measuredResult: '首次运行：最终/最佳 98.61%，训练 4.344 秒；正式脚本验证重跑：最终 96.94%、最佳 98.33%，训练 4.497 秒。两次均完成 20 轮且无数据下载。'
+    measuredResult: '第一次跑到 98.61%，用了 4.344 秒；重跑最终 96.94%、最好 98.33%，用了 4.497 秒。两次都完成了 20 轮，也都没有下载数据。'
   },
   {
     id: 'export',
     step: '05',
-    title: '导出模型与端侧边界',
-    objective: '保存 checkpoint、导出 MindIR、验证回载一致性，并区分桌面 MindIR 与 HarmonyOS Lite 模型。',
+    title: '导出模型，认清边界',
+    objective: '保存 CKPT、导出 MindIR，再把模型读回来对一次结果，同时弄清它为什么还不能直接塞进 HarmonyOS 应用。',
     paragraphs: [
-      '训练后保存 lenet_digits.ckpt，并用全零 [1,1,28,28] float32 张量固定导出输入契约。MindIR 图在回载执行时必须切换到 GRAPH_MODE；第一次保留在 PYNATIVE_MODE 会得到明确错误，切换后成功。',
-      '固定测试样本真实标签为 5，训练网络预测 5，MindIR 回载后也预测 5；两份 logits 最大绝对差为 0.0，说明本次桌面导出未改变该样本的数值结果。',
-      '当前 HarmonyOS 应用加载的是 MindSpore Lite .ms，现有自定义模型入口要求 float32 NHWC [1,224,224,3]。本教程的桌面 MindIR 是 float32 NCHW [1,1,28,28]，格式和张量契约均不匹配，不能直接导入，更不能只改扩展名。',
-      '仓库和 PATH 中没有 converter_lite，所以本次没有宣称完成 .ms 转换、API 24 模拟器加载或 arm64 真机推理。真正接入需要先转换 MINDIR_LITE，再实现完全相同的灰度化、缩放、归一化和 NCHW 排列，并用同一批样本做数值一致性验证。'
+      '训练完成后先存 lenet_digits.ckpt，再用一个全零的 [1,1,28,28] float32 张量导出 MindIR。第一次读回模型时还停在 PYNATIVE_MODE，结果直接报错；切到 GRAPH_MODE 后就跑通了。',
+      '我们固定拿一张标签为 5 的测试图做检查。训练网络预测 5，读回来的 MindIR 也预测 5，两份 logits 的最大绝对差是 0.0。这说明桌面导出没有改动这张图的计算结果。',
+      '这里要注意：HarmonyOS 应用现在加载的是 MindSpore Lite .ms，自定义模型入口还固定要求 float32 NHWC [1,224,224,3]。刚导出的却是桌面 MindIR，输入为 float32 NCHW [1,1,28,28]。格式和张量都对不上，改个扩展名也没用。',
+      '目前只走到了桌面 MindIR。仓库和 PATH 里都没有 converter_lite，Lite 转换、API 24 模拟器加载和 arm64 真机推理还没做。要接进应用，还得先转成 MINDIR_LITE，再补齐灰度化、缩放、归一化和 NCHW 排列，最后拿同一批样本核对数值。'
     ],
     codeBlocks: [
       {
@@ -128,7 +128,7 @@ export const collegeLocalQuickStartSections: Array<CollegeLocalQuickStartSection
         code: 'ms.set_context(mode=ms.GRAPH_MODE)\ngraph_network = nn.GraphCell(ms.load("lenet_digits.mindir"))\nexported_logits = graph_network(Tensor(test_x[:1])).asnumpy()'
       }
     ],
-    measuredResult: '实测 CKPT 177,956 B、MindIR 188,389 B；样本标签/导出前预测/回载后预测均为 5，logits 最大差 0.0。Lite .ms 转换与 HarmonyOS 端侧推理尚未执行，页面明确标注该边界。'
+    measuredResult: 'CKPT 是 177,956 B，MindIR 是 188,389 B。样本标签、导出前预测和回载后预测都是 5，logits 最大差 0.0。Lite .ms 转换和 HarmonyOS 端侧运行还没做。'
   }
 ];
 

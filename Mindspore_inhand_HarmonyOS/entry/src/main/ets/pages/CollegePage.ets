@@ -1,8 +1,6 @@
-import { common } from '@kit.AbilityKit';
 import router from '@ohos.router';
 import {
   collegeAdapterViewTitleKey,
-  collegeItems,
   CollegeItem,
   isCollegeItemUrlNavigable
 } from '../common/data/CollegeCatalog';
@@ -27,13 +25,8 @@ import {
 import { AppStringKey, appString } from '../common/i18n/AppStrings';
 import { AppColor } from '../common/theme/AppTheme';
 import { webPagePath } from '../common/data/WebDestination';
-import {
-  CollegeProgressService,
-  HarmonyCollegeProgressStore
-} from '../services/storage/CollegeProgressService';
 
 const collegeCardBorderColor: string = '#E8EDF5';
-const collegeCompletedBackgroundColor: string = '#F4F7FF';
 const collegeTutorialCodeBackgroundColor: string = '#F5F7FA';
 const collegeTutorialResultBackgroundColor: string = '#F4F7FF';
 
@@ -112,69 +105,12 @@ struct CollegeSummaryNoticeDialog {
 
 @Component
 export struct CollegePage {
-  private progressService: CollegeProgressService | undefined = undefined;
   private summaryDialogController: CustomDialogController = new CustomDialogController({
     builder: CollegeSummaryNoticeDialog(),
     autoCancel: false,
     customStyle: true
   });
-  @State checkedCollegeItemIds: Array<string> = [];
   @State expandedQuickStartSectionId: string = collegeLocalQuickStartSections[0].id;
-
-  aboutToAppear() {
-    this.refreshCollegeProgress();
-  }
-
-  private uiAbilityContext(): common.UIAbilityContext | undefined {
-    const context = this.getUIContext().getHostContext();
-    if (!context) {
-      return undefined;
-    }
-    return context as common.UIAbilityContext;
-  }
-
-  private collegeProgressService(): CollegeProgressService | undefined {
-    if (this.progressService !== undefined) {
-      return this.progressService;
-    }
-    try {
-      const context = this.uiAbilityContext();
-      if (context === undefined) {
-        return undefined;
-      }
-      this.progressService = new CollegeProgressService(new HarmonyCollegeProgressStore(context));
-      return this.progressService;
-    } catch (_) {
-      return undefined;
-    }
-  }
-
-  private refreshCollegeProgress(): void {
-    const service = this.collegeProgressService();
-    if (service === undefined) {
-      return;
-    }
-    const itemIds: Array<string> = [];
-    collegeItems.forEach((item: CollegeItem) => {
-      if (item.type !== 'footer') {
-        itemIds.push(item.id);
-      }
-    });
-    this.checkedCollegeItemIds = service.checkedItemIds(itemIds);
-  }
-
-  private isCollegeItemChecked(itemId: string): boolean {
-    return this.checkedCollegeItemIds.indexOf(itemId) >= 0;
-  }
-
-  private markCollegeItemChecked(item: CollegeItem): void {
-    const service = this.collegeProgressService();
-    if (service === undefined || item.type === 'footer') {
-      return;
-    }
-    service.markItemChecked(item.id);
-    this.refreshCollegeProgress();
-  }
 
   private openWeb(titleKey: AppStringKey, url: string): void {
     router.pushUrl({
@@ -192,32 +128,12 @@ export struct CollegePage {
 
   private openCollegeItem(item: CollegeItem): void {
     if (item.type === 'summary') {
-      this.markCollegeItemChecked(item);
       this.showSummary();
       return;
     }
     if (isCollegeItemUrlNavigable(item)) {
-      this.markCollegeItemChecked(item);
       this.openWeb(item.titleKey, item.url ?? '');
     }
-  }
-
-  @Builder
-  private collegeItemCompletedStatus(itemId: string) {
-    Row() {
-      Text('✓')
-        .fontSize(13)
-        .fontWeight(FontWeight.Bold)
-        .fontColor(AppColor.accent)
-      Text(appString('college_checked'))
-        .fontSize(12)
-        .fontWeight(FontWeight.Medium)
-        .fontColor(AppColor.accent)
-        .maxLines(2)
-        .margin({ left: 4 })
-    }
-    .alignItems(VerticalAlign.Center)
-    .visibility(this.isCollegeItemChecked(itemId) ? Visibility.Visible : Visibility.None)
   }
 
   @Builder
@@ -260,7 +176,6 @@ export struct CollegePage {
       .width('100%')
       .alignItems(VerticalAlign.Center)
       Row() {
-        this.collegeItemCompletedStatus(item.id)
         Blank()
         Row() {
           Text(appString(collegeAdapterViewTitleKey))
@@ -284,7 +199,7 @@ export struct CollegePage {
     .padding({ top: 12, bottom: 12, left: 14, right: 14 })
     .alignItems(HorizontalAlign.Start)
     .justifyContent(FlexAlign.Center)
-    .backgroundColor(this.isCollegeItemChecked(item.id) ? collegeCompletedBackgroundColor : Color.White)
+    .backgroundColor(Color.White)
     .border({ width: 1, color: collegeCardBorderColor, radius: collegeCardRadiusVp })
     .margin({ top: 10 })
     .onClick(() => {
@@ -361,7 +276,7 @@ export struct CollegePage {
           .strokeWidth(1)
           .color(collegeCardBorderColor)
           .margin({ top: 4, bottom: 14 })
-        Text('学习目标')
+        Text('这一节要做什么')
           .width('100%')
           .fontSize(13)
           .fontWeight(FontWeight.Bold)
@@ -384,7 +299,7 @@ export struct CollegePage {
           this.tutorialCodeBlock(block)
         }, (block: CollegeTutorialCodeBlock, index: number): string => `${section.id}-code-${index}`)
         Column() {
-          Text('本机实测')
+          Text('跑出来的结果')
             .width('100%')
             .fontSize(12)
             .fontWeight(FontWeight.Bold)
@@ -420,7 +335,7 @@ export struct CollegePage {
         .fontSize(19)
         .fontWeight(FontWeight.Bold)
         .fontColor(AppColor.textPrimary)
-      Text('用 MindSpore 亲手完成手写数字训练、评估与导出')
+      Text('跟着本机跑过的流程，学会训练、评估和导出')
         .width('100%')
         .fontSize(13)
         .fontColor(AppColor.textSecondary)
