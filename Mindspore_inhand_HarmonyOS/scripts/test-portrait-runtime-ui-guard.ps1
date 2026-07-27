@@ -116,10 +116,16 @@ try {
   $segmentationService = 'entry\src\main\ets\services\ai\SegmentationService.ets'
   $build = 'scripts\build-hap.ps1'
 
+  Invoke-SectionMutation 'missing-result-preview' $page `
+    '  portraitSegmentationAndroidLayout() {' '  simpleAndroidLiveLayout() {' `
+    'this.portraitSegmentationResultPreview()' 'this.portraitSegmentationCameraPreview()'
+  Invoke-SectionMutation 'wrong-result-aspect-ratio' $page `
+    '  portraitSegmentationResultPreview() {' '  portraitSegmentationStatus() {' `
+    '.aspectRatio(4 / 3)' ".height('100%')"
   Invoke-SectionMutation 'distorted-composite-fit' $page `
     '  portraitSegmentationComposite() {' '  portraitSegmentationStatus() {' `
-    "Image(this.backgroundImageUri)`n        .orientation(this.segmentationBackgroundImageOrientation)`n        .width('100%')`n        .height('100%')`n        .objectFit(ImageFit.Contain)" `
-    "Image(this.backgroundImageUri)`n        .orientation(this.segmentationBackgroundImageOrientation)`n        .width('100%')`n        .height('100%')`n        .objectFit(ImageFit.Fill)"
+    "Image(this.portraitCompositeBackgroundUri())`n        .orientation(this.segmentationBackgroundImageOrientation)`n        .width('100%')`n        .height('100%')`n        .objectFit(ImageFit.Cover)" `
+    "Image(this.portraitCompositeBackgroundUri())`n        .orientation(this.segmentationBackgroundImageOrientation)`n        .width('100%')`n        .height('100%')`n        .objectFit(ImageFit.Fill)"
   Invoke-SectionMutation 'color-only-preset-selection' $page `
     '  portraitSegmentationBackgroundStrip() {' '      }, (preset: PortraitSegmentationBackgroundPreset) => preset.id)' `
     "SymbolGlyph(`$r('sys.symbol.checkmark'))" "Text('')"

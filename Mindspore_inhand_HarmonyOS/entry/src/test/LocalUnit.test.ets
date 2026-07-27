@@ -4249,10 +4249,10 @@ export default function localUnitTest() {
 
     it('portsAndroidPortraitSegmentationBackgroundPresets', 0, () => {
       expect(portraitSegmentationBackgroundPresets.length).assertEqual(5);
-      expect(portraitSegmentationBackgroundPresets[0].id).assertEqual('portrait1');
-      expect(portraitSegmentationBackgroundPresets[0].mediaName).assertEqual('portrait1');
+      expect(portraitSegmentationBackgroundPresets[0].id).assertEqual('original');
+      expect(portraitSegmentationBackgroundPresets[0].mediaName).assertEqual('original');
       expect(portraitSegmentationBackgroundUri(portraitSegmentationBackgroundPresets[0]))
-        .assertEqual('rawfile://portrait/portrait1.jpg');
+        .assertEqual('');
       expect(portraitSegmentationBackgroundPresets[4].id).assertEqual('portrait5');
       expect(portraitSegmentationCustomBackgroundId).assertEqual('custom');
       expect(hasAppStringKey('feature_runtime_portrait_background_presets')).assertTrue();
@@ -4260,9 +4260,9 @@ export default function localUnitTest() {
     });
 
     it('defaultsPortraitSegmentationToAndroidFirstBackground', 0, () => {
-      expect(defaultPortraitSegmentationBackgroundPreset.id).assertEqual('portrait1');
-      expect(defaultPortraitSegmentationBackgroundPreset.rawfilePath).assertEqual('portrait/portrait1.jpg');
-      expect(defaultPortraitSegmentationBackgroundUri()).assertEqual('rawfile://portrait/portrait1.jpg');
+      expect(defaultPortraitSegmentationBackgroundPreset.id).assertEqual('original');
+      expect(defaultPortraitSegmentationBackgroundPreset.rawfilePath).assertEqual('');
+      expect(defaultPortraitSegmentationBackgroundUri()).assertEqual('');
     });
 
     it('initializesOnlyPortraitSegmentationWithDefaultBackground', 0, () => {
@@ -4271,8 +4271,8 @@ export default function localUnitTest() {
         '',
         ''
       );
-      expect(emptyPortraitState.backgroundImageUri).assertEqual('rawfile://portrait/portrait1.jpg');
-      expect(emptyPortraitState.selectedPresetId).assertEqual('portrait1');
+      expect(emptyPortraitState.backgroundImageUri).assertEqual('');
+      expect(emptyPortraitState.selectedPresetId).assertEqual('original');
 
       const selectedPortraitState: PortraitSegmentationBackgroundState = initialPortraitSegmentationBackgroundState(
         AppRoute.PORTRAIT_SEGMENTATION.name,

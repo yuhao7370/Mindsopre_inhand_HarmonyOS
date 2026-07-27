@@ -120,12 +120,17 @@ $segmentationService = Convert-ArkTsToGuardCode (Read-Normalized $segmentationSe
 
 $portraitLayout = Balanced-Section $page '  portraitSegmentationAndroidLayout() {' 'portrait layout'
 $portraitToolbar = Balanced-Section $page '  portraitSegmentationToolbar() {' 'portrait toolbar'
+$portraitCameraPreview = Balanced-Section $page '  portraitSegmentationCameraPreview() {' 'portrait camera preview'
+$portraitResultPreview = Balanced-Section $page '  portraitSegmentationResultPreview() {' 'portrait result preview'
 $portraitComposite = Balanced-Section $page '  portraitSegmentationComposite() {' 'portrait composite'
 $portraitStatus = Balanced-Section $page '  portraitSegmentationStatus() {' 'portrait status'
 $portraitBackgroundStrip = Balanced-Section $page '  portraitSegmentationBackgroundStrip() {' 'portrait background strip'
 $saveComponent = Balanced-Section $page '  private saveResultComponentImage(componentId: string): void {' 'portrait save entry'
 $saveComponentAsync = Balanced-Section $page '  private async saveResultComponentImageAsync(componentId: string): Promise<void> {' 'portrait async save entry'
 $applyPickResult = Balanced-Section $page '  private applyPickResult(' 'picker application'
+$selectPortraitBackground = Balanced-Section $page `
+  '  private selectPortraitBackgroundPreset(preset: PortraitSegmentationBackgroundPreset): void {' `
+  'portrait preset selection'
 $foreground = Balanced-Section $page '  private async updateSegmentationForegroundPreview(' 'segmentation foreground publication'
 $retry = Balanced-Section $page '  private retryLiveSegmentation(): void {' 'segmentation retry'
 $layoutRouter = Balanced-Section $page '  runtimeLayoutContent() {' 'runtime layout router'
@@ -172,18 +177,35 @@ Assert-Contains $cameraRemember 'rememberedLiveCameraPositions.set(routeName, po
   'portrait camera switches must be remembered per route.'
 
 Assert-Contains $portraitLayout 'this.portraitSegmentationToolbar()' 'portrait layout needs its toolbar.'
-Assert-Contains $portraitLayout 'this.portraitSegmentationComposite()' 'portrait layout needs its composite.'
+Assert-Contains $portraitLayout 'this.portraitSegmentationCameraPreview()' 'portrait camera preview is missing.'
+Assert-Contains $portraitLayout 'this.portraitSegmentationResultPreview()' 'portrait result preview is missing.'
 Assert-Contains $portraitLayout 'this.portraitSegmentationStatus()' 'portrait layout needs its independent status lane.'
 Assert-Contains $portraitLayout 'this.portraitSegmentationBackgroundStrip()' 'portrait layout needs its background controls.'
-Assert-Contains $portraitLayout '.layoutWeight(1)' 'portrait composite must retain a bounded flexible canvas.'
+Assert-Contains $portraitLayout 'Scroll() {' 'portrait split previews must remain reachable on compact screens.'
+if ($portraitLayout.IndexOf((Convert-ArkTsToGuardCode 'this.portraitSegmentationCameraPreview()'),
+    [StringComparison]::Ordinal) -ge
+  $portraitLayout.IndexOf((Convert-ArkTsToGuardCode 'this.portraitSegmentationResultPreview()'),
+    [StringComparison]::Ordinal)) {
+  Fail 'portrait camera preview must appear before the segmentation result.'
+}
+Assert-Contains $portraitCameraPreview '.aspectRatio(4 / 3)' 'portrait camera preview must use 4:3.'
+Assert-Contains $portraitResultPreview '.aspectRatio(4 / 3)' 'portrait result preview must use 4:3.'
+Assert-Contains $portraitCameraPreview 'this.liveCameraSurfaceContent()' `
+  'portrait camera preview must contain only the live camera.'
+Assert-Contains $portraitResultPreview 'this.portraitSegmentationComposite()' `
+  'portrait result preview must contain the composite.'
+Assert-Excludes $portraitCameraPreview 'this.portraitSegmentationComposite()' `
+  'camera and composite must not share one overlay stack.'
 Assert-Excludes $portraitComposite 'this.portraitSegmentationStatus()' `
   'portrait status must stay outside the composite canvas.'
 Assert-Excludes $portraitComposite 'this.portraitSegmentationBackgroundStrip()' `
   'portrait background controls must stay outside the composite canvas.'
-Assert-Count $portraitComposite '.objectFit(ImageFit.Contain)' 2 `
-  'portrait background and foreground must both use non-distorting fit.'
+Assert-Count $portraitComposite '.objectFit(ImageFit.Cover)' 2 `
+  'portrait background and foreground must preserve aspect ratio with matching crops.'
 Assert-Excludes $portraitComposite '.objectFit(ImageFit.Fill)' `
   'portrait composite must not stretch either image layer.'
+Assert-Excludes $selectPortraitBackground 'this.runWorkflow()' `
+  'background selection must not rerun segmentation.'
 Assert-Contains $portraitComposite '.id(segmentationBackgroundReplacementComponentId)' `
   'portrait composite needs the stable save snapshot view id.'
 Assert-Count $page '.id(segmentationBackgroundReplacementComponentId)' 1 `
