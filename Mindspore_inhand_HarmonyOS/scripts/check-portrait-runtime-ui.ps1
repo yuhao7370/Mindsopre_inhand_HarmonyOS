@@ -194,33 +194,31 @@ Assert-Contains $portraitLayout 'this.portraitSegmentationCameraPreview()' 'port
 Assert-Contains $portraitLayout 'this.portraitSegmentationResultPreview()' 'portrait result preview is missing.'
 Assert-Contains $portraitLayout 'this.portraitSegmentationStatus()' 'portrait layout needs its independent status lane.'
 Assert-Contains $portraitLayout 'this.portraitSegmentationBackgroundStrip()' 'portrait layout needs its background controls.'
-Assert-Contains $portraitLayout 'Scroll() {' 'portrait split previews must remain reachable on compact screens.'
+Assert-Excludes $portraitLayout 'Scroll() {' 'portrait split previews must not create a vertical scrollbar.'
 $portraitCameraIndex = $portraitLayout.IndexOf(
   (Convert-ArkTsToGuardCode 'this.portraitSegmentationCameraPreview()'), [StringComparison]::Ordinal)
 $portraitResultIndex = $portraitLayout.IndexOf(
   (Convert-ArkTsToGuardCode 'this.portraitSegmentationResultPreview()'), [StringComparison]::Ordinal)
-$portraitScrollIndex = $portraitLayout.IndexOf((Convert-ArkTsToGuardCode 'Scroll() {'), [StringComparison]::Ordinal)
 if ($portraitCameraIndex -ge $portraitResultIndex) {
   Fail 'portrait camera preview must appear before the segmentation result.'
 }
-if ($portraitCameraIndex -ge $portraitScrollIndex) {
-  Fail 'portrait camera XComponent must remain outside Scroll to avoid hardware-surface overlay.'
-}
-if ($portraitResultIndex -le $portraitScrollIndex) {
-  Fail 'portrait result preview must remain inside the reachable scrolling content.'
-}
-Assert-Contains $portraitCameraPreview '.aspectRatio(this.liveCameraPreviewAspectRatio)' `
-  'portrait camera preview must follow the oriented camera aspect ratio.'
-Assert-Contains $portraitResultPreview '.aspectRatio(this.liveCameraPreviewAspectRatio)' `
-  'portrait result preview must match the oriented camera aspect ratio.'
+Assert-Contains $portraitCameraPreview `
+  '.aspectRatio(livePreviewCardAspectRatio(this.liveCameraPreviewAspectRatio))' `
+  'portrait camera preview must use the compact concept ratio.'
+Assert-Contains $portraitResultPreview `
+  '.aspectRatio(livePreviewCardAspectRatio(this.liveCameraPreviewAspectRatio))' `
+  'portrait result preview must match the compact camera ratio.'
 Assert-Contains $portraitCameraPreview `
   '.width(livePreviewWidthForAspectRatio(this.liveCameraPreviewAspectRatio))' `
   'portrait camera preview must become compact only for vertical cameras.'
 Assert-Contains $portraitResultPreview `
   '.width(livePreviewWidthForAspectRatio(this.liveCameraPreviewAspectRatio))' `
   'portrait result preview must match the adaptive camera width.'
-Assert-Contains $portraitLayout '.scrollBar(BarState.Off)' `
-  'portrait result content must remain scrollable without a visible scrollbar.'
+Assert-Contains $cameraService `
+  "aspectRatio > 0 && aspectRatio < 1 ? '46%' : '100%'" `
+  'vertical portrait previews must match the approved compact concept width.'
+Assert-Excludes $portraitLayout '.scrollBar(' `
+  'portrait layout must not configure a vertical scrollbar.'
 Assert-Excludes $portraitLayout '.scrollBar(BarState.Auto)' `
   'portrait result content must not show an automatic scrollbar.'
 Assert-Contains $portraitCameraPreview 'this.liveCameraSurfaceContent()' `

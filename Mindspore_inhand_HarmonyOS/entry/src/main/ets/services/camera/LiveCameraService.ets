@@ -57,7 +57,11 @@ export function livePreviewAspectRatioForProfile(
 }
 
 export function livePreviewWidthForAspectRatio(aspectRatio: number): string {
-  return Number.isFinite(aspectRatio) && aspectRatio > 0 && aspectRatio < 1 ? '78%' : '100%';
+  return Number.isFinite(aspectRatio) && aspectRatio > 0 && aspectRatio < 1 ? '46%' : '100%';
+}
+
+export function livePreviewCardAspectRatio(aspectRatio: number): number {
+  return Number.isFinite(aspectRatio) && aspectRatio > 0 && aspectRatio < 1 ? 3 / 4 : 4 / 3;
 }
 
 function normalizedQuarterTurnDegrees(rotationDegrees: number): number {

@@ -196,6 +196,7 @@ import {
   isLiveRuntimeGenerationCurrent,
   liveRuntimeIntervalForAiMethod,
   liveCameraXComponentId,
+  livePreviewCardAspectRatio,
   livePreviewWidthForAspectRatio,
   shouldRunLiveRuntimeLoop,
   shouldAutoRunLiveRuntimeAfterPreview,
@@ -4045,7 +4046,7 @@ struct FeatureRuntimePage {
       this.liveCameraSurfaceContent()
     }
     .width(livePreviewWidthForAspectRatio(this.liveCameraPreviewAspectRatio))
-    .aspectRatio(this.liveCameraPreviewAspectRatio)
+    .aspectRatio(livePreviewCardAspectRatio(this.liveCameraPreviewAspectRatio))
     .clip(true)
     .backgroundColor('#111827')
     .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
@@ -4082,7 +4083,7 @@ struct FeatureRuntimePage {
       this.portraitSegmentationComposite()
     }
     .width(livePreviewWidthForAspectRatio(this.liveCameraPreviewAspectRatio))
-    .aspectRatio(this.liveCameraPreviewAspectRatio)
+    .aspectRatio(livePreviewCardAspectRatio(this.liveCameraPreviewAspectRatio))
     .clip(true)
     .backgroundColor('#111827')
     .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
@@ -4388,34 +4389,30 @@ struct FeatureRuntimePage {
       }
       .width('100%')
       .padding({ left: AppSpacing.page, right: AppSpacing.page, top: AppSpacing.sm, bottom: AppSpacing.sm })
-      Scroll() {
-        Column({ space: AppSpacing.sm }) {
-          Text(appString('feature_runtime_portrait_segmentation_result'))
-            .width('100%')
-            .fontSize(15)
-            .fontWeight(FontWeight.Medium)
-            .fontColor(AppColor.textPrimary)
-            .maxFontScale(3.2)
-          this.portraitSegmentationResultPreview()
-          Row() {
-            this.portraitSegmentationStatus()
-          }
+      Column({ space: AppSpacing.sm }) {
+        Text(appString('feature_runtime_portrait_segmentation_result'))
           .width('100%')
-          .justifyContent(FlexAlign.Center)
-          Text(appString('feature_runtime_portrait_background_presets'))
-            .width('100%')
-            .fontSize(15)
-            .fontWeight(FontWeight.Medium)
-            .fontColor(AppColor.textPrimary)
-            .maxFontScale(3.2)
-          this.portraitSegmentationBackgroundStrip()
+          .fontSize(15)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(AppColor.textPrimary)
+          .maxFontScale(3.2)
+        this.portraitSegmentationResultPreview()
+        Row() {
+          this.portraitSegmentationStatus()
         }
         .width('100%')
-        .padding({ left: AppSpacing.page, right: AppSpacing.page, top: AppSpacing.sm, bottom: AppSpacing.lg })
+        .justifyContent(FlexAlign.Center)
+        Text(appString('feature_runtime_portrait_background_presets'))
+          .width('100%')
+          .fontSize(15)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(AppColor.textPrimary)
+          .maxFontScale(3.2)
+        this.portraitSegmentationBackgroundStrip()
       }
       .width('100%')
       .layoutWeight(1)
-      .scrollBar(BarState.Off)
+      .padding({ left: AppSpacing.page, right: AppSpacing.page, top: AppSpacing.sm, bottom: AppSpacing.lg })
     }
     .width('100%')
     .height('100%')

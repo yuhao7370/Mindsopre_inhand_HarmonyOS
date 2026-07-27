@@ -136,19 +136,25 @@ try {
     "Scroll() {`n        Text(appString('feature_runtime_portrait_camera_original'))"
   Invoke-SectionMutation 'wrong-result-aspect-ratio' $page `
     '  portraitSegmentationResultPreview() {' '  portraitSegmentationStatus() {' `
-    '.aspectRatio(this.liveCameraPreviewAspectRatio)' '.aspectRatio(4 / 3)'
+    '.aspectRatio(livePreviewCardAspectRatio(this.liveCameraPreviewAspectRatio))' `
+    '.aspectRatio(this.liveCameraPreviewAspectRatio)'
   Invoke-SectionMutation 'wrong-camera-aspect-ratio' $page `
     '  portraitSegmentationCameraPreview() {' '  portraitSegmentationComposite() {' `
-    '.aspectRatio(this.liveCameraPreviewAspectRatio)' '.aspectRatio(4 / 3)'
+    '.aspectRatio(livePreviewCardAspectRatio(this.liveCameraPreviewAspectRatio))' `
+    '.aspectRatio(this.liveCameraPreviewAspectRatio)'
   Invoke-SectionMutation 'fixed-full-width-camera-preview' $page `
     '  portraitSegmentationCameraPreview() {' '  portraitSegmentationComposite() {' `
     '.width(livePreviewWidthForAspectRatio(this.liveCameraPreviewAspectRatio))' ".width('100%')"
   Invoke-SectionMutation 'fixed-full-width-result-preview' $page `
     '  portraitSegmentationResultPreview() {' '  portraitSegmentationStatus() {' `
     '.width(livePreviewWidthForAspectRatio(this.liveCameraPreviewAspectRatio))' ".width('100%')"
-  Invoke-SectionMutation 'visible-result-scrollbar' $page `
+  Invoke-SectionMutation 'scrolling-result-content' $page `
     '  portraitSegmentationAndroidLayout() {' '  simpleAndroidLiveLayout() {' `
-    '.scrollBar(BarState.Off)' '.scrollBar(BarState.Auto)'
+    "Column({ space: AppSpacing.sm }) {`n        Text(appString('feature_runtime_portrait_segmentation_result'))" `
+    "Scroll() {`n        Text(appString('feature_runtime_portrait_segmentation_result'))"
+  Invoke-Mutation 'oversized-vertical-preview' $cameraService `
+    "aspectRatio > 0 && aspectRatio < 1 ? '46%' : '100%'" `
+    "aspectRatio > 0 && aspectRatio < 1 ? '78%' : '100%'"
   Invoke-SectionMutation 'capture-ignores-camera-rotation' $page `
     '  private async prepareLiveFrameImageInput(' '  private async applyAiResult(' `
     'captureToCacheImage(surfaceId, context.cacheDir, rotation)' `
