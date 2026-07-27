@@ -2831,6 +2831,13 @@ export default function localUnitTest() {
       expect(visibleExperienceSections[2].groupTitleKey).assertEqual('experience_group_advanced');
     });
 
+    it('opensPortraitSegmentationWithBackgroundCapableRoute', 0, () => {
+      const portraitFeature = visibleExperienceSections[0].items.find((item: FeatureItem) => {
+        return item.id === 'segmentation';
+      });
+      expect(portraitFeature?.routeName).assertEqual(AppRoute.PORTRAIT_SEGMENTATION.name);
+    });
+
     it('keepsSceneDetectionEntryRouteReadyButHiddenByDefault', 0, () => {
       const sceneFeature = findFeatureByRoute(AppRoute.SCENE_STILL.name);
       expect(sceneFeature?.id).assertEqual('scene');

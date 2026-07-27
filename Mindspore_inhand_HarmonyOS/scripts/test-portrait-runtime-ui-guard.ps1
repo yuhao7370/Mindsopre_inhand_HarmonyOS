@@ -37,6 +37,7 @@ function New-Fixture() {
   Assert-SafeTempPath $fixture
   foreach ($relativePath in @(
     'entry\src\main\ets\pages\FeatureRuntimePage.ets',
+    'entry\src\main\ets\common\data\FeatureCatalog.ets',
     'entry\src\main\ets\features\runtime\FeatureWorkflowCatalog.ets',
     'entry\src\main\ets\features\runtime\FeatureRuntimeInputState.ets',
     'entry\src\main\ets\features\runtime\PortraitSegmentationBackgroundCatalog.ets',
@@ -110,12 +111,16 @@ try {
   if ($LASTEXITCODE -ne 0) { Fail 'baseline portrait guard failed.' }
 
   $page = 'entry\src\main\ets\pages\FeatureRuntimePage.ets'
+  $experienceCatalog = 'entry\src\main\ets\common\data\FeatureCatalog.ets'
   $catalog = 'entry\src\main\ets\features\runtime\FeatureWorkflowCatalog.ets'
   $inputState = 'entry\src\main\ets\features\runtime\FeatureRuntimeInputState.ets'
   $aiService = 'entry\src\main\ets\services\ai\AiService.ets'
   $segmentationService = 'entry\src\main\ets\services\ai\SegmentationService.ets'
   $build = 'scripts\build-hap.ps1'
 
+  Invoke-Mutation 'visible-card-opens-generic-live-segmentation' $experienceCatalog `
+    'routeName: AppRoute.PORTRAIT_SEGMENTATION.name, visibleByDefault: true' `
+    'routeName: AppRoute.SEGMENTATION_LIVE.name, visibleByDefault: true'
   Invoke-SectionMutation 'missing-result-preview' $page `
     '  portraitSegmentationAndroidLayout() {' '  simpleAndroidLiveLayout() {' `
     'this.portraitSegmentationResultPreview()' 'this.portraitSegmentationCameraPreview()'

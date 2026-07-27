@@ -105,6 +105,7 @@ $root = if ($SourceRoot) { [IO.Path]::GetFullPath($SourceRoot) } else {
   [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 }
 $pagePath = Join-Path $root 'entry\src\main\ets\pages\FeatureRuntimePage.ets'
+$experienceCatalogPath = Join-Path $root 'entry\src\main\ets\common\data\FeatureCatalog.ets'
 $catalogPath = Join-Path $root 'entry\src\main\ets\features\runtime\FeatureWorkflowCatalog.ets'
 $inputStatePath = Join-Path $root 'entry\src\main\ets\features\runtime\FeatureRuntimeInputState.ets'
 $backgroundCatalogPath = Join-Path $root 'entry\src\main\ets\features\runtime\PortraitSegmentationBackgroundCatalog.ets'
@@ -112,6 +113,7 @@ $aiServicePath = Join-Path $root 'entry\src\main\ets\services\ai\AiService.ets'
 $segmentationServicePath = Join-Path $root 'entry\src\main\ets\services\ai\SegmentationService.ets'
 $buildPath = Join-Path $root 'scripts\build-hap.ps1'
 $page = Convert-ArkTsToGuardCode (Read-Normalized $pagePath)
+$experienceCatalog = Convert-ArkTsToGuardCode (Read-Normalized $experienceCatalogPath)
 $catalog = Convert-ArkTsToGuardCode (Read-Normalized $catalogPath)
 $inputState = Convert-ArkTsToGuardCode (Read-Normalized $inputStatePath)
 $backgroundCatalog = Convert-ArkTsToGuardCode (Read-Normalized $backgroundCatalogPath)
@@ -152,6 +154,9 @@ $portraitWorkflow = $portraitWorkflowMatch.Value
 
 Assert-Contains $catalog 'return workflow?.routeName === AppRoute.PORTRAIT_SEGMENTATION.name;' `
   'portrait behavior must remain isolated to PORTRAIT_SEGMENTATION.'
+Assert-Contains $experienceCatalog `
+  "{ id: 'segmentation', title: 'Portrait Segmentation', titleKey: 'title_segmentation', icon: 'image', routeName: AppRoute.PORTRAIT_SEGMENTATION.name, visibleByDefault: true }" `
+  'the visible portrait-segmentation card must open the background-capable portrait route.'
 Assert-Contains $layoutRouter 'this.portraitSegmentationAndroidLayout()' `
   'runtime layout router must retain the portrait-specific route.'
 Assert-Contains $portraitWorkflow "inputKinds: ['camera']" 'portrait must use the live camera input.'
