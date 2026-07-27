@@ -134,6 +134,19 @@ function Assert-Count([string]$Text, [string]$Marker, [int]$Expected, [string]$M
   }
 }
 
+function Assert-CodeCount([string]$Text, [string]$Marker, [int]$Expected, [string]$Message) {
+  $actual = [regex]::Matches($Text, '(?m)^\s*' + [regex]::Escape($Marker)).Count
+  if ($actual -ne $Expected) {
+    throw "Custom Model parity guard failed: $Message Expected $Expected, found $actual."
+  }
+}
+
+function Assert-CodeContains([string]$Text, [string]$Marker, [string]$Message) {
+  if (-not [regex]::IsMatch($Text, '(?m)^\s*' + [regex]::Escape($Marker))) {
+    throw "Custom Model parity guard failed: $Message"
+  }
+}
+
 $commentStripperProbe = @'
 const single = 'it\'s https://single.example/*STRING_RAW_MARKER*/'; /* SINGLE_COMMENT_MARKER */
 const double = "say \"hello\" https://double.example/*DOUBLE_RAW_MARKER*/"; // DOUBLE_COMMENT_MARKER
@@ -231,18 +244,19 @@ foreach ($marker in @(
   "Text(appString('feature_runtime_custom_model_output_title'))",
   'Text(this.customModelOutputText())'
 )) {
-  Assert-Contains $builder $marker "dedicated builder is missing $marker."
+  Assert-CodeContains $builder $marker "dedicated builder is missing $marker."
 }
 
-Assert-Count $builder 'Scroll() {' 1 'dedicated builder must use one page-level Scroll.'
-Assert-Count $builder '.constraintSize({ minHeight: 48 })' 5 `
+Assert-Excludes $builder '`' 'dedicated builder must not contain template-literal marker decoys'
+Assert-CodeCount $builder 'Scroll() {' 1 'dedicated builder must use one page-level Scroll.'
+Assert-CodeCount $builder '.constraintSize({ minHeight: 48 })' 5 `
   'model, photo, camera, run, and status controls must keep 48vp targets.'
-Assert-Count $builder '.enabled(!this.workflowRunning)' 4 `
+Assert-CodeCount $builder '.enabled(!this.workflowRunning)' 4 `
   'all four actions must be disabled while running.'
-Assert-Count $builder 'LoadingProgress()' 1 'running state must use one compact status spinner.'
-Assert-Count $builder '.width(20)' 1 'running status spinner must remain compact.'
-Assert-Count $builder '.height(20)' 1 'running status spinner must remain compact.'
-Assert-Count $builder '.layoutWeight(1)' 2 `
+Assert-CodeCount $builder 'LoadingProgress()' 1 'running state must use one compact status spinner.'
+Assert-CodeCount $builder '.width(20)' 1 'running status spinner must remain compact.'
+Assert-CodeCount $builder '.height(20)' 1 'running status spinner must remain compact.'
+Assert-CodeCount $builder '.layoutWeight(1)' 2 `
   'only the status text and page-level Scroll may consume remaining space.'
 
 $modelIndex = $builder.IndexOf("this.prepareInput('modelFile')", [StringComparison]::Ordinal)
@@ -274,7 +288,7 @@ foreach ($marker in @(
   '.backgroundColor(AppColor.cardBackground)',
   '.border({ width: 1, color: AppColor.divider, radius: AppRadius.card })'
 )) {
-  Assert-Contains $preview $marker "responsive preview is missing $marker."
+  Assert-CodeContains $preview $marker "responsive preview is missing $marker."
 }
 
 $execute = Get-TextSection `
@@ -292,7 +306,7 @@ foreach ($marker in @(
   '.enabled(!this.workflowRunning)',
   '.onClick(() => this.runCustomModelAndroidAction())'
 )) {
-  Assert-Contains $execute $marker "Execute button is missing $marker."
+  Assert-CodeContains $execute $marker "Execute button is missing $marker."
 }
 
 $output = Get-TextSection `
@@ -310,7 +324,7 @@ foreach ($marker in @(
   '.backgroundColor(AppColor.cardBackground)',
   '.border({ width: 1, color: AppColor.divider, radius: AppRadius.card })'
 )) {
-  Assert-Contains $output $marker "output panel is missing $marker."
+  Assert-CodeContains $output $marker "output panel is missing $marker."
 }
 
 foreach ($marker in @(
@@ -435,12 +449,19 @@ $build = $page.Substring($page.IndexOf(
     "`n  @Builder`n  runtimeLayoutContent() {",
     [StringComparison]::Ordinal
   ))
-$selectorIndex = $build.IndexOf('usesAndroidCustomModelLayout(workflowForRoute(this.routeName))', [StringComparison]::Ordinal)
-$genericIndex = $build.IndexOf("    } else {`n      Scroll() {", [StringComparison]::Ordinal)
+Assert-Excludes $build ([string][char]0x60) 'runtime selector region must not contain template literals.'
+$selectorMatch = [regex]::Match(
+  $build,
+  '(?m)^\s*} else if \(usesAndroidCustomModelLayout\(workflowForRoute\(this\.routeName\)\)\) \{\s*\n\s*this\.customModelAndroidLayout\(\)\s*$'
+)
+$genericMatch = [regex]::Match($build, '(?m)^\s*} else \{\s*\n\s*Scroll\(\) \{')
+$selectorIndex = if ($selectorMatch.Success) { $selectorMatch.Index } else { -1 }
+$genericIndex = if ($genericMatch.Success) { $genericMatch.Index } else { -1 }
 if ($selectorIndex -lt 0 -or $genericIndex -lt 0 -or $selectorIndex -ge $genericIndex) {
   throw 'Custom Model parity guard failed: dedicated selector must precede the generic fallback.'
 }
-Assert-Count $build 'usesAndroidCustomModelLayout(workflowForRoute(this.routeName))' 1 'build must select the dedicated route exactly once.'
+Assert-CodeCount $build '} else if (usesAndroidCustomModelLayout(workflowForRoute(this.routeName))) {' 1 `
+  'build must select the dedicated route exactly once.'
 
 $buildScript = Get-NormalizedText $buildScriptPath
 $guardCall = "& (Join-Path `$PSScriptRoot 'check-custom-model-layout-parity.ps1')"
