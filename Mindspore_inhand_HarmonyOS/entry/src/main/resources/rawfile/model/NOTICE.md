@@ -4,6 +4,16 @@ These pinned model files are committed to a private repository for this
 project's private local learning use. No model-quality, device-runtime, or
 commercial-use claim is made.
 
+## College tutorial LeNet MNIST asset
+
+`lenet_mnist.ms` is a locally reproducible MindSpore Lite conversion of the
+college tutorial's `artifacts/lenet_mnist.mindir`. Its locked source and output
+hashes, official converter package provenance, float32 NCHW `[1,1,28,28]`
+input contract, float32 `[1,10]` output contract, and digit `0` through `9`
+class mapping are recorded in `lenet_mnist.NOTICE.md`. The tutorial archive
+contains no separate trained-model license; this asset is limited to the same
+private local learning use stated above.
+
 ## MindSpore Model Zoo assets
 
 The following trained-model assets come from the official MindSpore Model Zoo:
