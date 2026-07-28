@@ -569,7 +569,9 @@ struct FeatureRuntimePage {
     if (inputKind === 'modelFile' ||
       inputKind === 'stylePredictModelFile' ||
       inputKind === 'styleTransferModelFile') {
-      const result = await pickerService.pickModelFile();
+      const result = this.routeName === AppRoute.CUSTOM_MODEL.name && inputKind === 'modelFile' ?
+        await pickerService.pickModelPackage() :
+        await pickerService.pickModelFile();
       if (!isInputPreparationRequestCurrent(requestId, this.inputPreparationRequestId)) {
         return;
       }

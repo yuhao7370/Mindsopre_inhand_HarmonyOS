@@ -5,6 +5,10 @@ import { AppStringKey } from '../../common/i18n/AppStrings';
 import { FeatureInputKind } from '../../features/runtime/FeatureWorkflowCatalog';
 import { FileUriContentReader } from '../ai/FileUriContentReader';
 import { validateCustomModelContent } from '../ai/CustomModelService';
+import {
+  CustomModelPackageDescriptor,
+  CustomModelPackageService
+} from '../ai/CustomModelPackageService';
 import { validateObjectDetectionModelContent } from '../ai/ObjectDetectionService';
 import {
   stylePredictModelRawfilePath,
@@ -23,6 +27,7 @@ export interface ModelFileCacheResult {
   readonly ok: boolean;
   readonly uri: string;
   readonly messageKey: AppStringKey;
+  readonly customModelPackage?: CustomModelPackageDescriptor;
 }
 
 export interface CachedModelFileInputState {
@@ -262,17 +267,20 @@ export class RuntimeModelFileCacheService {
   private readonly writer: ModelFileCacheWriter;
   private readonly compatibilityChecker: ModelFileCompatibilityChecker;
   private readonly styleTransferPairChecker?: StyleTransferModelPairCompatibilityChecker;
+  private readonly customModelPackageService?: CustomModelPackageService;
 
   constructor(
     reader: FileUriContentReader = new FileUriContentReader(),
     writer: ModelFileCacheWriter = new HarmonyModelFileCacheWriter(),
     compatibilityChecker: ModelFileCompatibilityChecker = new BasicModelFileCompatibilityChecker(),
-    styleTransferPairChecker?: StyleTransferModelPairCompatibilityChecker
+    styleTransferPairChecker?: StyleTransferModelPairCompatibilityChecker,
+    customModelPackageService?: CustomModelPackageService
   ) {
     this.reader = reader;
     this.writer = writer;
     this.compatibilityChecker = compatibilityChecker;
     this.styleTransferPairChecker = styleTransferPairChecker;
+    this.customModelPackageService = customModelPackageService;
   }
 
   cachePickedModelFile(
@@ -302,6 +310,26 @@ export class RuntimeModelFileCacheService {
     }
 
     try {
+      if (routeName === AppRoute.CUSTOM_MODEL.name && inputKind === 'modelFile' &&
+        this.customModelPackageService !== undefined) {
+        const packageResult = await this.customModelPackageService.importPackage(sourceUri, cacheDir);
+        if (!isCurrent()) {
+          return undefined;
+        }
+        if (!packageResult.ok || packageResult.descriptor === undefined) {
+          return {
+            ok: false,
+            uri: '',
+            messageKey: packageResult.messageKey
+          };
+        }
+        return {
+          ok: true,
+          uri: packageResult.descriptor.modelPath,
+          messageKey: packageResult.messageKey,
+          customModelPackage: packageResult.descriptor
+        };
+      }
       const content = await this.reader.readFileContent(sourceUri);
       const fileName = cachedModelFileNameForInputKind(routeName, inputKind);
       if (fileName.length === 0) {
@@ -355,7 +383,8 @@ export function runtimeModelFileCacheService(rawfileReader: RawfileContentReader
     new FileUriContentReader(),
     new HarmonyModelFileCacheWriter(),
     new BasicModelFileCompatibilityChecker(),
-    new NativeStyleTransferModelPairCompatibilityChecker(rawfileReader)
+    new NativeStyleTransferModelPairCompatibilityChecker(rawfileReader),
+    new CustomModelPackageService()
   );
 }
 

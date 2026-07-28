@@ -4,6 +4,11 @@ import {
   parseCustomModelPackageManifest,
   validateCustomModelTensorContract
 } from '../main/ets/services/ai/CustomModelPackage';
+import {
+  CustomModelArchiveEntry,
+  customModelPackageFilesMatchManifest,
+  validateCustomModelPackageArchive
+} from '../main/ets/services/ai/CustomModelPackageService';
 
 const digest: string = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
 
@@ -98,6 +103,29 @@ export default function customModelPackageUnitTest(): void {
         rejected = true;
       }
       expect(rejected).assertTrue();
+    });
+
+    it('rejectsOversizedNestedLinkedAndUnexpectedArchiveEntries', 0, () => {
+      const valid: Array<CustomModelArchiveEntry> = [
+        { name: 'manifest.json', size: 700, isFile: true, isSymbolicLink: false },
+        { name: 'model.ms', size: 600, isFile: true, isSymbolicLink: false },
+        { name: 'labels.txt', size: 16, isFile: true, isSymbolicLink: false }
+      ];
+      expect(validateCustomModelPackageArchive(1316, 1316, valid)).assertTrue();
+      expect(validateCustomModelPackageArchive(256 * 1024 * 1024 + 1, 1316, valid)).assertFalse();
+      expect(validateCustomModelPackageArchive(1316, 512 * 1024 * 1024 + 1, valid)).assertFalse();
+      expect(validateCustomModelPackageArchive(1316, 1316, [
+        { name: '/nested/model.ms', size: 600, isFile: true, isSymbolicLink: false }
+      ])).assertFalse();
+      expect(validateCustomModelPackageArchive(1316, 1316, [
+        { name: 'model.ms', size: 600, isFile: true, isSymbolicLink: true }
+      ])).assertFalse();
+
+      const manifest = parseCustomModelPackageManifest(imageManifest);
+      expect(customModelPackageFilesMatchManifest(manifest, valid)).assertTrue();
+      expect(customModelPackageFilesMatchManifest(manifest, valid.concat([
+        { name: 'extra.bin', size: 1, isFile: true, isSymbolicLink: false }
+      ]))).assertFalse();
     });
   });
 }
