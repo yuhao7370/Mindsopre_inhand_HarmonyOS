@@ -11,6 +11,8 @@ Converter: official MindSpore Lite 2.6.0 Linux x64 package, `converter_lite`.
 The official package URL is
 `https://ms-release.obs.cn-north-4.myhuaweicloud.com/2.6.0/MindSpore/lite/release/linux/x86_64/mindspore-lite-2.6.0-linux-x64.tar.gz`;
 its SHA-256 is `DC70D965C440ECAB9692FD2DD7362E967D79E92CCB0FF632AC021D25D2AF9C9E`.
+Converter package SHA-256: `DC70D965C440ECAB9692FD2DD7362E967D79E92CCB0FF632AC021D25D2AF9C9E`.
+converter_lite SHA-256: `EB9BBA96E1022A8412021DBE4BF07C826F982EC0660E51E512787EE8350663A0`.
 The exact conversion flags are `--fmk=MINDIR --saveType=MINDIR_LITE
 --optimize=general --fp16=off --inputDataFormat=NCHW`.
 
