@@ -251,6 +251,7 @@ import {
 import {
   HandwrittenDigitFailure,
   HandwrittenDigitImagePreprocessor,
+  HandwrittenDigitScoreRunner,
   HandwrittenDigitService,
   HandwrittenDigitTensorRunner
 } from '../main/ets/services/ai/HandwrittenDigitService';
@@ -891,6 +892,7 @@ class FixedHandwrittenDigitPreprocessor implements HandwrittenDigitImagePreproce
 
 class FixedHandwrittenDigitTensorRunner implements HandwrittenDigitTensorRunner {
   readonly seenByteLengths: Array<number> = [];
+  stopCount: number = 0;
   private readonly logits: Array<number>;
 
   constructor(logits: Array<number>) {
@@ -899,6 +901,27 @@ class FixedHandwrittenDigitTensorRunner implements HandwrittenDigitTensorRunner 
 
   async predictScoresFromInput(input: ArrayBuffer): Promise<Array<number>> {
     this.seenByteLengths.push(input.byteLength);
+    return this.logits;
+  }
+
+  async stop(): Promise<void> {
+    this.stopCount++;
+  }
+}
+
+class FixedHandwrittenDigitScoreRunner implements HandwrittenDigitScoreRunner {
+  private readonly logits: Array<number>;
+  private readonly shouldReject: boolean;
+
+  constructor(logits: Array<number>, shouldReject: boolean = false) {
+    this.logits = logits;
+    this.shouldReject = shouldReject;
+  }
+
+  async predictLogits(_input: ArrayBuffer): Promise<Array<number>> {
+    if (this.shouldReject) {
+      throw new Error('model unavailable');
+    }
     return this.logits;
   }
 }
@@ -8512,21 +8535,13 @@ export default function localUnitTest() {
       const success = await new DefaultAiService({
         handwrittenDigitService: new HandwrittenDigitService({
           preprocessor: new FixedHandwrittenDigitPreprocessor(input),
-          scoreRunner: {
-            async predictLogits(_input: ArrayBuffer): Promise<Array<number>> {
-              return [0, 0, 0, 0, 0, 0, 7, 0, 0, 0];
-            }
-          }
+          scoreRunner: new FixedHandwrittenDigitScoreRunner([0, 0, 0, 0, 0, 0, 7, 0, 0, 0])
         })
       }).run(workflow, { imageUri: 'file://selected/six.png' });
       const failure = await new DefaultAiService({
         handwrittenDigitService: new HandwrittenDigitService({
           preprocessor: new FixedHandwrittenDigitPreprocessor(input),
-          scoreRunner: {
-            async predictLogits(_input: ArrayBuffer): Promise<Array<number>> {
-              throw new Error('model unavailable');
-            }
-          }
+          scoreRunner: new FixedHandwrittenDigitScoreRunner([], true)
         })
       }).run(workflow, { imageUri: 'file://selected/broken.png' });
 
@@ -8555,6 +8570,23 @@ export default function localUnitTest() {
       expect(result.ok).assertTrue();
       expect(result.code).assertEqual('DIGIT_RECOGNITION_DONE');
       expect(aiRunResultRows(result)[0].value).assertEqual('8');
+    });
+
+    it('defaultAiServiceStopsHandwrittenDigitTensorRunner', 0, async () => {
+      const input = new ArrayBuffer(28 * 28 * Float32Array.BYTES_PER_ELEMENT);
+      const runner = new FixedHandwrittenDigitTensorRunner([0, 0, 0, 0, 0, 0, 1, 0, 0, 0]);
+      const service = new DefaultAiService({
+        handwrittenDigitService: createHarmonyHandwrittenDigitService({
+          resourceManager: new FixedRawfileContentReader(new Uint8Array()),
+          handwrittenDigitPreprocessor: new FixedHandwrittenDigitPreprocessor(input),
+          handwrittenDigitTensorRunner: runner
+        })
+      });
+
+      await service.stop();
+      await service.stop();
+
+      expect(runner.stopCount).assertEqual(1);
     });
 
     it('createsHarmonyDefaultAiServiceWithRawfileLabelsAndRunner', 0, async () => {
@@ -8729,6 +8761,27 @@ export default function localUnitTest() {
 
       session.invalidate();
       session.invalidate();
+      await Promise.resolve();
+
+      expect(runner.stopCount).assertEqual(1);
+    });
+
+    it('runtimeAiServiceSessionRouteChangeStopsCachedDigitRunnerExactlyOnce', 0, async () => {
+      const session = new RuntimeAiServiceSession();
+      const digitWorkflow = workflowForRoute(AppRoute.DIGIT_LIVE.name)!;
+      const gestureWorkflow = workflowForRoute(AppRoute.GESTURE_LIVE.name)!;
+      const input = new ArrayBuffer(28 * 28 * Float32Array.BYTES_PER_ELEMENT);
+      const runner = new FixedHandwrittenDigitTensorRunner([0, 0, 0, 0, 0, 1, 0, 0, 0, 0]);
+      const digitService = new DefaultAiService({
+        handwrittenDigitService: createHarmonyHandwrittenDigitService({
+          resourceManager: new FixedRawfileContentReader(new Uint8Array()),
+          handwrittenDigitPreprocessor: new FixedHandwrittenDigitPreprocessor(input),
+          handwrittenDigitTensorRunner: runner
+        })
+      });
+
+      await session.getOrCreate(digitWorkflow, async (): Promise<DefaultAiService> => digitService);
+      await session.getOrCreate(gestureWorkflow, async (): Promise<DefaultAiService> => new DefaultAiService());
       await Promise.resolve();
 
       expect(runner.stopCount).assertEqual(1);
@@ -10571,15 +10624,21 @@ export default function localUnitTest() {
 
     it('keepsLiveGestureOverlayCameraAndRetryStatePerRoute', 0, () => {
       const gestureLive: FeatureWorkflow = workflowForRoute(AppRoute.GESTURE_LIVE.name)!;
+      const digitLive: FeatureWorkflow = workflowForRoute(AppRoute.DIGIT_LIVE.name)!;
       const sceneLive: FeatureWorkflow = workflowForRoute(AppRoute.SCENE_LIVE.name)!;
 
       expect(usesAndroidLiveGestureLayout(gestureLive)).assertTrue();
+      expect(usesAndroidLiveGestureLayout(digitLive)).assertTrue();
       expect(usesAndroidLiveGestureLayout(sceneLive)).assertFalse();
       expect(liveGestureRetryActionForStatus(gestureLive, 'feature_runtime_live_camera_failed'))
         .assertEqual('restartCamera');
       expect(liveGestureRetryActionForStatus(gestureLive, 'feature_runtime_run_failed'))
         .assertEqual('restartInference');
       expect(liveGestureRetryActionForStatus(gestureLive, 'feature_runtime_gesture_failed'))
+        .assertEqual('restartInference');
+      expect(liveGestureRetryActionForStatus(digitLive, 'feature_runtime_live_camera_failed'))
+        .assertEqual('restartCamera');
+      expect(liveGestureRetryActionForStatus(digitLive, 'feature_runtime_digit_failed'))
         .assertEqual('restartInference');
       expect(liveGestureRetryActionForStatus(gestureLive, 'feature_runtime_status_idle')).assertEqual('none');
       expect(liveGestureRetryActionForStatus(sceneLive, 'feature_runtime_run_failed')).assertEqual('none');
@@ -10592,6 +10651,7 @@ export default function localUnitTest() {
       expect(shouldPreserveRuntimeVisualResultOnAiResult(gestureLive, true, 'gesture')).assertTrue();
       expect(shouldPreserveRuntimeVisualResultOnAiResult(gestureLive, true, 'classification')).assertFalse();
       expect(shouldPreserveLiveCameraInputOnFailure(gestureLive)).assertTrue();
+      expect(shouldPreserveLiveCameraInputOnFailure(digitLive)).assertTrue();
       expect(shouldPreserveLiveCameraInputOnFailure(sceneLive)).assertTrue();
     });
 
@@ -11298,7 +11358,7 @@ export default function localUnitTest() {
           expectedLayout = 'objectDetection';
         } else if (workflow.routeName === AppRoute.SEGMENTATION_LIVE.name) {
           expectedLayout = 'segmentation';
-        } else if (workflow.routeName === AppRoute.GESTURE_LIVE.name) {
+        } else if (workflow.routeName === AppRoute.GESTURE_LIVE.name || workflow.routeName === AppRoute.DIGIT_LIVE.name) {
           expectedLayout = 'gesture';
         } else if (workflow.routeName === AppRoute.SCENE_LIVE.name) {
           expectedLayout = 'scene';
@@ -11322,7 +11382,7 @@ export default function localUnitTest() {
         usesAndroidStillSegmentationLayout(workflow),
         usesAndroidStillSceneLayout(workflow),
         usesAndroidPortraitSegmentationLayout(workflow),
-        isHandwrittenDigitWorkflow(workflow),
+        isHandwrittenDigitWorkflow(workflow) && workflow?.liveMode !== true,
         specializedAndroidLiveLayoutForWorkflow(workflow) === 'imageClassification',
         specializedAndroidLiveLayoutForWorkflow(workflow) === 'objectDetection',
         specializedAndroidLiveLayoutForWorkflow(workflow) === 'segmentation',

@@ -5876,7 +5876,9 @@ struct FeatureRuntimePage {
   @Builder
   gestureStillAndroidPreview() {
     Stack({ alignContent: Alignment.Center }) {
-      if (this.gestureImageUri.length > 0 && this.visibleGestureDetections().length > 0) {
+      if (this.liveCameraInputSelected || this.liveCameraActive) {
+        this.liveCameraSurfaceContent()
+      } else if (this.gestureImageUri.length > 0 && this.visibleGestureDetections().length > 0) {
         Stack({ alignContent: Alignment.TopStart }) {
           Image(this.gestureImageUri)
             .orientation(this.gestureImageOrientation)

@@ -80,6 +80,10 @@ struct FeatureRuntimePage {
     }
   }
 
+  @Builder
+  gestureStillAndroidLayout() {
+  }
+
   build() {
     Stack({ alignContent: Alignment.TopStart }) {
       this.runtimeLayoutContent()
@@ -247,6 +251,13 @@ try {
     Replace-Once (Join-Path $root $pagePath) `
       "    } else if (usesAndroidGestureStillLayout(workflowForRoute(this.routeName))) {`n      this.gestureStillAndroidLayout()" `
       "    } else if (usesAndroidGestureStillLayout(workflowForRoute(this.routeName))) {`n      const builderDecoy = 'this.gestureStillAndroidLayout()'"
+  }
+
+  Assert-GuardRejectsMutation $validRoot 'duplicate-shared-still-builder-call' {
+    param($root)
+    Replace-Once (Join-Path $root $pagePath) `
+      '      this.objectPhotoAndroidLayout()' `
+      "      this.gestureStillAndroidLayout()`n      this.objectPhotoAndroidLayout()"
   }
 
   Assert-GuardRejectsMutation $validRoot 'comment-selector-decoy' {

@@ -215,7 +215,7 @@ foreach ($line in @(
 $preview = Section $page '  gestureStillAndroidPreview() {' `
   "`n`n  @Builder`n  gestureStillAndroidLayout()" 'static gesture preview'
 foreach ($line in @(
-  'if (this.gestureImageUri.length > 0 && this.visibleGestureDetections().length > 0) {',
+  '} else if (this.gestureImageUri.length > 0 && this.visibleGestureDetections().length > 0) {',
   'Image(this.gestureImageUri)',
   '.orientation(this.gestureImageOrientation)',
   '.objectFit(ImageFit.Fill)',

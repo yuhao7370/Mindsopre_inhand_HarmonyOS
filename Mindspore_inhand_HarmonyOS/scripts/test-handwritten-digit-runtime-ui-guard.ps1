@@ -16,6 +16,13 @@ function Require-Text([string]$Text, [string]$Needle, [string]$Name) {
   }
 }
 
+function Section([string]$Text, [string]$Start, [string]$End) {
+  $startAt = $Text.IndexOf($Start, [StringComparison]::Ordinal)
+  $endAt = if ($startAt -ge 0) { $Text.IndexOf($End, $startAt + $Start.Length, [StringComparison]::Ordinal) } else { -1 }
+  if ($startAt -lt 0 -or $endAt -le $startAt) { throw "Digit guard could not find section: $Start" }
+  return $Text.Substring($startAt, $endAt - $startAt)
+}
+
 function Copy-Candidate([string]$Root) {
   foreach ($relative in @(
     'entry\src\main\ets\services\ai\AiService.ets',
@@ -68,6 +75,8 @@ try {
   Require-Text $catalog "isHandwrittenDigitWorkflow(workflow) && workflow?.liveMode" 'shared live layout predicate'
   Require-Text $page "usesAndroidGestureLikeStillLayout(workflowForRoute(this.routeName))" 'shared still builder selection'
   Require-Text $page "this.liveDigitOverlayValue()" 'live digit and confidence overlay'
+  $digitStillPreview = Section $page '  gestureStillAndroidPreview() {' "`n`n  @Builder`n  gestureStillAndroidLayout()"
+  Require-Text $digitStillPreview "if (this.liveCameraInputSelected || this.liveCameraActive) {`n        this.liveCameraSurfaceContent()" 'static inline camera surface'
   Require-Text $page "this.runtimeAiServiceSession.getOrCreate(workflow" 'route service session'
   Require-Text $build "test-handwritten-digit-runtime-ui-guard.ps1" 'build guard wire'
 
@@ -82,6 +91,9 @@ try {
     "aiMethod === 'detectGesture' ||`n    aiMethod === 'recognizeDigit' ||" "aiMethod === 'detectGesture' ||"
   Assert-Rejected 'drop-still-builder-reuse' 'entry\src\main\ets\pages\FeatureRuntimePage.ets' `
     'usesAndroidGestureLikeStillLayout(workflowForRoute(this.routeName))' 'usesAndroidGestureStillLayout(workflowForRoute(this.routeName))'
+  Assert-Rejected 'drop-static-inline-camera-surface' 'entry\src\main\ets\pages\FeatureRuntimePage.ets' `
+    "if (this.liveCameraInputSelected || this.liveCameraActive) {`n        this.liveCameraSurfaceContent()" `
+    "if (false) {`n        this.liveCameraSurfaceContent()"
   Assert-Rejected 'drop-session-cache' 'entry\src\main\ets\pages\FeatureRuntimePage.ets' `
     'await this.runtimeAiServiceSession.getOrCreate(workflow, () =>' 'await cachedRuntimeAiServiceForHarmonyResourceManager(workflow,'
 

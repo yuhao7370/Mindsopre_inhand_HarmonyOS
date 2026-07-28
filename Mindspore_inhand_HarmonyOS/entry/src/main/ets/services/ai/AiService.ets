@@ -298,6 +298,7 @@ export class DefaultAiService {
 
   private async stopRuntimeServices(): Promise<void> {
     await this.stopGestureService();
+    await this.stopHandwrittenDigitService();
     if (this.textTranslationService !== undefined) {
       try {
         await this.textTranslationService.stop();
@@ -354,6 +355,16 @@ export class DefaultAiService {
         result: result
       }
     };
+  }
+
+  private async stopHandwrittenDigitService(): Promise<void> {
+    if (this.handwrittenDigitService === undefined) {
+      return;
+    }
+    try {
+      await this.handwrittenDigitService.stop();
+    } catch (_) {
+    }
   }
 
   private async recognizeDigit(inputs: AiRunInputs): Promise<AiRunResult> {

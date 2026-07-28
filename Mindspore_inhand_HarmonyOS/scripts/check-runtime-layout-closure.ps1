@@ -117,7 +117,8 @@ if ([string]::IsNullOrWhiteSpace($SourceRoot)) { $SourceRoot = Split-Path -Paren
 $SourceRoot = [IO.Path]::GetFullPath($SourceRoot)
 $pagePath = Join-Path $SourceRoot 'entry\src\main\ets\pages\FeatureRuntimePage.ets'
 $buildScriptPath = Join-Path $SourceRoot 'scripts\build-hap.ps1'
-$page = ConvertTo-ArkTsStructuralText (Get-NormalizedText $pagePath)
+$rawPage = Get-NormalizedText $pagePath
+$page = ConvertTo-ArkTsStructuralText $rawPage
 
 $structMatches = [regex]::Matches(
   $page,
@@ -196,6 +197,18 @@ for ($index = 0; $index -lt $expectedLines.Count - 1; $index++) {
   if ($count -ne 1) {
     throw "Runtime layout closure guard failed: selector/builder line must occur exactly once: $($rawExpectedLines[$index])"
   }
+}
+
+$gestureStillBuilderDefinitions = [regex]::Matches(
+  $rawPage,
+  '(?m)^[\t ]*gestureStillAndroidLayout\(\)\s*\{'
+).Count
+if ($gestureStillBuilderDefinitions -ne 1) {
+  throw "Runtime layout closure guard failed: expected one shared gesture/digit still builder definition, found $gestureStillBuilderDefinitions."
+}
+$gestureStillBuilderCalls = @($actualLines | Where-Object { $_ -ceq 'this.gestureStillAndroidLayout()' }).Count
+if ($gestureStillBuilderCalls -ne 2) {
+  throw "Runtime layout closure guard failed: gesture and digit routes must make exactly two shared still-builder calls, found $gestureStillBuilderCalls."
 }
 
 $buildMatches = [regex]::Matches($featureRuntimePageBody, '(?m)^[\t ]*build\(\)[\t ]*\{[\t ]*$')

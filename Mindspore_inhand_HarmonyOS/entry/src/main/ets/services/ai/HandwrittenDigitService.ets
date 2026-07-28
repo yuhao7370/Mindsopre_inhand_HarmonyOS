@@ -22,10 +22,12 @@ export interface HandwrittenDigitImagePreprocessor {
 
 export interface HandwrittenDigitScoreRunner {
   predictLogits(input: ArrayBuffer): Promise<Array<number>>;
+  stop?(): Promise<void>;
 }
 
 export interface HandwrittenDigitTensorRunner {
   predictScoresFromInput(input: ArrayBuffer): Promise<Array<number>>;
+  stop?(): Promise<void>;
 }
 
 export class HandwrittenDigitMindSporeScoreRunner implements HandwrittenDigitScoreRunner {
@@ -37,6 +39,10 @@ export class HandwrittenDigitMindSporeScoreRunner implements HandwrittenDigitSco
 
   async predictLogits(input: ArrayBuffer): Promise<Array<number>> {
     return this.tensorRunner.predictScoresFromInput(input);
+  }
+
+  async stop(): Promise<void> {
+    await this.tensorRunner.stop?.();
   }
 }
 
@@ -78,5 +84,9 @@ export class HandwrittenDigitService {
     } catch (_) {
       throw new HandwrittenDigitFailure('MODEL_OUTPUT_INVALID');
     }
+  }
+
+  async stop(): Promise<void> {
+    await this.scoreRunner.stop?.();
   }
 }

@@ -342,9 +342,6 @@ export function specializedAndroidLiveLayoutForWorkflow(
   if (usesAndroidLiveGestureLayout(workflow)) {
     return 'gesture';
   }
-  if (isHandwrittenDigitWorkflow(workflow) && workflow?.liveMode) {
-    return 'gesture';
-  }
   if (usesAndroidLiveSceneLayout(workflow)) {
     return 'scene';
   }
@@ -818,7 +815,8 @@ export function shouldShowLiveGestureCameraOverlay(workflow: FeatureWorkflow | u
 }
 
 export function usesAndroidLiveGestureLayout(workflow: FeatureWorkflow | undefined): boolean {
-  return workflow?.routeName === AppRoute.GESTURE_LIVE.name;
+  return workflow?.routeName === AppRoute.GESTURE_LIVE.name ||
+    (isHandwrittenDigitWorkflow(workflow) && workflow?.liveMode === true);
 }
 
 export function usesAndroidLiveSceneLayout(workflow: FeatureWorkflow | undefined): boolean {
@@ -927,7 +925,8 @@ export function liveGestureRetryActionForStatus(
   if (statusKey === 'feature_runtime_live_frame_failed' ||
     statusKey === 'feature_runtime_run_failed' ||
     statusKey === 'feature_runtime_pending_adapter' ||
-    statusKey === 'feature_runtime_gesture_failed') {
+    statusKey === 'feature_runtime_gesture_failed' ||
+    statusKey === 'feature_runtime_digit_failed') {
     return 'restartInference';
   }
   return 'none';
@@ -1142,7 +1141,7 @@ export function shouldPreserveRuntimeTextResultOnAiResult(
     shouldShowLiveClassificationCameraOverlay(workflow) ||
     shouldShowLiveObjectDetectionCameraOverlay(workflow) ||
     usesAndroidLiveSegmentationLayout(workflow) ||
-    usesAndroidLiveGestureLayout(workflow) ||
+    (usesAndroidLiveGestureLayout(workflow) && !isHandwrittenDigitWorkflow(workflow)) ||
     usesAndroidLiveSceneLayout(workflow) ||
     usesAndroidLiveSkeletonLayout(workflow)) && !resultOk;
 }

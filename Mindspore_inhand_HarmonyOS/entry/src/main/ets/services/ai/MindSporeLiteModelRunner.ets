@@ -67,6 +67,11 @@ export class MindSporeLiteModelRunner {
     return floatScoresFromOutputBuffer(outputs[0].getData());
   }
 
+  async stop(): Promise<void> {
+    // MindSpore Lite exposes no stable explicit model-release API on this target.
+    this.cachedModel = undefined;
+  }
+
   private async loadModel(): Promise<mindSporeLite.Model> {
     if (this.cachedModel) {
       return this.cachedModel;
