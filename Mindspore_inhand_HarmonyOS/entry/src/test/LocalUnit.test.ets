@@ -302,6 +302,7 @@ import {
   mindSporeLiteInputTensorMatchesContract,
   mindSporeLiteCpuContext,
   mindSporeLiteCpuThreadNum,
+  MindSporeLiteModelRunner,
   RawfileContentReader,
   rawfileContentToArrayBuffer
 } from '../main/ets/services/ai/MindSporeLiteModelRunner';
@@ -960,6 +961,22 @@ class FixedRawfileContentReader implements RawfileContentReader {
 class ThrowingRawfileContentReader implements RawfileContentReader {
   async getRawFileContent(_path: string): Promise<Uint8Array> {
     throw new Error('unexpected rawfile access');
+  }
+}
+
+class DeferredMindSporeModelLoader {
+  loadCount: number = 0;
+  private resolveLoad?: (model: mindSporeLite.Model) => void;
+
+  load(_buffer: ArrayBuffer, _context: mindSporeLite.Context): Promise<mindSporeLite.Model> {
+    this.loadCount++;
+    return new Promise<mindSporeLite.Model>((resolve: (model: mindSporeLite.Model) => void) => {
+      this.resolveLoad = resolve;
+    });
+  }
+
+  resolve(model: mindSporeLite.Model): void {
+    this.resolveLoad?.(model);
   }
 }
 
@@ -8133,6 +8150,37 @@ export default function localUnitTest() {
       expect(copied.length).assertEqual(3);
       expect(copied[0]).assertEqual(1);
       expect(copied[2]).assertEqual(3);
+    });
+
+    it('doesNotReviveMindSporeModelAfterStopDuringDeferredLoad', 0, async () => {
+      const loader: DeferredMindSporeModelLoader = new DeferredMindSporeModelLoader();
+      const runner: MindSporeLiteModelRunner = new MindSporeLiteModelRunner({
+        resourceManager: new FixedRawfileContentReader(new Uint8Array([1])),
+        modelRawfilePath: 'model/deferred.ms',
+        modelLoader: (buffer: ArrayBuffer, context: mindSporeLite.Context): Promise<mindSporeLite.Model> => {
+          return loader.load(buffer, context);
+        }
+      });
+      let firstRejected: boolean = false;
+      const first = runner.predictScoresFromInput(new ArrayBuffer(4)).catch(() => {
+        firstRejected = true;
+      });
+
+      await Promise.resolve();
+      expect(loader.loadCount).assertEqual(1);
+      await runner.stop();
+      await runner.stop();
+      loader.resolve(new Object() as mindSporeLite.Model);
+      await first;
+
+      expect(loader.loadCount).assertEqual(1);
+      expect(firstRejected).assertTrue();
+      let laterRejected: boolean = false;
+      await runner.predictScoresFromInput(new ArrayBuffer(4)).catch(() => {
+        laterRejected = true;
+      });
+      expect(laterRejected).assertTrue();
+      expect(loader.loadCount).assertEqual(1);
     });
 
     it('readsSelectedModelUriContentToExactBytes', 0, async () => {

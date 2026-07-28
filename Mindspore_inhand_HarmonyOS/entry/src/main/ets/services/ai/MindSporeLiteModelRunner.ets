@@ -5,9 +5,15 @@ export interface RawfileContentReader {
   getRawFileContent(path: string): Promise<Uint8Array>;
 }
 
+export type MindSporeLiteModelLoader = (
+  buffer: ArrayBuffer,
+  context: mindSporeLite.Context
+) => Promise<mindSporeLite.Model>;
+
 export interface MindSporeLiteModelRunnerOptions {
   readonly resourceManager: RawfileContentReader;
   readonly modelRawfilePath: string;
+  readonly modelLoader?: MindSporeLiteModelLoader;
   readonly outputTensorDecoder?: (output: mindSporeLite.MSTensor) => Array<number>;
   readonly inputTensorValidator?: (input: mindSporeLite.MSTensor) => boolean;
 }
@@ -34,19 +40,27 @@ export function mindSporeLiteCpuContext(threadNum: number = mindSporeLiteCpuThre
 export class MindSporeLiteModelRunner {
   private readonly resourceManager: RawfileContentReader;
   private readonly modelRawfilePath: string;
+  private readonly modelLoader: MindSporeLiteModelLoader;
   private readonly outputTensorDecoder?: (output: mindSporeLite.MSTensor) => Array<number>;
   private readonly inputTensorValidator?: (input: mindSporeLite.MSTensor) => boolean;
   private cachedModel?: mindSporeLite.Model;
+  private stopped: boolean = false;
+  private generation: number = 0;
 
   constructor(options: MindSporeLiteModelRunnerOptions) {
     this.resourceManager = options.resourceManager;
     this.modelRawfilePath = options.modelRawfilePath;
+    this.modelLoader = options.modelLoader ?? ((buffer: ArrayBuffer, context: mindSporeLite.Context) => {
+      return mindSporeLite.loadModelFromBuffer(buffer, context);
+    });
     this.outputTensorDecoder = options.outputTensorDecoder;
     this.inputTensorValidator = options.inputTensorValidator;
   }
 
   async predictScoresFromInput(inputBuffer: ArrayBuffer): Promise<Array<number>> {
-    const model = await this.loadModel();
+    const generation = this.currentGeneration();
+    const model = await this.loadModel(generation);
+    this.ensureCurrent(generation);
     const inputs = model.getInputs();
     if (inputs.length === 0) {
       return [];
@@ -57,6 +71,7 @@ export class MindSporeLiteModelRunner {
 
     inputs[0].setData(inputBuffer);
     const outputs = await model.predict(inputs);
+    this.ensureCurrent(generation);
     if (outputs.length === 0) {
       return [];
     }
@@ -69,17 +84,33 @@ export class MindSporeLiteModelRunner {
 
   async stop(): Promise<void> {
     // MindSpore Lite exposes no stable explicit model-release API on this target.
+    this.stopped = true;
+    this.generation++;
     this.cachedModel = undefined;
   }
 
-  private async loadModel(): Promise<mindSporeLite.Model> {
+  private currentGeneration(): number {
+    this.ensureCurrent(this.generation);
+    return this.generation;
+  }
+
+  private ensureCurrent(generation: number): void {
+    if (this.stopped || generation !== this.generation) {
+      throw new Error('MindSpore Lite model runner has stopped.');
+    }
+  }
+
+  private async loadModel(generation: number): Promise<mindSporeLite.Model> {
+    this.ensureCurrent(generation);
     if (this.cachedModel) {
       return this.cachedModel;
     }
 
     const content = await this.resourceManager.getRawFileContent(this.modelRawfilePath);
+    this.ensureCurrent(generation);
     const modelBuffer = rawfileContentToArrayBuffer(content);
-    const model = await mindSporeLite.loadModelFromBuffer(modelBuffer, mindSporeLiteCpuContext());
+    const model = await this.modelLoader(modelBuffer, mindSporeLiteCpuContext());
+    this.ensureCurrent(generation);
     this.cachedModel = model;
     return model;
   }
