@@ -8,7 +8,8 @@ import {
   encodeCustomModelText,
   parseCustomModelPackageManifest
 } from './CustomModelPackage';
-import { mindSporeLiteCpuContext } from './MindSporeLiteModelRunner';
+import { FileUriContentReader } from './FileUriContentReader';
+import { mindSporeLiteCpuContext, rawfileContentToArrayBuffer } from './MindSporeLiteModelRunner';
 
 export interface CustomModelPackageImagePreprocessor {
   createPackageInputBuffer(
@@ -50,7 +51,11 @@ export class CustomModelPackageRunner {
     const manifest: CustomModelPackageManifest = parseCustomModelPackageManifest(
       await fileIo.readText(joinPath(rootDir, 'manifest.json'))
     );
-    const model = await mindSporeLite.loadModelFromFile(modelPath, mindSporeLiteCpuContext());
+    const modelContent = await new FileUriContentReader().readFileContent(modelPath);
+    const model = await mindSporeLite.loadModelFromBuffer(
+      rawfileContentToArrayBuffer(modelContent),
+      mindSporeLiteCpuContext()
+    );
     const buffers = await this.inputBuffers(rootDir, manifest, imageUri, text);
     const inputs = model.getInputs();
     for (let index = 0; index < inputs.length; index++) {
@@ -75,11 +80,15 @@ export class CustomModelPackageRunner {
     const tokenizer = manifest.output.tokenizer ?? manifest.input.text?.tokenizer;
     const tokenizerTable = tokenizer === undefined ? '' :
       await fileIo.readText(joinPath(rootDir, tokenizer.file));
+    const declaredOutput = values.find((value: CustomModelTensorValue): boolean =>
+      value.name === manifest.output.tensor.name);
+    if (declaredOutput === undefined) throw new Error('Declared model output is missing.');
+    const flatOutput = tensorNumbers(declaredOutput);
     return {
       ok: true,
-      output: [],
+      output: flatOutput,
       displayText: decodeCustomModelOutput(manifest, values, labels, tokenizerTable),
-      outputCount: values.length === 0 ? 0 : values[0].data.byteLength,
+      outputCount: flatOutput.length,
       executionMs: Date.now() - startedAt
     };
   }
@@ -103,6 +112,12 @@ export class CustomModelPackageRunner {
     const table = await fileIo.readText(joinPath(rootDir, manifest.input.text.tokenizer.file));
     return encodeCustomModelText(text, table, manifest);
   }
+}
+
+function tensorNumbers(tensor: CustomModelTensorValue): Array<number> {
+  if (tensor.dtype === 'FLOAT32') return Array.from(new Float32Array(tensor.data));
+  if (tensor.dtype === 'INT32') return Array.from(new Int32Array(tensor.data));
+  return Array.from(new Uint8Array(tensor.data));
 }
 
 function dataType(dtype: mindSporeLite.DataType): CustomModelDataType {

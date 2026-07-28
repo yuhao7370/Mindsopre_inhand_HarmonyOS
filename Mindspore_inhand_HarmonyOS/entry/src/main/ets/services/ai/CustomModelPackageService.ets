@@ -3,7 +3,8 @@ import { mindSporeLite } from '@kit.MindSporeLiteKit';
 import util from '@ohos.util';
 import zlib from '@ohos.zlib';
 import { AppStringKey } from '../../common/i18n/AppStrings';
-import { mindSporeLiteCpuContext } from './MindSporeLiteModelRunner';
+import { FileUriContentReader } from './FileUriContentReader';
+import { mindSporeLiteCpuContext, rawfileContentToArrayBuffer } from './MindSporeLiteModelRunner';
 import {
   CustomModelDataType,
   CustomModelInputKind,
@@ -98,7 +99,9 @@ export class CustomModelPackageService {
     const extractedDir = joinPath(requestDir, 'files');
     const zipPath = joinPath(requestDir, 'package.zip');
     try {
-      await fileIo.mkdir(baseDir, true);
+      if (!fileIo.accessSync(baseDir)) {
+        await fileIo.mkdir(baseDir, true);
+      }
       await fileIo.mkdir(extractedDir, true);
       await fileIo.copyFile(sourceUri, zipPath);
       const zipStat = await fileIo.stat(zipPath);
@@ -126,7 +129,8 @@ export class CustomModelPackageService {
         descriptor: descriptor,
         messageKey: 'feature_runtime_model_ready'
       };
-    } catch (_) {
+    } catch (error) {
+      console.error(`Custom model package import failed: ${String(error)}`);
       await removeTree(requestDir);
       return failedImport('feature_runtime_model_incompatible');
     }
@@ -164,7 +168,11 @@ async function descriptorForRoot(
   manifest: CustomModelPackageManifest
 ): Promise<CustomModelPackageDescriptor> {
   const modelPath = joinPath(rootDir, manifest.model.file);
-  const model = await mindSporeLite.loadModelFromFile(modelPath, mindSporeLiteCpuContext());
+  const modelContent = await new FileUriContentReader().readFileContent(modelPath);
+  const model = await mindSporeLite.loadModelFromBuffer(
+    rawfileContentToArrayBuffer(modelContent),
+    mindSporeLiteCpuContext()
+  );
   const nativeInputs = model.getInputs();
   const inputs = nativeInputs.map((tensor: mindSporeLite.MSTensor): CustomModelTensorMetadata =>
     tensorMetadata(tensor));
@@ -259,11 +267,11 @@ async function verifyDeclaredAssets(rootDir: string, manifest: CustomModelPackag
 
 async function publishPointer(baseDir: string, rootDir: string): Promise<void> {
   const pointerPath = joinPath(baseDir, 'current.json');
-  const tempPath = `${pointerPath}.tmp-${Date.now()}-${customModelPackageRequestSequence}`;
   const content = new util.TextEncoder().encodeInto(JSON.stringify({ rootDir: rootDir }));
+  const createMode = fileIo.accessSync(pointerPath) ? 0 : fileIo.OpenMode.CREATE;
   const file = await fileIo.open(
-    tempPath,
-    fileIo.OpenMode.READ_WRITE | fileIo.OpenMode.CREATE | fileIo.OpenMode.TRUNC
+    pointerPath,
+    fileIo.OpenMode.READ_WRITE | fileIo.OpenMode.TRUNC | createMode
   );
   try {
     const written = await fileIo.write(file.fd, content.buffer as ArrayBuffer, {
@@ -276,7 +284,6 @@ async function publishPointer(baseDir: string, rootDir: string): Promise<void> {
   } finally {
     await fileIo.close(file);
   }
-  fileIo.moveFileSync(tempPath, pointerPath, 0);
 }
 
 async function removeTree(rootDir: string): Promise<void> {
