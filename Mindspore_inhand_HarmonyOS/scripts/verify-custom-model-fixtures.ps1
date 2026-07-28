@@ -1,6 +1,7 @@
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $modelRoot = Join-Path $projectRoot 'entry/src/main/resources/rawfile/model'
+$packageRoot = Join-Path $projectRoot 'entry/src/ohosTest/resources/rawfile/fixtures/custom_model'
 $sourceRoot = Join-Path $projectRoot 'model_sources/custom_model'
 
 $models = @(
@@ -62,7 +63,7 @@ foreach ($contract in $packageFiles) {
   }
 }
 foreach ($contract in $packages) {
-  $path = Join-Path $modelRoot $contract.Name
+  $path = Join-Path $packageRoot $contract.Name
   if ((Get-Item -LiteralPath $path).Length -ne $contract.Bytes -or
     (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash -cne $contract.Sha256) {
     throw "$($contract.Name) differs from the reproducible package."

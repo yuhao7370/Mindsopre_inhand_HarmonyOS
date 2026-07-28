@@ -215,11 +215,11 @@ export default function customModelNativeTest() {
       const applicationContext = abilityDelegatorRegistry.getAbilityDelegator()
         .getAppContext()
         .getApplicationContext();
-      const mainManager = applicationContext.createModuleContext('entry').resourceManager;
+      const testManager = applicationContext.createModuleContext('entry_test').resourceManager;
       const cacheDir = `${applicationContext.cacheDir}/package-native-test-${Date.now()}`;
       await fileIo.mkdir(cacheDir, true);
-      const imageZip = await mainManager.getRawFileContent('model/custom_image_package.zip');
-      const textZip = await mainManager.getRawFileContent('model/custom_text_package.zip');
+      const imageZip = await testManager.getRawFileContent('fixtures/custom_model/custom_image_package.zip');
+      const textZip = await testManager.getRawFileContent('fixtures/custom_model/custom_text_package.zip');
       const imageZipPath = await cacheBytes(cacheDir, 'image.zip', imageZip);
       const textZipPath = await cacheBytes(cacheDir, 'text.zip', textZip);
       const redImage = await cacheBytes(cacheDir, 'package-red.png', await solidPngBytes(255, 0, 0));
