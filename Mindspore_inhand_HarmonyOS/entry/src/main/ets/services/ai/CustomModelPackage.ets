@@ -1,3 +1,9 @@
+import {
+  decodePortableTokenizerText,
+  encodePortableTokenizerText,
+  PortableTokenizerEncoding
+} from './TinyTranslationTokenizer';
+
 export type CustomModelInputKind = 'image' | 'text';
 export type CustomModelOutputKind = 'classification' | 'text' | 'raw';
 export type CustomModelDataType = 'FLOAT32' | 'UINT8' | 'INT32';
@@ -76,6 +82,13 @@ export interface CustomModelTensorMetadata {
   readonly dataSize: number;
 }
 
+export interface CustomModelTensorValue {
+  readonly name: string;
+  readonly dtype: CustomModelDataType;
+  readonly shape: Array<number>;
+  readonly data: ArrayBuffer;
+}
+
 export const customModelPackageMaxZipBytes: number = 256 * 1024 * 1024;
 export const customModelPackageMaxExtractedBytes: number = 512 * 1024 * 1024;
 export const customModelPackageMaxTextLogitsBytes: number = 32 * 1024 * 1024;
@@ -128,6 +141,160 @@ export function validateCustomModelTensorContract(
     throw new Error('Model output tensor is missing.');
   }
   validateTensorMetadata(manifest.output.tensor, output, 'output');
+}
+
+export function imageTensorFromRgba(
+  rgba: Uint8Array,
+  sourceWidth: number,
+  sourceHeight: number,
+  manifest: CustomModelPackageManifest
+): ArrayBuffer {
+  const image = manifest.input.image;
+  const tensor = manifest.input.tensors[0];
+  if (manifest.input.kind !== 'image' || image === undefined ||
+    rgba.length !== sourceWidth * sourceHeight * 4 || sourceWidth <= 0 || sourceHeight <= 0) {
+    throw new Error('Image input is invalid.');
+  }
+  const targetWidth = image.width;
+  const targetHeight = image.height;
+  const scale = image.resize === 'fit' ?
+    Math.min(targetWidth / sourceWidth, targetHeight / sourceHeight) :
+    Math.max(targetWidth / sourceWidth, targetHeight / sourceHeight);
+  const offsetX = (targetWidth - sourceWidth * scale) / 2;
+  const offsetY = (targetHeight - sourceHeight * scale) / 2;
+  const values = tensor.dtype === 'UINT8' ?
+    new Uint8Array(targetWidth * targetHeight * 3) :
+    new Float32Array(targetWidth * targetHeight * 3);
+  for (let y = 0; y < targetHeight; y++) {
+    for (let x = 0; x < targetWidth; x++) {
+      const sourceX = Math.floor((x - offsetX) / scale);
+      const sourceY = Math.floor((y - offsetY) / scale);
+      const inside = sourceX >= 0 && sourceX < sourceWidth && sourceY >= 0 && sourceY < sourceHeight;
+      const sourceIndex = inside ? (sourceY * sourceWidth + sourceX) * 4 : -1;
+      for (let channel = 0; channel < 3; channel++) {
+        const rgbaChannel = image.color === 'RGB' ? channel : 2 - channel;
+        const byteValue = sourceIndex < 0 ? 0 : rgba[sourceIndex + rgbaChannel];
+        const targetIndex = image.layout === 'NHWC' ?
+          (y * targetWidth + x) * 3 + channel :
+          channel * targetWidth * targetHeight + y * targetWidth + x;
+        values[targetIndex] = tensor.dtype === 'UINT8' ? byteValue :
+          (byteValue / 255 - image.mean[channel]) / image.std[channel];
+      }
+    }
+  }
+  return values.buffer as ArrayBuffer;
+}
+
+export function encodeCustomModelText(
+  text: string,
+  tokenizerTable: string,
+  manifest: CustomModelPackageManifest
+): Map<string, ArrayBuffer> {
+  const settings = manifest.input.text;
+  if (manifest.input.kind !== 'text' || settings === undefined) {
+    throw new Error('Text input is not configured.');
+  }
+  const encoded: PortableTokenizerEncoding = encodePortableTokenizerText(
+    tokenizerTable,
+    text,
+    settings.maxTokens,
+    settings.padId,
+    settings.bosId,
+    settings.eosId
+  );
+  const tensors = new Map<string, ArrayBuffer>();
+  tensors.set(settings.inputIdsTensor, new Int32Array(encoded.inputIds).buffer as ArrayBuffer);
+  if (settings.attentionMaskTensor !== undefined) {
+    tensors.set(settings.attentionMaskTensor,
+      new Int32Array(encoded.attentionMask).buffer as ArrayBuffer);
+  }
+  return tensors;
+}
+
+export function decodeCustomModelOutput(
+  manifest: CustomModelPackageManifest,
+  outputs: Array<CustomModelTensorValue>,
+  labels: Array<string>,
+  tokenizerTable: string
+): string {
+  const contract = manifest.output.tensor;
+  const output = outputs.find((value: CustomModelTensorValue): boolean => value.name === contract.name);
+  if (output === undefined || output.dtype !== contract.dtype || !sameShape(output.shape, contract.shape)) {
+    throw new Error('Model output does not match the package manifest.');
+  }
+  const count = shapeElementCount(output.shape);
+  const expectedBytes = output.dtype === 'UINT8' ? count : count * 4;
+  if (output.data.byteLength !== expectedBytes) {
+    throw new Error('Model output byte size is invalid.');
+  }
+  if (manifest.output.kind === 'classification') {
+    if (output.dtype !== 'FLOAT32' || labels.length !== count || manifest.output.topK === undefined) {
+      throw new Error('Classification output or labels are invalid.');
+    }
+    const scores = new Float32Array(output.data);
+    requireFiniteFloatValues(scores);
+    const indices: Array<number> = [];
+    for (let index = 0; index < scores.length; index++) indices.push(index);
+    indices.sort((left: number, right: number): number => scores[right] - scores[left]);
+    const lines: Array<string> = [];
+    const resultCount = Math.min(manifest.output.topK, indices.length);
+    for (let rank = 0; rank < resultCount; rank++) {
+      const index = indices[rank];
+      lines.push(`${rank + 1}. ${labels[index]} ${(scores[index] * 100).toFixed(2)}%`);
+    }
+    return lines.join('\n');
+  }
+  if (manifest.output.kind === 'text') {
+    if (tokenizerTable.length === 0) {
+      throw new Error('Text output tokenizer is missing.');
+    }
+    const ids: Array<number> = output.dtype === 'INT32' ?
+      Array.from(new Int32Array(output.data)) :
+      logitsToTokenIds(output);
+    const settings = manifest.input.text;
+    const padId = settings?.padId ?? -1;
+    const bosId = settings?.bosId ?? -1;
+    const eosId = settings?.eosId ?? 0;
+    return decodePortableTokenizerText(tokenizerTable, ids, padId, bosId, eosId);
+  }
+  const preview: Array<string> = output.dtype === 'FLOAT32' ?
+    finiteFloatPreview(new Float32Array(output.data)) :
+    output.dtype === 'INT32' ?
+      Array.from(new Int32Array(output.data)).slice(0, 16).map((value: number): string => `${value}`) :
+      Array.from(new Uint8Array(output.data)).slice(0, 16).map((value: number): string => `${value}`);
+  return `${output.name} · ${output.dtype} · [${output.shape.join(', ')}] · ${count} values\n${preview.join(', ')}`;
+}
+
+function logitsToTokenIds(output: CustomModelTensorValue): Array<number> {
+  if (output.data.byteLength > customModelPackageMaxTextLogitsBytes || output.shape.length < 2) {
+    throw new Error('Text logits are too large or have an invalid shape.');
+  }
+  const values = new Float32Array(output.data);
+  requireFiniteFloatValues(values);
+  const vocabularySize = output.shape[output.shape.length - 1];
+  const stepCount = values.length / vocabularySize;
+  const ids: Array<number> = [];
+  for (let step = 0; step < stepCount; step++) {
+    let bestIndex = 0;
+    for (let index = 1; index < vocabularySize; index++) {
+      if (values[step * vocabularySize + index] > values[step * vocabularySize + bestIndex]) {
+        bestIndex = index;
+      }
+    }
+    ids.push(bestIndex);
+  }
+  return ids;
+}
+
+function requireFiniteFloatValues(values: Float32Array): void {
+  for (let index = 0; index < values.length; index++) {
+    if (!Number.isFinite(values[index])) throw new Error('Model output contains a non-finite value.');
+  }
+}
+
+function finiteFloatPreview(values: Float32Array): Array<string> {
+  requireFiniteFloatValues(values);
+  return Array.from(values).slice(0, 16).map((value: number): string => `${value}`);
 }
 
 function validateInput(input: CustomModelInputContract): void {

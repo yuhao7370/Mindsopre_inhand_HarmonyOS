@@ -1,6 +1,10 @@
 import { describe, expect, it } from '@ohos/hypium';
 import {
+  CustomModelTensorValue,
   CustomModelTensorMetadata,
+  decodeCustomModelOutput,
+  encodeCustomModelText,
+  imageTensorFromRgba,
   parseCustomModelPackageManifest,
   validateCustomModelTensorContract
 } from '../main/ets/services/ai/CustomModelPackage';
@@ -44,7 +48,7 @@ const textManifest: string = `{
     ],
     "text":{
       "tokenizer":{"file":"tokenizer.ttok","sha256":"${digest}"},
-      "maxTokens":8,"padId":0,"unkId":1,"bosId":2,"eosId":3,
+      "maxTokens":8,"padId":5,"unkId":1,"bosId":2,"eosId":0,
       "inputIdsTensor":"input_ids","attentionMaskTensor":"attention_mask"
     }
   },
@@ -53,6 +57,22 @@ const textManifest: string = `{
     "tensor":{"name":"output","dtype":"FLOAT32","shape":[1,2]}
   }
 }`;
+
+const ttokTable: string =
+  `TTOK2\t${digest}\t${digest}\t6\t6\t6\t1\t-10\t1\t1\t1\n` +
+  'N\t20\t20\n' +
+  'P\t0\t0\t3\t3c,2f,73,3e\n' +
+  'P\t1\t-1\t2\t3c,75,6e,6b,3e\n' +
+  'P\t2\t-1\t3\t3c,73,3e\n' +
+  'P\t3\t1\t1\t2581,68,69\n' +
+  'P\t4\t1\t1\t2581,62,79,65\n' +
+  'P\t5\t-1\t3\t3c,70,61,64,3e\n' +
+  'V\t0\t3c,2f,73,3e\n' +
+  'V\t1\t3c,75,6e,6b,3e\n' +
+  'V\t2\t3c,73,3e\n' +
+  'V\t3\t2581,68,69\n' +
+  'V\t4\t2581,62,79,65\n' +
+  'V\t5\t3c,70,61,64,3e';
 
 function rejectsManifest(content: string): boolean {
   try {
@@ -126,6 +146,61 @@ export default function customModelPackageUnitTest(): void {
       expect(customModelPackageFilesMatchManifest(manifest, valid.concat([
         { name: 'extra.bin', size: 1, isFile: true, isSymbolicLink: false }
       ]))).assertFalse();
+    });
+
+    it('buildsExactImageAndTextInputTensors', 0, () => {
+      const nchwManifest = parseCustomModelPackageManifest(imageManifest
+        .replace('"shape":[1,2,2,3],"format":"NHWC"', '"shape":[1,3,1,2],"format":"NCHW"')
+        .replace('"height":2,"layout":"NHWC","color":"RGB"', '"height":1,"layout":"NCHW","color":"BGR"')
+        .replace('"mean":[0,0,0],"std":[1,1,1]', '"mean":[0.5,0,0],"std":[0.5,1,1]'));
+      const rgba = new Uint8Array([255, 0, 64, 255, 0, 128, 255, 255]);
+      const values = new Float32Array(imageTensorFromRgba(rgba, 2, 1, nchwManifest));
+      expect(values.length).assertEqual(6);
+      expect(Math.abs(values[0] - -0.4980392) < 0.000001).assertTrue();
+      expect(Math.abs(values[1] - 1) < 0.000001).assertTrue();
+      expect(Math.abs(values[2] - 0) < 0.000001).assertTrue();
+      expect(Math.abs(values[3] - 0.5019608) < 0.000001).assertTrue();
+      expect(Math.abs(values[4] - 1) < 0.000001).assertTrue();
+      expect(Math.abs(values[5] - 0) < 0.000001).assertTrue();
+
+      const text = parseCustomModelPackageManifest(textManifest);
+      const tensors = encodeCustomModelText('hi', ttokTable, text);
+      const ids = new Int32Array(tensors.get('input_ids')!);
+      const mask = new Int32Array(tensors.get('attention_mask')!);
+      expect(Array.from(ids).join(',')).assertEqual('2,3,0,5,5,5,5,5');
+      expect(Array.from(mask).join(',')).assertEqual('1,1,1,0,0,0,0,0');
+    });
+
+    it('decodesClassificationTextAndRawOutputsWithoutGuessing', 0, () => {
+      const classification = parseCustomModelPackageManifest(imageManifest);
+      const scoreBuffer = new Float32Array([0.1, 0.7, 0.2]).buffer as ArrayBuffer;
+      const scoreOutput: Array<CustomModelTensorValue> = [{
+        name: 'output', dtype: 'FLOAT32', shape: [1, 3], data: scoreBuffer
+      }];
+      const classificationText = decodeCustomModelOutput(
+        classification,
+        scoreOutput,
+        ['红色', '绿色', '蓝色'],
+        ''
+      );
+      expect(classificationText).assertEqual('1. 绿色 70.00%\n2. 蓝色 20.00%');
+
+      const textOutputManifest = parseCustomModelPackageManifest(textManifest
+        .replace('"kind":"raw"', '"kind":"text"')
+        .replace('"dtype":"FLOAT32","shape":[1,2]', '"dtype":"INT32","shape":[1,8]'));
+      const tokenBuffer = new Int32Array([2, 3, 4, 0, 5, 5, 5, 5]).buffer as ArrayBuffer;
+      const tokenOutput: Array<CustomModelTensorValue> = [{
+        name: 'output', dtype: 'INT32', shape: [1, 8], data: tokenBuffer
+      }];
+      expect(decodeCustomModelOutput(textOutputManifest, tokenOutput, [], ttokTable)).assertEqual('hi bye');
+
+      const rawText = decodeCustomModelOutput(
+        parseCustomModelPackageManifest(textManifest.replace('"shape":[1,2]', '"shape":[1,3]')),
+        scoreOutput,
+        [],
+        ''
+      );
+      expect(rawText.indexOf('output · FLOAT32 · [1, 3] · 3 values')).assertEqual(0);
     });
   });
 }
