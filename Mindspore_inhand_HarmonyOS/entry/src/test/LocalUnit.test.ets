@@ -2808,6 +2808,8 @@ export default function localUnitTest() {
       expect(hasAppStringKey(mainTabs[0].titleKey)).assertTrue();
       expect(hasAppStringKey('experience_group_experience')).assertTrue();
       expect(hasAppStringKey('experience_group_advanced')).assertTrue();
+      expect(hasAppStringKey('experience_group_custom')).assertTrue();
+      expect(hasAppStringKey('experience_category_model_tools')).assertTrue();
       expect(hasAppStringKey(experienceSections[0].titleKey)).assertTrue();
       expect(hasAppStringKey(allExperienceFeatures[0].titleKey)).assertTrue();
       expect(hasAppStringKey(collegeItems[0].titleKey)).assertTrue();
@@ -2912,6 +2914,23 @@ export default function localUnitTest() {
       expect(visibleExperienceSections[1].groupTitleKey).assertUndefined();
       expect(visibleExperienceSections[2].id).assertEqual('advanced-vision');
       expect(visibleExperienceSections[2].groupTitleKey).assertEqual('experience_group_advanced');
+      expect(visibleExperienceSections[3].id).assertEqual('custom-models');
+      expect(visibleExperienceSections[3].groupTitleKey).assertEqual('experience_group_custom');
+    });
+
+    it('placesCustomModelInItsOwnModelToolsSection', 0, () => {
+      const advanced = visibleExperienceSections.find((section: FeatureSection) => {
+        return section.id === 'advanced-vision';
+      });
+      const custom = visibleExperienceSections.find((section: FeatureSection) => {
+        return section.id === 'custom-models';
+      });
+      expect(advanced?.items.some((item: FeatureItem) => item.id === 'custom')).assertFalse();
+      expect(custom?.groupTitleKey).assertEqual('experience_group_custom');
+      expect(custom?.titleKey).assertEqual('experience_category_model_tools');
+      expect(custom?.items.map((item: FeatureItem) => item.id).join(',')).assertEqual('custom');
+      expect(visibleExperienceSections.findIndex((section: FeatureSection) => section.id === 'custom-models'))
+        .assertEqual(visibleExperienceSections.findIndex((section: FeatureSection) => section.id === 'advanced-vision') + 1);
     });
 
     it('opensPortraitSegmentationWithBackgroundCapableRoute', 0, () => {

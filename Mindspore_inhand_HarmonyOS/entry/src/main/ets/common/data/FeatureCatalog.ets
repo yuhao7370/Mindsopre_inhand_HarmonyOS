@@ -1,7 +1,7 @@
 import { AppRoute } from '../../app/AppRoutes';
 import { AppStringKey } from '../i18n/AppStrings';
 
-export type FeatureCategory = 'experience-vision' | 'experience-speech' | 'advanced-vision' | 'advanced-speech';
+export type FeatureCategory = 'experience-vision' | 'experience-speech' | 'advanced-vision' | 'advanced-speech' | 'custom-models';
 
 export interface FeatureItem {
   readonly id: string;
@@ -55,7 +55,15 @@ export const experienceSections: FeatureSection[] = [
       { id: 'scene', title: 'Scene Detection', titleKey: 'title_scene_detection', icon: 'scene', routeName: AppRoute.SCENE_STILL.name, visibleByDefault: true },
       { id: 'objectPhoto', title: 'Object Detection(Photo)', titleKey: 'title_object', icon: 'photo', routeName: AppRoute.OBJECT_PHOTO.name, visibleByDefault: true },
       { id: 'objectCamera', title: 'Object Detection(Real-time)', titleKey: 'title_object_camera', icon: 'camera', routeName: AppRoute.OBJECT_CAMERA.name, visibleByDefault: true },
-      { id: 'style', title: 'Style Transfer', titleKey: 'title_style_transfer', icon: 'style', routeName: AppRoute.STYLE_TRANSFER.name, visibleByDefault: true },
+      { id: 'style', title: 'Style Transfer', titleKey: 'title_style_transfer', icon: 'style', routeName: AppRoute.STYLE_TRANSFER.name, visibleByDefault: true }
+    ]
+  },
+  {
+    id: 'custom-models',
+    title: 'Model Tools',
+    titleKey: 'experience_category_model_tools',
+    groupTitleKey: 'experience_group_custom',
+    items: [
       { id: 'custom', title: 'Custom Model', titleKey: 'title_custom_model', icon: 'model', routeName: AppRoute.CUSTOM_MODEL.name, visibleByDefault: true }
     ]
   },

@@ -9,6 +9,8 @@
     { "name": "main_tab_title_three", "value": "Me" },
     { "name": "experience_group_experience", "value": "Experience" },
     { "name": "experience_group_advanced", "value": "Advanced" },
+    { "name": "experience_group_custom", "value": "Custom Capabilities" },
+    { "name": "experience_category_model_tools", "value": "Model Tools" },
     { "name": "tab_experience_one", "value": "Computer Vision" },
     { "name": "tab_speech_two", "value": "Speech Semantic Technology" },
     { "name": "experience_head_title", "value": "Experience Center" },

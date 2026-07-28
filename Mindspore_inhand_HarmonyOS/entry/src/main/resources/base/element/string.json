@@ -9,6 +9,8 @@
     { "name": "main_tab_title_three", "value": "我的" },
     { "name": "experience_group_experience", "value": "体验区" },
     { "name": "experience_group_advanced", "value": "高级区" },
+    { "name": "experience_group_custom", "value": "自定义能力" },
+    { "name": "experience_category_model_tools", "value": "模型工具" },
     { "name": "tab_experience_one", "value": "视觉图像技术" },
     { "name": "tab_speech_two", "value": "语音语义技术" },
     { "name": "experience_head_title", "value": "体验中心" },
