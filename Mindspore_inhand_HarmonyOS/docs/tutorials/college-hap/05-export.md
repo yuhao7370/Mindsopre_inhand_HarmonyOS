@@ -1,41 +1,45 @@
 ---
 id: export
 step: "05"
-title: 导出模型，认清边界
+title: 导出模型，走向 HarmonyOS
 ---
 
-# 导出模型，认清边界
+# 导出模型，走向 HarmonyOS
 
 ## 这一节要做什么
 
-保存 CKPT、导出 MindIR，再把模型读回来对一次结果，同时弄清它为什么还不能直接塞进 HarmonyOS 应用。
+保存 CKPT、导出 MindIR，再把模型读回来验证一次，确认导出没有改变计算结果。
 
 ## 正文
 
-训练完成后先存 lenet_digits.ckpt，再用一个全零的 [1,1,28,28] float32 张量导出 MindIR。第一次读回模型时还停在 PYNATIVE_MODE，结果直接报错；切到 GRAPH_MODE 后就跑通了。
+要保存两种文件：
 
-我们固定拿一张标签为 5 的测试图做检查。训练网络预测 5，读回来的 MindIR 也预测 5，两份 logits 的最大绝对差是 0.0。这说明桌面导出没有改动这张图的计算结果。
+- **CKPT（checkpoint）**：只存权重，用于继续训练或加载权重。
+- **MindIR**：完整的计算图加权重，是 MindSpore 的跨平台部署格式。
 
-这里要注意：HarmonyOS 应用现在加载的是 MindSpore Lite .ms，自定义模型入口还固定要求 float32 NHWC [1,224,224,3]。刚导出的却是桌面 MindIR，输入为 float32 NCHW [1,1,28,28]。格式和张量都对不上，改个扩展名也没用。
-
-目前只走到了桌面 MindIR。仓库和 PATH 里都没有 converter_lite，Lite 转换、API 24 模拟器加载和 arm64 真机推理还没做。要接进应用，还得先转成 MINDIR_LITE，再补齐灰度化、缩放、归一化和 NCHW 排列，最后拿同一批样本核对数值。
-
-### 保存与导出
+各一行代码。导出 MindIR 时传一个全零的 [1, 1, 28, 28] 张量告诉它输入形状：
 
 ```text
-ms.save_checkpoint(network, "lenet_digits.ckpt")
+ms.save_checkpoint(network, "lenet_mnist.ckpt")
 ms.export(network, Tensor(np.zeros((1, 1, 28, 28), np.float32)),
-          file_name="lenet_digits", file_format="MINDIR")
+          file_name="lenet_mnist", file_format="MINDIR")
 ```
 
-### 回载验证
+然后把 MindIR 读回来，拿同一张测试图和训练中的网络对一次结果：
 
 ```text
-ms.set_context(mode=ms.GRAPH_MODE)
-graph_network = nn.GraphCell(ms.load("lenet_digits.mindir"))
-exported_logits = graph_network(Tensor(test_x[:1])).asnumpy()
+graph_network = nn.GraphCell(ms.load("lenet_mnist.mindir"))
+logits_export = graph_network(Tensor(image)).asnumpy()
 ```
+
+这一步需要在 `GRAPH_MODE` 下进行，我们整个脚本都跑在静态图模式，直接加载即可。
+
+从桌面模型到 HarmonyOS 应用还差三步：
+
+1. 用 `converter_lite` 把 MindIR 转成 MindSpore Lite 的 `.ms` 模型；
+2. 在应用里补齐预处理：灰度化、缩放到 28×28、按均值 0.1307、标准差 0.3081 标准化，和训练时保持一致；
+3. 拿同一批测试样本核对端侧和桌面的输出，数值一致后再上线。
 
 ## 跑出来的结果
 
-CKPT 是 177,956 B，MindIR 是 188,389 B。样本标签、导出前预测和回载后预测都是 5，logits 最大差 0.0。Lite .ms 转换和 HarmonyOS 端侧运行还没做。
+产物在 `artifacts/` 目录：`lenet_mnist.ckpt`（177,956 B）和 `lenet_mnist.mindir`（189,495 B）。验证用一张标签为 7 的测试图：训练网络预测 7，回载的 MindIR 也预测 7，logits 最大绝对差 0.0，导出没有引入数值偏差。

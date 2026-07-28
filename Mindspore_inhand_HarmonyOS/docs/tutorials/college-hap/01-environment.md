@@ -1,37 +1,41 @@
 ---
 id: environment
 step: "01"
-title: 先看任务和环境
+title: 准备环境和数据集
 ---
 
-# 先看任务和环境
+# 准备环境和数据集
 
 ## 这一节要做什么
 
-先确认这台电脑能跑什么，再用 MindSpore 做一遍经典的手写数字识别。
+装好一个能跑 MindSpore 的 Python 环境，再把 MNIST 数据集下载到本地。
 
 ## 正文
 
-这套流程已经在本机跑过一遍：训练、评估和导出都留下了实际结果。电脑是 Windows 11，装有 Python 3.11.7、MindSpore 2.5.0（CPU）、scikit-learn 1.3.2、NumPy 1.26.4 和 Pillow 12.1.1。
-
-本机没有真实 MNIST 的 IDX 文件。为了离线也能跑，我们换成 scikit-learn 自带的 digits：1797 张 8×8 灰度手写数字图。任务还是识别 0 到 9，不过后面看到的准确率只属于 digits，不是 MNIST。
-
-PyTorch 2.6.0 本身能用，torchvision 0.22.0 却和它对不上，导入时会报 operator torchvision::nms does not exist。问题出在环境版本，不在 MindSpore。这里直接从 scikit-learn 读数据，也省掉了下载。
-
-### 环境检查
+新建一个 Python 3.11.15 环境，然后在里面 `pip install mindspore`，装到的是 MindSpore 2.9.0（CPU 版），附带 NumPy 1.26.4 和 Pillow 12.3.0。
 
 ```text
-python --version
-python -m pip show mindspore torch torchvision scikit-learn numpy pillow
-python -c "import mindspore as ms; print(ms.__version__, ms.get_context('device_target'))"
+micromamba create -n ms python=3.11 -c conda-forge
+micromamba run -n ms pip install mindspore
 ```
 
-### 从头跑一遍
+装完后跑一条命令确认 MindSpore 能正常导入：
 
 ```text
-python docs/tutorials/mindspore-digits-lenet.py --epochs 20 --batch-size 64 --learning-rate 0.002 --output-dir .tmp-college-tutorial/verified-artifacts
+python -c "import mindspore as ms; print(ms.__version__)"
 ```
+
+接下来是数据集。MNIST 是手写数字识别的"Hello World"：60,000 张训练图、10,000 张测试图，每张是 28×28 的灰度图，标签是 0 到 9。文件链接如下：
+
+```text
+https://ossci-datasets.s3.amazonaws.com/mnist/train-images-idx3-ubyte.gz
+https://ossci-datasets.s3.amazonaws.com/mnist/train-labels-idx1-ubyte.gz
+https://ossci-datasets.s3.amazonaws.com/mnist/t10k-images-idx3-ubyte.gz
+https://ossci-datasets.s3.amazonaws.com/mnist/t10k-labels-idx1-ubyte.gz
+```
+
+下载后把四个 `.gz` 解压成 IDX 文件，放进 `data/MNIST/` 目录。
 
 ## 跑出来的结果
 
-环境是 Python 3.11.7、MindSpore 2.5.0，跑在 CPU 上。脚本和运行记录都放在 docs/tutorials 目录，断网也能重新执行。
+环境就绪：Python 3.11.15 + MindSpore 2.9.0，跑在 CPU 上。MNIST 四个 IDX 文件已就位在 `data/MNIST/`，共 60,000 张训练图和 10,000 张测试图，后续所有实验都从本地读取。

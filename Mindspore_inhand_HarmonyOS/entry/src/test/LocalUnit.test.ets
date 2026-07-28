@@ -2658,6 +2658,17 @@ export default function localUnitTest() {
         expect(content.indexOf('http')).assertEqual(-1);
         expect(content.indexOf('参考视频')).assertEqual(-1);
       });
+      const tutorial = JSON.stringify(collegeLocalQuickStartSections);
+      expect(tutorial.indexOf('MindSpore 2.9.0') >= 0).assertTrue();
+      expect(tutorial.indexOf('60,000') >= 0).assertTrue();
+      expect(tutorial.indexOf('10,000') >= 0).assertTrue();
+      expect(tutorial.indexOf('batch size 32') >= 0).assertTrue();
+      expect(tutorial.indexOf('98.82%') >= 0).assertTrue();
+      expect(tutorial.indexOf('98.87%') >= 0).assertTrue();
+      expect(tutorial.indexOf('46.035') >= 0).assertTrue();
+      expect(tutorial.indexOf('lenet_mnist.mindir') >= 0).assertTrue();
+      expect(tutorial.indexOf('http')).assertEqual(-1);
+      expect(tutorial.indexOf('digits')).assertEqual(-1);
     });
 
     it('definesHarmonyMeLayoutMinimums', 0, () => {
