@@ -89,7 +89,7 @@ Assert-Contains $portrait '\.constraintSize\(\{\s*minHeight:\s*56\s*\}\)' 'portr
 Assert-Contains $portrait 'Text\(appString\(this\.titleKey\)\)(?:(?!\bif\s*\()[\s\S])*?\.maxFontScale\(1\.6\)(?:(?!\bif\s*\()[\s\S])*?\.maxLines\(2\)' 'portrait title must cap extreme font scaling and allow two lines.'
 Assert-CodeLineCount $portrait '.maxFontScale(1.6)' 1 'portrait title must own one executable font-scale cap.'
 Assert-Contains $portrait "\.accessibilityText\(\`$r\('app\.string\.action_back'\)\)" 'portrait back action must have a localized semantic name.'
-Assert-Contains $portrait "if \(this\.liveCameraSwitchAvailable\)[\s\S]*?\.width\(48\)[\s\S]*?\.height\(48\)[\s\S]*?\.accessibilityText\(appString\('feature_runtime_switch_camera'\) as Resource\)[\s\S]*?this\.switchLiveCamera\(\)" 'portrait camera switch must retain its policy and handler in a 48vp semantic target.'
+Assert-Contains $portrait "if \(this\.liveCameraInputSelected && this\.liveCameraSwitchAvailable\)[\s\S]*?\.width\(48\)[\s\S]*?\.height\(48\)[\s\S]*?\.accessibilityText\(appString\('feature_runtime_switch_camera'\) as Resource\)[\s\S]*?this\.switchLiveCamera\(\)" 'portrait camera switch must retain its live-input policy and handler in a 48vp semantic target.'
 Assert-Contains $portrait "SaveButton\([\s\S]*?\.width\(48\)[\s\S]*?\.height\(48\)[\s\S]*?compositeSegmentationSaveReady\([\s\S]*?this\.saveResultComponentImage\(segmentationBackgroundReplacementComponentId\)" 'portrait save action must retain its 48vp native control and readiness gate.'
 Assert-NotContains $portrait '\.height\(56\)' 'portrait title bar must not have a fixed 56vp height.'
 

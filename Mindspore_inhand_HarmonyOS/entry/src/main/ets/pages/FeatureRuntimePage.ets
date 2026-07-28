@@ -3911,6 +3911,18 @@ struct FeatureRuntimePage {
   }
 
   @Builder
+  runtimeGalleryModeAction() {
+    Button(appString(this.liveCameraInputSelected ?
+      'feature_input_photo_android' : 'feature_input_camera_android'), { type: ButtonType.Normal })
+      .constraintSize({ minWidth: 56, minHeight: 48 })
+      .fontSize(14)
+      .fontColor(AppColor.accent)
+      .maxFontScale(1.6)
+      .backgroundColor(Color.Transparent)
+      .onClick(() => this.prepareInput(this.liveCameraInputSelected ? 'photo' : 'camera'))
+  }
+
+  @Builder
   runtimeActionToolbar(showActions: boolean) {
     Row() {
       Row() {
@@ -3974,18 +3986,6 @@ struct FeatureRuntimePage {
     .padding({ left: AppSpacing.page, right: AppSpacing.page, top: AppSpacing.xs, bottom: AppSpacing.xs })
     .alignItems(VerticalAlign.Center)
     .backgroundColor(Color.White)
-  }
-
-  @Builder
-  runtimeGalleryModeAction() {
-    Button(appString(this.liveCameraInputSelected ?
-      'feature_input_photo_android' : 'feature_input_camera_android'), { type: ButtonType.Normal })
-      .constraintSize({ minWidth: 56, minHeight: 48 })
-      .fontSize(14)
-      .fontColor(AppColor.accent)
-      .maxFontScale(1.6)
-      .backgroundColor(Color.Transparent)
-      .onClick(() => this.prepareInput(this.liveCameraInputSelected ? 'photo' : 'camera'))
   }
 
   @Builder

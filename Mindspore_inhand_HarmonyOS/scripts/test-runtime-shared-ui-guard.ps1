@@ -133,7 +133,7 @@ function New-ValidFixture([string]$Root) {
       Text(appString(this.titleKey))
         .maxFontScale(1.6)
         .maxLines(2)
-      if (this.liveCameraSwitchAvailable) {
+      if (this.liveCameraInputSelected && this.liveCameraSwitchAvailable) {
         Row() {
         }
         .width(48)
