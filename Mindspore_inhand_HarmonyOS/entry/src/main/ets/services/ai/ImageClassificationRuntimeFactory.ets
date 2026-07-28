@@ -316,6 +316,11 @@ export async function cachedRuntimeAiServiceForWorkflow(
       resourceManager: resourceManager
     });
   }
+  if (workflow.aiMethod === 'recognizeDigit') {
+    return createRuntimeAiServiceForWorkflow(workflow, {
+      resourceManager: resourceManager
+    });
+  }
   if (workflow.aiMethod === 'detectScene') {
     return cachedHarmonyLocalSceneDetectionAiServiceForResourceManager(resourceManager);
   }
@@ -375,6 +380,11 @@ export async function createRuntimeAiServiceForWorkflow(
     }
     return new DefaultAiService({
       gestureService: createHarmonyHmsGestureService(options, workflow)
+    });
+  }
+  if (workflow.aiMethod === 'recognizeDigit') {
+    return new DefaultAiService({
+      handwrittenDigitService: createHarmonyHandwrittenDigitService(options)
     });
   }
   if (workflow.aiMethod === 'detectScene') {

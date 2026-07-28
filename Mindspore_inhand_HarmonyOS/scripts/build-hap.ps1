@@ -64,6 +64,7 @@ $env:PATH = (Join-Path $devEcoRoot 'jbr\bin') + ';' + $env:PATH
 & (Join-Path $PSScriptRoot 'test-live-segmentation-runtime-ui-guard.ps1')
 & (Join-Path $PSScriptRoot 'check-live-gesture-runtime-ui.ps1')
 & (Join-Path $PSScriptRoot 'test-live-gesture-runtime-ui-guard.ps1')
+& (Join-Path $PSScriptRoot 'test-handwritten-digit-runtime-ui-guard.ps1')
 & (Join-Path $PSScriptRoot 'check-live-scene-runtime-ui.ps1')
 & (Join-Path $PSScriptRoot 'test-live-scene-runtime-ui-guard.ps1')
 & (Join-Path $PSScriptRoot 'check-live-skeleton-runtime-ui.ps1')

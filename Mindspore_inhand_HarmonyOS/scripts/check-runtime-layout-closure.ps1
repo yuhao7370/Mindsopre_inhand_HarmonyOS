@@ -149,6 +149,8 @@ $rawExpectedLines = @(
   'this.poseNetStillAndroidLayout()',
   '} else if (usesAndroidGestureStillLayout(workflowForRoute(this.routeName))) {',
   'this.gestureStillAndroidLayout()',
+  '} else if (isHandwrittenDigitWorkflow(workflowForRoute(this.routeName)) && usesAndroidGestureLikeStillLayout(workflowForRoute(this.routeName))) {',
+  'this.gestureStillAndroidLayout()',
   '} else if (usesAndroidObjectPhotoLayout(workflowForRoute(this.routeName))) {',
   'this.objectPhotoAndroidLayout()',
   '} else if (usesAndroidStyleTransferLayout(workflowForRoute(this.routeName))) {',
@@ -187,6 +189,9 @@ for ($index = 0; $index -lt $expectedLines.Count; $index++) {
   }
 }
 for ($index = 0; $index -lt $expectedLines.Count - 1; $index++) {
+  if (-not $rawExpectedLines[$index].StartsWith('} else if')) {
+    continue
+  }
   $count = @($actualLines | Where-Object { $_ -ceq $expectedLines[$index] }).Count
   if ($count -ne 1) {
     throw "Runtime layout closure guard failed: selector/builder line must occur exactly once: $($rawExpectedLines[$index])"

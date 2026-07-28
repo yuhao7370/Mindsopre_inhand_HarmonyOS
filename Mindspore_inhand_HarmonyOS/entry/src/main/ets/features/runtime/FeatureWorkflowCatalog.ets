@@ -319,6 +319,11 @@ export function isHandwrittenDigitWorkflow(workflow: FeatureWorkflow | undefined
   return workflow?.routeName === AppRoute.DIGIT_STILL.name || workflow?.routeName === AppRoute.DIGIT_LIVE.name;
 }
 
+export function usesAndroidGestureLikeStillLayout(workflow: FeatureWorkflow | undefined): boolean {
+  return usesAndroidGestureStillLayout(workflow) ||
+    (isHandwrittenDigitWorkflow(workflow) && workflow?.liveMode === false);
+}
+
 export type SpecializedAndroidLiveLayout =
   'imageClassification' | 'objectDetection' | 'segmentation' | 'gesture' | 'scene' | 'skeleton';
 
@@ -335,6 +340,9 @@ export function specializedAndroidLiveLayoutForWorkflow(
     return 'segmentation';
   }
   if (usesAndroidLiveGestureLayout(workflow)) {
+    return 'gesture';
+  }
+  if (isHandwrittenDigitWorkflow(workflow) && workflow?.liveMode) {
     return 'gesture';
   }
   if (usesAndroidLiveSceneLayout(workflow)) {

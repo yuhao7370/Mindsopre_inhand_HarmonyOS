@@ -352,6 +352,7 @@ export function shouldRunLiveRuntimeLoop(
     aiMethod === 'segmentPerson' ||
     aiMethod === 'detectPose' ||
     aiMethod === 'detectGesture' ||
+    aiMethod === 'recognizeDigit' ||
     aiMethod === 'detectScene' ||
     aiMethod === 'translateText';
 }
@@ -364,7 +365,7 @@ export function isLiveRuntimeGenerationCurrent(
 }
 
 export function liveRuntimeIntervalForAiMethod(aiMethod: string): number {
-  if (aiMethod === 'detectGesture' || aiMethod === 'detectScene') {
+  if (aiMethod === 'detectGesture' || aiMethod === 'recognizeDigit' || aiMethod === 'detectScene') {
     return fastLiveRuntimeIntervalMs;
   }
   return liveRuntimeIntervalMs;

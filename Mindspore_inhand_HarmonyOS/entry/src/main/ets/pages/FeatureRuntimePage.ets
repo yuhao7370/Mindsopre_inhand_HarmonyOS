@@ -25,6 +25,7 @@ import {
   runtimeInputKindsForWorkflow,
   shouldShowGestureStillFailureToast,
   specializedAndroidLiveLayoutForWorkflow,
+  isHandwrittenDigitWorkflow,
   customModelCanExecute,
   customModelModelCacheToastKey,
   customModelOutputFallbackKey,
@@ -32,6 +33,7 @@ import {
   objectPhotoResultToastKey,
   shouldResetStyleTransferPageAfterModelCacheResult,
   usesAndroidGestureStillLayout,
+  usesAndroidGestureLikeStillLayout,
   usesAndroidCustomModelLayout,
   usesAndroidObjectPhotoLayout,
   usesAndroidStyleTransferLayout,
@@ -3188,6 +3190,14 @@ struct FeatureRuntimePage {
     return '';
   }
 
+  private liveDigitOverlayValue(): string {
+    const digit = this.resultRows.find((row: AiRunResultRow) =>
+      row.labelKey === 'feature_runtime_digit_result_predicted');
+    const confidence = this.resultRows.find((row: AiRunResultRow) =>
+      row.labelKey === 'feature_runtime_digit_result_confidence');
+    return digit === undefined || confidence === undefined ? '' : `${digit.value}  ${confidence.value}`;
+  }
+
   private livePoseSimilarityPercent(): string {
     const similarityRow = this.resultRows.find((row: AiRunResultRow) =>
       row.labelKey === 'feature_runtime_result_similarity');
@@ -4631,6 +4641,13 @@ struct FeatureRuntimePage {
   @Builder
   liveGestureStatusOverlay() {
     Row({ space: AppSpacing.sm }) {
+      if (isHandwrittenDigitWorkflow(workflowForRoute(this.routeName)) && this.resultRows.length > 0) {
+        Text(this.liveDigitOverlayValue())
+          .fontSize(18)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(Color.White)
+          .maxFontScale(3.2)
+      }
       Row({ space: AppSpacing.xs }) {
         if (this.statusKey === 'feature_runtime_status_preparing') {
           LoadingProgress()
@@ -5891,12 +5908,21 @@ struct FeatureRuntimePage {
             .width(64)
             .height(52)
             .objectFit(ImageFit.Contain)
-          Text(appString('workflow_summary_gesture_still_android_prompt'))
-            .fontSize(14)
-            .fontColor(AppColor.textSecondary)
-            .maxFontScale(1.6)
-            .textAlign(TextAlign.Center)
-            .margin({ top: AppSpacing.sm })
+          if (isHandwrittenDigitWorkflow(workflowForRoute(this.routeName))) {
+            Text(appString('workflow_summary_handwritten_digit_still'))
+              .fontSize(14)
+              .fontColor(AppColor.textSecondary)
+              .maxFontScale(1.6)
+              .textAlign(TextAlign.Center)
+              .margin({ top: AppSpacing.sm })
+          } else {
+            Text(appString('workflow_summary_gesture_still_android_prompt'))
+              .fontSize(14)
+              .fontColor(AppColor.textSecondary)
+              .maxFontScale(1.6)
+              .textAlign(TextAlign.Center)
+              .margin({ top: AppSpacing.sm })
+          }
         }
         .padding(AppSpacing.md)
         .alignItems(HorizontalAlign.Center)
@@ -5973,8 +5999,9 @@ struct FeatureRuntimePage {
               .enabled(!this.workflowRunning)
               .onClick(() => this.openLinkedLiveRoute())
             Button(appString(this.statusKey === 'feature_runtime_gesture_failed' ||
+              this.statusKey === 'feature_runtime_digit_failed' ||
               this.statusKey === 'feature_runtime_run_failed' ?
-              'web_retry' : 'feature_runtime_gesture_detect_android'))
+              'web_retry' : workflowRunActionKey(workflowForRoute(this.routeName))))
               .width('calc(50% - 4vp)')
               .constraintSize({ minHeight: 48 })
               .maxFontScale(1.6)
@@ -6307,6 +6334,8 @@ struct FeatureRuntimePage {
     } else if (usesAndroidPoseNetStillLayout(workflowForRoute(this.routeName))) {
       this.poseNetStillAndroidLayout()
     } else if (usesAndroidGestureStillLayout(workflowForRoute(this.routeName))) {
+      this.gestureStillAndroidLayout()
+    } else if (isHandwrittenDigitWorkflow(workflowForRoute(this.routeName)) && usesAndroidGestureLikeStillLayout(workflowForRoute(this.routeName))) {
       this.gestureStillAndroidLayout()
     } else if (usesAndroidObjectPhotoLayout(workflowForRoute(this.routeName))) {
       this.objectPhotoAndroidLayout()

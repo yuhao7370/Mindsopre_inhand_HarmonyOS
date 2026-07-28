@@ -44,6 +44,8 @@ struct FeatureRuntimePage {
       this.poseNetStillAndroidLayout()
     } else if (usesAndroidGestureStillLayout(workflowForRoute(this.routeName))) {
       this.gestureStillAndroidLayout()
+    } else if (isHandwrittenDigitWorkflow(workflowForRoute(this.routeName)) && usesAndroidGestureLikeStillLayout(workflowForRoute(this.routeName))) {
+      this.gestureStillAndroidLayout()
     } else if (usesAndroidObjectPhotoLayout(workflowForRoute(this.routeName))) {
       this.objectPhotoAndroidLayout()
     } else if (usesAndroidStyleTransferLayout(workflowForRoute(this.routeName))) {
@@ -243,8 +245,8 @@ try {
   Assert-GuardRejectsMutation $validRoot 'quoted-builder-decoy' {
     param($root)
     Replace-Once (Join-Path $root $pagePath) `
-      '      this.gestureStillAndroidLayout()' `
-      "      const builderDecoy = 'this.gestureStillAndroidLayout()'"
+      "    } else if (usesAndroidGestureStillLayout(workflowForRoute(this.routeName))) {`n      this.gestureStillAndroidLayout()" `
+      "    } else if (usesAndroidGestureStillLayout(workflowForRoute(this.routeName))) {`n      const builderDecoy = 'this.gestureStillAndroidLayout()'"
   }
 
   Assert-GuardRejectsMutation $validRoot 'comment-selector-decoy' {

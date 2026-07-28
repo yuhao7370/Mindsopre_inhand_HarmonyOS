@@ -153,8 +153,8 @@ try {
     'this.runtimeActionToolbar(false)' `
     "const toolbarDecoy = `` `nthis.runtimeActionToolbar(false)`n ``"
   Assert-RejectedInSection 'remove-retry-label' $page $layoutStart $layoutEnd `
-    "Button(appString(this.statusKey === 'feature_runtime_gesture_failed' ||`n              this.statusKey === 'feature_runtime_run_failed' ?`n              'web_retry' : 'feature_runtime_gesture_detect_android'))" `
-    "Button(appString('feature_runtime_gesture_detect_android'))"
+    "Button(appString(this.statusKey === 'feature_runtime_gesture_failed' ||`n              this.statusKey === 'feature_runtime_digit_failed' ||`n              this.statusKey === 'feature_runtime_run_failed' ?`n              'web_retry' : workflowRunActionKey(workflowForRoute(this.routeName))))" `
+    "Button(appString(workflowRunActionKey(workflowForRoute(this.routeName))))"
   Assert-RejectedInSection 'replace-current-input-on-run' $page $layoutStart $layoutEnd `
     '.onClick(() => this.runPrimaryAction())' `
     ".onClick(() => this.prepareInput('photo'))"

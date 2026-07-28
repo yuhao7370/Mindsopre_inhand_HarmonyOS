@@ -36,6 +36,11 @@ import {
   gestureDetectionLabelKey
 } from './GestureService';
 import {
+  HandwrittenDigitFailure,
+  HandwrittenDigitService
+} from './HandwrittenDigitService';
+import { HandwrittenDigitPrediction } from './HandwrittenDigitPreprocess';
+import {
   SceneDetection,
   SceneDetectionResult,
   SceneDetectionService
@@ -70,6 +75,8 @@ export type AiRunCode =
   'POSE_DETECTION_FAILED' |
   'GESTURE_DETECTION_DONE' |
   'GESTURE_DETECTION_FAILED' |
+  'DIGIT_RECOGNITION_DONE' |
+  'DIGIT_RECOGNITION_FAILED' |
   'SCENE_DETECTION_DONE' |
   'SCENE_DETECTION_FAILED' |
   'SCENE_DETECTION_RUNTIME_FAILED';
@@ -95,6 +102,7 @@ export type AiRunData =
   AiSegmentationData |
   AiPoseData |
   AiGestureData |
+  AiDigitPredictionsData |
   AiSceneData |
   AiCustomModelData;
 
@@ -148,6 +156,12 @@ export interface AiGestureData {
   readonly result: GestureResult;
 }
 
+export interface AiDigitPredictionsData {
+  readonly kind: 'digitPredictions';
+  readonly imageUri: string;
+  readonly predictions: Array<HandwrittenDigitPrediction>;
+}
+
 export interface AiSceneData {
   readonly kind: 'scenes';
   readonly imageUri: string;
@@ -198,6 +212,7 @@ export interface AiServiceOptions {
   readonly segmentationService?: SegmentationService;
   readonly poseService?: PoseService;
   readonly gestureService?: GestureService;
+  readonly handwrittenDigitService?: HandwrittenDigitService;
   readonly sceneDetectionService?: SceneDetectionService;
 }
 
@@ -211,6 +226,7 @@ export class DefaultAiService {
   private readonly segmentationService?: SegmentationService;
   private readonly poseService?: PoseService;
   private readonly gestureService?: GestureService;
+  private readonly handwrittenDigitService?: HandwrittenDigitService;
   private readonly sceneDetectionService?: SceneDetectionService;
   private stopPromise: Promise<void> | undefined = undefined;
 
@@ -226,6 +242,7 @@ export class DefaultAiService {
     this.segmentationService = options?.segmentationService;
     this.poseService = options?.poseService;
     this.gestureService = options?.gestureService;
+    this.handwrittenDigitService = options?.handwrittenDigitService;
     this.sceneDetectionService = options?.sceneDetectionService;
   }
 
@@ -253,6 +270,9 @@ export class DefaultAiService {
     }
     if (workflow.aiMethod === 'detectGesture') {
       return this.detectGesture(inputs);
+    }
+    if (workflow.aiMethod === 'recognizeDigit') {
+      return this.recognizeDigit(inputs);
     }
     if (workflow.aiMethod === 'detectScene') {
       return this.detectScene(inputs);
@@ -333,6 +353,49 @@ export class DefaultAiService {
         imageUri: imageUri,
         result: result
       }
+    };
+  }
+
+  private async recognizeDigit(inputs: AiRunInputs): Promise<AiRunResult> {
+    if (this.handwrittenDigitService === undefined) {
+      return this.runnerUnavailableResult('recognizeDigit', 'feature_runtime_digit_runner_unavailable');
+    }
+    const imageUri = inputs.imageUri ?? '';
+    if (imageUri.length === 0) {
+      return {
+        ok: false,
+        code: 'MISSING_INPUT',
+        aiMethod: 'recognizeDigit',
+        messageKey: 'feature_runtime_missing_input',
+        detailText: ''
+      };
+    }
+    try {
+      const predictions = await this.handwrittenDigitService.recognizeDigit(imageUri);
+      if (predictions.length === 0) {
+        return this.digitFailureResult('MODEL_OUTPUT_INVALID');
+      }
+      return {
+        ok: true,
+        code: 'DIGIT_RECOGNITION_DONE',
+        aiMethod: 'recognizeDigit',
+        messageKey: 'feature_runtime_digit_done',
+        detailText: this.digitSummary(predictions, imageUri),
+        data: { kind: 'digitPredictions', imageUri: imageUri, predictions: predictions }
+      };
+    } catch (error) {
+      const reason = error instanceof HandwrittenDigitFailure ? error.code : 'MODEL_UNAVAILABLE';
+      return this.digitFailureResult(reason);
+    }
+  }
+
+  private digitFailureResult(reason: string): AiRunResult {
+    return {
+      ok: false,
+      code: 'DIGIT_RECOGNITION_FAILED',
+      aiMethod: 'recognizeDigit',
+      messageKey: 'feature_runtime_digit_failed',
+      detailText: `reason=${reason}`
     };
   }
 
@@ -985,6 +1048,15 @@ export class DefaultAiService {
     return lines.join('\n');
   }
 
+  private digitSummary(predictions: Array<HandwrittenDigitPrediction>, imageUri: string): string {
+    const top = predictions[0];
+    return [
+      `image=${this.lastPathSegment(imageUri)}`,
+      `digit=${top.digit}`,
+      `confidence=${(top.confidence * 100).toFixed(2)}%`
+    ].join('\n');
+  }
+
   private sceneDetectionSummary(result: SceneDetectionResult, imageUri: string): string {
     const lines: Array<string> = [
       `image=${this.lastPathSegment(imageUri)}`,
@@ -1110,6 +1182,8 @@ export function aiRunResultRows(result: AiRunResult): Array<AiRunResultRow> {
       return poseRows;
     case 'gesture':
       return gestureResultRows(data);
+    case 'digitPredictions':
+      return digitPredictionResultRows(data);
     case 'scenes':
       return sceneDetectionResultRows(data);
     case 'customModel':
@@ -1120,6 +1194,20 @@ export function aiRunResultRows(result: AiRunResult): Array<AiRunResultRow> {
         resultRow('feature_runtime_result_execution_time', `${data.executionMs}ms`)
       ];
   }
+}
+
+function digitPredictionResultRows(data: AiDigitPredictionsData): Array<AiRunResultRow> {
+  const predictions = data.predictions.slice(0, 3);
+  if (predictions.length === 0) {
+    return [];
+  }
+  const top = predictions[0];
+  return [
+    resultRow('feature_runtime_digit_result_predicted', `${top.digit}`),
+    resultRow('feature_runtime_digit_result_confidence', `${(top.confidence * 100).toFixed(2)}%`),
+    resultRow('feature_runtime_digit_result_candidates', predictions.map((prediction: HandwrittenDigitPrediction) =>
+      `${prediction.digit}`).join(', '))
+  ];
 }
 
 export function androidStillSceneResultRows(result: SceneDetectionResult): Array<AiRunResultRow> {

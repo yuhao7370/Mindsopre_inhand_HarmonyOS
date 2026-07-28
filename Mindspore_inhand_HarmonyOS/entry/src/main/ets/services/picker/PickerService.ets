@@ -4,7 +4,11 @@ import { picker } from '@kit.CoreFileKit';
 import { camera, cameraPicker } from '@kit.CameraKit';
 import { photoAccessHelper } from '@kit.MediaLibraryKit';
 import { AppRoute } from '../../app/AppRoutes';
-import { FeatureInputKind, FeatureWorkflow } from '../../features/runtime/FeatureWorkflowCatalog';
+import {
+  FeatureInputKind,
+  FeatureWorkflow,
+  isHandwrittenDigitWorkflow
+} from '../../features/runtime/FeatureWorkflowCatalog';
 
 export type RuntimeInputAction =
   'startLiveCamera' |
@@ -33,7 +37,8 @@ export function shouldUseInlineCameraFallback(
   inputKind: FeatureInputKind,
   result: PickResult
 ): boolean {
-  return workflow?.routeName === AppRoute.SCENE_STILL.name &&
+  return (workflow?.routeName === AppRoute.SCENE_STILL.name ||
+    (isHandwrittenDigitWorkflow(workflow) && !workflow?.liveMode)) &&
     inputKind === 'camera' &&
     !result.ok &&
     result.failure === 'cameraUnavailable';

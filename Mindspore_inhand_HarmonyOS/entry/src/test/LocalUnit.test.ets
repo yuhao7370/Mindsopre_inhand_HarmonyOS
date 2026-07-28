@@ -251,6 +251,7 @@ import {
 import {
   HandwrittenDigitFailure,
   HandwrittenDigitImagePreprocessor,
+  HandwrittenDigitService,
   HandwrittenDigitTensorRunner
 } from '../main/ets/services/ai/HandwrittenDigitService';
 import { imageClassificationDecodeOptions } from '../main/ets/services/ai/HarmonyImageInputPreprocessor';
@@ -405,6 +406,7 @@ import {
   usesAndroidStillSegmentationLayout,
   usesAndroidPortraitSegmentationLayout,
   usesAndroidGestureStillLayout,
+  usesAndroidGestureLikeStillLayout,
   usesAndroidPoseNetStillLayout,
   usesAndroidTextRecognitionLayout,
   usesAndroidTextTranslationLayout,
@@ -8504,6 +8506,57 @@ export default function localUnitTest() {
       })).assertEqual('MODEL_OUTPUT_INVALID');
     });
 
+    it('aiServiceProjectsDigitPredictionsAndClearsRowsForTypedFailure', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.DIGIT_STILL.name)!;
+      const input = new ArrayBuffer(28 * 28 * Float32Array.BYTES_PER_ELEMENT);
+      const success = await new DefaultAiService({
+        handwrittenDigitService: new HandwrittenDigitService({
+          preprocessor: new FixedHandwrittenDigitPreprocessor(input),
+          scoreRunner: {
+            async predictLogits(_input: ArrayBuffer): Promise<Array<number>> {
+              return [0, 0, 0, 0, 0, 0, 7, 0, 0, 0];
+            }
+          }
+        })
+      }).run(workflow, { imageUri: 'file://selected/six.png' });
+      const failure = await new DefaultAiService({
+        handwrittenDigitService: new HandwrittenDigitService({
+          preprocessor: new FixedHandwrittenDigitPreprocessor(input),
+          scoreRunner: {
+            async predictLogits(_input: ArrayBuffer): Promise<Array<number>> {
+              throw new Error('model unavailable');
+            }
+          }
+        })
+      }).run(workflow, { imageUri: 'file://selected/broken.png' });
+
+      expect(success.ok).assertTrue();
+      expect(success.code).assertEqual('DIGIT_RECOGNITION_DONE');
+      expect(aiRunResultRows(success)[0].labelKey).assertEqual('feature_runtime_digit_result_predicted');
+      expect(aiRunResultRows(success)[0].value).assertEqual('6');
+      expect(aiRunResultRows(success)[1].value).assertEqual('99.19%');
+      expect(aiRunResultRows(success)[2].value).assertEqual('6, 0, 1');
+      expect(failure.ok).assertFalse();
+      expect(failure.code).assertEqual('DIGIT_RECOGNITION_FAILED');
+      expect(failure.messageKey).assertEqual('feature_runtime_digit_failed');
+      expect(aiRunResultRows(failure).length).assertEqual(0);
+    });
+
+    it('runtimeFactoryInjectsHandwrittenDigitServiceForDigitRoute', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.DIGIT_LIVE.name)!;
+      const input = new ArrayBuffer(28 * 28 * Float32Array.BYTES_PER_ELEMENT);
+      const service = await createRuntimeAiServiceForWorkflow(workflow, {
+        resourceManager: new FixedRawfileContentReader(new Uint8Array()),
+        handwrittenDigitPreprocessor: new FixedHandwrittenDigitPreprocessor(input),
+        handwrittenDigitTensorRunner: new FixedHandwrittenDigitTensorRunner([0, 0, 0, 0, 0, 0, 0, 0, 5, 0])
+      });
+      const result = await service.run(workflow, { imageUri: 'file://live/eight.jpg' });
+
+      expect(result.ok).assertTrue();
+      expect(result.code).assertEqual('DIGIT_RECOGNITION_DONE');
+      expect(aiRunResultRows(result)[0].value).assertEqual('8');
+    });
+
     it('createsHarmonyDefaultAiServiceWithRawfileLabelsAndRunner', 0, async () => {
       const workflow = workflowForRoute(AppRoute.IMAGE_CAMERA.name);
       expect(workflow !== undefined).assertTrue();
@@ -10275,14 +10328,27 @@ export default function localUnitTest() {
     it('stillSceneUsesInlineCameraWhenNativeCaptureIsUnavailable', 0, () => {
       const stillScene = workflowForRoute(AppRoute.SCENE_STILL.name);
       const liveScene = workflowForRoute(AppRoute.SCENE_LIVE.name);
+      const stillDigit = workflowForRoute(AppRoute.DIGIT_STILL.name);
       const unavailable: PickResult = { ok: false, uri: '', failure: 'cameraUnavailable' };
       const cancelled: PickResult = { ok: false, uri: '' };
 
       expect(shouldUseInlineCameraFallback(stillScene, 'camera', unavailable)).assertTrue();
+      expect(shouldUseInlineCameraFallback(stillDigit, 'camera', unavailable)).assertTrue();
       expect(shouldUseInlineCameraFallback(stillScene, 'photo', unavailable)).assertFalse();
       expect(shouldUseInlineCameraFallback(stillScene, 'camera', cancelled)).assertFalse();
       expect(shouldUseInlineCameraFallback(liveScene, 'camera', unavailable)).assertFalse();
       expect(shouldUseInlineCameraFallback(undefined, 'camera', unavailable)).assertFalse();
+    });
+
+    it('routesHandwrittenDigitsThroughSharedGestureStillAndLiveLayoutsOnly', 0, () => {
+      const stillDigit = workflowForRoute(AppRoute.DIGIT_STILL.name)!;
+      const liveDigit = workflowForRoute(AppRoute.DIGIT_LIVE.name)!;
+      const gestureStill = workflowForRoute(AppRoute.GESTURE_STILL.name)!;
+
+      expect(usesAndroidGestureLikeStillLayout(stillDigit)).assertTrue();
+      expect(usesAndroidGestureLikeStillLayout(gestureStill)).assertTrue();
+      expect(usesAndroidGestureStillLayout(stillDigit)).assertFalse();
+      expect(specializedAndroidLiveLayoutForWorkflow(liveDigit)).assertEqual('gesture');
     });
 
     it('autoRunsTextImageInputsAfterAndroidImageInputReadyOnly', 0, () => {
@@ -11744,6 +11810,7 @@ export default function localUnitTest() {
       expect(liveRuntimeIntervalMs).assertEqual(1000);
       expect(liveRuntimeIntervalForAiMethod('classifyImage')).assertEqual(1000);
       expect(liveRuntimeIntervalForAiMethod('detectGesture')).assertEqual(500);
+      expect(liveRuntimeIntervalForAiMethod('recognizeDigit')).assertEqual(500);
       expect(liveRuntimeIntervalForAiMethod('detectScene')).assertEqual(500);
       expect(liveRuntimeIntervalForAiMethod('detectObjects')).assertEqual(1000);
       expect(liveRuntimeIntervalForAiMethod('segmentPerson')).assertEqual(1000);
@@ -11756,6 +11823,7 @@ export default function localUnitTest() {
       expect(shouldRunLiveRuntimeLoop('segmentPerson', true, true, true)).assertTrue();
       expect(shouldRunLiveRuntimeLoop('detectPose', true, true, true)).assertTrue();
       expect(shouldRunLiveRuntimeLoop('detectGesture', true, true, true)).assertTrue();
+      expect(shouldRunLiveRuntimeLoop('recognizeDigit', true, true, true)).assertTrue();
       expect(shouldRunLiveRuntimeLoop('detectScene', true, true, true)).assertTrue();
       expect(shouldRunLiveRuntimeLoop('translateText', true, true, true)).assertTrue();
       expect(shouldRunLiveRuntimeLoop('runStyleTransfer', true, true, true)).assertFalse();
@@ -11773,6 +11841,7 @@ export default function localUnitTest() {
       expect(shouldAutoRunLiveRuntimeAfterPreview('segmentPerson', true, true)).assertTrue();
       expect(shouldAutoRunLiveRuntimeAfterPreview('detectPose', true, true)).assertTrue();
       expect(shouldAutoRunLiveRuntimeAfterPreview('detectGesture', true, true)).assertTrue();
+      expect(shouldAutoRunLiveRuntimeAfterPreview('recognizeDigit', true, true)).assertTrue();
       expect(shouldAutoRunLiveRuntimeAfterPreview('detectScene', true, true)).assertTrue();
       expect(shouldAutoRunLiveRuntimeAfterPreview('detectGesture', false, true)).assertFalse();
       expect(shouldAutoRunLiveRuntimeAfterPreview('runStyleTransfer', false, true)).assertFalse();
