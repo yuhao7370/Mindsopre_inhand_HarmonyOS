@@ -649,6 +649,8 @@ import {
 } from '../main/ets/common/data/CollegeCatalog';
 import {
   CollegeLocalQuickStartSection,
+  collegeTutorialExportFileName,
+  collegeTutorialRawFileName,
   collegeLocalQuickStartSections,
   nextCollegeQuickStartExpandedId,
   visibleCollegeItems
@@ -2646,6 +2648,8 @@ export default function localUnitTest() {
     });
 
     it('providesFiveCompleteOfflineMindSporeTutorialChapters', 0, () => {
+      expect(collegeTutorialRawFileName).assertEqual('college/college-hap.zip');
+      expect(collegeTutorialExportFileName).assertEqual('MindSpore-MNIST-鍏ラ棬鏁欑▼.zip');
       expect(collegeLocalQuickStartSections
         .map((section: CollegeLocalQuickStartSection): string => section.id).join(','))
         .assertEqual('environment,data,network,training,export');

@@ -1,5 +1,8 @@
 import { CollegeItem, collegeItems } from './CollegeCatalog';
 
+export const collegeTutorialRawFileName: string = 'college/college-hap.zip';
+export const collegeTutorialExportFileName: string = 'MindSpore-MNIST-鍏ラ棬鏁欑▼.zip';
+
 export interface CollegeTutorialCodeBlock {
   readonly title: string;
   readonly code: string;
