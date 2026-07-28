@@ -26,9 +26,10 @@ declare -A expected=(
   [custom_channel_mean]=DB1A0A273DA0658155473FB391E95D027D0D5606C72FB2FFB18BFAE0FDC85409
   [custom_channel_mean_inverted]=7EB540E46CE1437FB3004CAB1AF80BBAEBE2D83355923DA4432006482EA336D9
   [custom_channel_mean_non_finite]=C8087D8D7C94CD3BB92F872BC0665CABC0BB343A6C0D16B276FC4659C4AE0957
+  [custom_text_classifier]=25E35BA4F0AC6B2B03212463AAAF7ED38D91ADC2C051C22AB996DA7E4CDC9616
 )
 
-for name in custom_channel_mean custom_channel_mean_inverted custom_channel_mean_non_finite; do
+for name in custom_channel_mean custom_channel_mean_inverted custom_channel_mean_non_finite custom_text_classifier; do
   "$converter" \
     --fmk=TFLITE \
     --modelFile="$project_root/model_sources/custom_model/$name.tflite" \
@@ -41,10 +42,16 @@ for name in custom_channel_mean custom_channel_mean_inverted custom_channel_mean
     echo "$name.ms SHA-256 $actual does not match ${expected[$name]}" >&2
     exit 1
   }
+  echo "$name.ms $actual"
 done
 
 for name in custom_channel_mean custom_channel_mean_inverted custom_channel_mean_non_finite; do
   cp "$stage/$name.ms" "$project_root/entry/src/main/resources/rawfile/model/$name.ms"
 done
+cp "$stage/custom_text_classifier.ms" "$project_root/model_sources/custom_model/custom_text_classifier.ms"
+cp "$stage/custom_channel_mean.ms" "$project_root/model_sources/custom_model/package_image/model.ms"
+cp "$stage/custom_text_classifier.ms" "$project_root/model_sources/custom_model/package_text/model.ms"
+
+python3 "$project_root/scripts/package-custom-model-fixtures.py" --project-root "$project_root"
 
 echo "Custom Model fixtures converted and verified with MindSpore Lite 2.6.0."

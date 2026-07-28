@@ -13,6 +13,8 @@ import { HarmonyCustomModelInputPreprocessor } from
 import { RuntimeModelFileCacheService } from '../../../main/ets/services/picker/ModelFileCacheService';
 import { AppRoute } from '../../../main/ets/app/AppRoutes';
 import { FileUriContentReader } from '../../../main/ets/services/ai/FileUriContentReader';
+import { CustomModelPackageService } from '../../../main/ets/services/ai/CustomModelPackageService';
+import { CustomModelPackageRunner } from '../../../main/ets/services/ai/CustomModelPackageRunner';
 
 const primaryModelPath: string = 'model/custom_channel_mean.ms';
 const invertedModelPath: string = 'model/custom_channel_mean_inverted.ms';
@@ -207,6 +209,49 @@ export default function customModelNativeTest() {
         `blue=${blueResult.output.join(',')} mae=${mae} maxAbs=${maxAbs} ticks=${ticks} ` +
         `sameUriComplement=${invertedRed.output.join(',')} rejectedNonFinite=${!rejectedCache.ok}`
       );
+    });
+
+    it('importsAndRunsImageAndTextModelPackagesWithoutRandomOutput', 0, async () => {
+      const applicationContext = abilityDelegatorRegistry.getAbilityDelegator()
+        .getAppContext()
+        .getApplicationContext();
+      const mainManager = applicationContext.createModuleContext('entry').resourceManager;
+      const cacheDir = `${applicationContext.cacheDir}/package-native-test-${Date.now()}`;
+      await fileIo.mkdir(cacheDir, true);
+      const imageZip = await mainManager.getRawFileContent('model/custom_image_package.zip');
+      const textZip = await mainManager.getRawFileContent('model/custom_text_package.zip');
+      const imageZipPath = await cacheBytes(cacheDir, 'image.zip', imageZip);
+      const textZipPath = await cacheBytes(cacheDir, 'text.zip', textZip);
+      const redImage = await cacheBytes(cacheDir, 'package-red.png', await solidPngBytes(255, 0, 0));
+      const blueImage = await cacheBytes(cacheDir, 'package-blue.png', await solidPngBytes(0, 0, 255));
+      const packageService = new CustomModelPackageService();
+      const runner = new CustomModelPackageRunner(new HarmonyCustomModelInputPreprocessor());
+
+      const imageImport = await packageService.importPackage(imageZipPath, cacheDir);
+      expect(imageImport.ok).assertTrue();
+      expect(imageImport.descriptor?.inputKind).assertEqual('image');
+      const red = await runner.run(imageImport.descriptor!.modelPath, redImage, '');
+      const blue = await runner.run(imageImport.descriptor!.modelPath, blueImage, '');
+      expect(red.ok).assertTrue();
+      expect(blue.ok).assertTrue();
+      expect(maxAbsoluteDifference(red.output, blue.output) > 0.9).assertTrue();
+      expect(red.displayText === blue.displayText).assertFalse();
+
+      const textImport = await packageService.importPackage(textZipPath, cacheDir);
+      expect(textImport.ok).assertTrue();
+      expect(textImport.descriptor?.inputKind).assertEqual('text');
+      const firstText = await runner.run(textImport.descriptor!.modelPath, '', 'hi');
+      const secondText = await runner.run(textImport.descriptor!.modelPath, '', 'bye');
+      expect(firstText.ok).assertTrue();
+      expect(secondText.ok).assertTrue();
+      expect(firstText.displayText === secondText.displayText).assertFalse();
+
+      const corrupt = imageZip.slice();
+      corrupt[0] = 0;
+      const corruptPath = await cacheBytes(cacheDir, 'corrupt.zip', corrupt);
+      expect((await packageService.importPackage(corruptPath, cacheDir)).ok).assertFalse();
+      expect((await packageService.loadCurrentPackage(cacheDir))?.manifest.name)
+        .assertEqual(textImport.descriptor!.manifest.name);
     });
   });
 }
