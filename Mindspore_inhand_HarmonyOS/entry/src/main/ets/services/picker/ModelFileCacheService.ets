@@ -34,6 +34,7 @@ export interface CachedModelFileInputState {
   readonly modelInputUri: string;
   readonly stylePredictModelInputUri: string;
   readonly styleTransferModelInputUri: string;
+  readonly customModelPackage?: CustomModelPackageDescriptor;
 }
 
 export interface CachedModelFileExistenceChecker {
@@ -478,10 +479,14 @@ export class HarmonyCachedModelFileExistenceChecker implements CachedModelFileEx
 export async function cachedModelFileInputStateForRoute(
   routeName: string,
   cacheDir: string,
-  existenceChecker: CachedModelFileExistenceChecker = new HarmonyCachedModelFileExistenceChecker()
+  existenceChecker: CachedModelFileExistenceChecker = new HarmonyCachedModelFileExistenceChecker(),
+  packageService: CustomModelPackageService = new CustomModelPackageService()
 ): Promise<CachedModelFileInputState> {
+  const customPackage = routeName === AppRoute.CUSTOM_MODEL.name ?
+    await packageService.loadCurrentPackage(cacheDir) : undefined;
   return {
-    modelInputUri: await cachedModelFileUriForInputKind(routeName, 'modelFile', cacheDir, existenceChecker),
+    modelInputUri: customPackage?.modelPath ??
+      await cachedModelFileUriForInputKind(routeName, 'modelFile', cacheDir, existenceChecker),
     stylePredictModelInputUri: await cachedModelFileUriForInputKind(
       routeName,
       'stylePredictModelFile',
@@ -493,7 +498,8 @@ export async function cachedModelFileInputStateForRoute(
       'styleTransferModelFile',
       cacheDir,
       existenceChecker
-    )
+    ),
+    customModelPackage: customPackage
   };
 }
 

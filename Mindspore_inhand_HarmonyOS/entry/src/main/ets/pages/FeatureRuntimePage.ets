@@ -25,7 +25,6 @@ import {
   runtimeInputKindsForWorkflow,
   shouldShowGestureStillFailureToast,
   specializedAndroidLiveLayoutForWorkflow,
-  customModelExecutePreflightToastKey,
   customModelModelCacheToastKey,
   customModelOutputFallbackKey,
   objectPhotoFollowupInputKindAfterModelCacheSuccess,
@@ -152,6 +151,7 @@ import {
   segmentationMetadataWithBackground,
   sceneDetectionOverlayRows
 } from '../services/ai/AiService';
+import { CustomModelInputKind } from '../services/ai/CustomModelPackage';
 import {
   cachedRuntimeAiServiceForHarmonyResourceManager,
   HarmonyRawfileContentReader
@@ -366,6 +366,10 @@ struct FeatureRuntimePage {
   @State stylePredictModelInputUri: string = '';
   @State styleTransferModelInputUri: string = '';
   @State modelInputUri: string = '';
+  @State customModelInputKind: CustomModelInputKind | undefined = undefined;
+  @State customModelPackageName: string = '';
+  @State customModelInputSummary: string = '';
+  @State customModelOutputSummary: string = '';
   @State userText: string = '';
   @State textInputVisible: boolean = true;
   @State styledImagePixelMap: image.PixelMap | undefined = undefined;
@@ -661,6 +665,14 @@ struct FeatureRuntimePage {
       this.showCustomModelCacheToastIfNeeded(result.messageKey);
       this.showStyleTransferModelCacheToastIfNeeded(inputKind, result.messageKey);
       return;
+    }
+    if (result.customModelPackage !== undefined) {
+      this.applyCustomModelPackage(
+        result.customModelPackage.manifest.name,
+        result.customModelPackage.inputKind,
+        result.customModelPackage.inputSummary,
+        result.customModelPackage.outputSummary
+      );
     }
     this.runtimeAiServiceSession.invalidate();
     this.applyPickResult({
@@ -1045,7 +1057,8 @@ struct FeatureRuntimePage {
       stylePredictModelUri: this.stylePredictModelInputUri,
       styleTransferModelUri: this.styleTransferModelInputUri,
       modelUri: this.modelInputUri,
-      text: this.userText
+      text: this.userText,
+      customModelInputKind: this.customModelInputKind
     };
   }
 
@@ -1103,6 +1116,32 @@ struct FeatureRuntimePage {
     if (this.styleTransferModelInputUri.length === 0) {
       this.styleTransferModelInputUri = state.styleTransferModelInputUri;
     }
+    if (state.customModelPackage !== undefined) {
+      this.applyCustomModelPackage(
+        state.customModelPackage.manifest.name,
+        state.customModelPackage.inputKind,
+        state.customModelPackage.inputSummary,
+        state.customModelPackage.outputSummary
+      );
+    }
+  }
+
+  private applyCustomModelPackage(
+    name: string,
+    inputKind: CustomModelInputKind,
+    inputSummary: string,
+    outputSummary: string
+  ): void {
+    this.customModelPackageName = name;
+    this.customModelInputKind = inputKind;
+    this.customModelInputSummary = inputSummary;
+    this.customModelOutputSummary = outputSummary;
+    this.textInputVisible = inputKind === 'text';
+    if (inputKind === 'text') {
+      this.imageInputUri = '';
+    } else {
+      this.userText = '';
+    }
   }
 
   private customModelOutputText(): ResourceStr {
@@ -1129,12 +1168,16 @@ struct FeatureRuntimePage {
   }
 
   private runCustomModelAndroidAction(): void {
-    const toastKey = customModelExecutePreflightToastKey(
-      workflowForRoute(this.routeName),
-      this.imageInputUri.length > 0,
-      this.modelInputUri.length > 0,
-      this.workflowRunning
-    );
+    let toastKey: AppStringKey | undefined = undefined;
+    if (this.modelInputUri.length === 0) {
+      toastKey = 'feature_runtime_custom_model_model_required';
+    } else if (this.customModelInputKind === 'text' && this.userText.trim().length === 0) {
+      toastKey = 'feature_runtime_missing_input';
+    } else if (this.customModelInputKind !== 'text' && this.imageInputUri.length === 0) {
+      toastKey = 'feature_runtime_custom_model_image_required';
+    } else if (this.workflowRunning) {
+      toastKey = 'feature_runtime_custom_model_already_running';
+    }
     if (toastKey !== undefined) {
       this.showRuntimeToast(toastKey);
       return;
@@ -5443,62 +5486,105 @@ struct FeatureRuntimePage {
             .enabled(!this.workflowRunning)
             .onClick(() => this.prepareInput('modelFile'))
 
-          Button(appString(workflowInputLabelKey(workflowForRoute(this.routeName), 'photo')), { type: ButtonType.Normal })
-            .width('100%')
-            .constraintSize({ minHeight: 48 })
-            .fontSize(16)
-            .maxFontScale(3.2)
-            .fontWeight(FontWeight.Medium)
-            .fontColor(AppColor.accent)
-            .backgroundColor(AppColor.cardBackground)
-            .border({ width: 1, color: AppColor.divider, radius: AppRadius.button })
-            .margin({ top: AppSpacing.sm })
-            .enabled(!this.workflowRunning)
-            .onClick(() => this.prepareInput('photo'))
-
-          Button(appString(workflowInputLabelKey(workflowForRoute(this.routeName), 'camera')), { type: ButtonType.Normal })
-            .width('100%')
-            .constraintSize({ minHeight: 48 })
-            .fontSize(16)
-            .maxFontScale(3.2)
-            .fontWeight(FontWeight.Medium)
-            .fontColor(AppColor.accent)
-            .backgroundColor(AppColor.cardBackground)
-            .border({ width: 1, color: AppColor.divider, radius: AppRadius.button })
-            .margin({ top: AppSpacing.sm })
-            .enabled(!this.workflowRunning)
-            .onClick(() => this.prepareInput('camera'))
-
-          Stack({ alignContent: Alignment.Center }) {
-            if (this.imageInputUri.length > 0) {
-              Image(this.imageInputUri)
+          if (this.customModelPackageName.length > 0) {
+            Column() {
+              Text(this.customModelPackageName)
                 .width('100%')
-                .height('100%')
-                .padding(AppSpacing.md)
-                .objectFit(ImageFit.Contain)
-            } else {
-              Column() {
-                Image($r('app.media.feature_custom_model'))
-                  .width(64)
-                  .height(64)
-                  .objectFit(ImageFit.Contain)
-                Text(appString('feature_runtime_custom_model_select_photo'))
-                  .fontSize(16)
-                  .fontColor(AppColor.textSecondary)
-                  .maxFontScale(3.2)
-                  .maxLines(2)
-                  .textAlign(TextAlign.Center)
-                  .margin({ top: AppSpacing.sm })
-              }
-              .alignItems(HorizontalAlign.Center)
+                .fontSize(17)
+                .fontWeight(FontWeight.Medium)
+                .fontColor(AppColor.textPrimary)
+                .maxFontScale(3.2)
+              Text(`${appString('feature_runtime_custom_model_input_contract')}\n${this.customModelInputSummary}`)
+                .width('100%')
+                .fontSize(13)
+                .fontColor(AppColor.textSecondary)
+                .maxFontScale(3.2)
+                .margin({ top: AppSpacing.sm })
+              Text(`${appString('feature_runtime_custom_model_output_contract')}\n${this.customModelOutputSummary}`)
+                .width('100%')
+                .fontSize(13)
+                .fontColor(AppColor.textSecondary)
+                .maxFontScale(3.2)
+                .margin({ top: AppSpacing.sm })
             }
+            .width('100%')
+            .padding(AppSpacing.md)
+            .backgroundColor(AppColor.cardBackground)
+            .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
+            .margin({ top: AppSpacing.sm })
           }
-          .width('100%')
-          .aspectRatio(4 / 3)
-          .constraintSize({ minHeight: 220, maxHeight: 420 })
-          .backgroundColor(AppColor.cardBackground)
-          .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
-          .margin({ top: AppSpacing.md })
+
+          if (this.customModelInputKind === 'text') {
+            TextArea({
+              text: this.userText,
+              placeholder: appString('feature_runtime_custom_model_text_placeholder')
+            })
+              .width('100%')
+              .height(132)
+              .fontSize(14)
+              .margin({ top: AppSpacing.md })
+              .enabled(!this.workflowRunning)
+              .onChange((value: string) => this.updateUserText(value))
+          } else {
+            Button(appString(workflowInputLabelKey(workflowForRoute(this.routeName), 'photo')),
+              { type: ButtonType.Normal })
+              .width('100%')
+              .constraintSize({ minHeight: 48 })
+              .fontSize(16)
+              .maxFontScale(3.2)
+              .fontWeight(FontWeight.Medium)
+              .fontColor(AppColor.accent)
+              .backgroundColor(AppColor.cardBackground)
+              .border({ width: 1, color: AppColor.divider, radius: AppRadius.button })
+              .margin({ top: AppSpacing.sm })
+              .enabled(!this.workflowRunning)
+              .onClick(() => this.prepareInput('photo'))
+
+            Button(appString(workflowInputLabelKey(workflowForRoute(this.routeName), 'camera')),
+              { type: ButtonType.Normal })
+              .width('100%')
+              .constraintSize({ minHeight: 48 })
+              .fontSize(16)
+              .maxFontScale(3.2)
+              .fontWeight(FontWeight.Medium)
+              .fontColor(AppColor.accent)
+              .backgroundColor(AppColor.cardBackground)
+              .border({ width: 1, color: AppColor.divider, radius: AppRadius.button })
+              .margin({ top: AppSpacing.sm })
+              .enabled(!this.workflowRunning)
+              .onClick(() => this.prepareInput('camera'))
+
+            Stack({ alignContent: Alignment.Center }) {
+              if (this.imageInputUri.length > 0) {
+                Image(this.imageInputUri)
+                  .width('100%')
+                  .height('100%')
+                  .padding(AppSpacing.md)
+                  .objectFit(ImageFit.Contain)
+              } else {
+                Column() {
+                  Image($r('app.media.feature_custom_model'))
+                    .width(64)
+                    .height(64)
+                    .objectFit(ImageFit.Contain)
+                  Text(appString('feature_runtime_custom_model_select_photo'))
+                    .fontSize(16)
+                    .fontColor(AppColor.textSecondary)
+                    .maxFontScale(3.2)
+                    .maxLines(2)
+                    .textAlign(TextAlign.Center)
+                    .margin({ top: AppSpacing.sm })
+                }
+                .alignItems(HorizontalAlign.Center)
+              }
+            }
+            .width('100%')
+            .aspectRatio(4 / 3)
+            .constraintSize({ minHeight: 220, maxHeight: 420 })
+            .backgroundColor(AppColor.cardBackground)
+            .border({ width: 1, color: AppColor.divider, radius: AppRadius.card })
+            .margin({ top: AppSpacing.md })
+          }
 
           Button(appString(this.statusKey === 'feature_runtime_custom_model_failed' ||
             this.statusKey === 'feature_runtime_run_failed' ? 'web_retry' :
