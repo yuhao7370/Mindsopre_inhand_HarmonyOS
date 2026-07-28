@@ -926,7 +926,10 @@ export function liveGestureRetryActionForStatus(
     statusKey === 'feature_runtime_run_failed' ||
     statusKey === 'feature_runtime_pending_adapter' ||
     statusKey === 'feature_runtime_gesture_failed' ||
-    statusKey === 'feature_runtime_digit_failed') {
+    statusKey === 'feature_runtime_digit_failed' ||
+    statusKey === 'feature_runtime_digit_image_read_failed' ||
+    statusKey === 'feature_runtime_digit_no_foreground' ||
+    statusKey === 'feature_runtime_digit_runner_unavailable') {
     return 'restartInference';
   }
   return 'none';

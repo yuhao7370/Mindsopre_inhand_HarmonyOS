@@ -37,6 +37,7 @@ import {
 } from './GestureService';
 import {
   HandwrittenDigitFailure,
+  HandwrittenDigitFailureCode,
   HandwrittenDigitService
 } from './HandwrittenDigitService';
 import { HandwrittenDigitPrediction } from './HandwrittenDigitPreprocess';
@@ -400,12 +401,20 @@ export class DefaultAiService {
     }
   }
 
-  private digitFailureResult(reason: string): AiRunResult {
+  private digitFailureResult(reason: HandwrittenDigitFailureCode): AiRunResult {
+    let messageKey: AppStringKey = 'feature_runtime_digit_failed';
+    if (reason === 'MODEL_UNAVAILABLE') {
+      messageKey = 'feature_runtime_digit_runner_unavailable';
+    } else if (reason === 'IMAGE_DECODE_FAILED' || reason === 'IMAGE_URI_INVALID') {
+      messageKey = 'feature_runtime_digit_image_read_failed';
+    } else if (reason === 'INPUT_INVALID') {
+      messageKey = 'feature_runtime_digit_no_foreground';
+    }
     return {
       ok: false,
       code: 'DIGIT_RECOGNITION_FAILED',
       aiMethod: 'recognizeDigit',
-      messageKey: 'feature_runtime_digit_failed',
+      messageKey: messageKey,
       detailText: `reason=${reason}`
     };
   }
@@ -1208,7 +1217,7 @@ export function aiRunResultRows(result: AiRunResult): Array<AiRunResultRow> {
 }
 
 function digitPredictionResultRows(data: AiDigitPredictionsData): Array<AiRunResultRow> {
-  const predictions = data.predictions.slice(0, 3);
+  const predictions = data.predictions.slice(0, 4);
   if (predictions.length === 0) {
     return [];
   }
@@ -1216,7 +1225,8 @@ function digitPredictionResultRows(data: AiDigitPredictionsData): Array<AiRunRes
   return [
     resultRow('feature_runtime_digit_result_predicted', `${top.digit}`),
     resultRow('feature_runtime_digit_result_confidence', `${(top.confidence * 100).toFixed(2)}%`),
-    resultRow('feature_runtime_digit_result_candidates', predictions.map((prediction: HandwrittenDigitPrediction) =>
+    resultRow('feature_runtime_digit_result_candidates', predictions.slice(1).map(
+      (prediction: HandwrittenDigitPrediction) =>
       `${prediction.digit}`).join(', '))
   ];
 }

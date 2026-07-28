@@ -1,6 +1,6 @@
 import { fileIo } from '@kit.CoreFileKit';
 import { image } from '@kit.ImageKit';
-import { HandwrittenDigitImagePreprocessor } from './HandwrittenDigitService';
+import { HandwrittenDigitFailure, HandwrittenDigitImagePreprocessor } from './HandwrittenDigitService';
 import { handwrittenDigitInputFromRgba } from './HandwrittenDigitPreprocess';
 import { createPixelMapWithExifOrientation } from './ImageDecodeOrientation';
 
@@ -12,14 +12,22 @@ export class HarmonyHandwrittenDigitInputPreprocessor implements HandwrittenDigi
     try {
       imageFile = await openHandwrittenDigitImageFile(imageUri);
       imageSource = image.createImageSource(imageFile.fd);
-      pixelMap = await createPixelMapWithExifOrientation(imageSource, handwrittenDigitDecodeOptions());
+      const sourceInfo = await imageSource.getImageInfo();
+      pixelMap = await createPixelMapWithExifOrientation(
+        imageSource,
+        handwrittenDigitDecodeOptions(sourceInfo.size.width, sourceInfo.size.height)
+      );
       const imageInfo = await pixelMap.getImageInfo();
       if (imageInfo.size.width <= 0 || imageInfo.size.height <= 0) {
         throw new Error('Invalid digit image dimensions.');
       }
       const rgbaBuffer = new ArrayBuffer(imageInfo.size.width * imageInfo.size.height * 4);
       await pixelMap.readPixelsToBuffer(rgbaBuffer);
-      return handwrittenDigitInputFromRgba(new Uint8Array(rgbaBuffer), imageInfo.size.width, imageInfo.size.height);
+      try {
+        return handwrittenDigitInputFromRgba(new Uint8Array(rgbaBuffer), imageInfo.size.width, imageInfo.size.height);
+      } catch (_) {
+        throw new HandwrittenDigitFailure('INPUT_INVALID');
+      }
     } finally {
       await releaseHandwrittenDigitPixelMap(pixelMap);
       await releaseHandwrittenDigitImageSource(imageSource);
@@ -28,10 +36,22 @@ export class HarmonyHandwrittenDigitInputPreprocessor implements HandwrittenDigi
   }
 }
 
-export function handwrittenDigitDecodeOptions(): image.DecodingOptions {
-  return {
+export function handwrittenDigitDecodeOptions(width: number, height: number): image.DecodingOptions {
+  if (!Number.isInteger(width) || !Number.isInteger(height) || width <= 0 || height <= 0) {
+    throw new Error('Invalid handwritten digit source dimensions.');
+  }
+  const options: image.DecodingOptions = {
     desiredPixelFormat: image.PixelMapFormat.RGBA_8888
   };
+  const maximumEdge = Math.max(width, height);
+  if (maximumEdge > 1024) {
+    const scale = 1024 / maximumEdge;
+    options.desiredSize = {
+      width: Math.max(1, Math.round(width * scale)),
+      height: Math.max(1, Math.round(height * scale))
+    };
+  }
+  return options;
 }
 
 async function openHandwrittenDigitImageFile(imageUri: string): Promise<fileIo.File> {

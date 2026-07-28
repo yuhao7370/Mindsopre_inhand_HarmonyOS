@@ -67,7 +67,10 @@ export class HandwrittenDigitService {
     let input: ArrayBuffer;
     try {
       input = await this.preprocessor.createInput(imageUri);
-    } catch (_) {
+    } catch (error) {
+      if (error instanceof HandwrittenDigitFailure) {
+        throw error;
+      }
       throw new HandwrittenDigitFailure('IMAGE_DECODE_FAILED');
     }
     if (input.byteLength !== handwrittenDigitInputFloatCount * Float32Array.BYTES_PER_ELEMENT) {
@@ -80,7 +83,7 @@ export class HandwrittenDigitService {
       throw new HandwrittenDigitFailure('MODEL_UNAVAILABLE');
     }
     try {
-      return topHandwrittenDigitResults(logits);
+      return topHandwrittenDigitResults(logits, 4);
     } catch (_) {
       throw new HandwrittenDigitFailure('MODEL_OUTPUT_INVALID');
     }

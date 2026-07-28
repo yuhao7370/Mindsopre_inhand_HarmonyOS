@@ -6003,6 +6003,9 @@ struct FeatureRuntimePage {
               .onClick(() => this.openLinkedLiveRoute())
             Button(appString(this.statusKey === 'feature_runtime_gesture_failed' ||
               this.statusKey === 'feature_runtime_digit_failed' ||
+              this.statusKey === 'feature_runtime_digit_image_read_failed' ||
+              this.statusKey === 'feature_runtime_digit_no_foreground' ||
+              this.statusKey === 'feature_runtime_digit_runner_unavailable' ||
               this.statusKey === 'feature_runtime_run_failed' ?
               'web_retry' : workflowRunActionKey(workflowForRoute(this.routeName))))
               .width('calc(50% - 4vp)')

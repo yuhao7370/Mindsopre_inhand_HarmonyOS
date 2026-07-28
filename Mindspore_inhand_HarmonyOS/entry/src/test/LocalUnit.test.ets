@@ -250,11 +250,13 @@ import {
 } from '../main/ets/services/ai/ImageClassificationPipeline';
 import {
   HandwrittenDigitFailure,
+  HandwrittenDigitFailureCode,
   HandwrittenDigitImagePreprocessor,
   HandwrittenDigitScoreRunner,
   HandwrittenDigitService,
   HandwrittenDigitTensorRunner
 } from '../main/ets/services/ai/HandwrittenDigitService';
+import { handwrittenDigitDecodeOptions } from '../main/ets/services/ai/HarmonyHandwrittenDigitInputPreprocessor';
 import { imageClassificationDecodeOptions } from '../main/ets/services/ai/HarmonyImageInputPreprocessor';
 import {
   CustomModelBufferRuntime,
@@ -888,6 +890,21 @@ class FixedHandwrittenDigitPreprocessor implements HandwrittenDigitImagePreproce
   async createInput(imageUri: string): Promise<ArrayBuffer> {
     this.seenUris.push(imageUri);
     return this.input;
+  }
+}
+
+class RejectingHandwrittenDigitPreprocessor implements HandwrittenDigitImagePreprocessor {
+  private readonly failureCode?: HandwrittenDigitFailureCode;
+
+  constructor(failureCode?: HandwrittenDigitFailureCode) {
+    this.failureCode = failureCode;
+  }
+
+  async createInput(_imageUri: string): Promise<ArrayBuffer> {
+    if (this.failureCode !== undefined) {
+      throw new HandwrittenDigitFailure(this.failureCode);
+    }
+    throw new Error('decode failed');
   }
 }
 
@@ -2741,6 +2758,8 @@ export default function localUnitTest() {
       expect(hasAppStringKey('feature_runtime_digit_done')).assertTrue();
       expect(hasAppStringKey('feature_runtime_digit_runner_unavailable')).assertTrue();
       expect(hasAppStringKey('feature_runtime_digit_failed')).assertTrue();
+      expect(hasAppStringKey('feature_runtime_digit_image_read_failed')).assertTrue();
+      expect(hasAppStringKey('feature_runtime_digit_no_foreground')).assertTrue();
       expect(hasAppStringKey('feature_runtime_digit_result_predicted')).assertTrue();
       expect(hasAppStringKey('feature_runtime_digit_result_confidence')).assertTrue();
       expect(hasAppStringKey('feature_runtime_digit_result_candidates')).assertTrue();
@@ -8577,6 +8596,36 @@ export default function localUnitTest() {
       })).assertEqual('MODEL_OUTPUT_INVALID');
     });
 
+    it('boundsHandwrittenDigitDecodeMemoryWithoutDistortingAspectRatio', 0, () => {
+      const landscape = handwrittenDigitDecodeOptions(4000, 3000);
+      const portrait = handwrittenDigitDecodeOptions(3000, 4000);
+      const small = handwrittenDigitDecodeOptions(640, 480);
+
+      expect(landscape.desiredSize?.width).assertEqual(1024);
+      expect(landscape.desiredSize?.height).assertEqual(768);
+      expect(portrait.desiredSize?.width).assertEqual(768);
+      expect(portrait.desiredSize?.height).assertEqual(1024);
+      expect(small.desiredSize === undefined).assertTrue();
+    });
+
+    it('preservesTypedDigitFailuresAsDistinctVisibleStates', 0, async () => {
+      const workflow = workflowForRoute(AppRoute.DIGIT_STILL.name)!;
+      const failureResult = async (failureCode?: HandwrittenDigitFailureCode): Promise<AiRunResult> => {
+        return new DefaultAiService({
+          handwrittenDigitService: new HandwrittenDigitService({
+            preprocessor: new RejectingHandwrittenDigitPreprocessor(failureCode),
+            scoreRunner: new FixedHandwrittenDigitScoreRunner([])
+          })
+        }).run(workflow, { imageUri: 'file://selected/digit.png' });
+      };
+      const inputResult = await failureResult('INPUT_INVALID');
+      expect(inputResult.messageKey).assertEqual('feature_runtime_digit_no_foreground');
+      const imageResult = await failureResult('IMAGE_DECODE_FAILED');
+      expect(imageResult.messageKey).assertEqual('feature_runtime_digit_image_read_failed');
+      const decodeResult = await failureResult();
+      expect(decodeResult.messageKey).assertEqual('feature_runtime_digit_image_read_failed');
+    });
+
     it('aiServiceProjectsDigitPredictionsAndClearsRowsForTypedFailure', 0, async () => {
       const workflow = workflowForRoute(AppRoute.DIGIT_STILL.name)!;
       const input = new ArrayBuffer(28 * 28 * Float32Array.BYTES_PER_ELEMENT);
@@ -8598,10 +8647,10 @@ export default function localUnitTest() {
       expect(aiRunResultRows(success)[0].labelKey).assertEqual('feature_runtime_digit_result_predicted');
       expect(aiRunResultRows(success)[0].value).assertEqual('6');
       expect(aiRunResultRows(success)[1].value).assertEqual('99.19%');
-      expect(aiRunResultRows(success)[2].value).assertEqual('6, 0, 1');
+      expect(aiRunResultRows(success)[2].value).assertEqual('0, 1, 2');
       expect(failure.ok).assertFalse();
       expect(failure.code).assertEqual('DIGIT_RECOGNITION_FAILED');
-      expect(failure.messageKey).assertEqual('feature_runtime_digit_failed');
+      expect(failure.messageKey).assertEqual('feature_runtime_digit_runner_unavailable');
       expect(aiRunResultRows(failure).length).assertEqual(0);
     });
 
@@ -10687,6 +10736,12 @@ export default function localUnitTest() {
       expect(liveGestureRetryActionForStatus(digitLive, 'feature_runtime_live_camera_failed'))
         .assertEqual('restartCamera');
       expect(liveGestureRetryActionForStatus(digitLive, 'feature_runtime_digit_failed'))
+        .assertEqual('restartInference');
+      expect(liveGestureRetryActionForStatus(digitLive, 'feature_runtime_digit_image_read_failed'))
+        .assertEqual('restartInference');
+      expect(liveGestureRetryActionForStatus(digitLive, 'feature_runtime_digit_no_foreground'))
+        .assertEqual('restartInference');
+      expect(liveGestureRetryActionForStatus(digitLive, 'feature_runtime_digit_runner_unavailable'))
         .assertEqual('restartInference');
       expect(liveGestureRetryActionForStatus(gestureLive, 'feature_runtime_status_idle')).assertEqual('none');
       expect(liveGestureRetryActionForStatus(sceneLive, 'feature_runtime_run_failed')).assertEqual('none');

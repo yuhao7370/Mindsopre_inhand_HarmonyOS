@@ -340,6 +340,8 @@ export type AppStringKey =
   'feature_runtime_digit_runner_unavailable' |
   'feature_runtime_digit_done' |
   'feature_runtime_digit_failed' |
+  'feature_runtime_digit_image_read_failed' |
+  'feature_runtime_digit_no_foreground' |
   'feature_runtime_digit_result_predicted' |
   'feature_runtime_digit_result_confidence' |
   'feature_runtime_digit_result_candidates' |
@@ -689,6 +691,8 @@ const APP_STRING_KEYS: AppStringKey[] = [
   'feature_runtime_digit_runner_unavailable',
   'feature_runtime_digit_done',
   'feature_runtime_digit_failed',
+  'feature_runtime_digit_image_read_failed',
+  'feature_runtime_digit_no_foreground',
   'feature_runtime_digit_result_predicted',
   'feature_runtime_digit_result_confidence',
   'feature_runtime_digit_result_candidates',
@@ -1383,6 +1387,10 @@ export function appString(key: AppStringKey): ResourceStr {
       return $r('app.string.feature_runtime_digit_done');
     case 'feature_runtime_digit_failed':
       return $r('app.string.feature_runtime_digit_failed');
+    case 'feature_runtime_digit_image_read_failed':
+      return $r('app.string.feature_runtime_digit_image_read_failed');
+    case 'feature_runtime_digit_no_foreground':
+      return $r('app.string.feature_runtime_digit_no_foreground');
     case 'feature_runtime_digit_result_predicted':
       return $r('app.string.feature_runtime_digit_result_predicted');
     case 'feature_runtime_digit_result_confidence':
