@@ -17,18 +17,17 @@ export function handwrittenDigitInputFromRgba(rgba: Uint8Array, width: number, h
   validateRgba(rgba, width, height);
   const grayscale = grayscaleFromRgba(rgba, width * height);
   const background = borderBackground(grayscale, width, height);
-  const invert = background > 0.5;
-  const ink = inkFromGrayscale(grayscale, invert);
+  const ink = inkFromGrayscale(grayscale, background);
   const bounds = foregroundBounds(ink, width, height);
   if (bounds === undefined) {
     throw new Error('Handwritten digit image is blank or low contrast.');
   }
 
   const resized = resizeForegroundToMnist(ink, width, height, bounds);
-  centreOfMassTranslate(resized);
+  const translated = translateHandwrittenDigitToCenter(resized);
   const input = new Float32Array(handwrittenDigitInputFloatCount);
   for (let index = 0; index < input.length; index++) {
-    input[index] = (resized[index] - handwrittenDigitMean) / handwrittenDigitStd;
+    input[index] = (translated[index] - handwrittenDigitMean) / handwrittenDigitStd;
   }
   return input.buffer as ArrayBuffer;
 }
@@ -108,14 +107,15 @@ function borderBackground(grayscale: Float32Array, width: number, height: number
   return total / count;
 }
 
-function inkFromGrayscale(grayscale: Float32Array, invert: boolean): Float32Array {
+function inkFromGrayscale(grayscale: Float32Array, background: number): Float32Array {
   const ink = new Float32Array(grayscale.length);
   let minimum = grayscale[0];
   let maximum = grayscale[0];
+  const darkInk = background > 0.5;
   for (let index = 0; index < grayscale.length; index++) {
     minimum = Math.min(minimum, grayscale[index]);
     maximum = Math.max(maximum, grayscale[index]);
-    ink[index] = invert ? 1 - grayscale[index] : grayscale[index];
+    ink[index] = Math.min(1, Math.max(0, darkInk ? background - grayscale[index] : grayscale[index] - background));
   }
   if (maximum - minimum < minimumContrast) {
     throw new Error('Handwritten digit image is blank or low contrast.');
@@ -188,26 +188,41 @@ function sample(values: Float32Array, width: number, height: number, x: number, 
   return values[y * width + x];
 }
 
-function centreOfMassTranslate(values: Float32Array): void {
+export function translateHandwrittenDigitToCenter(values: Float32Array): Float32Array {
+  if (values.length !== handwrittenDigitInputFloatCount) {
+    throw new Error('Handwritten digit body must be 28x28.');
+  }
   let mass = 0;
   let centerX = 0;
   let centerY = 0;
+  let left = handwrittenDigitInputSize;
+  let top = handwrittenDigitInputSize;
+  let right = -1;
+  let bottom = -1;
   for (let y = 0; y < handwrittenDigitInputSize; y++) {
     for (let x = 0; x < handwrittenDigitInputSize; x++) {
       const value = values[y * handwrittenDigitInputSize + x];
+      if (!Number.isFinite(value) || value < 0) {
+        throw new Error('Handwritten digit body contains invalid values.');
+      }
       mass += value;
       centerX += value * x;
       centerY += value * y;
+      if (value > 0) {
+        left = Math.min(left, x);
+        top = Math.min(top, y);
+        right = Math.max(right, x);
+        bottom = Math.max(bottom, y);
+      }
     }
   }
   if (mass <= 0 || !Number.isFinite(mass)) {
     throw new Error('Handwritten digit image is blank.');
   }
-  const shiftX = Math.round((handwrittenDigitInputSize - 1) / 2 - centerX / mass);
-  const shiftY = Math.round((handwrittenDigitInputSize - 1) / 2 - centerY / mass);
-  if (shiftX === 0 && shiftY === 0) {
-    return;
-  }
+  const desiredShiftX = Math.round((handwrittenDigitInputSize - 1) / 2 - centerX / mass);
+  const desiredShiftY = Math.round((handwrittenDigitInputSize - 1) / 2 - centerY / mass);
+  const shiftX = Math.min(handwrittenDigitInputSize - 1 - right, Math.max(-left, desiredShiftX));
+  const shiftY = Math.min(handwrittenDigitInputSize - 1 - bottom, Math.max(-top, desiredShiftY));
   const translated = new Float32Array(values.length);
   for (let y = 0; y < handwrittenDigitInputSize; y++) {
     for (let x = 0; x < handwrittenDigitInputSize; x++) {
@@ -216,5 +231,5 @@ function centreOfMassTranslate(values: Float32Array): void {
       );
     }
   }
-  values.set(translated);
+  return translated;
 }

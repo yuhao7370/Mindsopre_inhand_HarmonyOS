@@ -1,7 +1,8 @@
 import { describe, expect, it } from '@ohos/hypium';
 import {
   handwrittenDigitInputFromRgba,
-  topHandwrittenDigitResults
+  topHandwrittenDigitResults,
+  translateHandwrittenDigitToCenter
 } from '../main/ets/services/ai/HandwrittenDigitPreprocess';
 import {
   HandwrittenDigitImagePreprocessor,
@@ -57,6 +58,28 @@ function foregroundCenter(input: Float32Array): Array<number> {
   return [centerX / mass, centerY / mass];
 }
 
+function rawInputValue(input: Float32Array, index: number): number {
+  return input[index] * 0.3081 + 0.1307;
+}
+
+function foregroundPixelCount(values: Float32Array): number {
+  let count = 0;
+  for (let index = 0; index < values.length; index++) {
+    if (values[index] > 0) {
+      count++;
+    }
+  }
+  return count;
+}
+
+function pixelMass(values: Float32Array): number {
+  let total = 0;
+  for (let index = 0; index < values.length; index++) {
+    total += values[index];
+  }
+  return total;
+}
+
 class FixedDigitPreprocessor implements HandwrittenDigitImagePreprocessor {
   seenUri: string = '';
   readonly input: ArrayBuffer;
@@ -97,6 +120,52 @@ export default function handwrittenDigitUnitTest(): void {
       expect(whiteInput[14 * 28 + 14] > 1).assertTrue();
       expect(blackInput[0] < 0).assertTrue();
       expect(whiteInput[0] < 0).assertTrue();
+      expect(Math.abs(blackInput[0] - ((0 - 0.1307) / 0.3081)) < 0.0001).assertTrue();
+      expect(Math.abs(blackInput[14 * 28 + 14] - ((1 - 0.1307) / 0.3081)) < 0.0001).assertTrue();
+      for (let index = 0; index < blackInput.length; index++) {
+        expect(Number.isFinite(blackInput[index])).assertTrue();
+      }
+    });
+
+    it('extractsInkFromMidGrayAndDarkGrayBordersWithoutWholeCanvasForeground', 0, () => {
+      const blackOnMidGray = rgbaCanvas(44, 44, 178);
+      fillRect(blackOnMidGray, 44, 16, 8, 9, 28, 0);
+      const brightOnDarkGray = rgbaCanvas(44, 44, 75);
+      fillRect(brightOnDarkGray, 44, 16, 8, 9, 28, 255);
+
+      const midGrayInput = new Float32Array(handwrittenDigitInputFromRgba(blackOnMidGray, 44, 44));
+      const darkGrayInput = new Float32Array(handwrittenDigitInputFromRgba(brightOnDarkGray, 44, 44));
+      let midGrayForeground = 0;
+      let darkGrayForeground = 0;
+      for (let index = 0; index < midGrayInput.length; index++) {
+        if (rawInputValue(midGrayInput, index) > 0.1) {
+          midGrayForeground++;
+        }
+        if (rawInputValue(darkGrayInput, index) > 0.1) {
+          darkGrayForeground++;
+        }
+      }
+
+      expect(midGrayForeground < 200).assertTrue();
+      expect(darkGrayForeground < 200).assertTrue();
+      expect(rawInputValue(midGrayInput, 14 * 28 + 14) > 0.6).assertTrue();
+      expect(rawInputValue(darkGrayInput, 14 * 28 + 14) > 0.6).assertTrue();
+    });
+
+    it('keepsEveryNonzeroPixelAndMassWhenRecenteringAnAsymmetricBody', 0, () => {
+      const body = new Float32Array(28 * 28);
+      for (let y = 8; y < 20; y++) {
+        for (let x = 2; x < 5; x++) {
+          body[y * 28 + x] = 1;
+        }
+      }
+      body[13 * 28 + 26] = 0.1;
+
+      const translated = translateHandwrittenDigitToCenter(body);
+
+      expect(foregroundPixelCount(translated)).assertEqual(foregroundPixelCount(body));
+      expect(Math.abs(pixelMass(translated) - pixelMass(body)) < 0.000001).assertTrue();
+      expect(translated[13 * 28 + 27] > 0).assertTrue();
     });
 
     it('centresAnOffCentreDigitBody', 0, () => {
