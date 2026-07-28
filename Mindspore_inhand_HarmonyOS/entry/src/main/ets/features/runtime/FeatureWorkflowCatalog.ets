@@ -315,6 +315,10 @@ export function workflowForRoute(routeName: string): FeatureWorkflow | undefined
   return featureWorkflows.find((workflow: FeatureWorkflow) => workflow.routeName === routeName);
 }
 
+export function isHandwrittenDigitWorkflow(workflow: FeatureWorkflow | undefined): boolean {
+  return workflow?.routeName === AppRoute.DIGIT_STILL.name || workflow?.routeName === AppRoute.DIGIT_LIVE.name;
+}
+
 export type SpecializedAndroidLiveLayout =
   'imageClassification' | 'objectDetection' | 'segmentation' | 'gesture' | 'scene' | 'skeleton';
 

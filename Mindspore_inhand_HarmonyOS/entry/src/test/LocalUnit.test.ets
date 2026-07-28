@@ -480,6 +480,7 @@ import {
   workflowInitialStatusKey,
   workflowInputLabelKey,
   workflowGoLiveLabelKey,
+  isHandwrittenDigitWorkflow,
   workflowResultTitleKey,
   workflowRuntimeTitleKey,
   workflowRunActionKey,
@@ -2675,16 +2676,19 @@ export default function localUnitTest() {
       expect(digit?.titleKey).assertEqual('title_handwritten_digit');
       expect(digit?.icon).assertEqual('digit');
       expect(digit?.visibleByDefault).assertTrue();
-      expect(allExperienceFeatures.indexOf(digit!) > allExperienceFeatures.findIndex(
+      expect(allExperienceFeatures.indexOf(digit!)).assertEqual(allExperienceFeatures.findIndex(
         (item: FeatureItem) => item.id === 'image'
-      )).assertTrue();
+      ) + 1);
       expect(iconMediaName('digit')).assertEqual('feature_digit');
       expect(staticWorkflow?.aiMethod).assertEqual('recognizeDigit');
+      expect(isHandwrittenDigitWorkflow(staticWorkflow)).assertTrue();
       expect(staticWorkflow?.inputKinds.join(',')).assertEqual('photo,camera');
       expect(staticWorkflow?.resultKind).assertEqual('digitPredictions');
       expect(staticWorkflow?.linkedLiveRouteName).assertEqual(AppRoute.DIGIT_LIVE.name);
       expect(staticWorkflow?.liveMode).assertFalse();
       expect(liveWorkflow?.aiMethod).assertEqual('recognizeDigit');
+      expect(isHandwrittenDigitWorkflow(liveWorkflow)).assertTrue();
+      expect(isHandwrittenDigitWorkflow(workflowForRoute(AppRoute.GESTURE_STILL.name))).assertFalse();
       expect(liveWorkflow?.inputKinds.join(',')).assertEqual('camera');
       expect(liveWorkflow?.resultKind).assertEqual('digitPredictions');
       expect(liveWorkflow?.liveMode).assertTrue();
@@ -11252,8 +11256,7 @@ export default function localUnitTest() {
         usesAndroidStillSegmentationLayout(workflow),
         usesAndroidStillSceneLayout(workflow),
         usesAndroidPortraitSegmentationLayout(workflow),
-        workflow?.routeName === AppRoute.DIGIT_STILL.name ||
-          workflow?.routeName === AppRoute.DIGIT_LIVE.name,
+        isHandwrittenDigitWorkflow(workflow),
         specializedAndroidLiveLayoutForWorkflow(workflow) === 'imageClassification',
         specializedAndroidLiveLayoutForWorkflow(workflow) === 'objectDetection',
         specializedAndroidLiveLayoutForWorkflow(workflow) === 'segmentation',
