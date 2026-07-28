@@ -7,6 +7,7 @@ import poseMoveNetUnitTest from './PoseMoveNetUnit.test';
 import experienceFontScaleUnitTest from './ExperienceFontScaleUnit.test';
 import customModelPackageUnitTest from './CustomModelPackage.test';
 import collegeTutorialExportServiceUnitTest from './CollegeTutorialExportService.test';
+import handwrittenDigitUnitTest from './HandwrittenDigitUnit.test';
 
 export default function testsuite() {
   localUnitTest();
@@ -18,4 +19,5 @@ export default function testsuite() {
   experienceFontScaleUnitTest();
   customModelPackageUnitTest();
   collegeTutorialExportServiceUnitTest();
+  handwrittenDigitUnitTest();
 }
