@@ -1,4 +1,6 @@
 import router from '@ohos.router';
+import { common } from '@kit.AbilityKit';
+import { fileIo, picker } from '@kit.CoreFileKit';
 import {
   collegeAdapterViewTitleKey,
   CollegeItem,
@@ -8,6 +10,7 @@ import {
   CollegeLocalQuickStartSection,
   CollegeTutorialCodeBlock,
   collegeLocalQuickStartSections,
+  collegeTutorialRawFileName,
   nextCollegeQuickStartExpandedId,
   visibleCollegeItems
 } from '../common/data/CollegeLocalQuickStart';
@@ -25,6 +28,11 @@ import {
 import { AppStringKey, appString } from '../common/i18n/AppStrings';
 import { AppColor } from '../common/theme/AppTheme';
 import { webPagePath } from '../common/data/WebDestination';
+import {
+  CollegeTutorialExportService,
+  CollegeTutorialExportStatus,
+  collegeTutorialStatusAfterResult
+} from '../services/college/CollegeTutorialExportService';
 
 const collegeCardBorderColor: string = '#E8EDF5';
 const collegeTutorialCodeBackgroundColor: string = '#F5F7FA';
@@ -111,6 +119,52 @@ export struct CollegePage {
     customStyle: true
   });
   @State expandedQuickStartSectionId: string = collegeLocalQuickStartSections[0].id;
+  @State tutorialExportStatus: CollegeTutorialExportStatus = 'idle';
+
+  private async exportTutorialPackage(): Promise<void> {
+    if (this.tutorialExportStatus === 'exporting') {
+      return;
+    }
+    const context = getContext(this) as common.UIAbilityContext;
+    const service = new CollegeTutorialExportService(
+      async (defaultName: string): Promise<string> => {
+        const options = new picker.DocumentSaveOptions();
+        options.newFileNames = [defaultName];
+        options.fileSuffixChoices = ['ZIP archive|.zip'];
+        try {
+          const targets = await new picker.DocumentViewPicker(context).save(options);
+          return targets.length > 0 ? targets[0] : '';
+        } catch (_) {
+          return '';
+        }
+      },
+      async (): Promise<Uint8Array> => {
+        return await context.resourceManager.getRawFileContent(collegeTutorialRawFileName);
+      },
+      async (uri: string, bytes: Uint8Array): Promise<number> => {
+        const file = await fileIo.open(uri, fileIo.OpenMode.READ_WRITE | fileIo.OpenMode.TRUNC);
+        try {
+          let totalWritten = 0;
+          while (totalWritten < bytes.byteLength) {
+            const remaining = bytes.subarray(totalWritten);
+            const written = await fileIo.write(file.fd, remaining.buffer as ArrayBuffer, {
+              offset: remaining.byteOffset,
+              length: remaining.byteLength
+            });
+            if (written <= 0) {
+              throw new Error('Tutorial package write stopped early.');
+            }
+            totalWritten += written;
+          }
+          return totalWritten;
+        } finally {
+          await fileIo.close(file);
+        }
+      }
+    );
+    this.tutorialExportStatus = 'exporting';
+    this.tutorialExportStatus = collegeTutorialStatusAfterResult(await service.exportPackage());
+  }
 
   private openWeb(titleKey: AppStringKey, url: string): void {
     router.pushUrl({
@@ -330,11 +384,35 @@ export struct CollegePage {
   @Builder
   private localQuickStart() {
     Column() {
-      Text('本地快速入门')
-        .width('100%')
-        .fontSize(19)
-        .fontWeight(FontWeight.Bold)
-        .fontColor(AppColor.textPrimary)
+      Row() {
+        Text('本地快速入门')
+          .fontSize(19)
+          .fontWeight(FontWeight.Bold)
+          .fontColor(AppColor.textPrimary)
+          .layoutWeight(1)
+        Button(appString('college_tutorial_export'))
+          .constraintSize({ minHeight: 44 })
+          .fontSize(12)
+          .fontColor(AppColor.accent)
+          .backgroundColor('#EDF4FF')
+          .enabled(this.tutorialExportStatus !== 'exporting')
+          .onClick(() => {
+            this.exportTutorialPackage();
+          })
+      }
+      .width('100%')
+      .alignItems(VerticalAlign.Center)
+      if (this.tutorialExportStatus !== 'idle') {
+        Text(appString(this.tutorialExportStatus === 'exporting'
+          ? 'college_tutorial_exporting'
+          : this.tutorialExportStatus === 'done'
+            ? 'college_tutorial_export_done'
+            : 'college_tutorial_export_failed'))
+          .width('100%')
+          .fontSize(12)
+          .fontColor(this.tutorialExportStatus === 'failed' ? AppColor.textSecondary : AppColor.accent)
+          .margin({ top: 6 })
+      }
       Text('跟着本机跑过的流程，学会训练、评估和导出')
         .width('100%')
         .fontSize(13)

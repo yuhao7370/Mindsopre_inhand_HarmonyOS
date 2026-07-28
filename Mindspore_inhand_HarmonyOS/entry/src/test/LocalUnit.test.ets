@@ -656,6 +656,9 @@ import {
   visibleCollegeItems
 } from '../main/ets/common/data/CollegeLocalQuickStart';
 import {
+  collegeTutorialStatusAfterResult
+} from '../main/ets/services/college/CollegeTutorialExportService';
+import {
   collegeCardRadiusVp,
   collegeDialogConfirmMinHeightVp,
   collegeEntryMinHeightVp,
@@ -2673,6 +2676,16 @@ export default function localUnitTest() {
       expect(tutorial.indexOf('lenet_mnist.mindir') >= 0).assertTrue();
       expect(tutorial.indexOf('http')).assertEqual(-1);
       expect(tutorial.indexOf('digits')).assertEqual(-1);
+    });
+
+    it('mapsCollegeTutorialExportResultsAndProvidesStrings', 0, () => {
+      expect(collegeTutorialStatusAfterResult({ ok: false, cancelled: true })).assertEqual('idle');
+      expect(collegeTutorialStatusAfterResult({ ok: true, cancelled: false })).assertEqual('done');
+      expect(collegeTutorialStatusAfterResult({ ok: false, cancelled: false })).assertEqual('failed');
+      expect(hasAppStringKey('college_tutorial_export')).assertTrue();
+      expect(hasAppStringKey('college_tutorial_exporting')).assertTrue();
+      expect(hasAppStringKey('college_tutorial_export_done')).assertTrue();
+      expect(hasAppStringKey('college_tutorial_export_failed')).assertTrue();
     });
 
     it('definesHarmonyMeLayoutMinimums', 0, () => {

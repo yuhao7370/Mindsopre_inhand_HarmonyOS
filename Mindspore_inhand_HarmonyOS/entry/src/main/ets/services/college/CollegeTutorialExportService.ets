@@ -7,6 +7,15 @@ export interface CollegeTutorialExportResult {
   readonly cancelled: boolean;
 }
 
+export function collegeTutorialStatusAfterResult(
+  result: CollegeTutorialExportResult
+): CollegeTutorialExportStatus {
+  if (result.cancelled) {
+    return 'idle';
+  }
+  return result.ok ? 'done' : 'failed';
+}
+
 export type CollegeDestinationPicker = (defaultName: string) => Promise<string>;
 export type CollegePackageReader = () => Promise<Uint8Array>;
 export type CollegePackageWriter = (uri: string, bytes: Uint8Array) => Promise<number>;

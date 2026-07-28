@@ -27,6 +27,10 @@ export type AppStringKey =
   'me_head_title' |
   'me_head_subtitle' |
   'mindspore_college_title' |
+  'college_tutorial_export' |
+  'college_tutorial_exporting' |
+  'college_tutorial_export_done' |
+  'college_tutorial_export_failed' |
   'account_title' |
   'action_back' |
   'action_more' |
@@ -360,6 +364,10 @@ const APP_STRING_KEYS: AppStringKey[] = [
   'me_head_title',
   'me_head_subtitle',
   'mindspore_college_title',
+  'college_tutorial_export',
+  'college_tutorial_exporting',
+  'college_tutorial_export_done',
+  'college_tutorial_export_failed',
   'account_title',
   'action_back',
   'action_more',
@@ -725,6 +733,14 @@ export function appString(key: AppStringKey): ResourceStr {
       return $r('app.string.me_head_subtitle');
     case 'mindspore_college_title':
       return $r('app.string.mindspore_college_title');
+    case 'college_tutorial_export':
+      return $r('app.string.college_tutorial_export');
+    case 'college_tutorial_exporting':
+      return $r('app.string.college_tutorial_exporting');
+    case 'college_tutorial_export_done':
+      return $r('app.string.college_tutorial_export_done');
+    case 'college_tutorial_export_failed':
+      return $r('app.string.college_tutorial_export_failed');
     case 'account_title':
       return $r('app.string.account_title');
     case 'action_back':
