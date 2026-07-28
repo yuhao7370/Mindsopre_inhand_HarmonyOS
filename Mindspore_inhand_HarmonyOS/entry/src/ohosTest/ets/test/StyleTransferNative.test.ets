@@ -271,7 +271,7 @@ export default function styleTransferNativeTest() {
       const pairValidationNative = await styleTransferMnn.run(
         new Float32Array(style0Input.styleInputBuffer),
         new Float32Array(style0Input.contentInputBuffer)
-      );
+      ) as StyleTransferNativeOutput;
       const pairValidationRecovered: StyleTransferNativeOutput = new TestStyleTransferNativeOutput(
         pairValidationNative.output,
         pairValidationNative.predictMs,
@@ -290,7 +290,7 @@ export default function styleTransferNativeTest() {
       const nativeRecovered = await styleTransferMnn.run(
         new Float32Array(style0Input.styleInputBuffer),
         new Float32Array(style0Input.contentInputBuffer)
-      );
+      ) as StyleTransferNativeOutput;
       const recovered: StyleTransferNativeOutput = new TestStyleTransferNativeOutput(
         nativeRecovered.output,
         nativeRecovered.predictMs,
