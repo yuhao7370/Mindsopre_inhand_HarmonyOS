@@ -22,6 +22,8 @@ STD = 0.3081
 MINIMUM_CONTRAST = 32 / 255
 FOREGROUND_THRESHOLD = 0.15
 FOREGROUND_PADDING_RATIO = 0.1
+MAX_IMAGE_DIMENSION = 4096
+MAX_RGBA_BYTES = MAX_IMAGE_DIMENSION * MAX_IMAGE_DIMENSION * 4
 FIXTURES = (("digit-2.png", 2), ("digit-7.png", 7), ("digit-9.png", 9))
 MINDIR_ENTRY = "artifacts/lenet_mnist.mindir"
 
@@ -49,15 +51,30 @@ def js_round(value: float) -> int:
     return math.floor(value + 0.5)
 
 
-def arkts_input(image_path: Path) -> np.ndarray:
-    """Mirror HandwrittenDigitPreprocess.ets, including its Float32 storage boundaries."""
-    with Image.open(image_path) as image:
-        rgba = np.asarray(image.convert("RGBA"), dtype=np.uint8)
-    height, width = rgba.shape[:2]
+def validate_rgba(rgba: np.ndarray, width: int, height: int) -> None:
+    if (not isinstance(width, (int, np.integer)) or isinstance(width, bool) or
+            not isinstance(height, (int, np.integer)) or isinstance(height, bool) or
+            width <= 0 or height <= 0 or width > MAX_IMAGE_DIMENSION or height > MAX_IMAGE_DIMENSION):
+        raise ValueError("Handwritten digit RGBA dimensions do not match the pixel data.")
+    expected_bytes = int(width) * int(height) * 4
+    if expected_bytes > MAX_RGBA_BYTES or rgba.ndim != 1 or rgba.size != expected_bytes:
+        raise ValueError("Handwritten digit RGBA dimensions do not match the pixel data.")
+
+
+def border_background(grayscale: np.ndarray, width: int, height: int) -> float:
+    if width == 1 or height == 1:
+        return float(grayscale.sum(dtype=np.float64) / (width * height))
+    border = np.concatenate((grayscale[0, :], grayscale[-1, :], grayscale[1:-1, 0], grayscale[1:-1, -1]))
+    return float(border.sum(dtype=np.float64) / border.size)
+
+
+def arkts_input_from_rgba(rgba: np.ndarray, width: int, height: int) -> np.ndarray:
+    """Mirror HandwrittenDigitPreprocess.ets, including its trust-boundary checks."""
+    validate_rgba(rgba, width, height)
+    rgba = rgba.reshape((height, width, 4))
     rgb = rgba[:, :, :3].astype(np.float64)
     grayscale = ((rgb[:, :, 0] * 0.299 + rgb[:, :, 1] * 0.587 + rgb[:, :, 2] * 0.114) / 255).astype(np.float32)
-    border = np.concatenate((grayscale[0, :], grayscale[-1, :], grayscale[1:-1, 0], grayscale[1:-1, -1]))
-    background = float(border.sum(dtype=np.float64) / border.size)
+    background = border_background(grayscale, width, height)
     minimum = float(grayscale.min())
     maximum = float(grayscale.max())
     if maximum - minimum < MINIMUM_CONTRAST:
@@ -109,6 +126,27 @@ def arkts_input(image_path: Path) -> np.ndarray:
     return np.asarray([(float(value) - MEAN) / STD for value in translated.ravel()], dtype=np.float32).reshape(1, 1, 28, 28)
 
 
+def arkts_input(image_path: Path) -> np.ndarray:
+    """Decode a PNG then pass exact RGBA bytes through the ArkTS mirror."""
+    with Image.open(image_path) as image:
+        rgba = np.asarray(image.convert("RGBA"), dtype=np.uint8)
+    height, width = rgba.shape[:2]
+    return arkts_input_from_rgba(rgba.reshape(-1), width, height)
+
+
+def self_test() -> None:
+    one_by_three = np.asarray([[0.1, 0.2, 0.3]], dtype=np.float32)
+    three_by_one = np.asarray([[0.1], [0.2], [0.3]], dtype=np.float32)
+    assert math.isclose(border_background(one_by_three, 3, 1), 0.2, abs_tol=1e-6)
+    assert math.isclose(border_background(three_by_one, 1, 3), 0.2, abs_tol=1e-6)
+    for rgba, width, height in ((np.zeros(3, dtype=np.uint8), 1, 1), (np.zeros(0, dtype=np.uint8), 4097, 1)):
+        try:
+            validate_rgba(rgba, width, height)
+        except ValueError:
+            continue
+        raise AssertionError("RGBA trust-boundary validation accepted invalid input")
+
+
 def load_network(archive_path: Path, temp_dir: Path) -> nn.GraphCell:
     with zipfile.ZipFile(archive_path) as archive:
         extracted = temp_dir / "lenet_mnist.mindir"
@@ -146,7 +184,12 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[1])
     parser.add_argument("--json", action="store_true")
+    parser.add_argument("--self-test", action="store_true")
     args = parser.parse_args()
+    if args.self_test:
+        self_test()
+        print("MNIST fixture preprocessor self-test passed.")
+        return 0
     results = run(args.root.resolve())
     if args.json:
         print(json.dumps(results, separators=(",", ":")))

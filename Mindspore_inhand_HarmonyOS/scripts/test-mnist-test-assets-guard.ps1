@@ -28,21 +28,31 @@ function Test-Assets([string]$Root) {
   }
   $manifest = Read-Manifest $readmePath
   if ($manifest.Count -ne 3) { throw "Manifest must describe exactly three fixtures, got $($manifest.Count)." }
+  $manifestFiles = @($manifest | ForEach-Object { [string]$_.file })
+  $sortedManifestFiles = @($manifestFiles | Sort-Object)
+  $sortedExpectedFiles = @($expectedFiles | Sort-Object)
+  if ($manifestFiles.Count -ne $expectedFiles.Count -or
+    $manifestFiles.Count -ne @($manifestFiles | Sort-Object -Unique).Count -or
+    ($sortedManifestFiles -join '|') -cne ($sortedExpectedFiles -join '|')) {
+    throw 'Manifest files must uniquely and completely cover digit-2.png, digit-7.png, and digit-9.png.'
+  }
   $fixtureHashes = @{}
-  foreach ($record in $manifest) {
-    if ($expectedFiles -cnotcontains [string]$record.file) { throw "Manifest has unexpected file: $($record.file)" }
-    $expectedDigit = [int]($record.file -replace '^digit-(\d)\.png$', '$1')
+  foreach ($file in $expectedFiles) {
+    $record = @($manifest | Where-Object { [string]$_.file -ceq $file })
+    if ($record.Count -ne 1) { throw "Manifest must contain exactly one record for $file." }
+    $record = $record[0]
+    $expectedDigit = [int]($file -replace '^digit-(\d)\.png$', '$1')
     if ([int]$record.expected -ne $expectedDigit) { throw "Manifest label mismatch for $($record.file)." }
     if ([string]::IsNullOrWhiteSpace([string]$record.prompt) -or [string]::IsNullOrWhiteSpace([string]$record.source)) {
       throw "Manifest source or prompt is missing for $($record.file)."
     }
-    $path = Join-Path $assetRoot $record.file
+    $path = Join-Path $assetRoot $file
     $image = [System.Drawing.Image]::FromFile($path)
     try { $dimensions = "$($image.Width)x$($image.Height)" } finally { $image.Dispose() }
     if ([string]$record.dimensions -cne $dimensions) { throw "Manifest dimensions mismatch for $($record.file): $dimensions" }
     $hash = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash
     if ([string]$record.sha256 -cne $hash) { throw "Manifest SHA-256 mismatch for $($record.file)." }
-    $fixtureHashes[$hash] = $record.file
+    $fixtureHashes[$hash] = $file
   }
   $entryRoot = Join-Path $Root 'entry'
   if (Test-Path -LiteralPath $entryRoot -PathType Container) {
@@ -52,6 +62,8 @@ function Test-Assets([string]$Root) {
       }
     }
   }
+  & $PythonExe $validatorPath --root $Root --self-test
+  if ($LASTEXITCODE -ne 0) { throw 'MNIST fixture preprocessor self-test failed.' }
   $json = & $PythonExe $validatorPath --root $Root --json
   if ($LASTEXITCODE -ne 0) { throw 'MNIST fixture validator failed.' }
   $results = $json | ConvertFrom-Json
@@ -80,10 +92,19 @@ if (-not $SkipMutation) {
     New-Item -ItemType Directory -Path (Join-Path $tempRoot 'scripts') | Out-Null
     Copy-Item -LiteralPath $validatorPath -Destination (Join-Path $tempRoot 'scripts\validate-mnist-test-assets.py')
     $fixtureReadme = Join-Path $tempRoot 'test-assets\handwritten-digits\README.md'
-    [IO.File]::WriteAllText($fixtureReadme, ([IO.File]::ReadAllText($fixtureReadme).Replace('"expected": 2', '"expected": 1')))
+    $originalReadme = [IO.File]::ReadAllText($fixtureReadme)
+    [IO.File]::WriteAllText($fixtureReadme, $originalReadme.Replace('"expected": 2', '"expected": 1'))
     $rejected = $false
     try { & $PSCommandPath -SourceRoot $tempRoot -PythonExe $PythonExe -SkipMutation *> $null } catch { $rejected = $true }
     if (-not $rejected) { throw 'MNIST asset guard accepted a manifest label mutation.' }
+    $manifestMatch = [regex]::Match($originalReadme, '(?s)<!-- mnist-test-assets-manifest\s*(?<json>\[.*?\])\s*-->')
+    $records = $manifestMatch.Groups['json'].Value | ConvertFrom-Json
+    $duplicates = ConvertTo-Json -InputObject ([object[]]@($records[0], $records[0], $records[0])) -Depth 8
+    [IO.File]::WriteAllText($fixtureReadme, $originalReadme.Substring(0, $manifestMatch.Groups['json'].Index) +
+      $duplicates + $originalReadme.Substring($manifestMatch.Groups['json'].Index + $manifestMatch.Groups['json'].Length))
+    $rejected = $false
+    try { & $PSCommandPath -SourceRoot $tempRoot -PythonExe $PythonExe -SkipMutation *> $null } catch { $rejected = $true }
+    if (-not $rejected) { throw 'MNIST asset guard accepted duplicate manifest files.' }
   } finally {
     if ([IO.Directory]::Exists($tempRoot)) { [IO.Directory]::Delete($tempRoot, $true) }
   }
