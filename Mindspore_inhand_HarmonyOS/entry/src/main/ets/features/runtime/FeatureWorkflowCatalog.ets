@@ -33,6 +33,7 @@ export type AiMethodName =
   'segmentPerson' |
   'detectPose' |
   'detectGesture' |
+  'recognizeDigit' |
   'detectScene' |
   'recognizeText' |
   'translateText';
@@ -45,6 +46,7 @@ export type FeatureResultKind =
   'segmentationMask' |
   'poseOverlay' |
   'gestureLabel' |
+  'digitPredictions' |
   'sceneLabels' |
   'recognizedText' |
   'translationText';
@@ -184,6 +186,28 @@ export const featureWorkflows: Array<FeatureWorkflow> = [
     inputKinds: ['camera'],
     requiredPermissions: ['camera'],
     resultKind: 'gestureLabel',
+    liveMode: true
+  },
+  {
+    routeName: AppRoute.DIGIT_STILL.name,
+    titleKey: 'title_handwritten_digit',
+    summaryKey: 'workflow_summary_handwritten_digit_still',
+    aiMethod: 'recognizeDigit',
+    inputKinds: ['photo', 'camera'],
+    requiredPermissions: ['camera', 'media'],
+    resultKind: 'digitPredictions',
+    liveMode: false,
+    runActionKey: 'feature_runtime_digit_recognize',
+    linkedLiveRouteName: AppRoute.DIGIT_LIVE.name
+  },
+  {
+    routeName: AppRoute.DIGIT_LIVE.name,
+    titleKey: 'title_handwritten_digit',
+    summaryKey: 'workflow_summary_handwritten_digit',
+    aiMethod: 'recognizeDigit',
+    inputKinds: ['camera'],
+    requiredPermissions: ['camera'],
+    resultKind: 'digitPredictions',
     liveMode: true
   },
   {

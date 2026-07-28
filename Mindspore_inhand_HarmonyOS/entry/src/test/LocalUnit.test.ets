@@ -2665,6 +2665,43 @@ export default function localUnitTest() {
       expect(workflowForRoute(AppRoute.SCENE_LIVE.name)?.liveMode).assertTrue();
     });
 
+    it('registersHandwrittenDigitCatalogAndRuntimeContracts', 0, () => {
+      const digit = allExperienceFeatures.find((item: FeatureItem) => item.id === 'digit');
+      const staticWorkflow = workflowForRoute(AppRoute.DIGIT_STILL.name);
+      const liveWorkflow = workflowForRoute(AppRoute.DIGIT_LIVE.name);
+
+      expect(findRouteByName(AppRoute.DIGIT_STILL.name)?.page).assertEqual('pages/FeatureRuntimePage');
+      expect(findRouteByName(AppRoute.DIGIT_LIVE.name)?.page).assertEqual('pages/FeatureRuntimePage');
+      expect(digit?.titleKey).assertEqual('title_handwritten_digit');
+      expect(digit?.icon).assertEqual('digit');
+      expect(digit?.visibleByDefault).assertTrue();
+      expect(allExperienceFeatures.indexOf(digit!) > allExperienceFeatures.findIndex(
+        (item: FeatureItem) => item.id === 'image'
+      )).assertTrue();
+      expect(iconMediaName('digit')).assertEqual('feature_digit');
+      expect(staticWorkflow?.aiMethod).assertEqual('recognizeDigit');
+      expect(staticWorkflow?.inputKinds.join(',')).assertEqual('photo,camera');
+      expect(staticWorkflow?.resultKind).assertEqual('digitPredictions');
+      expect(staticWorkflow?.linkedLiveRouteName).assertEqual(AppRoute.DIGIT_LIVE.name);
+      expect(staticWorkflow?.liveMode).assertFalse();
+      expect(liveWorkflow?.aiMethod).assertEqual('recognizeDigit');
+      expect(liveWorkflow?.inputKinds.join(',')).assertEqual('camera');
+      expect(liveWorkflow?.resultKind).assertEqual('digitPredictions');
+      expect(liveWorkflow?.liveMode).assertTrue();
+      expect(hasAppStringKey('title_handwritten_digit')).assertTrue();
+      expect(hasAppStringKey('feature_runtime_digit_recognize')).assertTrue();
+      expect(hasAppStringKey('feature_runtime_digit_status_idle')).assertTrue();
+      expect(hasAppStringKey('feature_runtime_digit_status_running')).assertTrue();
+      expect(hasAppStringKey('feature_runtime_digit_done')).assertTrue();
+      expect(hasAppStringKey('feature_runtime_digit_runner_unavailable')).assertTrue();
+      expect(hasAppStringKey('feature_runtime_digit_failed')).assertTrue();
+      expect(hasAppStringKey('feature_runtime_digit_result_predicted')).assertTrue();
+      expect(hasAppStringKey('feature_runtime_digit_result_confidence')).assertTrue();
+      expect(hasAppStringKey('feature_runtime_digit_result_candidates')).assertTrue();
+      expect(hasAppStringKey('workflow_summary_handwritten_digit')).assertTrue();
+      expect(hasAppStringKey('workflow_summary_handwritten_digit_still')).assertTrue();
+    });
+
     it('keepsHiddenAndroidFeaturesRouteReady', 0, () => {
       const dance = findFeatureByRoute('/dance/DanceMainActivity');
       const poetry = findFeatureByRoute('/app/IntelligentPoetryWritingActivity');
@@ -2681,8 +2718,8 @@ export default function localUnitTest() {
       const visibleSceneCount = visibleExperienceSections
         .map((section) => section.items.filter((item: FeatureItem) => item.id === 'scene').length)
         .reduce((sum, count) => sum + count, 0);
-      expect(visibleCount).assertEqual(11);
-      expect(allExperienceFeatures.length).assertEqual(13);
+      expect(visibleCount).assertEqual(12);
+      expect(allExperienceFeatures.length).assertEqual(14);
       expect(scene === undefined).assertFalse();
       expect(scene?.visibleByDefault).assertTrue();
       expect(custom?.visibleByDefault).assertTrue();
@@ -10742,7 +10779,7 @@ export default function localUnitTest() {
     });
 
     it('usesAndroidTextRecognitionLayout', 0, () => {
-      expect(featureWorkflows.length).assertEqual(16);
+      expect(featureWorkflows.length).assertEqual(18);
       featureWorkflows.forEach((workflow: FeatureWorkflow) => {
         expect(usesAndroidTextRecognitionLayout(workflow))
           .assertEqual(workflow.routeName === AppRoute.TEXT_RECOGNITION.name);
@@ -10751,7 +10788,7 @@ export default function localUnitTest() {
     });
 
     it('usesAndroidTextTranslationLayout', 0, () => {
-      expect(featureWorkflows.length).assertEqual(16);
+      expect(featureWorkflows.length).assertEqual(18);
       featureWorkflows.forEach((workflow: FeatureWorkflow) => {
         expect(usesAndroidTextTranslationLayout(workflow))
           .assertEqual(workflow.routeName === AppRoute.TEXT_TRANSLATION.name);
@@ -10760,7 +10797,7 @@ export default function localUnitTest() {
     });
 
     it('usesAndroidPoseNetStillLayoutOnlyForPoseNetStill', 0, () => {
-      expect(featureWorkflows.length).assertEqual(16);
+      expect(featureWorkflows.length).assertEqual(18);
       featureWorkflows.forEach((workflow: FeatureWorkflow) => {
         expect(usesAndroidPoseNetStillLayout(workflow))
           .assertEqual(workflow.routeName === AppRoute.POSENET.name);
@@ -11043,7 +11080,7 @@ export default function localUnitTest() {
     });
 
     it('usesAndroidCustomModelLayoutOnlyForCustomModel', 0, () => {
-      expect(featureWorkflows.length).assertEqual(16);
+      expect(featureWorkflows.length).assertEqual(18);
       featureWorkflows.forEach((workflow: FeatureWorkflow) => {
         expect(usesAndroidCustomModelLayout(workflow))
           .assertEqual(workflow.routeName === AppRoute.CUSTOM_MODEL.name);
@@ -11164,7 +11201,7 @@ export default function localUnitTest() {
     });
 
     it('usesAndroidGestureStillLayoutOnlyForStaticGesture', 0, () => {
-      expect(featureWorkflows.length).assertEqual(16);
+      expect(featureWorkflows.length).assertEqual(18);
       featureWorkflows.forEach((workflow: FeatureWorkflow) => {
         expect(usesAndroidGestureStillLayout(workflow))
           .assertEqual(workflow.routeName === AppRoute.GESTURE_STILL.name);
@@ -11215,6 +11252,8 @@ export default function localUnitTest() {
         usesAndroidStillSegmentationLayout(workflow),
         usesAndroidStillSceneLayout(workflow),
         usesAndroidPortraitSegmentationLayout(workflow),
+        workflow?.routeName === AppRoute.DIGIT_STILL.name ||
+          workflow?.routeName === AppRoute.DIGIT_LIVE.name,
         specializedAndroidLiveLayoutForWorkflow(workflow) === 'imageClassification',
         specializedAndroidLiveLayoutForWorkflow(workflow) === 'objectDetection',
         specializedAndroidLiveLayoutForWorkflow(workflow) === 'segmentation',
@@ -11224,7 +11263,7 @@ export default function localUnitTest() {
         usesSimpleAndroidLiveLayout(workflow)
       ].filter((matches: boolean) => matches).length;
 
-      expect(featureWorkflows.length).assertEqual(16);
+      expect(featureWorkflows.length).assertEqual(18);
       featureWorkflows.forEach((workflow: FeatureWorkflow) => {
         expect(layoutMatchCount(workflow)).assertEqual(1);
       });
@@ -11238,11 +11277,12 @@ export default function localUnitTest() {
         AppRoute.PORTRAIT_SEGMENTATION.name,
         AppRoute.IMAGE_CAMERA.name,
         AppRoute.GESTURE_LIVE.name,
+        AppRoute.DIGIT_LIVE.name,
         AppRoute.SCENE_LIVE.name,
         AppRoute.OBJECT_CAMERA.name
       ];
-      expect(liveRouteNames.length).assertEqual(7);
-      expect(new Set<string>(liveRouteNames).size).assertEqual(7);
+      expect(liveRouteNames.length).assertEqual(8);
+      expect(new Set<string>(liveRouteNames).size).assertEqual(8);
 
       let emptyVisibleInputCount = 0;
       liveRouteNames.forEach((routeName: string) => {
@@ -11260,12 +11300,13 @@ export default function localUnitTest() {
           emptyVisibleInputCount += 1;
         }
       });
-      expect(emptyVisibleInputCount).assertEqual(4);
+      expect(emptyVisibleInputCount).assertEqual(5);
 
       const stillRouteNames: Array<string> = [
         AppRoute.POSENET.name,
         AppRoute.SEGMENTATION_STILL.name,
         AppRoute.GESTURE_STILL.name,
+        AppRoute.DIGIT_STILL.name,
         AppRoute.SCENE_STILL.name
       ];
       stillRouteNames.forEach((routeName: string) => {
@@ -11301,6 +11342,8 @@ export default function localUnitTest() {
         AppRoute.IMAGE_CAMERA.name,
         AppRoute.GESTURE_STILL.name,
         AppRoute.GESTURE_LIVE.name,
+        AppRoute.DIGIT_STILL.name,
+        AppRoute.DIGIT_LIVE.name,
         AppRoute.SCENE_STILL.name,
         AppRoute.SCENE_LIVE.name,
         AppRoute.TEXT_RECOGNITION.name,

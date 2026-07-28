@@ -334,6 +334,18 @@
     { "name": "workflow_summary_text_recognition", "value": "Text extraction path for selected or captured images." },
     { "name": "workflow_summary_text_recognition_android_prompt", "value": "Please click on the picture below and the camera to extract" },
     { "name": "workflow_summary_text_translation", "value": "Text translation path for user input or recognized text." },
+    { "name": "title_handwritten_digit", "value": "Handwritten Digit Recognition" },
+    { "name": "feature_runtime_digit_recognize", "value": "Recognize Digit" },
+    { "name": "feature_runtime_digit_status_idle", "value": "Select or take a handwritten digit image, then start recognition." },
+    { "name": "feature_runtime_digit_status_running", "value": "Recognizing handwritten digit…" },
+    { "name": "feature_runtime_digit_runner_unavailable", "value": "Handwritten digit recognition is unavailable in the current runtime. Reopen the page and try again." },
+    { "name": "feature_runtime_digit_done", "value": "Handwritten digit recognition completed." },
+    { "name": "feature_runtime_digit_failed", "value": "No valid handwritten digit was recognized. Try another image." },
+    { "name": "feature_runtime_digit_result_predicted", "value": "Predicted Digit" },
+    { "name": "feature_runtime_digit_result_confidence", "value": "Confidence" },
+    { "name": "feature_runtime_digit_result_candidates", "value": "Candidates" },
+    { "name": "workflow_summary_handwritten_digit", "value": "Use the live camera to recognize handwritten digits continuously." },
+    { "name": "workflow_summary_handwritten_digit_still", "value": "Select or take a handwritten digit image to recognize it." },
     { "name": "title_source", "value": "Code" }
   ]
 }

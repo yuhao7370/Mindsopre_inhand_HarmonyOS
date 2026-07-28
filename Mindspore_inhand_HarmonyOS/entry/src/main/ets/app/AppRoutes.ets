@@ -23,6 +23,8 @@ export interface AppRouteCatalog {
   readonly SCENE_LIVE: AppRouteInfo;
   readonly GESTURE_STILL: AppRouteInfo;
   readonly GESTURE_LIVE: AppRouteInfo;
+  readonly DIGIT_STILL: AppRouteInfo;
+  readonly DIGIT_LIVE: AppRouteInfo;
   readonly TEXT_RECOGNITION: AppRouteInfo;
   readonly TEXT_TRANSLATION: AppRouteInfo;
   readonly DANCE: AppRouteInfo;
@@ -50,6 +52,8 @@ export const AppRoute: AppRouteCatalog = {
   SCENE_LIVE: { name: '/hms/SenceDetectionLiveAnalyseActivity', page: 'pages/FeatureRuntimePage' } as AppRouteInfo,
   GESTURE_STILL: { name: '/hms/StillHandGestureAnalyseActivity', page: 'pages/FeatureRuntimePage' } as AppRouteInfo,
   GESTURE_LIVE: { name: '/hms/LiveHandGestureAnalyseActivity', page: 'pages/FeatureRuntimePage' } as AppRouteInfo,
+  DIGIT_STILL: { name: '/hms/StillHandwrittenDigitAnalyseActivity', page: 'pages/FeatureRuntimePage' } as AppRouteInfo,
+  DIGIT_LIVE: { name: '/hms/LiveHandwrittenDigitAnalyseActivity', page: 'pages/FeatureRuntimePage' } as AppRouteInfo,
   TEXT_RECOGNITION: { name: '/hms/TextRecognitionActivity', page: 'pages/FeatureRuntimePage' } as AppRouteInfo,
   TEXT_TRANSLATION: { name: '/hms/TextTranslationActivity', page: 'pages/FeatureRuntimePage' } as AppRouteInfo,
   DANCE: { name: '/dance/DanceMainActivity', page: dancePagePath } as AppRouteInfo,
@@ -77,6 +81,8 @@ export const appRoutes: AppRouteInfo[] = [
   AppRoute.SCENE_LIVE,
   AppRoute.GESTURE_STILL,
   AppRoute.GESTURE_LIVE,
+  AppRoute.DIGIT_STILL,
+  AppRoute.DIGIT_LIVE,
   AppRoute.TEXT_RECOGNITION,
   AppRoute.TEXT_TRANSLATION,
   AppRoute.DANCE,

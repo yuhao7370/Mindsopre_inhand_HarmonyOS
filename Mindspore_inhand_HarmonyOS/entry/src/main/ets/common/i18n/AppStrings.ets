@@ -333,6 +333,18 @@ export type AppStringKey =
   'workflow_summary_text_recognition' |
   'workflow_summary_text_recognition_android_prompt' |
   'workflow_summary_text_translation' |
+  'title_handwritten_digit' |
+  'feature_runtime_digit_recognize' |
+  'feature_runtime_digit_status_idle' |
+  'feature_runtime_digit_status_running' |
+  'feature_runtime_digit_runner_unavailable' |
+  'feature_runtime_digit_done' |
+  'feature_runtime_digit_failed' |
+  'feature_runtime_digit_result_predicted' |
+  'feature_runtime_digit_result_confidence' |
+  'feature_runtime_digit_result_candidates' |
+  'workflow_summary_handwritten_digit' |
+  'workflow_summary_handwritten_digit_still' |
   'title_source';
 
 const APP_STRING_KEYS: AppStringKey[] = [
@@ -670,6 +682,18 @@ const APP_STRING_KEYS: AppStringKey[] = [
   'workflow_summary_text_recognition',
   'workflow_summary_text_recognition_android_prompt',
   'workflow_summary_text_translation',
+  'title_handwritten_digit',
+  'feature_runtime_digit_recognize',
+  'feature_runtime_digit_status_idle',
+  'feature_runtime_digit_status_running',
+  'feature_runtime_digit_runner_unavailable',
+  'feature_runtime_digit_done',
+  'feature_runtime_digit_failed',
+  'feature_runtime_digit_result_predicted',
+  'feature_runtime_digit_result_confidence',
+  'feature_runtime_digit_result_candidates',
+  'workflow_summary_handwritten_digit',
+  'workflow_summary_handwritten_digit_still',
   'title_source'
 ];
 
@@ -1345,6 +1369,30 @@ export function appString(key: AppStringKey): ResourceStr {
       return $r('app.string.workflow_summary_text_recognition_android_prompt');
     case 'workflow_summary_text_translation':
       return $r('app.string.workflow_summary_text_translation');
+    case 'title_handwritten_digit':
+      return $r('app.string.title_handwritten_digit');
+    case 'feature_runtime_digit_recognize':
+      return $r('app.string.feature_runtime_digit_recognize');
+    case 'feature_runtime_digit_status_idle':
+      return $r('app.string.feature_runtime_digit_status_idle');
+    case 'feature_runtime_digit_status_running':
+      return $r('app.string.feature_runtime_digit_status_running');
+    case 'feature_runtime_digit_runner_unavailable':
+      return $r('app.string.feature_runtime_digit_runner_unavailable');
+    case 'feature_runtime_digit_done':
+      return $r('app.string.feature_runtime_digit_done');
+    case 'feature_runtime_digit_failed':
+      return $r('app.string.feature_runtime_digit_failed');
+    case 'feature_runtime_digit_result_predicted':
+      return $r('app.string.feature_runtime_digit_result_predicted');
+    case 'feature_runtime_digit_result_confidence':
+      return $r('app.string.feature_runtime_digit_result_confidence');
+    case 'feature_runtime_digit_result_candidates':
+      return $r('app.string.feature_runtime_digit_result_candidates');
+    case 'workflow_summary_handwritten_digit':
+      return $r('app.string.workflow_summary_handwritten_digit');
+    case 'workflow_summary_handwritten_digit_still':
+      return $r('app.string.workflow_summary_handwritten_digit_still');
     case 'title_source':
       return $r('app.string.title_source');
     case 'empty':

@@ -14,6 +14,8 @@ export function iconLabel(token: string): string {
       return 'I';
     case 'hand':
       return 'G';
+    case 'digit':
+      return '7';
     case 'dance':
       return 'D';
     case 'poetry':
@@ -79,6 +81,8 @@ export function iconMediaName(token: string): string {
       return 'feature_classification';
     case 'hand':
       return 'feature_gesture';
+    case 'digit':
+      return 'feature_digit';
     case 'dance':
       return 'feature_dance';
     case 'poetry':
@@ -128,6 +132,8 @@ export function iconMediaResource(token: string): Resource | undefined {
       return $r('app.media.feature_classification');
     case 'hand':
       return $r('app.media.feature_gesture');
+    case 'digit':
+      return $r('app.media.feature_digit');
     case 'dance':
       return $r('app.media.feature_dance');
     case 'poetry':

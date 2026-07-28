@@ -334,6 +334,18 @@
     { "name": "workflow_summary_text_recognition", "value": "文本提取路径，面向选择或拍摄的图片。" },
     { "name": "workflow_summary_text_recognition_android_prompt", "value": "请点击下方图片、相机进行提取" },
     { "name": "workflow_summary_text_translation", "value": "文本翻译路径，面向用户输入或识别后的文本。" },
+    { "name": "title_handwritten_digit", "value": "手写数字识别" },
+    { "name": "feature_runtime_digit_recognize", "value": "识别数字" },
+    { "name": "feature_runtime_digit_status_idle", "value": "选择或拍摄一张手写数字图片后开始识别。" },
+    { "name": "feature_runtime_digit_status_running", "value": "正在识别手写数字…" },
+    { "name": "feature_runtime_digit_runner_unavailable", "value": "当前运行环境暂不支持手写数字识别。请重新打开页面后再试。" },
+    { "name": "feature_runtime_digit_done", "value": "手写数字识别完成。" },
+    { "name": "feature_runtime_digit_failed", "value": "未识别到有效的手写数字。请换一张图片重试。" },
+    { "name": "feature_runtime_digit_result_predicted", "value": "预测数字" },
+    { "name": "feature_runtime_digit_result_confidence", "value": "置信度" },
+    { "name": "feature_runtime_digit_result_candidates", "value": "候选数字" },
+    { "name": "workflow_summary_handwritten_digit", "value": "使用实时相机连续识别手写数字。" },
+    { "name": "workflow_summary_handwritten_digit_still", "value": "选择或拍摄手写数字图片进行识别。" },
     { "name": "title_source", "value": "代码" }
   ]
 }
