@@ -8,6 +8,7 @@ import {
   RawfileContentReader,
   rawfileContentToArrayBuffer
 } from './MindSporeLiteModelRunner';
+import { CustomModelPackageRunner } from './CustomModelPackageRunner';
 
 export const customModelInputSize: number = 224;
 export const customModelInputChannels: number = 3;
@@ -23,6 +24,8 @@ export const customModelDefaultModelUri: string = 'rawfile://model/mobilenetv2.m
 export interface CustomModelRunResult {
   readonly ok: boolean;
   readonly output: Array<number>;
+  readonly displayText?: string;
+  readonly outputCount?: number;
   readonly executionMs: number;
 }
 
@@ -57,17 +60,27 @@ export interface CustomModelDefaultOrSelectedRunnerOptions {
 export interface CustomModelServiceOptions {
   readonly preprocessor: CustomModelInputPreprocessor;
   readonly tensorRunner: CustomModelTensorRunner;
+  readonly packageRunner?: CustomModelPackageRunner;
 }
 
 export class CustomModelService {
   private readonly runner: CustomModelMindSporeRunner;
+  private readonly packageRunner?: CustomModelPackageRunner;
 
   constructor(options: CustomModelServiceOptions) {
     this.runner = new CustomModelMindSporeRunner(options);
+    this.packageRunner = options.packageRunner;
   }
 
   async run(modelUri: string, imageUri: string): Promise<CustomModelRunResult> {
     return this.runner.run(modelUri, imageUri);
+  }
+
+  async runPackage(modelUri: string, imageUri: string, text: string): Promise<CustomModelRunResult> {
+    if (this.packageRunner === undefined) {
+      throw new Error('Custom model package runtime is unavailable.');
+    }
+    return this.packageRunner.run(modelUri, imageUri, text);
   }
 }
 

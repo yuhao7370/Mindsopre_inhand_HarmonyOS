@@ -6,6 +6,7 @@ import {
   ImageClassificationService
 } from './ImageClassificationService';
 import { CustomModelRunResult, CustomModelService } from './CustomModelService';
+import { CustomModelInputKind } from './CustomModelPackage';
 import {
   ObjectDetection,
   ObjectDetectionRunResult,
@@ -82,6 +83,7 @@ export interface AiRunInputs {
   readonly styleTransferModelUri?: string;
   readonly modelUri?: string;
   readonly text?: string;
+  readonly customModelInputKind?: CustomModelInputKind;
 }
 
 export type AiRunData =
@@ -747,7 +749,7 @@ export class DefaultAiService {
   private async runCustomModel(inputs: AiRunInputs): Promise<AiRunResult> {
     const selectedModelUri = inputs.modelUri ?? '';
     const imageUri = inputs.imageUri ?? '';
-    if (imageUri.length === 0) {
+    if (inputs.customModelInputKind === undefined && imageUri.length === 0) {
       return {
         ok: false,
         code: 'MISSING_INPUT',
@@ -765,8 +767,32 @@ export class DefaultAiService {
         detailText: ''
       };
     }
+    if (inputs.customModelInputKind === 'text' && (inputs.text ?? '').trim().length === 0) {
+      return {
+        ok: false,
+        code: 'MISSING_INPUT',
+        aiMethod: 'runCustomModel',
+        messageKey: 'feature_runtime_missing_input',
+        detailText: ''
+      };
+    }
+    if (inputs.customModelInputKind !== 'text' && imageUri.length === 0) {
+      return {
+        ok: false,
+        code: 'MISSING_INPUT',
+        aiMethod: 'runCustomModel',
+        messageKey: 'feature_runtime_custom_model_image_required',
+        detailText: ''
+      };
+    }
     if (this.customModelService !== undefined) {
-      return this.runCustomModelWithService(this.customModelService, selectedModelUri, imageUri);
+      return this.runCustomModelWithService(
+        this.customModelService,
+        selectedModelUri,
+        imageUri,
+        inputs.text ?? '',
+        inputs.customModelInputKind
+      );
     }
     return this.pendingAdapterResult('runCustomModel');
   }
@@ -774,10 +800,14 @@ export class DefaultAiService {
   private async runCustomModelWithService(
     service: CustomModelService,
     modelUri: string,
-    imageUri: string
+    imageUri: string,
+    text: string,
+    inputKind?: CustomModelInputKind
   ): Promise<AiRunResult> {
     try {
-      const result = await service.run(modelUri, imageUri);
+      const result = inputKind === undefined ?
+        await service.run(modelUri, imageUri) :
+        await service.runPackage(modelUri, imageUri, text);
       if (!result.ok) {
         return this.customModelFailedResult(modelUri, imageUri);
       }
@@ -791,7 +821,7 @@ export class DefaultAiService {
           kind: 'customModel',
           imageUri: imageUri,
           modelUri: modelUri,
-          outputCount: result.output.length,
+          outputCount: result.outputCount ?? result.output.length,
           executionMs: result.executionMs
         }
       };
@@ -811,6 +841,9 @@ export class DefaultAiService {
   }
 
   private customModelExecutionSummary(result: CustomModelRunResult): string {
+    if (result.displayText !== undefined) {
+      return result.displayText;
+    }
     const lines: Array<string> = [
       'Model execution completed!',
       '',
