@@ -19,6 +19,7 @@ EXPECTED = {
     "custom_channel_mean.tflite": "99A725E615C3B6B64C015DCE2EFE5796DCA65DDA22DD6B5B1753F500447A9B7A",
     "custom_channel_mean_inverted.tflite": "AFC464560DFE364E68B7D83544FB45E141B5A471813166FA7FCEEC37166D47AD",
     "custom_channel_mean_non_finite.tflite": "C722CA178EBBAB5AD6ECDF4327B46FFD72E009EE62FC46E858C4D41DA03DA52D",
+    "custom_text_classifier.tflite": "24F70321EE950765DEC2AEEDD722989D27D878646484A6C2F3A34F911417E991",
 }
 
 
@@ -57,6 +58,15 @@ class ChannelMeanNonFinite(tf.Module):
         }
 
 
+class TextClassifier(tf.Module):
+    @tf.function(input_signature=[tf.TensorSpec([1, 8], tf.int32, name="input_ids")])
+    @tf.autograph.experimental.do_not_convert
+    def __call__(self, input_ids):
+        total = tf.reduce_sum(tf.cast(input_ids, tf.float32), axis=1)
+        centered = (total - tf.constant(30.5, tf.float32)) * tf.constant(0.5, tf.float32)
+        return {"scores": tf.stack([0.5 - centered, 0.5 + centered], axis=1)}
+
+
 def convert(module: tf.Module) -> bytes:
     concrete = module.__call__.get_concrete_function()
     converter = tf.lite.TFLiteConverter.from_concrete_functions([concrete], module)
@@ -70,6 +80,7 @@ def write_locked(output_dir: Path, name: str, content: bytes) -> None:
         raise RuntimeError(f"{name} generated SHA-256 {digest}; expected {EXPECTED[name]}")
     output_dir.mkdir(parents=True, exist_ok=True)
     (output_dir / name).write_bytes(content)
+    print(f"{name}: {digest}")
 
 
 def main() -> None:
@@ -89,6 +100,7 @@ def main() -> None:
         "custom_channel_mean_non_finite.tflite",
         convert(ChannelMeanNonFinite()),
     )
+    write_locked(args.output_dir, "custom_text_classifier.tflite", convert(TextClassifier()))
 
 
 if __name__ == "__main__":

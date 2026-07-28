@@ -21,6 +21,7 @@ export interface PickResult {
 }
 
 export const modelFileSuffixFilters: Array<string> = ['.ms'];
+export const modelPackageSuffixFilters: Array<string> = ['.zip'];
 
 export function isApi24EmulatorCameraPickerUnsupported(hardwareModel: string): boolean {
   const normalized = hardwareModel.toUpperCase();
@@ -117,8 +118,16 @@ export class PickerService {
   }
 
   async pickModelFile(): Promise<PickResult> {
+    return await this.pickDocument(modelFileSuffixFilters);
+  }
+
+  async pickModelPackage(): Promise<PickResult> {
+    return await this.pickDocument(modelPackageSuffixFilters);
+  }
+
+  private async pickDocument(suffixFilters: Array<string>): Promise<PickResult> {
     const option = new picker.DocumentSelectOptions();
-    option.fileSuffixFilters = modelFileSuffixFilters;
+    option.fileSuffixFilters = suffixFilters;
     option.maxSelectNumber = 1;
     try {
       const result = await new picker.DocumentViewPicker(this.context).select(option);

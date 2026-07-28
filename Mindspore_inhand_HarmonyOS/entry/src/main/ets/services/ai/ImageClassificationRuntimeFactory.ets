@@ -11,6 +11,7 @@ import {
   CustomModelTensorRunner
 } from './CustomModelService';
 import { HarmonyCustomModelInputPreprocessor } from './HarmonyCustomModelInputPreprocessor';
+import { CustomModelPackageRunner } from './CustomModelPackageRunner';
 import { HarmonyImageClassificationInputPreprocessor } from './HarmonyImageInputPreprocessor';
 import { HarmonyObjectDetectionInputPreprocessor } from './HarmonyObjectDetectionInputPreprocessor';
 import { HarmonyStyleTransferInputPreprocessor } from './HarmonyStyleTransferInputPreprocessor';
@@ -411,15 +412,17 @@ export async function createHarmonyImageClassificationService(
 export function createHarmonyCustomModelService(
   options: HarmonyImageClassificationRuntimeOptions
 ): CustomModelService {
+  const harmonyPreprocessor = new HarmonyCustomModelInputPreprocessor();
   return new CustomModelService({
-    preprocessor: options.customModelPreprocessor ?? new HarmonyCustomModelInputPreprocessor(),
+    preprocessor: options.customModelPreprocessor ?? harmonyPreprocessor,
     tensorRunner: options.customModelTensorRunner ?? new CustomModelDefaultOrSelectedRunner({
       defaultModelRunner: new CustomModelRawfileRunner({
         resourceManager: options.resourceManager,
         modelRawfilePath: imageClassificationModelRawfilePath
       }),
       selectedModelRunner: new CustomModelSelectedFileRunner()
-    })
+    }),
+    packageRunner: new CustomModelPackageRunner(harmonyPreprocessor)
   });
 }
 

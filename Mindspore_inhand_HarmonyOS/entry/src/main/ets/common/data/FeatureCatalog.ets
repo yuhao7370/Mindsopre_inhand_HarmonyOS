@@ -52,11 +52,11 @@ export const experienceSections: FeatureSection[] = [
     titleKey: 'tab_experience_one',
     groupTitleKey: 'experience_group_advanced',
     items: [
-      { id: 'scene', title: 'Scene Detection', titleKey: 'title_scene_detection', icon: 'scene', routeName: AppRoute.SCENE_STILL.name, visibleByDefault: false },
+      { id: 'scene', title: 'Scene Detection', titleKey: 'title_scene_detection', icon: 'scene', routeName: AppRoute.SCENE_STILL.name, visibleByDefault: true },
       { id: 'objectPhoto', title: 'Object Detection(Photo)', titleKey: 'title_object', icon: 'photo', routeName: AppRoute.OBJECT_PHOTO.name, visibleByDefault: true },
       { id: 'objectCamera', title: 'Object Detection(Real-time)', titleKey: 'title_object_camera', icon: 'camera', routeName: AppRoute.OBJECT_CAMERA.name, visibleByDefault: true },
       { id: 'style', title: 'Style Transfer', titleKey: 'title_style_transfer', icon: 'style', routeName: AppRoute.STYLE_TRANSFER.name, visibleByDefault: true },
-      { id: 'custom', title: 'Custom Model', titleKey: 'title_custom_model', icon: 'model', routeName: AppRoute.CUSTOM_MODEL.name, visibleByDefault: false }
+      { id: 'custom', title: 'Custom Model', titleKey: 'title_custom_model', icon: 'model', routeName: AppRoute.CUSTOM_MODEL.name, visibleByDefault: true }
     ]
   },
   {

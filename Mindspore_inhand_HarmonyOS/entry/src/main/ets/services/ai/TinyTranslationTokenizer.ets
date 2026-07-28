@@ -51,6 +51,11 @@ export interface TranslationTokenizerContract {
   readonly unknownId: number;
 }
 
+export interface PortableTokenizerEncoding {
+  readonly inputIds: Array<number>;
+  readonly attentionMask: Array<number>;
+}
+
 interface EncodedPieces {
   readonly normalized: string;
   readonly pieces: Array<string>;
@@ -341,6 +346,49 @@ export function resetTranslationTokenizerForTests(): void {
   configuredRuntime = undefined;
   configuredSourceRuntime = undefined;
   configuredTargetRuntime = undefined;
+}
+
+export function encodePortableTokenizerText(
+  runtimeTable: string,
+  text: string,
+  maxTokens: number,
+  padId: number,
+  bosId: number,
+  eosId: number
+): PortableTokenizerEncoding {
+  if (maxTokens < 2) {
+    throw new Error('Tokenizer input requires room for BOS and EOS.');
+  }
+  const pieceIds = parseRuntimeTableV2ForTests(runtimeTable, true).encode(text).pieceIds;
+  const inputIds: Array<number> = [bosId];
+  const attentionMask: Array<number> = [1];
+  const pieceLimit = maxTokens - 2;
+  for (let index = 0; index < pieceIds.length && index < pieceLimit; index++) {
+    inputIds.push(pieceIds[index]);
+    attentionMask.push(1);
+  }
+  inputIds.push(eosId);
+  attentionMask.push(1);
+  while (inputIds.length < maxTokens) {
+    inputIds.push(padId);
+    attentionMask.push(0);
+  }
+  return { inputIds: inputIds, attentionMask: attentionMask };
+}
+
+export function decodePortableTokenizerText(
+  runtimeTable: string,
+  ids: Array<number>,
+  padId: number,
+  bosId: number,
+  eosId: number
+): string {
+  const filtered: Array<number> = [];
+  for (let index = 0; index < ids.length; index++) {
+    if (ids[index] === eosId) break;
+    if (ids[index] !== padId && ids[index] !== bosId) filtered.push(ids[index]);
+  }
+  return parseRuntimeTableV2ForTests(runtimeTable, false).decode(filtered);
 }
 
 export function encodeTranslationTextForDirection(

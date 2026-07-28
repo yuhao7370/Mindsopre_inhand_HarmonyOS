@@ -375,7 +375,9 @@ import {
   runtimeInputKindsForWorkflow,
   visibleInputKindsForWorkflow,
   specializedAndroidLiveLayoutForWorkflow,
+  customModelCanExecute,
   customModelExecutePreflightToastKey,
+  customModelVisibleInputs,
   customModelModelCacheToastKey,
   customModelOutputFallbackKey,
   objectPhotoFollowupInputKindAfterModelCacheSuccess,
@@ -2562,7 +2564,7 @@ export default function localUnitTest() {
       expect(AppRoute.SCENE_LIVE.name).assertEqual('/hms/SenceDetectionLiveAnalyseActivity');
       expect(findRouteByName(AppRoute.SCENE_STILL.name)?.page).assertEqual('pages/FeatureRuntimePage');
       expect(findRouteByName(AppRoute.SCENE_LIVE.name)?.page).assertEqual('pages/FeatureRuntimePage');
-      expect(findFeatureByRoute(AppRoute.SCENE_STILL.name)?.visibleByDefault).assertFalse();
+      expect(findFeatureByRoute(AppRoute.SCENE_STILL.name)?.visibleByDefault).assertTrue();
       expect(findFeatureByRoute(AppRoute.SCENE_LIVE.name) === undefined).assertTrue();
       expect(workflowForRoute(AppRoute.SCENE_STILL.name)?.aiMethod).assertEqual('detectScene');
       expect(workflowForRoute(AppRoute.SCENE_LIVE.name)?.liveMode).assertTrue();
@@ -2584,12 +2586,12 @@ export default function localUnitTest() {
       const visibleSceneCount = visibleExperienceSections
         .map((section) => section.items.filter((item: FeatureItem) => item.id === 'scene').length)
         .reduce((sum, count) => sum + count, 0);
-      expect(visibleCount).assertEqual(9);
+      expect(visibleCount).assertEqual(11);
       expect(allExperienceFeatures.length).assertEqual(13);
       expect(scene === undefined).assertFalse();
-      expect(scene?.visibleByDefault).assertFalse();
-      expect(custom?.visibleByDefault).assertFalse();
-      expect(visibleSceneCount).assertEqual(0);
+      expect(scene?.visibleByDefault).assertTrue();
+      expect(custom?.visibleByDefault).assertTrue();
+      expect(visibleSceneCount).assertEqual(1);
     });
 
     it('mapsExperienceFeaturesToGeneratedMedia', 0, () => {
@@ -2919,12 +2921,12 @@ export default function localUnitTest() {
       expect(portraitFeature?.routeName).assertEqual(AppRoute.PORTRAIT_SEGMENTATION.name);
     });
 
-    it('keepsSceneDetectionEntryRouteReadyButHiddenByDefault', 0, () => {
+    it('showsSceneDetectionEntryWithItsReadyRoute', 0, () => {
       const sceneFeature = findFeatureByRoute(AppRoute.SCENE_STILL.name);
       expect(sceneFeature?.id).assertEqual('scene');
       expect(sceneFeature?.titleKey).assertEqual('title_scene_detection');
       expect(sceneFeature?.routeName).assertEqual(AppRoute.SCENE_STILL.name);
-      expect(sceneFeature?.visibleByDefault).assertFalse();
+      expect(sceneFeature?.visibleByDefault).assertTrue();
 
       const advancedVisionSection = visibleExperienceSections.find((section: FeatureSection) => {
         return section.id === 'advanced-vision';
@@ -2932,7 +2934,7 @@ export default function localUnitTest() {
       const visibleSceneFeature = advancedVisionSection?.items.find((item: FeatureItem) => {
         return item.id === 'scene';
       });
-      expect(visibleSceneFeature).assertUndefined();
+      expect(visibleSceneFeature?.routeName).assertEqual(AppRoute.SCENE_STILL.name);
     });
 
     it('usesAndroidNoticeDialogTreatmentForCollegeSummary', 0, () => {
@@ -10816,6 +10818,15 @@ export default function localUnitTest() {
       expect(customModelExecutePreflightToastKey(customModel, true, true, false)).assertUndefined();
       expect(customModelExecutePreflightToastKey(styleTransfer, false, false, true)).assertUndefined();
       expect(customModelExecutePreflightToastKey(undefined, false, false, true)).assertUndefined();
+    });
+
+    it('adaptsCustomModelInputsToTheValidatedPackageContract', 0, () => {
+      expect(customModelVisibleInputs('image').join(',')).assertEqual('photo,camera');
+      expect(customModelVisibleInputs('text').join(',')).assertEqual('text');
+      expect(customModelCanExecute('image', '/cache/model.ms', '/cache/input.jpg', '')).assertTrue();
+      expect(customModelCanExecute('text', '/cache/model.ms', '', 'hello')).assertTrue();
+      expect(customModelCanExecute('text', '/cache/model.ms', '', '   ')).assertFalse();
+      expect(customModelCanExecute(undefined, '/cache/model.ms', '/cache/input.jpg', 'hello')).assertFalse();
     });
 
     it('resolvesCustomModelOutputFallbackInVisiblePriorityOrder', 0, () => {
