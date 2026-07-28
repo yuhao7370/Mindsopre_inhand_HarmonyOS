@@ -6,6 +6,8 @@ export enum MainTab {
   ME = 2
 }
 
+export const mainTabStorageKey: string = 'mainSelectedTab';
+
 export interface TabItem {
   readonly id: MainTab;
   readonly title: string;

@@ -5,7 +5,7 @@ import { fileIo } from '@kit.CoreFileKit';
 import { mindSporeLite } from '@kit.MindSporeLiteKit';
 import request from '@ohos.request';
 import { AppRoute, findRouteByName } from '../main/ets/app/AppRoutes';
-import { MainTab, mainTabs } from '../main/ets/app/AppState';
+import { MainTab, mainTabs, mainTabStorageKey } from '../main/ets/app/AppState';
 import { hasAppStringKey } from '../main/ets/common/i18n/AppStrings';
 import { webPageFailedAfterRequest } from '../main/ets/features/web/WebPageLoadState';
 import { iconLabel, iconMediaName } from '../main/ets/common/icons/IconSymbols';
@@ -2823,6 +2823,11 @@ export default function localUnitTest() {
       expect(mainTabs[2].id).assertEqual(MainTab.ME);
       expect(mainTabs[1].selectedIconMediaName).assertEqual('college_checked_icon');
       expect(mainTabs[1].unselectedIconMediaName).assertEqual('college_uncheck');
+    });
+
+    it('keepsCollegeAsTheRestoredMainTabKey', 0, () => {
+      expect(mainTabStorageKey).assertEqual('mainSelectedTab');
+      expect(mainTabs[MainTab.COLLEGE].id).assertEqual(MainTab.COLLEGE);
     });
 
     it('mapsSemanticIconTokensToCompactLabels', 0, () => {

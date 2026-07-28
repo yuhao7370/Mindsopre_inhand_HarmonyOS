@@ -1,4 +1,4 @@
-import { MainTab, mainTabs } from '../app/AppState';
+import { MainTab, mainTabs, mainTabStorageKey } from '../app/AppState';
 import { BottomTabBar } from '../common/components/BottomTabBar';
 import { AppColor } from '../common/theme/AppTheme';
 import { CollegePage } from './CollegePage';
@@ -7,7 +7,7 @@ import { MePage } from './MePage';
 
 @Component
 export struct MainPage {
-  @State selectedTab: MainTab = MainTab.EXPERIENCE;
+  @StorageLink(mainTabStorageKey) selectedTab: MainTab = MainTab.EXPERIENCE;
 
   build() {
     Column() {
