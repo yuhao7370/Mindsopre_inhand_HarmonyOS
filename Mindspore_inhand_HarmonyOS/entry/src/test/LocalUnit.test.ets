@@ -275,6 +275,8 @@ import {
   createHarmonyHandwrittenDigitService,
   createHarmonyDefaultAiService,
   createRuntimeAiServiceForWorkflow,
+  handwrittenDigitInputTensorCompatible,
+  handwrittenDigitLogitsFromOutputTensor,
   HarmonyImageClassificationRuntimeOptions,
   imageCategoryLabelRawfilePathForLocale,
   objectCategoryLabelRawfilePathForLocale,
@@ -294,6 +296,8 @@ import {
 } from '../main/ets/features/runtime/RuntimePixelMapOwner';
 import {
   floatScoresFromOutputBuffer,
+  MindSporeLiteInputTensorContract,
+  mindSporeLiteInputTensorMatchesContract,
   mindSporeLiteCpuContext,
   mindSporeLiteCpuThreadNum,
   RawfileContentReader,
@@ -347,7 +351,9 @@ import {
 import { image } from '@kit.ImageKit';
 import {
   decodingOptionsWithImageRotation,
+  imageExifOrientationTransformFromOrientationProperty,
   imageRotationDegreesFromOrientationProperty,
+  orientedImageSize,
   rotatedImageSize
 } from '../main/ets/services/ai/ImageDecodeOrientation';
 import {
@@ -831,6 +837,39 @@ class FixedTensorRunner implements ImageClassificationTensorRunner {
     this.seenByteLengths.push(inputBuffer.byteLength);
     return this.scores;
   }
+}
+
+class FixedMindSporeTensor implements mindSporeLite.MSTensor {
+  name: string = 'input';
+  shape: Array<number>;
+  elementNum: number;
+  dataSize: number;
+  dtype: mindSporeLite.DataType;
+  format: mindSporeLite.Format = mindSporeLite.Format.NCHW;
+  private readonly data: ArrayBuffer;
+
+  constructor(shape: Array<number>, dtype: mindSporeLite.DataType, elementNum: number, dataSize: number,
+    data?: ArrayBuffer) {
+    this.shape = shape;
+    this.dtype = dtype;
+    this.elementNum = elementNum;
+    this.dataSize = dataSize;
+    this.data = data ?? new ArrayBuffer(dataSize);
+  }
+
+  getData(): ArrayBuffer {
+    return this.data;
+  }
+
+  setData(_inputArray: ArrayBuffer): void {
+  }
+}
+
+class FixedMindSporeInputTensorContract implements MindSporeLiteInputTensorContract {
+  readonly dtype: mindSporeLite.DataType = mindSporeLite.DataType.NUMBER_TYPE_FLOAT32;
+  readonly shape: Array<number> = [1, 1, 28, 28];
+  readonly elementNum: number = 784;
+  readonly dataSize: number = 3136;
 }
 
 class FixedHandwrittenDigitPreprocessor implements HandwrittenDigitImagePreprocessor {
@@ -8094,6 +8133,44 @@ export default function localUnitTest() {
       expect(scores[1].toFixed(6)).assertEqual('0.900000');
     });
 
+    it('acceptsOnlyTheHandwrittenDigitModelInputTensorContract', 0, () => {
+      const valid = new FixedMindSporeTensor(
+        [1, 1, 28, 28], mindSporeLite.DataType.NUMBER_TYPE_FLOAT32, 784, 3136
+      );
+      expect(handwrittenDigitInputTensorCompatible(valid)).assertTrue();
+      expect(mindSporeLiteInputTensorMatchesContract(valid, new FixedMindSporeInputTensorContract())).assertTrue();
+
+      expect(handwrittenDigitInputTensorCompatible(new FixedMindSporeTensor(
+        [1, 1, 28, 28], mindSporeLite.DataType.NUMBER_TYPE_INT8, 784, 3136
+      ))).assertFalse();
+      expect(handwrittenDigitInputTensorCompatible(new FixedMindSporeTensor(
+        [1, 28, 28], mindSporeLite.DataType.NUMBER_TYPE_FLOAT32, 784, 3136
+      ))).assertFalse();
+      expect(handwrittenDigitInputTensorCompatible(new FixedMindSporeTensor(
+        [1, 1, 14, 56], mindSporeLite.DataType.NUMBER_TYPE_FLOAT32, 784, 3136
+      ))).assertFalse();
+      expect(handwrittenDigitInputTensorCompatible(new FixedMindSporeTensor(
+        [1, 1, 28, 28], mindSporeLite.DataType.NUMBER_TYPE_FLOAT32, 783, 3136
+      ))).assertFalse();
+      expect(handwrittenDigitInputTensorCompatible(new FixedMindSporeTensor(
+        [1, 1, 28, 28], mindSporeLite.DataType.NUMBER_TYPE_FLOAT32, 784, 3132
+      ))).assertFalse();
+    });
+
+    it('rejectsNonFiniteHandwrittenDigitModelLogits', 0, () => {
+      const logits = new Float32Array([0, 0, 0, 0, Number.NaN, 0, 0, 0, 0, 0]);
+      const output = new FixedMindSporeTensor(
+        [1, 10], mindSporeLite.DataType.NUMBER_TYPE_FLOAT32, 10, 40, logits.buffer as ArrayBuffer
+      );
+
+      expect(handwrittenDigitLogitsFromOutputTensor(output).length).assertEqual(0);
+      const infinityLogits = new Float32Array([0, 0, 0, 0, 0, Number.POSITIVE_INFINITY, 0, 0, 0, 0]);
+      const infinityOutput = new FixedMindSporeTensor(
+        [1, 10], mindSporeLite.DataType.NUMBER_TYPE_FLOAT32, 10, 40, infinityLogits.buffer as ArrayBuffer
+      );
+      expect(handwrittenDigitLogitsFromOutputTensor(infinityOutput).length).assertEqual(0);
+    });
+
     it('definesAndroidImageClassificationPreprocessContract', 0, () => {
       expect(imageClassificationResizedSize).assertEqual(256);
       expect(imageClassificationCropSize).assertEqual(224);
@@ -8135,6 +8212,41 @@ export default function localUnitTest() {
       expect(imageRotationDegreesFromOrientationProperty('8')).assertEqual(270);
       expect(imageRotationDegreesFromOrientationProperty('Top-left')).assertEqual(0);
       expect(imageRotationDegreesFromOrientationProperty('Unknown Value 9')).assertEqual(0);
+    });
+
+    it('mapsEveryExifOrientationToItsRotationAndMirrorTransform', 0, () => {
+      const topLeft = imageExifOrientationTransformFromOrientationProperty('1');
+      const topRight = imageExifOrientationTransformFromOrientationProperty('2');
+      const bottomRight = imageExifOrientationTransformFromOrientationProperty('3');
+      const bottomLeft = imageExifOrientationTransformFromOrientationProperty('4');
+      const leftTop = imageExifOrientationTransformFromOrientationProperty('5');
+      const rightTop = imageExifOrientationTransformFromOrientationProperty('6');
+      const rightBottom = imageExifOrientationTransformFromOrientationProperty('7');
+      const leftBottom = imageExifOrientationTransformFromOrientationProperty('8');
+
+      expect(topLeft.rotationDegrees).assertEqual(0);
+      expect(topRight.flipHorizontal).assertTrue();
+      expect(bottomRight.rotationDegrees).assertEqual(180);
+      expect(bottomLeft.flipVertical).assertTrue();
+      expect(leftTop.flipHorizontal).assertTrue();
+      expect(leftTop.rotationDegrees).assertEqual(270);
+      expect(rightTop.rotationDegrees).assertEqual(90);
+      expect(rightBottom.flipHorizontal).assertTrue();
+      expect(rightBottom.rotationDegrees).assertEqual(90);
+      expect(leftBottom.rotationDegrees).assertEqual(270);
+      expect(imageExifOrientationTransformFromOrientationProperty('Right-bottom').rotationDegrees).assertEqual(90);
+    });
+
+    it('swapsOrientedImageSizeForEveryQuarterTurnExifOrientation', 0, () => {
+      expect(orientedImageSize(640, 480, '1').width).assertEqual(640);
+      expect(orientedImageSize(640, 480, '5').width).assertEqual(480);
+      expect(orientedImageSize(640, 480, '5').height).assertEqual(640);
+      expect(orientedImageSize(640, 480, '6').width).assertEqual(480);
+      expect(orientedImageSize(640, 480, '6').height).assertEqual(640);
+      expect(orientedImageSize(640, 480, '7').width).assertEqual(480);
+      expect(orientedImageSize(640, 480, '7').height).assertEqual(640);
+      expect(orientedImageSize(640, 480, '8').width).assertEqual(480);
+      expect(orientedImageSize(640, 480, '8').height).assertEqual(640);
     });
 
     it('addsExifRotationToHarmonyDecodeOptions', 0, () => {

@@ -51,7 +51,9 @@ import {
 } from './ObjectDetectionService';
 import {
   imageClassificationScoresFromOutputTensor,
+  MindSporeLiteInputTensorContract,
   MindSporeLiteModelRunner,
+  mindSporeLiteInputTensorMatchesContract,
   RawfileContentReader
 } from './MindSporeLiteModelRunner';
 import {
@@ -420,12 +422,20 @@ export async function createHarmonyImageClassificationService(
   });
 }
 
+class HandwrittenDigitInputTensorContract implements MindSporeLiteInputTensorContract {
+  readonly dtype: mindSporeLite.DataType = mindSporeLite.DataType.NUMBER_TYPE_FLOAT32;
+  readonly shape: Array<number> = [1, 1, 28, 28];
+  readonly elementNum: number = 784;
+  readonly dataSize: number = 3136;
+}
+
 export function createHarmonyHandwrittenDigitService(
   options: HarmonyImageClassificationRuntimeOptions
 ): HandwrittenDigitService {
   const tensorRunner = options.handwrittenDigitTensorRunner ?? new MindSporeLiteModelRunner({
     resourceManager: options.resourceManager,
     modelRawfilePath: handwrittenDigitModelRawfilePath,
+    inputTensorValidator: handwrittenDigitInputTensorCompatible,
     outputTensorDecoder: handwrittenDigitLogitsFromOutputTensor
   });
   return new HandwrittenDigitService({
@@ -434,7 +444,11 @@ export function createHarmonyHandwrittenDigitService(
   });
 }
 
-function handwrittenDigitLogitsFromOutputTensor(output: mindSporeLite.MSTensor): Array<number> {
+export function handwrittenDigitInputTensorCompatible(input: mindSporeLite.MSTensor): boolean {
+  return mindSporeLiteInputTensorMatchesContract(input, new HandwrittenDigitInputTensorContract());
+}
+
+export function handwrittenDigitLogitsFromOutputTensor(output: mindSporeLite.MSTensor): Array<number> {
   if (output.dtype !== mindSporeLite.DataType.NUMBER_TYPE_FLOAT32 || output.elementNum !== 10 ||
     output.dataSize !== 10 * Float32Array.BYTES_PER_ELEMENT || output.shape.length !== 2 ||
     output.shape[0] !== 1 || output.shape[1] !== 10) {
@@ -446,6 +460,9 @@ function handwrittenDigitLogitsFromOutputTensor(output: mindSporeLite.MSTensor):
   }
   const decoded: Array<number> = [];
   for (let index = 0; index < logits.length; index++) {
+    if (!Number.isFinite(logits[index])) {
+      return [];
+    }
     decoded.push(logits[index]);
   }
   return decoded;

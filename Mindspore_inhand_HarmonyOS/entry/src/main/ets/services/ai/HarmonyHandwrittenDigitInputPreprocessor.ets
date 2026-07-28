@@ -21,15 +21,9 @@ export class HarmonyHandwrittenDigitInputPreprocessor implements HandwrittenDigi
       await pixelMap.readPixelsToBuffer(rgbaBuffer);
       return handwrittenDigitInputFromRgba(new Uint8Array(rgbaBuffer), imageInfo.size.width, imageInfo.size.height);
     } finally {
-      if (pixelMap !== undefined) {
-        await pixelMap.release();
-      }
-      if (imageSource !== undefined) {
-        await imageSource.release();
-      }
-      if (imageFile !== undefined) {
-        await closeHandwrittenDigitImageFile(imageFile);
-      }
+      await releaseHandwrittenDigitPixelMap(pixelMap);
+      await releaseHandwrittenDigitImageSource(imageSource);
+      await closeHandwrittenDigitImageFile(imageFile);
     }
   }
 }
@@ -48,7 +42,30 @@ async function openHandwrittenDigitImageFile(imageUri: string): Promise<fileIo.F
   }
 }
 
-async function closeHandwrittenDigitImageFile(imageFile: fileIo.File): Promise<void> {
+async function releaseHandwrittenDigitPixelMap(pixelMap?: image.PixelMap): Promise<void> {
+  if (pixelMap === undefined) {
+    return;
+  }
+  try {
+    await pixelMap.release();
+  } catch (_) {
+  }
+}
+
+async function releaseHandwrittenDigitImageSource(imageSource?: image.ImageSource): Promise<void> {
+  if (imageSource === undefined) {
+    return;
+  }
+  try {
+    await imageSource.release();
+  } catch (_) {
+  }
+}
+
+async function closeHandwrittenDigitImageFile(imageFile?: fileIo.File): Promise<void> {
+  if (imageFile === undefined) {
+    return;
+  }
   try {
     await fileIo.close(imageFile);
   } catch (_) {

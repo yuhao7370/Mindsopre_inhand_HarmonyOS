@@ -9,6 +9,14 @@ export interface MindSporeLiteModelRunnerOptions {
   readonly resourceManager: RawfileContentReader;
   readonly modelRawfilePath: string;
   readonly outputTensorDecoder?: (output: mindSporeLite.MSTensor) => Array<number>;
+  readonly inputTensorValidator?: (input: mindSporeLite.MSTensor) => boolean;
+}
+
+export interface MindSporeLiteInputTensorContract {
+  readonly dtype: mindSporeLite.DataType;
+  readonly shape: Array<number>;
+  readonly elementNum: number;
+  readonly dataSize: number;
 }
 
 export const mindSporeLiteCpuThreadNum: number = 2;
@@ -27,18 +35,23 @@ export class MindSporeLiteModelRunner {
   private readonly resourceManager: RawfileContentReader;
   private readonly modelRawfilePath: string;
   private readonly outputTensorDecoder?: (output: mindSporeLite.MSTensor) => Array<number>;
+  private readonly inputTensorValidator?: (input: mindSporeLite.MSTensor) => boolean;
   private cachedModel?: mindSporeLite.Model;
 
   constructor(options: MindSporeLiteModelRunnerOptions) {
     this.resourceManager = options.resourceManager;
     this.modelRawfilePath = options.modelRawfilePath;
     this.outputTensorDecoder = options.outputTensorDecoder;
+    this.inputTensorValidator = options.inputTensorValidator;
   }
 
   async predictScoresFromInput(inputBuffer: ArrayBuffer): Promise<Array<number>> {
     const model = await this.loadModel();
     const inputs = model.getInputs();
     if (inputs.length === 0) {
+      return [];
+    }
+    if (this.inputTensorValidator !== undefined && !this.inputTensorValidator(inputs[0])) {
       return [];
     }
 
@@ -65,6 +78,22 @@ export class MindSporeLiteModelRunner {
     this.cachedModel = model;
     return model;
   }
+}
+
+export function mindSporeLiteInputTensorMatchesContract(
+  input: mindSporeLite.MSTensor,
+  contract: MindSporeLiteInputTensorContract
+): boolean {
+  if (input.dtype !== contract.dtype || input.elementNum !== contract.elementNum ||
+    input.dataSize !== contract.dataSize || input.shape.length !== contract.shape.length) {
+    return false;
+  }
+  for (let index = 0; index < contract.shape.length; index++) {
+    if (input.shape[index] !== contract.shape[index]) {
+      return false;
+    }
+  }
+  return true;
 }
 
 export function rawfileContentToArrayBuffer(content: Uint8Array): ArrayBuffer {

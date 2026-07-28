@@ -5,20 +5,42 @@ export interface RotatedImageSize {
   readonly height: number;
 }
 
+export interface ImageExifOrientationTransform {
+  readonly rotationDegrees: number;
+  readonly flipHorizontal: boolean;
+  readonly flipVertical: boolean;
+}
+
 export function imageRotationDegreesFromOrientationProperty(orientation: string): number {
+  return imageExifOrientationTransformFromOrientationProperty(orientation).rotationDegrees;
+}
+
+export function imageExifOrientationTransformFromOrientationProperty(orientation: string): ImageExifOrientationTransform {
   const normalized = orientation.trim().toLowerCase();
   switch (normalized) {
+    case '2':
+    case 'top-right':
+      return { rotationDegrees: 0, flipHorizontal: true, flipVertical: false };
     case '6':
     case 'right-top':
-      return 90;
+      return { rotationDegrees: 90, flipHorizontal: false, flipVertical: false };
     case '3':
     case 'bottom-right':
-      return 180;
+      return { rotationDegrees: 180, flipHorizontal: false, flipVertical: false };
+    case '4':
+    case 'bottom-left':
+      return { rotationDegrees: 0, flipHorizontal: false, flipVertical: true };
+    case '5':
+    case 'left-top':
+      return { rotationDegrees: 270, flipHorizontal: true, flipVertical: false };
+    case '7':
+    case 'right-bottom':
+      return { rotationDegrees: 90, flipHorizontal: true, flipVertical: false };
     case '8':
     case 'left-bottom':
-      return 270;
+      return { rotationDegrees: 270, flipHorizontal: false, flipVertical: false };
     default:
-      return 0;
+      return { rotationDegrees: 0, flipHorizontal: false, flipVertical: false };
   }
 }
 
@@ -46,11 +68,28 @@ export async function createPixelMapWithExifOrientation(
   imageSource: image.ImageSource,
   options?: image.DecodingOptions
 ): Promise<image.PixelMap> {
-  const rotationDegrees = await imageRotationDegreesFromImageSource(imageSource);
-  if (options === undefined && rotationDegrees === 0) {
-    return imageSource.createPixelMap();
+  let transform: ImageExifOrientationTransform = { rotationDegrees: 0, flipHorizontal: false, flipVertical: false };
+  try {
+    transform = imageExifOrientationTransformFromOrientationProperty(
+      await imageSource.getImageProperty(image.PropertyKey.ORIENTATION)
+    );
+  } catch (_) {
   }
-  return imageSource.createPixelMap(decodingOptionsWithImageRotation(options ?? {}, rotationDegrees));
+  const pixelMap = options === undefined ? await imageSource.createPixelMap() : await imageSource.createPixelMap(options);
+  await applyImageExifOrientation(pixelMap, transform);
+  return pixelMap;
+}
+
+export async function applyImageExifOrientation(
+  pixelMap: image.PixelMap,
+  transform: ImageExifOrientationTransform
+): Promise<void> {
+  if (transform.flipHorizontal || transform.flipVertical) {
+    await pixelMap.flip(transform.flipHorizontal, transform.flipVertical);
+  }
+  if (transform.rotationDegrees !== 0) {
+    await pixelMap.rotate(transform.rotationDegrees);
+  }
 }
 
 export function rotatedImageSize(width: number, height: number, rotationDegrees: number): RotatedImageSize {
@@ -65,6 +104,10 @@ export function rotatedImageSize(width: number, height: number, rotationDegrees:
     width: width,
     height: height
   };
+}
+
+export function orientedImageSize(width: number, height: number, orientation: string): RotatedImageSize {
+  return rotatedImageSize(width, height, imageExifOrientationTransformFromOrientationProperty(orientation).rotationDegrees);
 }
 
 function normalizedImageRotationDegrees(rotationDegrees: number): number {
