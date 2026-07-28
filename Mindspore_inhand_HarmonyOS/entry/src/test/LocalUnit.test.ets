@@ -2649,7 +2649,7 @@ export default function localUnitTest() {
 
     it('providesFiveCompleteOfflineMindSporeTutorialChapters', 0, () => {
       expect(collegeTutorialRawFileName).assertEqual('college/college-hap.zip');
-      expect(collegeTutorialExportFileName).assertEqual('MindSpore-MNIST-鍏ラ棬鏁欑▼.zip');
+      expect(collegeTutorialExportFileName).assertEqual('MindSpore-MNIST-入门教程.zip');
       expect(collegeLocalQuickStartSections
         .map((section: CollegeLocalQuickStartSection): string => section.id).join(','))
         .assertEqual('environment,data,network,training,export');
