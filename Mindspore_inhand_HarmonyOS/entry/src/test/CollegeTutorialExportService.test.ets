@@ -34,6 +34,17 @@ export default function collegeTutorialExportServiceUnitTest(): void {
       expect(read).assertFalse();
     });
 
+    it('reportsPickerFailuresAsFailures', 0, async () => {
+      const service = new CollegeTutorialExportService(
+        async (): Promise<string> => { throw new Error('picker failed'); },
+        async (): Promise<Uint8Array> => new Uint8Array(),
+        async (): Promise<number> => 0
+      );
+      const result = await service.exportPackage();
+      expect(result.ok).assertFalse();
+      expect(result.cancelled).assertFalse();
+    });
+
     it('reportsReaderFailuresWithoutDestination', 0, async () => {
       const readerFailure = new CollegeTutorialExportService(
         async (): Promise<string> => 'file://secret-target',

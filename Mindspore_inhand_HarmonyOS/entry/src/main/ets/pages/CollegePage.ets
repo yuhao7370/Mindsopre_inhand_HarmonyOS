@@ -131,12 +131,8 @@ export struct CollegePage {
         const options = new picker.DocumentSaveOptions();
         options.newFileNames = [defaultName];
         options.fileSuffixChoices = ['ZIP archive|.zip'];
-        try {
-          const targets = await new picker.DocumentViewPicker(context).save(options);
-          return targets.length > 0 ? targets[0] : '';
-        } catch (_) {
-          return '';
-        }
+        const targets = await new picker.DocumentViewPicker(context).save(options);
+        return targets.length > 0 ? targets[0] : '';
       },
       async (): Promise<Uint8Array> => {
         return await context.resourceManager.getRawFileContent(collegeTutorialRawFileName);

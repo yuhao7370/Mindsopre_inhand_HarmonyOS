@@ -36,11 +36,11 @@ export class CollegeTutorialExportService {
   }
 
   async exportPackage(): Promise<CollegeTutorialExportResult> {
-    const destination = await this.pickDestination(collegeTutorialExportFileName);
-    if (destination.length === 0) {
-      return { ok: false, cancelled: true };
-    }
     try {
+      const destination = await this.pickDestination(collegeTutorialExportFileName);
+      if (destination.length === 0) {
+        return { ok: false, cancelled: true };
+      }
       const bytes = await this.readPackage();
       const written = await this.writePackage(destination, bytes);
       return { ok: written === bytes.length, cancelled: false };
