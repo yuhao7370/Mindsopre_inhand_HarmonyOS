@@ -1,4 +1,5 @@
 import { i18n, resourceManager } from '@kit.LocalizationKit';
+import { mindSporeLite } from '@kit.MindSporeLiteKit';
 import { AppRoute } from '../../app/AppRoutes';
 import { FeatureWorkflow, poseModeForWorkflow } from '../../features/runtime/FeatureWorkflowCatalog';
 import { DefaultAiService } from './AiService';
@@ -11,6 +12,7 @@ import {
   CustomModelTensorRunner
 } from './CustomModelService';
 import { HarmonyCustomModelInputPreprocessor } from './HarmonyCustomModelInputPreprocessor';
+import { HarmonyHandwrittenDigitInputPreprocessor } from './HarmonyHandwrittenDigitInputPreprocessor';
 import { CustomModelPackageRunner } from './CustomModelPackageRunner';
 import { HarmonyImageClassificationInputPreprocessor } from './HarmonyImageInputPreprocessor';
 import { HarmonyObjectDetectionInputPreprocessor } from './HarmonyObjectDetectionInputPreprocessor';
@@ -52,6 +54,12 @@ import {
   MindSporeLiteModelRunner,
   RawfileContentReader
 } from './MindSporeLiteModelRunner';
+import {
+  HandwrittenDigitImagePreprocessor,
+  HandwrittenDigitMindSporeScoreRunner,
+  HandwrittenDigitService,
+  HandwrittenDigitTensorRunner
+} from './HandwrittenDigitService';
 import {
   MindSporeLiteTranslationRunner,
   productionTranslationModelBundleFactory,
@@ -119,6 +127,8 @@ export interface HarmonyImageClassificationRuntimeOptions {
   readonly labelLocale?: string;
   readonly inputPreprocessor?: ImageClassificationInputPreprocessor;
   readonly tensorRunner?: ImageClassificationTensorRunner;
+  readonly handwrittenDigitPreprocessor?: HandwrittenDigitImagePreprocessor;
+  readonly handwrittenDigitTensorRunner?: HandwrittenDigitTensorRunner;
   readonly customModelPreprocessor?: CustomModelInputPreprocessor;
   readonly customModelTensorRunner?: CustomModelTensorRunner;
   readonly objectDetectionPreprocessor?: ObjectDetectionInputPreprocessor;
@@ -184,6 +194,7 @@ export class HarmonyRawfileContentReader implements RawfileContentReader {
 
 export const harmonyTranslationModelCacheRoot: string =
   '/data/storage/el2/base/files/translation';
+export const handwrittenDigitModelRawfilePath: string = 'model/lenet_mnist.ms';
 
 class HarmonyTranslationProductionOptions implements TranslationProductionBundleOptions {
   readonly resourceManager: TranslationModelResourceManager;
@@ -407,6 +418,37 @@ export async function createHarmonyImageClassificationService(
     labels: labels,
     scoreRunner: scoreRunner
   });
+}
+
+export function createHarmonyHandwrittenDigitService(
+  options: HarmonyImageClassificationRuntimeOptions
+): HandwrittenDigitService {
+  const tensorRunner = options.handwrittenDigitTensorRunner ?? new MindSporeLiteModelRunner({
+    resourceManager: options.resourceManager,
+    modelRawfilePath: handwrittenDigitModelRawfilePath,
+    outputTensorDecoder: handwrittenDigitLogitsFromOutputTensor
+  });
+  return new HandwrittenDigitService({
+    preprocessor: options.handwrittenDigitPreprocessor ?? new HarmonyHandwrittenDigitInputPreprocessor(),
+    scoreRunner: new HandwrittenDigitMindSporeScoreRunner(tensorRunner)
+  });
+}
+
+function handwrittenDigitLogitsFromOutputTensor(output: mindSporeLite.MSTensor): Array<number> {
+  if (output.dtype !== mindSporeLite.DataType.NUMBER_TYPE_FLOAT32 || output.elementNum !== 10 ||
+    output.dataSize !== 10 * Float32Array.BYTES_PER_ELEMENT || output.shape.length !== 2 ||
+    output.shape[0] !== 1 || output.shape[1] !== 10) {
+    return [];
+  }
+  const logits = new Float32Array(output.getData());
+  if (logits.length !== 10) {
+    return [];
+  }
+  const decoded: Array<number> = [];
+  for (let index = 0; index < logits.length; index++) {
+    decoded.push(logits[index]);
+  }
+  return decoded;
 }
 
 export function createHarmonyCustomModelService(

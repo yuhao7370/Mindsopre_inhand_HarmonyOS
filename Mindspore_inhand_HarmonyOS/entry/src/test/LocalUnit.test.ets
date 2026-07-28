@@ -248,6 +248,11 @@ import {
   ImageClassificationMindSporeScoreRunner,
   ImageClassificationTensorRunner
 } from '../main/ets/services/ai/ImageClassificationPipeline';
+import {
+  HandwrittenDigitFailure,
+  HandwrittenDigitImagePreprocessor,
+  HandwrittenDigitTensorRunner
+} from '../main/ets/services/ai/HandwrittenDigitService';
 import { imageClassificationDecodeOptions } from '../main/ets/services/ai/HarmonyImageInputPreprocessor';
 import {
   CustomModelBufferRuntime,
@@ -267,6 +272,7 @@ import {
 } from '../main/ets/services/ai/CustomModelService';
 import {
   cachedRuntimeAiServiceForWorkflow,
+  createHarmonyHandwrittenDigitService,
   createHarmonyDefaultAiService,
   createRuntimeAiServiceForWorkflow,
   HarmonyImageClassificationRuntimeOptions,
@@ -825,6 +831,51 @@ class FixedTensorRunner implements ImageClassificationTensorRunner {
     this.seenByteLengths.push(inputBuffer.byteLength);
     return this.scores;
   }
+}
+
+class FixedHandwrittenDigitPreprocessor implements HandwrittenDigitImagePreprocessor {
+  readonly seenUris: Array<string> = [];
+  private readonly input: ArrayBuffer;
+
+  constructor(input: ArrayBuffer) {
+    this.input = input;
+  }
+
+  async createInput(imageUri: string): Promise<ArrayBuffer> {
+    this.seenUris.push(imageUri);
+    return this.input;
+  }
+}
+
+class FixedHandwrittenDigitTensorRunner implements HandwrittenDigitTensorRunner {
+  readonly seenByteLengths: Array<number> = [];
+  private readonly logits: Array<number>;
+
+  constructor(logits: Array<number>) {
+    this.logits = logits;
+  }
+
+  async predictScoresFromInput(input: ArrayBuffer): Promise<Array<number>> {
+    this.seenByteLengths.push(input.byteLength);
+    return this.logits;
+  }
+}
+
+class RejectingHandwrittenDigitTensorRunner implements HandwrittenDigitTensorRunner {
+  async predictScoresFromInput(_input: ArrayBuffer): Promise<Array<number>> {
+    throw new Error('model unavailable');
+  }
+}
+
+async function handwrittenDigitFailureCode(action: () => Promise<void>): Promise<string> {
+  try {
+    await action();
+  } catch (error) {
+    if (error instanceof HandwrittenDigitFailure) {
+      return error.code;
+    }
+  }
+  return '';
 }
 
 class FixedRawfileContentReader implements RawfileContentReader {
@@ -8253,6 +8304,51 @@ export default function localUnitTest() {
       expect(scores[1]).assertEqual(0.7);
       expect(preprocessor.seenUris[0]).assertEqual('file://selected/fish.jpg');
       expect(tensorRunner.seenByteLengths[0]).assertEqual(12);
+    });
+
+    it('createsHandwrittenDigitServiceWithInjectedImageAndTensorRunners', 0, async () => {
+      const input = new ArrayBuffer(28 * 28 * Float32Array.BYTES_PER_ELEMENT);
+      const preprocessor = new FixedHandwrittenDigitPreprocessor(input);
+      const tensorRunner = new FixedHandwrittenDigitTensorRunner([0, 0, 0, 0, 0, 0, 7, 0, 0, 0]);
+      const service = createHarmonyHandwrittenDigitService({
+        resourceManager: new FixedRawfileContentReader(new Uint8Array()),
+        handwrittenDigitPreprocessor: preprocessor,
+        handwrittenDigitTensorRunner: tensorRunner
+      });
+
+      const predictions = await service.recognizeDigit('file://selected/digit.png');
+
+      expect(predictions[0].digit).assertEqual(6);
+      expect(preprocessor.seenUris[0]).assertEqual('file://selected/digit.png');
+      expect(tensorRunner.seenByteLengths[0]).assertEqual(28 * 28 * Float32Array.BYTES_PER_ELEMENT);
+    });
+
+    it('reportsTypedFailureWhenTheHandwrittenDigitModelCannotRun', 0, async () => {
+      const service = createHarmonyHandwrittenDigitService({
+        resourceManager: new FixedRawfileContentReader(new Uint8Array()),
+        handwrittenDigitPreprocessor: new FixedHandwrittenDigitPreprocessor(
+          new ArrayBuffer(28 * 28 * Float32Array.BYTES_PER_ELEMENT)
+        ),
+        handwrittenDigitTensorRunner: new RejectingHandwrittenDigitTensorRunner()
+      });
+
+      expect(await handwrittenDigitFailureCode(async (): Promise<void> => {
+        await service.recognizeDigit('file://selected/digit.png');
+      })).assertEqual('MODEL_UNAVAILABLE');
+    });
+
+    it('reportsTypedFailureWhenTheHandwrittenDigitModelOutputIsInvalid', 0, async () => {
+      const service = createHarmonyHandwrittenDigitService({
+        resourceManager: new FixedRawfileContentReader(new Uint8Array()),
+        handwrittenDigitPreprocessor: new FixedHandwrittenDigitPreprocessor(
+          new ArrayBuffer(28 * 28 * Float32Array.BYTES_PER_ELEMENT)
+        ),
+        handwrittenDigitTensorRunner: new FixedHandwrittenDigitTensorRunner([])
+      });
+
+      expect(await handwrittenDigitFailureCode(async (): Promise<void> => {
+        await service.recognizeDigit('file://selected/digit.png');
+      })).assertEqual('MODEL_OUTPUT_INVALID');
     });
 
     it('createsHarmonyDefaultAiServiceWithRawfileLabelsAndRunner', 0, async () => {
