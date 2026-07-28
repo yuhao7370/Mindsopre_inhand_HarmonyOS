@@ -1,4 +1,5 @@
 import { AppRoute } from '../../app/AppRoutes';
+import { CustomModelInputKind } from '../../services/ai/CustomModelPackage';
 import { AppStringKey } from '../../common/i18n/AppStrings';
 import { LiveCameraPosition } from '../../services/camera/LiveCameraService';
 import { PoseDetectionMode } from '../../services/ai/PoseService';
@@ -432,6 +433,20 @@ export function objectPhotoFollowupInputKindAfterModelCacheSuccess(
 
 export function usesAndroidCustomModelLayout(workflow: FeatureWorkflow | undefined): boolean {
   return workflow?.routeName === AppRoute.CUSTOM_MODEL.name;
+}
+
+export function customModelVisibleInputs(kind: CustomModelInputKind): Array<FeatureInputKind> {
+  return kind === 'image' ? ['photo', 'camera'] : ['text'];
+}
+
+export function customModelCanExecute(
+  kind: CustomModelInputKind | undefined,
+  modelPath: string,
+  imageUri: string,
+  text: string
+): boolean {
+  if (kind === undefined || modelPath.length === 0) return false;
+  return kind === 'image' ? imageUri.length > 0 : text.trim().length > 0;
 }
 
 export function customModelExecutePreflightToastKey(

@@ -25,6 +25,7 @@ import {
   runtimeInputKindsForWorkflow,
   shouldShowGestureStillFailureToast,
   specializedAndroidLiveLayoutForWorkflow,
+  customModelCanExecute,
   customModelModelCacheToastKey,
   customModelOutputFallbackKey,
   objectPhotoFollowupInputKindAfterModelCacheSuccess,
@@ -1137,11 +1138,9 @@ struct FeatureRuntimePage {
     this.customModelInputSummary = inputSummary;
     this.customModelOutputSummary = outputSummary;
     this.textInputVisible = inputKind === 'text';
-    if (inputKind === 'text') {
-      this.imageInputUri = '';
-    } else {
-      this.userText = '';
-    }
+    this.imageInputUri = '';
+    this.userText = '';
+    this.clearRuntimeResultState();
   }
 
   private customModelOutputText(): ResourceStr {
@@ -5598,7 +5597,12 @@ struct FeatureRuntimePage {
             .backgroundColor(AppColor.accent)
             .borderRadius(AppRadius.button)
             .margin({ top: AppSpacing.sm })
-            .enabled(!this.workflowRunning)
+            .enabled(!this.workflowRunning && customModelCanExecute(
+              this.customModelInputKind,
+              this.modelInputUri,
+              this.imageInputUri,
+              this.userText
+            ))
             .onClick(() => this.runCustomModelAndroidAction())
 
           Row() {

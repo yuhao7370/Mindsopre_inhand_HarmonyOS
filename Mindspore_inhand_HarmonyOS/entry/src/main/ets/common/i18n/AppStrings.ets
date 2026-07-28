@@ -188,6 +188,9 @@ export type AppStringKey =
   'feature_runtime_object_select_model' |
   'feature_runtime_custom_model_output_title' |
   'feature_runtime_custom_model_output_placeholder' |
+  'feature_runtime_custom_model_input_contract' |
+  'feature_runtime_custom_model_output_contract' |
+  'feature_runtime_custom_model_text_placeholder' |
   'feature_runtime_classification_runner_unavailable' |
   'feature_runtime_classification_done' |
   'feature_runtime_classification_failed' |
@@ -516,6 +519,9 @@ const APP_STRING_KEYS: AppStringKey[] = [
   'feature_runtime_object_select_model',
   'feature_runtime_custom_model_output_title',
   'feature_runtime_custom_model_output_placeholder',
+  'feature_runtime_custom_model_input_contract',
+  'feature_runtime_custom_model_output_contract',
+  'feature_runtime_custom_model_text_placeholder',
   'feature_runtime_classification_runner_unavailable',
   'feature_runtime_classification_done',
   'feature_runtime_classification_failed',
@@ -1037,6 +1043,12 @@ export function appString(key: AppStringKey): ResourceStr {
       return $r('app.string.feature_runtime_custom_model_output_title');
     case 'feature_runtime_custom_model_output_placeholder':
       return $r('app.string.feature_runtime_custom_model_output_placeholder');
+    case 'feature_runtime_custom_model_input_contract':
+      return $r('app.string.feature_runtime_custom_model_input_contract');
+    case 'feature_runtime_custom_model_output_contract':
+      return $r('app.string.feature_runtime_custom_model_output_contract');
+    case 'feature_runtime_custom_model_text_placeholder':
+      return $r('app.string.feature_runtime_custom_model_text_placeholder');
     case 'feature_runtime_classification_runner_unavailable':
       return $r('app.string.feature_runtime_classification_runner_unavailable');
     case 'feature_runtime_classification_done':
