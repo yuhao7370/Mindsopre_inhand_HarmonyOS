@@ -4470,6 +4470,7 @@ struct FeatureRuntimePage {
       }
       .width('100%')
       .layoutWeight(1)
+      .align(Alignment.TopStart)
       .scrollBar(BarState.Auto)
     }
       .width('100%')

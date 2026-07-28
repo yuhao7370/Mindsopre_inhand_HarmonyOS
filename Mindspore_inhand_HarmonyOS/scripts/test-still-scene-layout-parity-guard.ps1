@@ -327,6 +327,7 @@ export function sceneDetectionOverlayRows(result: SceneDetectionResult): Array<S
         .padding({ left: AppSpacing.page, right: AppSpacing.page, top: AppSpacing.md, bottom: AppSpacing.xl })
       }
       .scrollBar(BarState.Auto)
+      .align(Alignment.TopStart)
     }
     .width('100%')
     .height('100%')
@@ -460,6 +461,9 @@ try {
   Assert-MutationRejected $validRoot 'nested-scroll-injected' $pagePath `
     'Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.SpaceBetween }) {' `
     "Scroll() {`n          Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.SpaceBetween }) {"
+  Assert-MutationRejected $validRoot 'missing-top-alignment' $pagePath `
+    '.align(Alignment.TopStart)' `
+    '.align(Alignment.Center)'
   Assert-MutationRejected $validRoot 'combined-scene-rows' $aiPath `
     "rows.push(resultRow('feature_runtime_scene_overlay_scene', scene.label));" `
     "rows.push(resultRow('feature_runtime_result_scenes', scene.label));"

@@ -184,6 +184,7 @@ foreach ($line in @(
   "Span(appString('feature_runtime_result_separator'))",
   'Span(this.resultRowValue(row))',
   '.padding({ left: AppSpacing.page, right: AppSpacing.page, top: AppSpacing.md, bottom: AppSpacing.xl })',
+  '.align(Alignment.TopStart)',
   '.scrollBar(BarState.Auto)',
   ".height('100%')",
   '.backgroundColor(AppColor.pageBackground)'
